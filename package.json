@@ -1,0 +1,35 @@
+{
+  "name": "orbis",
+  "private": true,
+  "description": "Orbis agent harness: modular extensions for Pi",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "new:extension": "node scripts/new-extension.mts",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "oxlint --type-aware --deny-warnings --report-unused-disable-directives .",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@types/node": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "packageManager": "pnpm@12.3.4",
+  "pi": {
+    "extensions": [
+      "./packages/*/src/index.ts"
+    ]
+  }
+}

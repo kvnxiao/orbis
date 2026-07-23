@@ -1,0 +1,39 @@
+{
+  "name": "@orbis/example",
+  "version": "0.1.0",
+  "description": "Pi extension for the Orbis agent harness",
+  "keywords": [
+    "orbis",
+    "pi-package"
+  ],
+  "license": "GPL-3.0-only",
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}

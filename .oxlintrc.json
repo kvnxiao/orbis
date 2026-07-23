@@ -1,0 +1,75 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "rules": {
+    "typescript/no-floating-promises": [
+      "error",
+      {
+        "checkThenables": true,
+        "ignoreVoid": false
+      }
+    ],
+    "typescript/no-misused-promises": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-import-type-side-effects": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "eqeqeq": "error",
+    "curly": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-eval": "error",
+    "no-new-func": "error",
+    "typescript/strict-boolean-expressions": [
+      "error",
+      {
+        "allowString": false,
+        "allowNumber": false
+      }
+    ],
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/only-throw-error": [
+      "error",
+      {
+        "allowThrowingAny": false,
+        "allowThrowingUnknown": false,
+        "allowRethrowing": true
+      }
+    ],
+    "typescript/no-deprecated": "error",
+    "typescript/prefer-promise-reject-errors": [
+      "error",
+      {
+        "allowEmptyReject": false,
+        "allowThrowingAny": false,
+        "allowThrowingUnknown": false
+      }
+    ],
+    "typescript/return-await": ["error", "error-handling-correctness-only"]
+  },
+  "ignorePatterns": ["node_modules/**", ".artifacts/**"],
+  "overrides": [
+    {
+      "files": ["packages/**/*.ts", "templates/**/*.ts"],
+      "rules": {
+        "no-console": "error"
+      }
+    }
+  ],
+  "options": {
+    "typeAware": true
+  }
+}
