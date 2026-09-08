@@ -30,6 +30,11 @@ Jiti; development and publication do not require a transpilation step.
 Node.js 22 type definitions constrain extension code to the supported runtime
 generation. Newer APIs still need tests on the minimum supported runtime.
 
+The workspace sets [`minimumReleaseAge: 1440`](https://pnpm.io/settings/dependency-resolution#minimumreleaseage)
+to delay new direct and transitive dependency releases for one day. Exact-version
+exemptions are listed in `minimumReleaseAgeExclude`. Once those releases qualify,
+toolchain updates remove the exemptions and verify locked and fresh installs.
+
 ## Local development
 
 From the repository root:
@@ -184,6 +189,20 @@ Users can then install the published extension:
 ```sh
 pi install npm:@orbis/review
 ```
+
+## Update the toolchain
+
+In a fresh agent session, invoke `$update-toolchain` to refresh Node.js, pnpm,
+TypeScript, Pi, and workspace dependencies and evaluate newly supported strict
+checks. The repository-local
+[skill](.agents/skills/update-toolchain/SKILL.md) includes source-only package
+compatibility and runtime verification. If the session does not discover local
+skills, ask it to read and follow that file.
+
+The skill runs [`scripts/update-toolchain.mts`](scripts/update-toolchain.mts) for
+dependency inventory, age-eligible release candidates, and installation,
+scaffolding, packaging, and Pi loading checks. Commands emit JSON reports;
+compatibility decisions and new compiler or lint checks remain agent tasks.
 
 ## References
 

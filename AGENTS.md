@@ -37,6 +37,12 @@ documentation concrete.
   Node.js runtime, not the installed compiler version. Test new syntax and
   APIs on the package's supported runtimes before changing their requirements.
 
+## Toolchain updates
+
+- For dependency refreshes and newly supported strict checks, use
+  [update-toolchain](.agents/skills/update-toolchain/SKILL.md). Read its workflow
+  when automatic skill discovery is unavailable.
+
 ## Implementation
 
 - Write local scripts, test files, and Vitest configuration as `.mts` files.

@@ -19,6 +19,8 @@ catalog:
   oxlint: 1.82.0
   oxlint-tsgolint: 7.0.2001
 
+minimumReleaseAge: 1440
+
 minimumReleaseAgeExclude:
   - "@oxlint/binding-android-arm-eabi@1.82.0"
   - "@oxlint/binding-android-arm64@1.82.0"
