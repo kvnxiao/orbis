@@ -9,6 +9,7 @@
   "license": "MIT",
   "files": [
     "src",
+    "SPEC.md",
     "LICENSE"
   ],
   "type": "module",

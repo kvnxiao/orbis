@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -35,6 +35,7 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
   const source = await readFile(join(destination, "src", "index.ts"), "utf8");
   assert.match(source, /registerCommand\("orbis-review"/);
   assert.match(source, /@orbis\/review is loaded/);
+  assert.match(await readFile(join(destination, "SPEC.md"), "utf8"), /@orbis\/review/);
   assert.equal(
     await readFile(join(destination, "LICENSE"), "utf8"),
     await readFile(join(root, "LICENSE"), "utf8"),
@@ -85,4 +86,115 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
     assert.match(invalid.stderr, /Usage:/);
   }
   assert.deepEqual(await readdir(join(fixture, "packages")), ["review"]);
+});
+
+test("preserves a package specification and rejects other existing directory contents", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-spec-scaffold-"));
+  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+
+  const script = join(fixture, "scripts", "new-extension.mts");
+  const destination = join(fixture, "packages", "plan");
+  await mkdir(destination, { recursive: true });
+  const specification = "# Planning specification\n\nPreserve @orbis/example literally.\n";
+  await writeFile(join(destination, "SPEC.md"), specification);
+  const result = spawnSync(process.execPath, [script, "plan"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(join(destination, "SPEC.md"), "utf8"), specification);
+  assert.match(await readFile(join(destination, "src", "index.ts"), "utf8"), /@orbis\/plan/);
+
+  await Promise.all(
+    ["empty", "extra", "directory"].map(async (name) => {
+      const existing = join(fixture, "packages", name);
+      await mkdir(existing);
+      if (name === "extra") {
+        await writeFile(join(existing, "SPEC.md"), specification);
+        await writeFile(join(existing, "notes.md"), "Keep these notes.\n");
+      }
+      if (name === "directory") {
+        await mkdir(join(existing, "SPEC.md"));
+      }
+      const before = await readdir(existing);
+      const rejected = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
+      assert.equal(rejected.status, 1);
+      assert.match(rejected.stderr, /already exists/);
+      assert.deepEqual(await readdir(existing), before);
+    }),
+  );
+
+  const linkedTarget = join(fixture, "linked-target");
+  await mkdir(linkedTarget);
+  await writeFile(join(linkedTarget, "SPEC.md"), specification);
+  await symlink(linkedTarget, join(fixture, "packages", "linked"), "junction");
+  const linked = spawnSync(process.execPath, [script, "linked"], { encoding: "utf8" });
+  assert.equal(linked.status, 1);
+  assert.deepEqual(await readdir(linkedTarget), ["SPEC.md"]);
+});
+
+test("preserves package research and rejects conflicting or linked research directories", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-research-scaffold-"));
+  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+
+  const script = join(fixture, "scripts", "new-extension.mts");
+  const destination = join(fixture, "packages", "researched");
+  const research = join(destination, "docs", "research");
+  await mkdir(join(research, "comparisons"), { recursive: true });
+  const specification = Buffer.from("# Specification\r\nPreserve @orbis/example.\r\n");
+  const synthesis = Buffer.from("# Research\r\nPreserve orbis-example and packages/example.\r\n");
+  await writeFile(join(destination, "SPEC.md"), specification);
+  await writeFile(join(research, "summary.md"), synthesis);
+  await writeFile(join(research, "comparisons", "pi.md"), synthesis);
+
+  const result = spawnSync(process.execPath, [script, "researched"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(await readFile(join(destination, "SPEC.md")), specification);
+  assert.deepEqual(await readFile(join(research, "summary.md")), synthesis);
+  assert.deepEqual(await readFile(join(research, "comparisons", "pi.md")), synthesis);
+  assert.match(await readFile(join(destination, "src", "index.ts"), "utf8"), /@orbis\/researched/);
+
+  await Promise.all(
+    [
+      "research-only",
+      "docs-file",
+      "research-file",
+      "extra-docs",
+      "linked-docs",
+      "linked-research",
+    ].map(async (name) => {
+      const existing = join(fixture, "packages", name);
+      await mkdir(existing);
+      if (name !== "research-only") {
+        await writeFile(join(existing, "SPEC.md"), specification);
+      }
+      const docs = join(existing, "docs");
+      if (name === "docs-file") {
+        await writeFile(docs, synthesis);
+      } else if (name === "linked-docs") {
+        await symlink(join(destination, "docs"), docs, "junction");
+      } else {
+        await mkdir(docs);
+        if (name === "research-file") {
+          await writeFile(join(docs, "research"), synthesis);
+        } else if (name === "linked-research") {
+          await symlink(research, join(docs, "research"), "junction");
+        } else {
+          await mkdir(join(docs, "research"));
+          if (name === "extra-docs") {
+            await writeFile(join(docs, "notes.md"), synthesis);
+          }
+        }
+      }
+      const before = await readdir(existing);
+      const rejected = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
+      assert.equal(rejected.status, 1, name);
+      assert.match(rejected.stderr, /already exists/);
+      assert.deepEqual(await readdir(existing), before);
+    }),
+  );
+  assert.deepEqual(await readFile(join(research, "summary.md")), synthesis);
 });

@@ -19,7 +19,37 @@ documentation concrete.
 - Keep each extension independently installable. The root manifest discovers
   `packages/*/src/index.ts` for local `pi install .` use.
 - Preserve the repository's MIT license and include `LICENSE` in each
-  published package. Keep package-specific usage in its README.
+  published package. Include `SPEC.md` with published source and keep
+  package-specific usage in its README.
+
+## Specifications and implementation planning
+
+- When research informs a package design, persist its synthesis in
+  `packages/<name>/docs/research/` before writing `SPEC.md`. Research docs are
+  optional for simple packages with settled behavior.
+- Define each package in `packages/<name>/SPEC.md` before implementing its
+  behavior. Follow [specification guidance](docs/specifications.md); choose
+  headings for the package instead of imposing a common table of contents.
+- Write specifications for an independent Pi implementer. State the complete
+  required behavior, public contracts, permitted implementation choices, and
+  conformance criteria. Keep implementation availability explicit.
+- Use package-local requirement IDs in the form `REQ-001`. Implementation tasks
+  reference these IDs and have separate names; cross-package references name the
+  package as well.
+- Review the relevant specification requirements with the user before deriving
+  implementation work. Existing approval in the session is sufficient.
+- Derive implementation tasks from the approved contract and current source.
+  Each task identifies requirements, dependencies, observable outcomes, and
+  verification. Do not scaffold package-local plan directories.
+- For package design, use
+  [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md).
+  For implementation planning, use
+  [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md).
+  Read their files when automatic discovery is unavailable.
+- A package containing `SPEC.md` and optional `docs/research/` can await
+  implementation. `pnpm new:extension <name>` preserves those artifacts while
+  adding runtime files; it rejects other existing package contents and linked
+  package, `docs`, or `research` directories.
 
 ## Dependencies and imports
 

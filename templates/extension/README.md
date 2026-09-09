@@ -2,6 +2,9 @@
 
 A TypeScript extension for the Orbis agent harness.
 
+Define the package contract in [SPEC.md](SPEC.md) before implementing its behavior.
+This README describes the reference implementation as it becomes available.
+
 ## Local use
 
 With Pi installed globally and `pi` available on `PATH`, run from the monorepo

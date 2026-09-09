@@ -2,6 +2,8 @@
 
 Adds `/exit` to quit Pi through its graceful shutdown API.
 
+[SPEC.md](SPEC.md) defines the contract for independent implementations.
+
 ## Local use
 
 With Pi installed globally and `pi` available on `PATH`, run from the monorepo

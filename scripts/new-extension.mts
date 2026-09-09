@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -18,37 +18,70 @@ if (
 const root = resolve(import.meta.dirname, "..");
 const packages = join(root, "packages");
 const destination = join(packages, name);
+let preserveSpecification = false;
 
 try {
   await mkdir(packages, { recursive: true });
   await mkdir(destination);
 } catch (error) {
   if (error instanceof Error && "code" in error && error.code === "EEXIST") {
-    console.error(`Package directory already exists: packages/${name}`);
-    process.exit(1);
+    const existing = await lstat(destination);
+    const entries = existing.isDirectory()
+      ? await readdir(destination, { withFileTypes: true })
+      : [];
+    const specification = entries.find((entry) => entry.name === "SPEC.md");
+    let hasResearch = false;
+    if (
+      entries.length === 2 &&
+      entries.some((entry) => entry.name === "docs" && entry.isDirectory())
+    ) {
+      const docs = await readdir(join(destination, "docs"), { withFileTypes: true });
+      hasResearch = docs.length === 1 && docs[0]?.name === "research" && docs[0].isDirectory();
+    }
+    preserveSpecification =
+      specification?.isFile() === true && (entries.length === 1 || hasResearch);
+    if (!preserveSpecification) {
+      console.error(`Package directory already exists: packages/${name}`);
+      process.exit(1);
+    }
+  } else {
+    throw error;
   }
-  throw error;
 }
 
-await cp(join(root, "templates", "extension"), destination, {
-  recursive: true,
-});
+const template = join(root, "templates", "extension");
+await Promise.all(
+  (await readdir(template))
+    .filter((entry) => !preserveSpecification || entry !== "SPEC.md")
+    .map((entry) =>
+      cp(join(template, entry), join(destination, entry), {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+      }),
+    ),
+);
 await cp(join(root, "LICENSE"), join(destination, "LICENSE"));
 
 await Promise.all(
-  ["package.json", "README.md", "src/index.ts", "vitest.config.mts", "tests/index.test.mts"].map(
-    async (file) => {
-      const path = join(destination, file);
-      const content = await readFile(path, "utf8");
-      await writeFile(
-        path,
-        content
-          .replaceAll("@orbis/example", `@orbis/${name}`)
-          .replaceAll("orbis-example", `orbis-${name}`)
-          .replaceAll("packages/example", `packages/${name}`),
-      );
-    },
-  ),
+  [
+    "package.json",
+    "README.md",
+    ...(!preserveSpecification ? ["SPEC.md"] : []),
+    "src/index.ts",
+    "vitest.config.mts",
+    "tests/index.test.mts",
+  ].map(async (file) => {
+    const path = join(destination, file);
+    const content = await readFile(path, "utf8");
+    await writeFile(
+      path,
+      content
+        .replaceAll("@orbis/example", `@orbis/${name}`)
+        .replaceAll("orbis-example", `orbis-${name}`)
+        .replaceAll("packages/example", `packages/${name}`),
+    );
+  }),
 );
 
 console.log(`Created @orbis/${name} in packages/${name}`);
