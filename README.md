@@ -14,7 +14,38 @@ Jiti; development and publication do not require a transpilation step.
 
 ## Packages
 
-- [@orbis/exit](packages/exit/README.md) adds `/exit` to quit Pi.
+| Package       | Contract                               | Reference implementation                                                  |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| `@orbis/exit` | [Specification](packages/exit/SPEC.md) | [Available](packages/exit/README.md): adds `/exit` to quit Pi.            |
+| `@orbis/plan` | [Specification](packages/plan/SPEC.md) | Not implemented: collaborative planning with browser and terminal review. |
+
+Each package specification defines the behavior for an independent Pi
+implementation. Use the available reference package or build from its `SPEC.md`.
+Specifications and source are distributed under the repository's MIT license.
+
+## Design a package
+
+When the design needs research, save its synthesis in
+`packages/<name>/docs/research/` before writing `SPEC.md`. Simple packages can omit
+research docs. Review the spec's requirements, then derive
+implementation tasks from the approved contract. The
+[specification guide](docs/specifications.md) defines this workflow and how to
+write package-specific contracts. The repository does not scaffold package-local
+plan directories.
+
+Repository-local skills support both stages:
+
+- [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md)
+  researches existing packages and Pi APIs, works through decision rounds,
+  saves research synthesis, and writes a specification.
+- [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md)
+  turns an approved specification into verifiable tasks against the current code.
+
+In Codex, invoke `$brainstorm-orbis-package` or `$plan-orbis-implementation`.
+In Pi, use `/skill:brainstorm-orbis-package` or
+`/skill:plan-orbis-implementation`. After project trust is established, Pi discovers
+the repository's `.agents/skills`. When a host does not discover these skills,
+ask it to read the linked `SKILL.md` directly.
 
 ## Requirements
 
@@ -54,8 +85,11 @@ pi
 ```
 
 The scaffold creates `packages/review` as `@orbis/review` and registers an example
-`/orbis-review` command. Replace that command with the extension's intended
-behavior.
+`/orbis-review` command. When the directory contains `SPEC.md` and optional
+`docs/research/`, the scaffold preserves those artifacts and adds runtime files.
+For a new directory, it includes a
+specification starter. Define and review the contract before replacing the example
+command with the extension's intended behavior.
 
 The root Pi manifest discovers `packages/*/src/index.ts`. `pi install .`
 registers the local repository in Pi's user settings without copying source.
@@ -73,8 +107,10 @@ From inside the package directory, `pi install .` registers that package.
 ## Repository layout
 
 ```text
-packages/                 Extension packages created by new:extension
-templates/extension/      Source-only package template
+packages/                 Package specifications and available implementations
+templates/extension/      Source-only package template and specification starter
+docs/specifications.md    Specification and implementation-planning workflow
+.agents/skills/           Repository-local design and development skills
 scripts/                  Scaffolding and verification scripts
 pnpm-workspace.yaml       Workspace discovery and dependency catalog
 tsconfig.base.json        Shared TypeScript constraints
@@ -85,12 +121,16 @@ AGENTS.md                 Instructions for coding agents
 
 ## Add an extension
 
-1. Run `pnpm new:extension <name>` with a lowercase name such as `review` or
-   `session-notes`. The script creates the npm name `@orbis/<name>` and refuses
-   to overwrite a package directory. Names must fit npm's length limit and
-   avoid Windows device names.
-2. Implement `packages/<name>/src/index.ts` as a default factory that receives
-   `ExtensionAPI`. Use the factory to register commands, tools, and handlers.
+1. Write and review `packages/<name>/SPEC.md`, then derive implementation tasks
+   from its requirements. Use a lowercase name such as `review` or
+   `session-notes`; names must fit npm's length limit and avoid Windows device
+   names.
+2. Run `pnpm new:extension <name>`. The script creates the npm name
+   `@orbis/<name>`, preserves an existing `SPEC.md` and optional `docs/research/`,
+   and rejects other existing package contents. The package, `docs`, and `research`
+   directories must be real directories. Implement `packages/<name>/src/index.ts`
+   as a default factory that receives `ExtensionAPI`. Use the factory to register
+   commands, tools, and handlers.
 3. Use `import type` for types and explicit `.ts` extensions on relative imports.
    Keep runtime imports resolvable from the published package.
 4. Declare every imported dependency in the package's `package.json`. Use
@@ -174,7 +214,7 @@ and template tests load TypeScript source through Pi and check command
 registration. New extension behavior still needs its own runtime tests.
 
 Before publishing, inspect the tarball for `src/index.ts`, every imported source
-file, the package README, and `LICENSE`. Install the tarball and its runtime
+file, `SPEC.md`, the package README, and `LICENSE`. Install the tarball and its runtime
 dependencies in a temporary project outside this workspace, then load that
 installed package through Pi and test its behavior. Include the minimum
 supported Node.js and Pi versions in release checks. If the package supports
