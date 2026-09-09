@@ -1,6 +1,6 @@
 # @orbis/plan specification
 
-Status: Draft v1. The reference implementation is not available.
+Status: Draft v1. The reference implementation is available; complete conformance verification remains pending.
 
 This document specifies a Pi extension that develops a researched, user-approved
 implementation plan through collaborative question rounds. It is written for

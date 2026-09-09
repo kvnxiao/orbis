@@ -3,8 +3,8 @@
 Research date: 2026-09-08. The local dependency inspected is
 `@earendil-works/pi-coding-agent` 0.85.1. Its public release tag resolves to
 `d981de1229ef899957bbe968bc8dcda02a21f477`. Documentation and source inspection
-establish API capabilities; the proposed Orbis workflow has not been implemented
-or tested in Pi.
+establish API capabilities. The package implementation is available; complete
+workflow conformance remains unverified.
 
 ## Extension, command, or skill
 

@@ -14,10 +14,10 @@ Jiti; development and publication do not require a transpilation step.
 
 ## Packages
 
-| Package       | Contract                               | Reference implementation                                                  |
-| ------------- | -------------------------------------- | ------------------------------------------------------------------------- |
-| `@orbis/exit` | [Specification](packages/exit/SPEC.md) | [Available](packages/exit/README.md): adds `/exit` to quit Pi.            |
-| `@orbis/plan` | [Specification](packages/plan/SPEC.md) | Not implemented: collaborative planning with browser and terminal review. |
+| Package       | Contract                               | Reference implementation                                                                                                    |
+| ------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `@orbis/exit` | [Specification](packages/exit/SPEC.md) | [Available](packages/exit/README.md): adds `/exit` to quit Pi.                                                              |
+| `@orbis/plan` | [Specification](packages/plan/SPEC.md) | [Implementation available](packages/plan/README.md): terminal and browser planning; complete workflow verification pending. |
 
 Each package specification defines the behavior for an independent Pi
 implementation. Use the available reference package or build from its `SPEC.md`.

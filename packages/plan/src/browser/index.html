@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis planning</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/client.js" defer></script>
+  </head>
+  <body>
+    <p id="error" role="alert"></p>
+    <section id="recovery-panel" hidden>
+      <p>
+        The question or plan changed. Your local text remains unsubmitted. Inspect the current
+        revision before restoring it.
+      </p>
+      <label for="recovery-text">Recovered draft text</label>
+      <textarea id="recovery-text" rows="4"></textarea>
+      <button id="restore-draft" type="button">Restore as an unsubmitted draft</button>
+    </section>
+    <main id="planning">
+      <h1>Orbis planning</h1>
+      <p>Connecting to the Pi session…</p>
+    </main>
+  </body>
+</html>

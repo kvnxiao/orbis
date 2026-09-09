@@ -1,0 +1,128 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+body {
+  margin: 0 auto;
+  max-width: 74rem;
+  padding: 1.5rem;
+}
+main {
+  display: grid;
+  grid-template-columns: minmax(12rem, 20rem) minmax(0, 46rem);
+  gap: 1.5rem;
+}
+header,
+footer {
+  grid-column: 1 / -1;
+}
+header {
+  border-bottom: 1px solid GrayText;
+}
+nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: start;
+}
+article {
+  min-width: 0;
+}
+.plan {
+  grid-column: 1 / -1;
+  max-width: 46rem;
+}
+h1,
+h2 {
+  line-height: 1.25;
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+button,
+textarea {
+  font: inherit;
+  border: 1px solid GrayText;
+  border-radius: 0.4rem;
+}
+button {
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+button:hover {
+  background: color-mix(in srgb, CanvasText 12%, Canvas);
+}
+button[aria-current="step"],
+button[aria-pressed="true"] {
+  border: 2px solid Highlight;
+  background: color-mix(in srgb, Highlight 18%, Canvas);
+}
+button:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 3px solid Highlight;
+  outline-offset: 3px;
+}
+textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 0.6rem;
+  margin: 0.4rem 0 0.7rem;
+  resize: vertical;
+}
+label {
+  display: block;
+  font-weight: 600;
+  margin-top: 1.5rem;
+}
+.option,
+aside {
+  border: 1px solid GrayText;
+  border-radius: 0.9rem;
+  padding: 0.5rem;
+  margin: 1rem 0;
+}
+.prose {
+  overflow-wrap: anywhere;
+}
+pre {
+  overflow: auto;
+  padding: 0.75rem;
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+}
+table {
+  border-collapse: collapse;
+  display: block;
+  overflow: auto;
+}
+td,
+th {
+  border: 1px solid GrayText;
+  padding: 0.4rem;
+}
+#error:not(:empty) {
+  border: 2px solid Mark;
+  padding: 1rem;
+}
+footer {
+  border-top: 1px solid GrayText;
+  padding-top: 1rem;
+}
+footer button {
+  margin-right: 0.5rem;
+}
+@media (max-width: 48rem) {
+  main {
+    grid-template-columns: 1fr;
+  }
+  nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
