@@ -40,16 +40,18 @@ documentation concrete.
   implementation work. Existing approval in the session is sufficient.
 - Derive implementation tasks from the approved contract and current source.
   Each task identifies requirements, dependencies, observable outcomes, and
-  verification. Do not scaffold package-local plan directories.
+  verification. Save local implementation plans under
+  `packages/<name>/implementation/` by default; Git ignores these directories.
+  The package scaffold does not create plan directories.
 - For package design, use
   [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md).
   For implementation planning, use
   [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md).
   Read their files when automatic discovery is unavailable.
-- A package containing `SPEC.md` and optional `docs/research/` can await
-  implementation. `pnpm new:extension <name>` preserves those artifacts while
+- A package containing `SPEC.md` and optional `docs/research/` and
+  `implementation/` can await implementation. `pnpm new:extension <name>` preserves those artifacts while
   adding runtime files; it rejects other existing package contents and linked
-  package, `docs`, or `research` directories.
+  package, `docs`, `research`, or `implementation` directories.
 
 ## Dependencies and imports
 

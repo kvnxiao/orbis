@@ -97,9 +97,19 @@ from that contract. Each task identifies its requirements, dependencies, observa
 outcome, and verification. A vertical task delivers a behavior through the layers
 it needs; a list of modules alone does not define its completion.
 
-The repository does not prescribe storage for implementation plans and does not
-scaffold package-local plan directories. Plans can remain in the task's session or
-external work tracker. The package's durable design artifact is `SPEC.md`.
+The planning skill saves local Markdown plans to
+`packages/<name>/implementation/PLAN.md` by default. Git ignores these directories.
+For large work, `PLAN.md` indexes dependency-ordered sibling plans and assigns
+requirement coverage across them. Each task states concrete edits, prerequisites,
+verification commands or interaction steps, and expected results. Follow the
+[plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md).
+The user can request another destination, tracked plans, or chat-only output.
+
+The package scaffold does not create plan directories. `SPEC.md` remains the
+tracked package contract; local implementation plans record proposed work and
+verification evidence. They are separate from the approved Markdown artifacts
+produced by `@orbis/plan`. The [format research](implementation-plan-research.md)
+compares host defaults, published recipes, and Pi package formats.
 
 When implementation starts, run:
 
@@ -109,10 +119,11 @@ pnpm install
 ```
 
 The scaffold accepts a new package name or an existing real directory containing
-a regular `SPEC.md` file and optional `docs/research/`. In an existing package,
-`docs` may contain only the real `research` directory. The scaffold preserves the
-specification and research bytes and adds the runtime template. It rejects other
-existing directory contents and linked package, `docs`, or `research` directories.
+a regular `SPEC.md` file and optional `docs/research/` and `implementation/`.
+In an existing package, `docs` may contain only the real `research` directory.
+The scaffold preserves the specification, research, and plan bytes and adds the runtime
+template. It rejects other existing directory contents and linked package, `docs`,
+`research`, or `implementation` directories.
 For a new directory, it includes the specification
 starter; complete that contract before replacing the runtime example with package
 behavior.

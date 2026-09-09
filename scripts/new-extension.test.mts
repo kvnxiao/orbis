@@ -198,3 +198,75 @@ test("preserves package research and rejects conflicting or linked research dire
   );
   assert.deepEqual(await readFile(join(research, "summary.md")), synthesis);
 });
+
+test("preserves implementation plans with or without research and rejects invalid plan directories", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-implementation-scaffold-"));
+  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+
+  const script = join(fixture, "scripts", "new-extension.mts");
+  const specification = Buffer.from("# Specification\r\nPreserve @orbis/example.\r\n");
+  const plan = Buffer.from("# Implement orbis-example\r\nPreserve packages/example.\r\n");
+
+  await Promise.all(
+    ["planned", "researched"].map(async (name) => {
+      const destination = join(fixture, "packages", name);
+      const implementation = join(destination, "implementation");
+      await mkdir(implementation, { recursive: true });
+      await writeFile(join(destination, "SPEC.md"), specification);
+      await writeFile(join(implementation, "PLAN.md"), plan);
+      await writeFile(join(implementation, "01-terminal.md"), plan);
+      if (name === "researched") {
+        await mkdir(join(destination, "docs", "research"), { recursive: true });
+        await writeFile(join(destination, "docs", "research", "pi.md"), specification);
+      }
+
+      const result = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(await readFile(join(destination, "SPEC.md")), specification);
+      assert.deepEqual(await readFile(join(implementation, "PLAN.md")), plan);
+      assert.deepEqual(await readFile(join(implementation, "01-terminal.md")), plan);
+      assert.deepEqual(await readdir(implementation), ["01-terminal.md", "PLAN.md"]);
+      if (name === "researched") {
+        assert.deepEqual(
+          await readFile(join(destination, "docs", "research", "pi.md")),
+          specification,
+        );
+      }
+      assert.match(await readFile(join(destination, "src", "index.ts"), "utf8"), /registerCommand/);
+    }),
+  );
+
+  const linkedTarget = join(fixture, "linked-plans");
+  await mkdir(linkedTarget);
+  await writeFile(join(linkedTarget, "PLAN.md"), plan);
+  await Promise.all(
+    ["plans-only", "plans-file", "linked-plans", "extra-directory"].map(async (name) => {
+      const destination = join(fixture, "packages", name);
+      await mkdir(destination);
+      if (name !== "plans-only") {
+        await writeFile(join(destination, "SPEC.md"), specification);
+      }
+      const implementation = join(destination, "implementation");
+      if (name === "plans-file") {
+        await writeFile(implementation, plan);
+      } else if (name === "linked-plans") {
+        await symlink(linkedTarget, implementation, "junction");
+      } else {
+        await mkdir(implementation);
+        if (name === "extra-directory") {
+          await mkdir(join(destination, "notes"));
+        }
+      }
+      const before = await readdir(destination);
+      const rejected = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
+      assert.equal(rejected.status, 1, name);
+      assert.match(rejected.stderr, /already exists/);
+      assert.deepEqual(await readdir(destination), before);
+    }),
+  );
+  assert.deepEqual(await readFile(join(linkedTarget, "PLAN.md")), plan);
+  assert.deepEqual(await readdir(linkedTarget), ["PLAN.md"]);
+});

@@ -30,16 +30,19 @@ try {
       ? await readdir(destination, { withFileTypes: true })
       : [];
     const specification = entries.find((entry) => entry.name === "SPEC.md");
-    let hasResearch = false;
-    if (
-      entries.length === 2 &&
-      entries.some((entry) => entry.name === "docs" && entry.isDirectory())
-    ) {
+    let validResearch = true;
+    if (entries.some((entry) => entry.name === "docs" && entry.isDirectory())) {
       const docs = await readdir(join(destination, "docs"), { withFileTypes: true });
-      hasResearch = docs.length === 1 && docs[0]?.name === "research" && docs[0].isDirectory();
+      validResearch = docs.length === 1 && docs[0]?.name === "research" && docs[0].isDirectory();
     }
     preserveSpecification =
-      specification?.isFile() === true && (entries.length === 1 || hasResearch);
+      specification?.isFile() === true &&
+      validResearch &&
+      entries.every(
+        (entry) =>
+          entry.name === "SPEC.md" ||
+          ((entry.name === "docs" || entry.name === "implementation") && entry.isDirectory()),
+      );
     if (!preserveSpecification) {
       console.error(`Package directory already exists: packages/${name}`);
       process.exit(1);

@@ -30,8 +30,10 @@ When the design needs research, save its synthesis in
 research docs. Review the spec's requirements, then derive
 implementation tasks from the approved contract. The
 [specification guide](docs/specifications.md) defines this workflow and how to
-write package-specific contracts. The repository does not scaffold package-local
-plan directories.
+write package-specific contracts. The planning skill saves local Markdown tasks
+under `packages/<name>/implementation/`, which Git ignores. `PLAN.md` contains a
+single plan or indexes numbered outcome files for larger work. The scaffold
+preserves existing plans without creating empty implementation directories.
 
 Repository-local skills support both stages:
 
@@ -39,7 +41,8 @@ Repository-local skills support both stages:
   researches existing packages and Pi APIs, works through decision rounds,
   saves research synthesis, and writes a specification.
 - [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md)
-  turns an approved specification into verifiable tasks against the current code.
+  turns an approved specification into saved implementation plans with concrete
+  edits, task dependencies, and verification against the current code.
 
 In Codex, invoke `$brainstorm-orbis-package` or `$plan-orbis-implementation`.
 In Pi, use `/skill:brainstorm-orbis-package` or
@@ -86,7 +89,8 @@ pi
 
 The scaffold creates `packages/review` as `@orbis/review` and registers an example
 `/orbis-review` command. When the directory contains `SPEC.md` and optional
-`docs/research/`, the scaffold preserves those artifacts and adds runtime files.
+`docs/research/` and `implementation/`, the scaffold preserves those artifacts and
+adds runtime files.
 For a new directory, it includes a
 specification starter. Define and review the contract before replacing the example
 command with the extension's intended behavior.
@@ -125,10 +129,11 @@ AGENTS.md                 Instructions for coding agents
    from its requirements. Use a lowercase name such as `review` or
    `session-notes`; names must fit npm's length limit and avoid Windows device
    names.
-2. Run `pnpm new:extension <name>`. The script creates the npm name
-   `@orbis/<name>`, preserves an existing `SPEC.md` and optional `docs/research/`,
-   and rejects other existing package contents. The package, `docs`, and `research`
-   directories must be real directories. Implement `packages/<name>/src/index.ts`
+2. When implementation starts, run `pnpm new:extension <name>`. The script creates
+   the npm name `@orbis/<name>`, preserves an existing `SPEC.md` and optional
+   `docs/research/` and `implementation/`, and rejects other existing package
+   contents. The package, `docs`, `research`, and `implementation` directories
+   must be real directories. Implement `packages/<name>/src/index.ts`
    as a default factory that receives `ExtensionAPI`. Use the factory to register
    commands, tools, and handlers.
 3. Use `import type` for types and explicit `.ts` extensions on relative imports.

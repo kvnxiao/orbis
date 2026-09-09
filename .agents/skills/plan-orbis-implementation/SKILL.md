@@ -1,12 +1,13 @@
 ---
 name: plan-orbis-implementation
-description: Derive verifiable implementation tasks from an approved Orbis package SPEC.md. Use when planning implementation or vertical slices against an existing package contract.
+description: Write local Markdown implementation plans with concrete tasks and verification from an approved Orbis package SPEC.md. Use when planning implementation or vertical slices against an existing package contract.
 ---
 
 # Plan implementation of an Orbis specification
 
-Produce an implementation plan grounded in the approved package contract and the
-current repository. A planning request does not authorize implementing the tasks.
+Write an implementation plan grounded in the approved package contract and the
+current repository. Save it locally by default. A planning request authorizes the
+plan files, not execution of their tasks.
 
 ## Establish the approved baseline
 
@@ -49,9 +50,12 @@ remaining obligations. Assign the check that establishes full coverage to a task
 A requirement reference alone does not establish that a slice satisfies the whole
 requirement.
 
-Use one plan when the work is cohesive. When separate tasks are useful, divide
-them into vertical slices with observable outcomes, each implementing the layers
-needed for that behavior. Do not make every layer a separate task by default.
+Read the [plan format](references/plan-format.md) before drafting. Use one plan
+when the work is cohesive. When separate tasks are useful, divide them into
+vertical slices with observable outcomes, each implementing the layers needed for
+that behavior. Split large work into linked plans when a slice needs an independent
+handoff, prerequisite investigation, or substantial context unrelated to other
+slices. Do not split solely by file count or make every layer a separate task.
 Infrastructure tasks are appropriate when a concrete prerequisite cannot form a
 useful independent slice; name the dependent behavior.
 
@@ -78,6 +82,14 @@ For each task, provide:
 - Remaining uncertainties and the specific research or experiment that resolves
   them.
 
+Make each task executable from the repository and saved plan without the chat.
+Name the files or symbols to change, the existing behavior to reuse, the intended
+edits, and the commands or interaction steps that establish acceptance. State each
+command's working directory and expected observable result. Label proposed paths
+and interfaces as additions; do not claim they already exist. Resolve routine
+implementation choices from inspected code and document the selection. Keep
+material unknowns in bounded investigation tasks with dependent work blocked.
+
 Order tasks by prerequisites. Identify parallel work only when it does not depend
 on unresolved decisions or incompatible changes to shared contracts. In a partial
 implementation, distinguish a completed slice from full package conformance. In a
@@ -94,11 +106,24 @@ weaken acceptance criteria, or treat a proposed change as already approved.
 
 ## Deliver and verify the plan
 
-Present a dependency-ordered plan with requirement coverage and remaining gaps.
-Keep plans in the current conversation unless the user specifies a destination.
-Do not create package-local plan directories or modify source merely to deliver a
-plan. Name the specification revision the plan targets and record any uncommitted
-specification changes that affect that baseline.
+Unless the user specifies another destination or requests chat-only output, write
+the dependency-ordered plan to `packages/<name>/implementation/PLAN.md` relative to
+the repository root. Use a descriptive title. Inspect existing plans before
+creating a directory; revise the matching plan without overwriting unrelated
+work. For multiple plans, make
+`PLAN.md` the index and use descriptive numbered sibling files as described in the
+format reference. Create directories only when writing their contents.
+
+Verify that Git ignores the default destination with `git check-ignore -v` and
+that no plan files there are tracked. Orbis ignores `/packages/*/implementation/`;
+do not add a blanket `PLAN.md` ignore rule or force-add local plans. When a user selects another
+local destination, check its ignore status and add a narrowly scoped ignore rule
+if needed. An explicit request for tracked plans overrides the local default.
+
+Keep the reusable format in the tracked skill and the generated plans in the
+chosen local directory. The package scaffold does not create plan directories.
+These files guide implementation work; they are not approved artifacts emitted by
+the `@orbis/plan` runtime. Preserve its requirement to save the exact reviewed Markdown.
 
 When evidence invalidates an assumption, revise the affected tasks, dependencies,
 and coverage claims. Preserve unaffected work and settled requirements. Distinguish
@@ -110,5 +135,9 @@ Include the repository's applicable verification in the implementation work. Pla
 or PR. Do not infer permission to commit, push, or publish from a planning request.
 
 If the user also authorized implementation, use the agreed plan to continue that
-work. Otherwise finish with the plan and explicit blockers, without claiming its
-tasks have been executed.
+work. Otherwise finish with links to the saved plan or index, its approval and
+readiness state, and explicit blockers. Check links, requirement coverage, task
+dependencies, and the separation between expected checks and recorded results.
+Report the saved paths and ignore status without repeating the entire plan in
+chat. If saving fails, report the failure and provide the plan in chat without
+claiming it was persisted.
