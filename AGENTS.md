@@ -43,6 +43,12 @@ documentation concrete.
   verification. Save local implementation plans under
   `packages/<name>/implementation/` by default; Git ignores these directories.
   The package scaffold does not create plan directories.
+- Colocate verification records and run evidence with implementation plans in
+  the default Git-ignored directory. Tracking or publishing evidence requires
+  explicit user opt-in. Do not create publicly referenced verification documents
+  or link package documentation to local evidence. Keep reusable test instructions
+  in the package README; package documentation describes behavior and compatibility
+  limits without session logs or test-run results.
 - For package design, use
   [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md).
   For implementation planning, use
@@ -104,6 +110,15 @@ documentation concrete.
 
 ## Verification
 
+- Automated local tests, including Vitest, `pnpm test`, and `pnpm check`, must not
+  invoke real models, start autonomous live-agent sessions, or incur model charges.
+  Use local unit and integration fixtures; Pi SDK sessions must use scripted
+  in-process providers when a test exercises an agent turn. Block external network
+  connections in those tests and allow only local fixture traffic.
+- Run real-agent checks with real models only as separate, explicit in-session
+  verification supervised by the active orchestrator. Do not include them in test
+  discovery or ordinary repository check commands. Store their evidence beside
+  the ignored implementation plans.
 - Run `pnpm install` after changing dependency manifests.
 - Run `pnpm format` and `pnpm check` before completing a change. Use targeted
   package tests and Pi loading checks for changed extension behavior.

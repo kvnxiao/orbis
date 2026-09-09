@@ -5,6 +5,13 @@ linked local plans. The approved `SPEC.md` defines behavior; the plan selects
 concrete edits and checks. Do not copy the entire specification or research corpus.
 Include the constraints needed to execute each task and link their sources.
 
+Verification records and run evidence belong beside the implementation plans in
+their default Git-ignored directory. Use task evidence fields or sibling records;
+tracking or publishing them requires explicit user opt-in. Do not create publicly
+referenced verification documents or link public documentation to local evidence.
+Keep reusable test instructions in the package README. Package documentation
+describes behavior and compatibility limits without session logs or test-run results.
+
 ## Single plan
 
 Use `PLAN.md` for one cohesive change. Start with its outcome and baseline, then
@@ -22,6 +29,7 @@ Specification approval: <confirmed scope, or pending decision>
 Repository baseline: <commit and relevant uncommitted changes>
 Readiness: ready | blocked on <named decision or investigation>
 Execution: not started | in progress | blocked | complete
+Evidence location: task fields or sibling records in this local implementation directory; ignored unless tracking is explicitly requested
 
 ## Outcome and scope
 
@@ -47,6 +55,9 @@ behavior to reuse. State shared contracts that constrain concurrent work.
 
 Verification: Give the working directory, exact command or repeatable interaction,
 input, and expected result. Label automated checks and real Pi/manual checks.
+Automated tests use local fixtures or scripted providers without real-model calls
+or model charges. Real-model checks require separate supervision by a live
+orchestrator during an explicit verification session.
 Include invalid input, interruption, and recovery cases when the behavior needs
 them. Name the plausible regression that the check must reject.
 
@@ -55,6 +66,7 @@ resolves it. Omit this field when the task has no blockers.
 
 Evidence: Not run. During authorized implementation, replace this with observed
 results and remaining checks; do not copy expectations into completion claims.
+Keep detailed records beside this plan and link them only from local plans.
 
 ## Requirement coverage
 
@@ -69,6 +81,9 @@ Include every requirement in the requested scope. Identify exclusions explicitly
 Assign interaction checks across tasks and repository verification to executable
 tasks. Include verify-changes after the accumulated implementation and immediately
 before any requested commit or PR. List checks that require a real Pi session.
+Confirm that plans and evidence share the ignored directory and are untracked
+unless the user explicitly opted in. Public docs must not reference run evidence;
+reusable test instructions belong in the package README.
 
 ## Resume notes
 
@@ -103,6 +118,7 @@ packages/<name>/implementation/
   01-<outcome>.md
   02-<outcome>.md
   03-<outcome>.md
+  verification.md  # Optional detailed run evidence; ignored with the plans
 ```
 
 The index contains the shared outcome, specification approval and baseline, links
@@ -115,6 +131,8 @@ Each child follows the single-plan outline for its scope. Link the index for sha
 context and include task-specific constraints locally. State each prerequisite's
 observable output, not just its filename. Keep task status and evidence in the
 child; the index links to that record instead of maintaining a duplicate checklist.
+Detailed verification and evidence records remain siblings of these plans and
+must not become publicly referenced package documentation.
 Do not create a separate file for every small task or repeat all package requirements
 in every child. A completed child establishes only its assigned contribution.
 

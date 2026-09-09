@@ -79,6 +79,9 @@ For each task, provide:
   require real Pi or user interaction. Where useful, name a plausible incorrect
   behavior the check must reject. A successful render or test run alone is not an
   acceptance criterion.
+- Automated checks use local fixtures or scripted in-process providers and must
+  not call real models or incur model charges. Schedule real-model checks as
+  separate in-session verification supervised by a live orchestrator.
 - Remaining uncertainties and the specific research or experiment that resolves
   them.
 
@@ -125,6 +128,15 @@ chosen local directory. The package scaffold does not create plan directories.
 These files guide implementation work; they are not approved artifacts emitted by
 the `@orbis/plan` runtime. Preserve its requirement to save the exact reviewed Markdown.
 
+Colocate verification records and run evidence with the implementation plans.
+Record results in task evidence fields or sibling files under the same default
+Git-ignored directory. Keep session logs, environment details, command results,
+and remaining checks there; do not create publicly referenced verification
+documents or link package documentation to these local records. Tracking or
+publishing evidence requires an explicit user opt-in. Keep reusable test
+instructions in the package README. Package documentation describes behavior and
+compatibility limits without session logs or test-run results.
+
 When evidence invalidates an assumption, revise the affected tasks, dependencies,
 and coverage claims. Preserve unaffected work and settled requirements. Distinguish
 a task adjustment within the contract from a proposed specification change that
@@ -138,6 +150,8 @@ If the user also authorized implementation, use the agreed plan to continue that
 work. Otherwise finish with links to the saved plan or index, its approval and
 readiness state, and explicit blockers. Check links, requirement coverage, task
 dependencies, and the separation between expected checks and recorded results.
+Verify that evidence is colocated with the plans and that public documentation
+does not reference it. Check ignore and tracking status for evidence as well as plans.
 Report the saved paths and ignore status without repeating the entire plan in
 chat. If saving fails, report the failure and provide the plan in chat without
 claiming it was persisted.
