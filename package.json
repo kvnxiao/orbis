@@ -9,10 +9,11 @@
     "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm -r --include-workspace-root run \"/^typecheck:.*/\"",
     "test": "vitest run",
     "lint": "oxlint --type-aware --deny-warnings --report-unused-disable-directives .",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck:root": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "catalog:",

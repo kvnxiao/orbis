@@ -118,7 +118,7 @@ docs/specifications.md    Specification and implementation-planning workflow
 scripts/                  Scaffolding and verification scripts
 pnpm-workspace.yaml       Workspace discovery and dependency catalog
 tsconfig.base.json        Shared TypeScript constraints
-tsconfig.json             Workspace and template type checking
+tsconfig.json             Root scripts, configuration, and template type checking
 vitest.config.mts         Workspace, template, and package test projects
 AGENTS.md                 Instructions for coding agents
 ```
@@ -160,6 +160,18 @@ boundaries; do not import a sibling's source through `../../` paths or TypeScrip
 path aliases.
 
 ## TypeScript compatibility
+
+`pnpm typecheck` runs `typecheck:*` scripts in the workspace root and every
+package through pnpm's recursive script runner. The root `typecheck:root` checks
+repository scripts, the root Vitest configuration, and the extension template.
+Each package's `typecheck:node` checks its source, tests, and Vitest configuration.
+`@orbis/plan` also runs `typecheck:browser` to check browser JavaScript with DOM
+types and without Node.js globals.
+
+The extension scaffold includes `typecheck:node`. To add another TypeScript
+configuration, add a `typecheck:<name>` script to its package. The root command
+includes it automatically. Use `pnpm --filter @orbis/<name> check` to run only
+that package's `typecheck:*` scripts.
 
 `tsc` checks source with `noEmit`. Pi's Jiti loader determines runtime syntax
 support; the workspace compiler version does not upgrade that loader.
