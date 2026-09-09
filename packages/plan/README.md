@@ -95,10 +95,15 @@ When a failed Pi write advances memory beyond disk, further planning writes stop
 Correct storage and reload the saved session. Reload restores the last saved state
 and discards unsaved edits. The package does not repair Pi session files.
 
-Approval saves the exact reviewed Markdown to a generated filename and records
-acceptance in the session. A failed acceptance save can leave the Markdown file
-present. Explicit approval of the same revision retries reconciliation at its
-recorded path, even if the configured directory changes. After confirming both records, the interface reports acceptance.
+Approval saves the exact reviewed Markdown as `<planId>-<revision>.md` and records
+acceptance in the session. The output filesystem must support hard links; existing
+files are never overwritten. When approval fails, the current revision remains
+available for review. Correct the reported settings or storage error, then use
+`/plan` to reopen review and explicitly retry approval, or `/plan-cancel` to cancel.
+A failed acceptance save can leave the Markdown file present. Even if the
+configured directory changes, explicit approval of the same revision retries
+reconciliation at its recorded path. After confirming both records, the interface reports
+acceptance.
 
 After saving approval and observing Pi idle, the package emits
 `orbis:plan-approved` with the [version 1 payload](SPEC.md#completion-event).

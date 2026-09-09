@@ -195,7 +195,7 @@ main?.addEventListener("click", (event) => {
   }
   (async () => {
     await saveDraft();
-    if (dirty || snapshot === undefined) {
+    if (dirty || snapshot === undefined || !button.isConnected) {
       return;
     }
     busy = true;

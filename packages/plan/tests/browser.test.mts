@@ -53,6 +53,14 @@ async function fixture() {
       );
       version += 1;
     },
+    revise() {
+      state = presentReview(state, {
+        planId: "plan",
+        expectedRevision: state.reviews?.at(-1)?.revision ?? 0,
+        markdown: "# Changed implementation\n\nNew content requires review.",
+      });
+      version += 1;
+    },
   };
 }
 
@@ -132,6 +140,45 @@ test("Markdown escapes embedded HTML and rejects executable URLs and remote imag
   expect(html).toContain("&lt;script&gt;");
   expect(renderMarkdown("**strong** and `code`")).toContain("<strong>strong</strong>");
 });
+
+test.skipIf(process.env.ORBIS_BROWSER !== "1")(
+  "a dirty stale approval click cannot approve a newly recovered revision",
+  { timeout: 30000 },
+  async ({ onTestFinished }) => {
+    const f = await fixture();
+    f.review();
+    onTestFinished(() => {
+      f.server.close();
+    });
+    const browser = await chromium.launch(
+      process.platform === "win32" ? { channel: "msedge" } : {},
+    );
+    onTestFinished(async () => {
+      await browser.close();
+    });
+    const page = await browser.newPage();
+    await page.goto(f.url.href);
+    await page.getByLabel("Request changes").focus();
+    f.revise();
+    await page.evaluate(`(() => {
+      const editor = document.querySelector("#feedback");
+      const approve = document.querySelector('button[data-action="approve"]');
+      if (!(editor instanceof HTMLTextAreaElement) || !(approve instanceof HTMLButtonElement)) {
+        throw new Error("Missing review controls");
+      }
+      editor.value = "Feedback for the old text";
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+      approve.click();
+    })()`);
+    await page.getByLabel("Recovered draft text").waitFor();
+    await page.getByRole("heading", { name: "Changed implementation", exact: true }).waitFor();
+    await page.waitForFunction("busy === false");
+    expect(f.read().phase).toBe("review");
+    expect(f.read().reviews?.at(-1)?.status).toBe("pending");
+    await page.getByRole("button", { name: "Approve this revision" }).click();
+    await expect.poll(() => f.read().phase).toBe("saving");
+  },
+);
 
 test("teardown invalidates an in-flight browser startup", async ({ onTestFinished }) => {
   const server = new PlanBrowser(

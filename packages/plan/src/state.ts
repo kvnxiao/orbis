@@ -81,7 +81,7 @@ export interface RoundState {
 export interface PlanRevision {
   revision: number;
   markdown: string;
-  status: "pending" | "feedback" | "approved";
+  status: "pending" | "feedback" | "approved" | "superseded";
   feedbackDraft: string;
   feedback?: string;
 }
@@ -122,6 +122,7 @@ export const roundStateSchema = Type.Object({
           Type.Literal("pending"),
           Type.Literal("feedback"),
           Type.Literal("approved"),
+          Type.Literal("superseded"),
         ]),
         feedbackDraft: Type.String(),
         feedback: Type.Optional(prose),
@@ -267,10 +268,24 @@ export function transitionInteraction(
 
 function normalizeQuestion(item: QuestionInput) {
   return JSON.stringify({
-    ...item,
+    id: item.id,
     prerequisites: item.prerequisites.toSorted(),
-    options: item.options.toSorted((a, b) => a.id.localeCompare(b.id)),
-    revision: undefined,
+    context: item.context,
+    prompt: item.prompt,
+    options: item.options
+      .toSorted((a, b) => a.id.localeCompare(b.id))
+      .map((option) => ({
+        id: option.id,
+        label: option.label,
+        explanation: option.explanation,
+      })),
+    recommendation:
+      item.recommendation === undefined
+        ? undefined
+        : {
+            optionId: item.recommendation.optionId,
+            reason: item.recommendation.reason,
+          },
   });
 }
 
@@ -339,6 +354,13 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   return {
     ...state,
     phase: "round",
+    ...(state.reviews === undefined
+      ? {}
+      : {
+          reviews: state.reviews.map((review) =>
+            review.status === "pending" ? { ...review, status: "superseded" as const } : review,
+          ),
+        }),
     round: {
       id: input.roundId,
       revision: (same ? previous.revision : 0) + 1,

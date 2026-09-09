@@ -350,13 +350,13 @@ export class PlanRuntime {
         }
         apply(roundId, revision, action);
       };
-      const runView = async (): Promise<void> => {
+      const runView = async (): Promise<boolean> => {
         const view = this.selectedInterface;
         const viewController = new AbortController();
         const interrupted = () => viewController.signal.aborted;
         this.viewController = viewController;
         if (controller.signal.aborted || generation !== this.generation) {
-          return;
+          return false;
         }
         if (view === "terminal") {
           const show = reviewing ? terminalReview : terminalRound;
@@ -412,7 +412,7 @@ export class PlanRuntime {
             viewController.signal.aborted ||
             (this.active?.phase !== "round" && this.active?.phase !== "review")
           ) {
-            return;
+            return false;
           }
           const selection = await ctx.ui.select(
             `Browser planning: ${url}\nAnswer in the browser, or choose an action here.`,
@@ -425,15 +425,17 @@ export class PlanRuntime {
             dispatch({ type: "cancel" });
           }
         }
-        if (
+        return (
           generation === this.generation &&
           view !== this.selectedInterface &&
           (this.active?.phase === "round" || this.active?.phase === "review")
-        ) {
-          await runView();
-        }
+        );
       };
-      await runView();
+      let switching: boolean;
+      do {
+        // oxlint-disable-next-line no-await-in-loop -- The active view must close before its replacement opens.
+        switching = await runView();
+      } while (switching);
       if (generation !== this.generation) {
         return { outcome: "cancelled" };
       }
@@ -509,6 +511,18 @@ export class PlanRuntime {
         return { outcome: "clarification", round: active.round, draftsSubmitted: false };
       }
       return { outcome: "cancelled", planId: active.planId };
+    } catch (error) {
+      if (generation !== this.generation) {
+        return { outcome: "cancelled" };
+      }
+      if (this.active?.phase === "saving") {
+        this.active = { ...this.active, phase: "review" };
+        this.viewVersion += 1;
+        this.save(ctx);
+      }
+      const message = `${error instanceof Error ? error.message : String(error)} Use /plan to retry the current interaction, /plan-ui to switch interfaces, or /plan-cancel to cancel.`;
+      ctx.ui.notify(message, "error");
+      return { outcome: "error", message };
     } finally {
       this.waiting = false;
       this.finishView = undefined;

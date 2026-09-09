@@ -76,7 +76,7 @@ test("reordering preserves identities and changed questions require selective re
   });
 });
 
-test("invalid answers and stale submissions preserve accepted state", () => {
+test("invalid answers and stale submissions preserve round state", () => {
   const state = round();
   const before = structuredClone(state);
   expect(() =>
@@ -91,6 +91,34 @@ test("invalid answers and stale submissions preserve accepted state", () => {
   expect(() => action(state, { type: "submit" })).toThrow("Answer or reconfirm");
   expect(() => transitionRound(state, "frontier", 0, { type: "submit" })).toThrow("Round changed");
   expect(state).toEqual(before);
+});
+
+test("JSON member order preserves unchanged question revisions and draft submission", () => {
+  const original = question("storage");
+  let state = round([original]);
+  state = action(state, { type: "answer", questionId: "storage", answer: { optionId: "local" } });
+  const reordered: QuestionInput = {
+    recommendation: { reason: "Offline access is required", optionId: "local" },
+    options: original.options.map((option) => ({
+      explanation: option.explanation,
+      label: option.label,
+      id: option.id,
+    })),
+    context: original.context,
+    prompt: original.prompt,
+    prerequisites: original.prerequisites,
+    id: original.id,
+  };
+  state = presentRound(state, {
+    planId: "plan",
+    roundId: "frontier",
+    expectedRevision: 1,
+    questions: [reordered],
+  });
+  expect(state.round?.questions[0]?.revision).toBe(1);
+  expect(action(state, { type: "submit" }).decisions.storage?.answer).toEqual({
+    optionId: "local",
+  });
 });
 
 test("clarification retains unsubmitted drafts and resolves the same round", () => {

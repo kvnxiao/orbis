@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { presentRound, transitionRound } from "../src/state.ts";
+import { presentReview, presentRound, transitionReview, transitionRound } from "../src/state.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 test("entry preserves active work and replacement archives the unfinished plan", async ({
@@ -94,6 +94,52 @@ test("malformed branch records cannot initialize an interaction", async ({ onTes
   f.manager.appendCustomEntry("orbis-plan", { version: 1, active: { phase: "round" } });
   f.runtime.restore(f.ctx);
   expect(f.runtime.active).toBeUndefined();
+});
+
+test("reopened questions supersede pending review and resume without approving obsolete text", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(async () => {
+    await f.dispose();
+  });
+  f.runtime.start(f.ctx, "Reconsider storage");
+  const active = f.runtime.active;
+  if (active === undefined) {
+    throw new Error("Missing plan");
+  }
+  const review = presentReview(active, {
+    planId: active.planId,
+    expectedRevision: 0,
+    markdown: "# Old plan",
+  });
+  const questions = presentRound(review, {
+    planId: active.planId,
+    roundId: "reconsider",
+    expectedRevision: 0,
+    questions: [
+      {
+        id: "storage",
+        prerequisites: [],
+        prompt: "Storage?",
+        context: "New constraint",
+        options: [],
+      },
+    ],
+  });
+  f.runtime.active = {
+    ...active,
+    ...transitionRound(questions, "reconsider", 1, { type: "cancel" }),
+  };
+  f.runtime.save(f.ctx);
+  f.runtime.restore(f.ctx);
+  expect(f.runtime.resumeCurrent(f.ctx)).toBe(true);
+  expect(f.runtime.active.phase).toBe("round");
+  expect(f.runtime.active.reviews?.at(-1)?.markdown).toBe("# Old plan");
+  expect(f.runtime.active.reviews?.at(-1)?.status).toBe("superseded");
+  expect(() => transitionReview({ ...questions, phase: "review" }, 1, { type: "approve" })).toThrow(
+    "Plan review changed",
+  );
 });
 
 test("explicit resumption restores cancelled research while model review remains stopped", async ({
