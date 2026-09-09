@@ -35,6 +35,13 @@ assume the reference implementation already conforms to its specification.
 
 ## Derive tasks from requirements
 
+Keep the SPEC at the behavioral-contract level. In the plan, select files, internal
+types, algorithms, and task boundaries within that contract. Translate failure,
+cancellation, recovery, and ordering guarantees into concrete edits and checks;
+do not require the SPEC to prescribe the mechanism. When a missing behavioral
+decision would change acceptance, resolve it with the user before planning
+dependent work.
+
 Map the requested scope to specification requirements and conformance scenarios.
 Keep complete, partial, remaining, and out-of-scope requirements visible. Separate proposed
 checks from recorded results; identify the evidence behind completion claims.
@@ -102,6 +109,11 @@ obligation; do not make required behavior optional to simplify scheduling.
 Assign verification of interactions across slices, such as cancellation during
 persistence or interface switching with unfinished input, to concrete tasks.
 Passing isolated component checks does not establish the complete workflow.
+For delayed operations and persistence, include checks at the boundary where the
+operation completes: identify which session or revision may accept its result,
+what survives interruption, and what an explicit retry may change. Select these
+checks from the package's requirements rather than imposing them on unrelated
+tasks.
 
 When an implementation decision changes observable behavior, treat it as a
 specification decision and obtain the user's direction. Do not add requirements,
@@ -145,6 +157,12 @@ requires the user's direction.
 Include the repository's applicable verification in the implementation work. Place
 `verify-changes` after the accumulated implementation and before a requested commit
 or PR. Do not infer permission to commit, push, or publish from a planning request.
+Assign [verify-orbis-conformance](../verify-orbis-conformance/SKILL.md) to final
+verification through `verify-changes`, including requirements affected by review
+fixes. Plan tracked tests and reusable verification instructions that a fresh clone
+can use without the ignored plans or evidence journals. Keep missing tests and
+implementation defects separate from contract amendments that require approval.
+A completed plan or passing test suite does not establish package conformance.
 
 If the user also authorized implementation, use the agreed plan to continue that
 work. Otherwise finish with links to the saved plan or index, its approval and

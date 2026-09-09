@@ -12,23 +12,11 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 
-import { Type } from "typebox";
-import type { Static } from "typebox";
-
 import type { SaveResult } from "./persistence.ts";
-import type { PlanningSession } from "./runtime.ts";
+import type { PlanApproval, PlanningSession } from "./state.ts";
 
-export const approvalSchema = Type.Object({
-  version: Type.Literal(1),
-  planId: Type.String(),
-  revision: Type.Integer({ minimum: 1 }),
-  sessionId: Type.String(),
-  cwd: Type.String(),
-  planPath: Type.String(),
-  planContent: Type.String(),
-  approvedAt: Type.String(),
-});
-export type PlanApproval = Static<typeof approvalSchema>;
+export { approvalSchema } from "./state.ts";
+export type { PlanApproval } from "./state.ts";
 
 export function saveApproval(
   state: PlanningSession,

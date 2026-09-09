@@ -39,6 +39,11 @@ publication, and commands without a `just` recipe.
 - Write specifications for an independent Pi implementer. State the complete
   required behavior, public contracts, permitted implementation choices, and
   conformance criteria. Keep implementation availability explicit.
+- Keep specifications current with approved behavior, including failure,
+  cancellation, recovery, and ordering guarantees. Put file layouts, internal
+  types, algorithms, and task decomposition in implementation plans unless an
+  external compatibility contract requires them. Specifications contain the
+  contract, not review history or verification journals.
 - Use package-local requirement IDs in the form `REQ-001`. Implementation tasks
   reference these IDs and have separate names; cross-package references name the
   package as well.
@@ -137,6 +142,25 @@ publication, and commands without a `just` recipe.
 - Run the `verify-changes` skill once on the accumulated change set when the
   skill is available. Otherwise review the diff, update affected docs, audit
   prose, and run repository checks. Report skipped or blocked checks.
+- As part of `verify-changes`, use
+  [verify-orbis-conformance](.agents/skills/verify-orbis-conformance/SKILL.md)
+  for affected package contracts and their interactions with unchanged behavior.
+  Use its full-package scope for an explicit package conformance review. Read the
+  skill file when automatic discovery is unavailable. Review SPEC-only changes
+  against available source and tests as well.
+- Conformance reviews use clone-available artifacts, not ignored plans, journals,
+  or prior chat conclusions. Required behavior must be implemented and verified;
+  public behavior must be described by the SPEC or fall within an explicitly
+  permitted implementation choice. Report confirmed deviations separately from
+  unverified obligations. A scoped review does not establish full conformance.
+- Derive expected results from the approved contract, not the current output.
+  Report requirement IDs, supporting checks, and unverified obligations. Keep
+  saved run evidence local unless tracking is explicitly requested. Classify
+  discrepancies as implementation defects, missing verification, or proposed
+  contract amendments. Do not weaken the SPEC to make code pass; obtain user
+  direction for material contract changes. After review fixes, recheck affected
+  requirements and update approved contract wording
+  without adding implementation mechanics or provenance to the SPEC.
 - Do not publish packages, push commits, or create releases unless the user
   requests those actions.
 

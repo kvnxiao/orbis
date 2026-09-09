@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
+import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
@@ -55,17 +56,32 @@ export async function readSettings(
   return { ...settings, planDirectory: resolve(cwd, settings.planDirectory) };
 }
 
-export async function writeSettings(path: string, fields: SettingsFields): Promise<void> {
+export async function writeSettings(
+  path: string,
+  fields: SettingsFields,
+  current: () => boolean = () => true,
+): Promise<void> {
   if (!Value.Check(settingsSchema, fields) || fields.planDirectory?.includes("\0") === true) {
     throw new Error(
       `Invalid planning settings for ${path}. Correct interface or planDirectory and retry.`,
     );
   }
-  const previous = await readSettingsFile(path);
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify({ ...previous, ...fields }, null, 2)}\n`, {
-    flag: "wx",
+  await withFileMutationQueue(path, async () => {
+    if (!current()) {
+      return;
+    }
+    const previous = await readSettingsFile(path);
+    await mkdir(dirname(path), { recursive: true });
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, `${JSON.stringify({ ...previous, ...fields }, null, 2)}\n`, {
+        flag: "wx",
+      });
+      if (current()) {
+        await rename(temporary, path);
+      }
+    } finally {
+      await rm(temporary, { force: true });
+    }
   });
-  await rename(temporary, path);
 }

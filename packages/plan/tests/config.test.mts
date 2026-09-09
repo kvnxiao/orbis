@@ -6,6 +6,22 @@ import { expect, test } from "vitest";
 
 import { readSettings, readSettingsFile, writeSettings } from "../src/config.ts";
 
+test("concurrent settings updates preserve both fields", async ({ onTestFinished }) => {
+  const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-config-"));
+  onTestFinished(async () => {
+    await rm(cwd, { recursive: true, force: true });
+  });
+  const path = join(cwd, "settings.json");
+  await Promise.all([
+    writeSettings(path, { interface: "browser" }),
+    writeSettings(path, { planDirectory: "approved-plans" }),
+  ]);
+  expect(await readSettingsFile(path)).toEqual({
+    interface: "browser",
+    planDirectory: "approved-plans",
+  });
+});
+
 test("settings inherit defaults and trust gates project overrides", async ({ onTestFinished }) => {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-config-"));
   onTestFinished(async () => {

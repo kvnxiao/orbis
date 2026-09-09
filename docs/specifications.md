@@ -130,6 +130,13 @@ behavior.
 
 ## Maintain the contract
 
+Use [verify-orbis-conformance](../.agents/skills/verify-orbis-conformance/SKILL.md)
+to review the reference implementation against the SPEC and check that the SPEC
+describes its public behavior. An explicit full-package review covers every
+requirement; `verify-changes` reviews affected contracts and their interactions.
+Reviews use clone-available source, tests, and documentation. Ignored plans and
+verification journals do not supply missing requirements or establish conformance.
+
 Keep `SPEC.md` focused on required behavior and the README focused on the available
 reference implementation. A specification does not establish that a feature is
 implemented or tested. State implementation availability in the repository package

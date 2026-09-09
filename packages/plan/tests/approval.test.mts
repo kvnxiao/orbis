@@ -24,11 +24,7 @@ async function fixture() {
     ...active,
     ...transitionReview(reviewed, 1, { type: "approve" }),
   };
-  const persist = (snapshot: PlanningSession) => {
-    f.runtime.active = snapshot;
-    return f.runtime.save(f.ctx);
-  };
-  return { ...f, state, persist, directory: join(f.ctx.cwd, "plans") };
+  return { ...f, state, directory: join(f.ctx.cwd, "plans") };
 }
 
 test("approval persists intent, exact file bytes, and acceptance in order", async ({

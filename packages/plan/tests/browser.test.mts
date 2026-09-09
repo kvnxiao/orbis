@@ -1,3 +1,5 @@
+import { request } from "node:http";
+
 import { chromium } from "playwright";
 import { expect, test } from "vitest";
 
@@ -99,6 +101,62 @@ test("browser rejects unauthorized, foreign-origin and stale mutations", async (
   await expect(fetch(`${f.url.origin}/state`, { headers: f.headers })).rejects.toThrow(
     "fetch failed",
   );
+});
+
+test("browser preserves Unicode split across HTTP body chunks", async ({ onTestFinished }) => {
+  const f = await fixture();
+  onTestFinished(() => {
+    f.server.close();
+  });
+  const body = Buffer.from(
+    JSON.stringify({
+      version: 0,
+      roundId: "round",
+      revision: 1,
+      action: { type: "edit", questionId: "storage", unfinished: "café" },
+    }),
+  );
+  const split = body.indexOf(Buffer.from("é")) + 1;
+  const status = await new Promise<number | undefined>((resolve, reject) => {
+    const outgoing = request(
+      `${f.url.origin}/action`,
+      { method: "POST", headers: f.headers },
+      (response) => {
+        response.resume();
+        response.once("end", () => {
+          resolve(response.statusCode);
+        });
+      },
+    );
+    outgoing.once("error", reject);
+    outgoing.write(body.subarray(0, split), () => {
+      setImmediate(() => {
+        outgoing.end(body.subarray(split));
+      });
+    });
+  });
+  expect(status).toBe(200);
+  expect(f.read().round?.drafts.storage?.unfinished).toBe("café");
+});
+
+test("oversized browser actions preserve existing drafts", async ({ onTestFinished }) => {
+  const f = await fixture();
+  onTestFinished(() => {
+    f.server.close();
+  });
+  const before = structuredClone(f.read());
+  const response = await fetch(`${f.url.origin}/action`, {
+    method: "POST",
+    headers: f.headers,
+    body: JSON.stringify({
+      version: 0,
+      roundId: "round",
+      revision: 1,
+      action: { type: "edit", questionId: "storage", unfinished: "é".repeat(600_000) },
+    }),
+  });
+  expect(response.status).toBe(413);
+  expect(f.read()).toEqual(before);
 });
 
 test.skipIf(process.env.ORBIS_BROWSER !== "1")(

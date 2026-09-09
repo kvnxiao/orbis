@@ -10,13 +10,17 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { saveRecord } from "../src/persistence.ts";
+import type { SaveResult } from "../src/persistence.ts";
 import { PlanRuntime } from "../src/runtime.ts";
+import type { PlanningSession } from "../src/state.ts";
 
 interface RuntimeFixture {
   runtime: PlanRuntime;
   ctx: ExtensionContext;
   manager: SessionManager;
   api: ExtensionAPI;
+  persist: (plan: PlanningSession) => SaveResult;
   dispose: () => Promise<void>;
 }
 export async function runtimeFixture(): Promise<RuntimeFixture> {
@@ -53,6 +57,7 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
     throw new Error("Fixture did not initialize planning runtime");
   }
   const planning = runtime;
+  const extensionApi = api;
   const base = session.extensionRunner.createContext();
   const ctx: ExtensionContext = {
     ...base,
@@ -89,7 +94,11 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
     ctx,
     manager,
     api,
+    persist(plan) {
+      return saveRecord(extensionApi, ctx, { version: 1, active: plan, unfinished: [] });
+    },
     async dispose(): Promise<void> {
+      await session.abort();
       planning.close(ctx);
       session.dispose();
       await rm(cwd, { recursive: true, force: true });

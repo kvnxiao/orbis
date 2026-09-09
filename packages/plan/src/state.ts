@@ -50,12 +50,13 @@ export interface Draft {
   unfinished: string;
   answer?: Answer;
 }
-export interface Clarification {
-  id: string;
-  questionId: string;
-  request: string;
-  response?: string;
-}
+const clarificationSchema = Type.Object({
+  id: identity,
+  questionId: identity,
+  request: prose,
+  response: Type.Optional(prose),
+});
+export type Clarification = Static<typeof clarificationSchema>;
 export interface Round {
   id: string;
   revision: number;
@@ -78,13 +79,51 @@ export interface RoundState {
   decisions: Record<string, Decision>;
   reviews?: PlanRevision[];
 }
-export interface PlanRevision {
-  revision: number;
-  markdown: string;
-  status: "pending" | "feedback" | "approved" | "superseded";
-  feedbackDraft: string;
-  feedback?: string;
+const planRevisionSchema = Type.Object({
+  revision: Type.Integer({ minimum: 1 }),
+  markdown: prose,
+  status: Type.Union([
+    Type.Literal("pending"),
+    Type.Literal("feedback"),
+    Type.Literal("approved"),
+    Type.Literal("superseded"),
+  ]),
+  feedbackDraft: Type.String(),
+  feedback: Type.Optional(prose),
+});
+export type PlanRevision = Static<typeof planRevisionSchema>;
+
+export const approvalSchema = Type.Object({
+  version: Type.Literal(1),
+  planId: Type.String(),
+  revision: Type.Integer({ minimum: 1 }),
+  sessionId: Type.String(),
+  cwd: Type.String(),
+  planPath: Type.String(),
+  planContent: Type.String(),
+  approvedAt: Type.String(),
+});
+export type PlanApproval = Static<typeof approvalSchema>;
+
+export interface PlanningSession extends RoundState {
+  planId: string;
+  sessionId: string;
+  branchId: string | null;
+  cwd: string;
+  objective: string;
+  accepted?: PlanApproval;
+  pendingApproval?: PlanApproval;
 }
+export type RuntimeResult =
+  | { outcome: "error"; message: string }
+  | { outcome: "unsupported-mode"; message: string }
+  | { outcome: "started" | "active"; plan: PlanningSession }
+  | { outcome: "cancelled"; planId?: string }
+  | { outcome: "approval"; message: string; approval: PlanApproval }
+  | { outcome: "feedback"; revision: number; feedback: string }
+  | { outcome: "answers"; roundId: string; revision: number; decisions: RoundState["decisions"] }
+  | { outcome: "clarification"; round: NonNullable<RoundState["round"]>; draftsSubmitted: false };
+
 export type ReviewAction =
   | { type: "approve" }
   | { type: "feedback"; text: string }
@@ -103,6 +142,15 @@ export type RoundAction =
   | { type: "submit" }
   | { type: "cancel" };
 
+const storedQuestionSchema = Type.Object({
+  ...questionSchema.properties,
+  revision: Type.Integer({ minimum: 1 }),
+});
+const storedAnswerSchema = Type.Union([
+  Type.Object({ optionId: identity }, { additionalProperties: false }),
+  Type.Object({ custom: prose }, { additionalProperties: false }),
+]);
+
 export const roundStateSchema = Type.Object({
   phase: Type.Union([
     Type.Literal("research"),
@@ -113,36 +161,15 @@ export const roundStateSchema = Type.Object({
     Type.Literal("accepted"),
     Type.Literal("cancelled"),
   ]),
-  reviews: Type.Optional(
-    Type.Array(
-      Type.Object({
-        revision: Type.Integer({ minimum: 1 }),
-        markdown: prose,
-        status: Type.Union([
-          Type.Literal("pending"),
-          Type.Literal("feedback"),
-          Type.Literal("approved"),
-          Type.Literal("superseded"),
-        ]),
-        feedbackDraft: Type.String(),
-        feedback: Type.Optional(prose),
-      }),
-    ),
-  ),
+  reviews: Type.Optional(Type.Array(planRevisionSchema)),
   decisions: Type.Record(
     Type.String(),
     Type.Object({
       questionId: identity,
       questionRevision: Type.Integer({ minimum: 1 }),
-      question: Type.Object({
-        ...questionSchema.properties,
-        revision: Type.Integer({ minimum: 1 }),
-      }),
+      question: storedQuestionSchema,
       roundId: identity,
-      answer: Type.Union([
-        Type.Object({ optionId: identity }, { additionalProperties: false }),
-        Type.Object({ custom: prose }, { additionalProperties: false }),
-      ]),
+      answer: storedAnswerSchema,
     }),
   ),
   round: Type.Optional(
@@ -151,31 +178,16 @@ export const roundStateSchema = Type.Object({
       revision: Type.Integer({ minimum: 1 }),
       focus: identity,
       submitted: Type.Boolean(),
-      questions: Type.Array(
-        Type.Object({ ...questionSchema.properties, revision: Type.Integer({ minimum: 1 }) }),
-        { minItems: 1 },
-      ),
+      questions: Type.Array(storedQuestionSchema, { minItems: 1 }),
       drafts: Type.Record(
         Type.String(),
         Type.Object({
           revision: Type.Integer({ minimum: 1 }),
           unfinished: Type.String(),
-          answer: Type.Optional(
-            Type.Union([
-              Type.Object({ optionId: identity }, { additionalProperties: false }),
-              Type.Object({ custom: prose }, { additionalProperties: false }),
-            ]),
-          ),
+          answer: Type.Optional(storedAnswerSchema),
         }),
       ),
-      clarifications: Type.Array(
-        Type.Object({
-          id: identity,
-          questionId: identity,
-          request: prose,
-          response: Type.Optional(prose),
-        }),
-      ),
+      clarifications: Type.Array(clarificationSchema),
     }),
   ),
 });

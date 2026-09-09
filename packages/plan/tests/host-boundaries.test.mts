@@ -14,6 +14,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { expect, test } from "vitest";
 
+import extension from "../src/index.ts";
 import { saveRecord } from "../src/persistence.ts";
 
 async function fixture(persist = true, setup?: (pi: ExtensionAPI) => void) {
@@ -57,6 +58,7 @@ async function fixture(persist = true, setup?: (pi: ExtensionAPI) => void) {
     session,
     ctx: session.extensionRunner.createContext(),
     async dispose() {
+      await session.abort();
       session.dispose();
       await rm(cwd, { recursive: true, force: true });
     },
@@ -208,6 +210,109 @@ test("disabled persistence returns normally and retains only memory", async ({
   }).not.toThrow();
   expect(f.manager.isPersisted()).toBe(false);
   expect(f.manager.getSessionFile()).toBeUndefined();
+});
+
+test("Pi records rejected planning execution as an error tool result", async ({
+  onTestFinished,
+}) => {
+  const f = await fixture(true, (pi) => {
+    extension({
+      ...pi,
+      registerTool(tool) {
+        pi.registerTool({
+          ...tool,
+          async execute(id, params, signal, update, ctx) {
+            return await tool.execute(id, params, signal, update, { ...ctx, mode: "tui" });
+          },
+        });
+      },
+    });
+  });
+  onTestFinished(async () => {
+    await f.dispose();
+  });
+  const model = {
+    id: "fixture",
+    name: "Fixture",
+    api: "openai-responses",
+    provider: "fixture",
+    baseUrl: "http://127.0.0.1",
+    reasoning: false,
+    input: ["text" as const],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 10000,
+    maxTokens: 1000,
+  };
+  f.api.registerProvider("fixture", {
+    api: model.api,
+    baseUrl: model.baseUrl,
+    apiKey: "fixture",
+    models: [model],
+  });
+  await f.session.setModel(model, { persist: false });
+  let calls = 0;
+  f.session.agent.streamFunction = () => {
+    calls += 1;
+    if (calls > 2) {
+      throw new Error("Unexpected fixture continuation");
+    }
+    const stream = createAssistantMessageEventStream();
+    const message: AssistantMessage = {
+      role: "assistant",
+      content:
+        calls === 1
+          ? [
+              {
+                type: "toolCall",
+                id: "invalid-plan",
+                name: "plan_round",
+                arguments: {
+                  planId: "missing",
+                  roundId: "round",
+                  expectedRevision: 0,
+                  questions: [
+                    {
+                      id: "scope",
+                      prerequisites: [],
+                      context: "Known context",
+                      prompt: "Scope?",
+                      options: [],
+                    },
+                  ],
+                },
+              },
+            ]
+          : [{ type: "text", text: "Observed the planning failure." }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: calls === 1 ? "toolUse" : "stop",
+      timestamp: Date.now(),
+    };
+    stream.push({
+      type: "done",
+      reason: message.stopReason === "toolUse" ? "toolUse" : "stop",
+      message,
+    });
+    return stream;
+  };
+  await f.session.prompt("Present the round for the missing plan.");
+  expect(
+    f.manager
+      .getBranch()
+      .filter((entry) => entry.type === "message")
+      .map((entry) => entry.message),
+  ).toContainEqual(
+    expect.objectContaining({ role: "toolResult", toolName: "plan_round", isError: true }),
+  );
 });
 
 test("failed writes advance memory and retry creates a missing-parent branch on disk", async ({

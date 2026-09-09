@@ -6,14 +6,20 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
-import { approvalSchema, saveApproval } from "./approval.ts";
-import type { PlanApproval } from "./approval.ts";
+import { saveApproval } from "./approval.ts";
 import { PlanBrowser } from "./browser.ts";
 import { readSettings, readSettingsFile, writeSettings } from "./config.ts";
 import { readSavedRecord, saveRecord } from "./persistence.ts";
-import { presentReview, presentRound, roundStateSchema, transitionInteraction } from "./state.ts";
-import type { ReviewInput, RoundInput, RoundState } from "./state.ts";
+import {
+  approvalSchema,
+  presentReview,
+  presentRound,
+  roundStateSchema,
+  transitionInteraction,
+} from "./state.ts";
+import type { PlanningSession, ReviewInput, RoundInput, RuntimeResult } from "./state.ts";
 import { terminalReview, terminalRound } from "./terminal.ts";
+import { toolResult } from "./tool-result.ts";
 
 const sessionSchema = Type.Object({
   ...roundStateSchema.properties,
@@ -31,44 +37,33 @@ const snapshotSchema = Type.Object({
   unfinished: Type.Array(sessionSchema),
 });
 
-export interface PlanningSession extends RoundState {
-  planId: string;
-  sessionId: string;
-  branchId: string | null;
-  cwd: string;
-  objective: string;
-  accepted?: PlanApproval;
-  pendingApproval?: PlanApproval;
-}
+export type { PlanningSession } from "./state.ts";
 
-export interface RuntimeResult {
-  outcome: string;
-  message?: string;
-  plan?: PlanningSession | undefined;
-  planId?: string;
-  approval?: PlanApproval | undefined;
-  revision?: number | undefined;
-  feedback?: string | undefined;
-  roundId?: string | undefined;
-  decisions?: RoundState["decisions"];
-  round?: RoundState["round"];
-  draftsSubmitted?: boolean;
-}
+export type { RuntimeResult } from "./state.ts";
 
 export class PlanRuntime {
-  active: PlanningSession | undefined;
-  readonly unfinished: PlanningSession[] = [];
-  private waiting = false;
+  private current: PlanningSession | undefined;
+  private readonly archived: PlanningSession[] = [];
+
+  get active(): Readonly<PlanningSession> | undefined {
+    return this.current;
+  }
+
+  get unfinished(): readonly Readonly<PlanningSession>[] {
+    return this.archived;
+  }
   private readonly pi: ExtensionAPI;
   private readonly agentDir: string;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private controller: AbortController | undefined;
+  private entryController: AbortController | undefined;
   private generation = 0;
   private viewVersion = 0;
   private browser: PlanBrowser | undefined;
   private viewController: AbortController | undefined;
   private finishView: (() => void) | undefined;
   private selectedInterface: "terminal" | "browser" | undefined;
+  private interfaceRequest = 0;
   private completionTimer: ReturnType<typeof setInterval> | undefined;
   private readonly emitted = new Set<string>();
   saveStatus = { saved: false, message: "Planning state is unsaved." };
@@ -79,7 +74,7 @@ export class PlanRuntime {
   }
 
   resumeCurrent(ctx: ExtensionContext): boolean {
-    const active = this.active;
+    const active = this.current;
     if (active?.phase !== "cancelled") {
       return false;
     }
@@ -92,7 +87,7 @@ export class PlanRuntime {
             ? "clarification"
             : "round"
           : "research";
-    this.active = { ...active, phase };
+    this.current = { ...active, phase };
     this.viewVersion += 1;
     this.save(ctx);
     return true;
@@ -100,45 +95,43 @@ export class PlanRuntime {
 
   cancel(ctx: ExtensionContext): RuntimeResult {
     if (
-      this.active === undefined ||
-      this.active.phase === "accepted" ||
-      this.active.phase === "saving"
+      this.current === undefined ||
+      this.current.phase === "accepted" ||
+      this.current.phase === "saving"
     ) {
       return { outcome: "error", message: "No cancellable planning interaction is active." };
     }
-    this.active = { ...this.active, phase: "cancelled" };
+    this.current = { ...this.current, phase: "cancelled" };
     this.viewVersion += 1;
-    this.controller?.abort();
-    this.viewController?.abort();
-    this.browser?.close();
-    this.browser = undefined;
+    this.disposeOperations();
     this.save(ctx);
     ctx.abort();
-    return { outcome: "cancelled", planId: this.active.planId };
+    return { outcome: "cancelled", planId: this.current.planId };
   }
 
   resume(ctx: ExtensionContext, planId: string): void {
-    if (this.waiting) {
+    if (this.controller !== undefined) {
       throw new Error("Cancel the current interaction before resuming another plan.");
     }
-    const index = this.unfinished.findIndex(
+    const index = this.archived.findIndex(
       (plan) => plan.planId === planId && plan.phase !== "accepted",
     );
-    const selected = this.unfinished[index];
+    const selected = this.archived[index];
     if (selected === undefined) {
       throw new Error("The selected unfinished plan is unavailable on this branch.");
     }
-    this.unfinished.splice(index, 1);
-    if (this.active !== undefined) {
-      this.unfinished.push(this.active);
+    this.archived.splice(index, 1);
+    if (this.current !== undefined) {
+      this.archived.push(this.current);
     }
-    this.active = selected;
+    this.current = selected;
     this.viewVersion += 1;
     this.save(ctx);
     this.present(ctx);
   }
 
   switchInterface(interfaceName: "terminal" | "browser"): void {
+    this.interfaceRequest += 1;
     if (interfaceName === "terminal") {
       this.browser?.close();
       this.browser = undefined;
@@ -147,14 +140,42 @@ export class PlanRuntime {
     this.viewController?.abort();
   }
 
-  async chooseInterface(ctx: ExtensionContext, selected: "terminal" | "browser"): Promise<void> {
-    const projectPath = join(ctx.cwd, ".pi", "plan.json");
-    const project = ctx.isProjectTrusted() ? await readSettingsFile(projectPath) : {};
-    await writeSettings(
-      project.interface === undefined ? join(this.agentDir, "orbis-plan.json") : projectPath,
-      { interface: selected },
-    );
-    this.switchInterface(selected);
+  async chooseInterface(
+    ctx: ExtensionContext,
+    selected: "terminal" | "browser",
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    const generation = this.generation;
+    const request = ++this.interfaceRequest;
+    const current = () =>
+      generation === this.generation &&
+      request === this.interfaceRequest &&
+      signal?.aborted !== true;
+    if (!current()) {
+      return false;
+    }
+    try {
+      const projectPath = join(ctx.cwd, ".pi", "plan.json");
+      const project = ctx.isProjectTrusted() ? await readSettingsFile(projectPath) : {};
+      if (!current()) {
+        return false;
+      }
+      await writeSettings(
+        project.interface === undefined ? join(this.agentDir, "orbis-plan.json") : projectPath,
+        { interface: selected },
+        current,
+      );
+      if (!current()) {
+        return false;
+      }
+      this.switchInterface(selected);
+      return true;
+    } catch (error) {
+      if (!current()) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   save(ctx: ExtensionContext): { saved: boolean; message: string } {
@@ -164,13 +185,13 @@ export class PlanRuntime {
       ctx,
       structuredClone({
         version: 1,
-        ...(this.active === undefined ? {} : { active: this.active }),
-        unfinished: this.unfinished,
+        ...(this.current === undefined ? {} : { active: this.current }),
+        unfinished: this.archived,
       }),
     );
     ctx.ui.setStatus(
       "orbis-plan",
-      `Plan: ${this.active?.phase ?? "inactive"} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
+      `Plan: ${this.current?.phase ?? "inactive"} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
     );
     return this.saveStatus;
   }
@@ -187,33 +208,23 @@ export class PlanRuntime {
   }
 
   close(ctx: ExtensionContext): void {
-    if (this.active !== undefined) {
+    if (this.current !== undefined) {
       this.save(ctx);
     }
-    this.generation += 1;
-    clearInterval(this.completionTimer);
-    this.controller?.abort();
-    this.viewController?.abort();
-    this.browser?.close();
-    this.browser = undefined;
+    this.disposeOperations();
     clearTimeout(this.saveTimer);
-    this.active = undefined;
-    this.unfinished.length = 0;
+    this.current = undefined;
+    this.archived.length = 0;
     ctx.ui.setStatus("orbis-plan", undefined);
   }
 
   restore(ctx: ExtensionContext, fork = false): void {
-    this.generation += 1;
-    clearInterval(this.completionTimer);
-    this.controller?.abort();
-    this.viewController?.abort();
-    this.browser?.close();
-    this.browser = undefined;
+    this.disposeOperations();
     this.viewVersion += 1;
     this.selectedInterface = undefined;
     clearTimeout(this.saveTimer);
-    this.active = undefined;
-    this.unfinished.length = 0;
+    this.current = undefined;
+    this.archived.length = 0;
     const record = readSavedRecord(ctx);
     if (record?.type !== "custom") {
       return;
@@ -225,21 +236,21 @@ export class PlanRuntime {
       );
       return;
     }
-    this.active = structuredClone(record.data.active);
-    this.unfinished.push(...structuredClone(record.data.unfinished));
+    this.current = structuredClone(record.data.active);
+    this.archived.push(...structuredClone(record.data.unfinished));
     if (
-      this.active !== undefined &&
-      this.active.phase !== "accepted" &&
-      (fork || this.active.sessionId !== ctx.sessionManager.getSessionId())
+      this.current !== undefined &&
+      this.current.phase !== "accepted" &&
+      (fork || this.current.sessionId !== ctx.sessionManager.getSessionId())
     ) {
-      this.active.planId = randomUUID();
-      this.active.sessionId = ctx.sessionManager.getSessionId();
-      this.active.branchId = ctx.sessionManager.getLeafId();
-      this.active.cwd = ctx.cwd;
-      delete this.active.pendingApproval;
+      this.current.planId = randomUUID();
+      this.current.sessionId = ctx.sessionManager.getSessionId();
+      this.current.branchId = ctx.sessionManager.getLeafId();
+      this.current.cwd = ctx.cwd;
+      delete this.current.pendingApproval;
     }
     if (fork) {
-      for (const plan of this.unfinished) {
+      for (const plan of this.archived) {
         if (plan.phase !== "accepted") {
           plan.planId = randomUUID();
           plan.sessionId = ctx.sessionManager.getSessionId();
@@ -249,12 +260,12 @@ export class PlanRuntime {
         }
       }
     }
-    if (this.active?.phase === "saving") {
-      this.active.phase = "review";
+    if (this.current?.phase === "saving") {
+      this.current.phase = "review";
     }
-    if (this.active?.pendingApproval !== undefined) {
+    if (this.current?.pendingApproval !== undefined) {
       ctx.ui.notify(
-        `An approval may have saved ${this.active.pendingApproval.planPath}. Review the exact revision and explicitly retry approval to reconcile it, or cancel.`,
+        `An approval may have saved ${this.current.pendingApproval.planPath}. Review the exact revision and explicitly retry approval to reconcile it, or cancel.`,
         "warning",
       );
     }
@@ -265,6 +276,60 @@ export class PlanRuntime {
     this.present(ctx);
   }
 
+  private disposeOperations() {
+    this.generation += 1;
+    clearInterval(this.completionTimer);
+    this.controller?.abort();
+    this.entryController?.abort();
+    this.viewController?.abort();
+    this.browser?.close();
+    this.browser = undefined;
+    this.controller = undefined;
+    this.viewController = undefined;
+    this.finishView = undefined;
+  }
+
+  async requestStart(
+    ctx: ExtensionContext,
+    objective: string,
+    replace: boolean,
+    signal?: AbortSignal,
+  ): Promise<RuntimeResult> {
+    const generation = this.generation;
+    const plan = this.current;
+    const controller = new AbortController();
+    this.entryController?.abort();
+    this.entryController = controller;
+    const combined =
+      signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
+    const current = () => generation === this.generation && !combined.aborted;
+    try {
+      if (!current()) {
+        return { outcome: "cancelled" };
+      }
+      if (ctx.mode === "tui" && replace && plan !== undefined) {
+        const confirmed = await ctx.ui.confirm(
+          "Start another plan?",
+          "Keep the current unfinished plan and start a new objective?",
+          { signal: combined },
+        );
+        if (!confirmed || !current() || this.current !== plan) {
+          return { outcome: "cancelled" };
+        }
+      }
+      return this.start(ctx, objective, replace);
+    } catch (error) {
+      if (!current()) {
+        return { outcome: "cancelled" };
+      }
+      throw error;
+    } finally {
+      if (this.entryController === controller) {
+        this.entryController = undefined;
+      }
+    }
+  }
+
   start(ctx: ExtensionContext, objective: string, replace = false): RuntimeResult {
     if (ctx.mode !== "tui") {
       return {
@@ -272,20 +337,20 @@ export class PlanRuntime {
         message: "Planning requires interactive Pi in TUI mode.",
       };
     }
-    if (this.active !== undefined && !replace) {
+    if (this.current !== undefined && !replace) {
       this.present(ctx);
-      return { outcome: "active", plan: this.active };
+      return { outcome: "active", plan: this.current };
     }
-    if (this.waiting) {
+    if (this.controller !== undefined) {
       return {
         outcome: "error",
         message: "Cancel the current interaction before starting another plan.",
       };
     }
-    if (this.active !== undefined) {
-      this.unfinished.push(this.active);
+    if (this.current !== undefined) {
+      this.archived.push(this.current);
     }
-    this.active = {
+    this.current = {
       planId: randomUUID(),
       sessionId: ctx.sessionManager.getSessionId(),
       branchId: ctx.sessionManager.getLeafId(),
@@ -297,15 +362,57 @@ export class PlanRuntime {
     this.viewVersion += 1;
     this.present(ctx);
     this.save(ctx);
-    return { outcome: "started", plan: this.active };
+    return { outcome: "started", plan: this.current };
+  }
+
+  async reopen(ctx: ExtensionContext, signal?: AbortSignal): Promise<void> {
+    const generation = this.generation;
+    const planId = this.current?.planId;
+    const current = () =>
+      generation === this.generation && this.current?.planId === planId && signal?.aborted !== true;
+    const result = await this.interact(ctx, signal);
+    if (!current()) {
+      return;
+    }
+    if (
+      result.outcome === "answers" ||
+      result.outcome === "clarification" ||
+      result.outcome === "feedback"
+    ) {
+      const plan = this.current;
+      if (plan === undefined) {
+        return;
+      }
+      try {
+        const prepared = await toolResult(result);
+        const updated = this.current;
+        if (
+          current() &&
+          updated !== undefined &&
+          updated.phase === plan.phase &&
+          updated.round?.id === plan.round?.id &&
+          updated.round?.revision === plan.round?.revision &&
+          updated.reviews?.at(-1)?.revision === plan.reviews?.at(-1)?.revision
+        ) {
+          this.pi.sendMessage(
+            { customType: "orbis-plan-input", content: prepared.content, display: true },
+            { triggerTurn: true },
+          );
+        }
+      } catch (error) {
+        if (current()) {
+          throw error;
+        }
+      }
+    }
   }
 
   async interact(ctx: ExtensionContext, signal?: AbortSignal): Promise<RuntimeResult> {
-    const read = () => this.active;
-    if (this.waiting) {
-      return { outcome: "active", plan: this.active };
+    const read = () => this.current;
+    if (this.controller !== undefined) {
+      return { outcome: "error", message: "A planning interaction is already waiting." };
     }
-    const current = this.active;
+    const current = this.current;
     const reviewing = current?.phase === "review";
     const record = reviewing ? current.reviews?.at(-1) : current?.round;
     if (record === undefined) {
@@ -313,13 +420,14 @@ export class PlanRuntime {
     }
     const roundId = reviewing ? "review" : (current?.round?.id ?? "");
     const revision = record.revision;
-    this.waiting = true;
     const generation = this.generation;
     const controller = new AbortController();
     this.controller = controller;
     const abort = () => {
       controller.abort();
-      this.viewController?.abort();
+      if (this.controller === controller) {
+        this.viewController?.abort();
+      }
     };
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted === true) {
@@ -327,20 +435,26 @@ export class PlanRuntime {
     }
     try {
       const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
+      if (generation !== this.generation) {
+        return { outcome: "cancelled" };
+      }
       this.selectedInterface ??= settings.interface;
       const apply = (
         id: string,
         expectedRevision: number,
         action: Parameters<typeof transitionInteraction>[3],
       ) => {
-        const active = this.active;
+        const active = this.current;
         if (active === undefined) {
           throw new Error("Planning session ended.");
         }
-        this.active = { ...active, ...transitionInteraction(active, id, expectedRevision, action) };
+        this.current = {
+          ...active,
+          ...transitionInteraction(active, id, expectedRevision, action),
+        };
         this.viewVersion += 1;
         this.scheduleSave(ctx);
-        if (this.active.phase !== "round" && this.active.phase !== "review") {
+        if (this.current.phase !== "round" && this.current.phase !== "review") {
           this.finishView?.();
         }
       };
@@ -351,11 +465,12 @@ export class PlanRuntime {
         apply(roundId, revision, action);
       };
       const runView = async (): Promise<boolean> => {
+        const obsolete = () => controller.signal.aborted || generation !== this.generation;
         const view = this.selectedInterface;
         const viewController = new AbortController();
         const interrupted = () => viewController.signal.aborted;
         this.viewController = viewController;
-        if (controller.signal.aborted || generation !== this.generation) {
+        if (obsolete()) {
           return false;
         }
         if (view === "terminal") {
@@ -363,23 +478,25 @@ export class PlanRuntime {
           await show(
             ctx,
             () => {
-              if (this.active === undefined) {
+              if (this.current === undefined) {
                 throw new Error("Planning session ended.");
               }
-              return this.active;
+              return this.current;
             },
             dispatch,
             viewController.signal,
             () => {
-              this.chooseInterface(ctx, "browser").catch((error: unknown) => {
-                ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+              this.chooseInterface(ctx, "browser", controller.signal).catch((error: unknown) => {
+                if (generation === this.generation && !controller.signal.aborted) {
+                  ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+                }
               });
             },
           );
         } else {
           this.browser ??= new PlanBrowser(
             () => ({
-              state: this.active,
+              state: this.current,
               version: this.viewVersion,
               saving: this.saveStatus.message,
             }),
@@ -390,7 +507,7 @@ export class PlanRuntime {
                 );
               }
               if (
-                !this.waiting &&
+                this.controller === undefined &&
                 !["focus", "edit", "answer", "edit-feedback"].includes(action.type)
               ) {
                 throw new Error(
@@ -401,6 +518,9 @@ export class PlanRuntime {
             },
           );
           const url = await this.browser.start();
+          if (obsolete()) {
+            return false;
+          }
           ctx.ui.notify(
             `Planning browser: ${url}\nIf unreachable, select Use terminal below.`,
             "info",
@@ -410,7 +530,7 @@ export class PlanRuntime {
           };
           if (
             viewController.signal.aborted ||
-            (this.active?.phase !== "round" && this.active?.phase !== "review")
+            (this.current?.phase !== "round" && this.current?.phase !== "review")
           ) {
             return false;
           }
@@ -420,7 +540,7 @@ export class PlanRuntime {
             { signal: viewController.signal },
           );
           if (selection === "Use terminal (Recommended)") {
-            await this.chooseInterface(ctx, "terminal");
+            await this.chooseInterface(ctx, "terminal", controller.signal);
           } else if (!interrupted() && (read()?.phase === "round" || read()?.phase === "review")) {
             dispatch({ type: "cancel" });
           }
@@ -428,7 +548,7 @@ export class PlanRuntime {
         return (
           generation === this.generation &&
           view !== this.selectedInterface &&
-          (this.active?.phase === "round" || this.active?.phase === "review")
+          (this.current?.phase === "round" || this.current?.phase === "review")
         );
       };
       let switching: boolean;
@@ -449,18 +569,18 @@ export class PlanRuntime {
           return { outcome: "cancelled" };
         }
         if (controller.signal.aborted) {
-          this.active = { ...active, phase: "review" };
+          this.current = { ...active, phase: "review" };
           return { outcome: "cancelled" };
         }
         const approval = saveApproval(active, approvalSettings.planDirectory, (state) => {
-          this.active = state;
+          this.current = state;
           return this.save(ctx);
         });
-        this.active = approval.state;
+        this.current = approval.state;
         this.viewVersion += 1;
         ctx.ui.setStatus(
           "orbis-plan",
-          `Plan: ${this.active.phase} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
+          `Plan: ${this.current.phase} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
         );
         ctx.ui.notify(approval.message, approval.outcome === "approval" ? "info" : "error");
         if (approval.outcome === "approval" && approval.state.accepted !== undefined) {
@@ -481,33 +601,49 @@ export class PlanRuntime {
             }
           }, 10);
         }
+        if (approval.outcome === "error") {
+          return { outcome: "error", message: approval.message };
+        }
+        if (approval.state.accepted === undefined) {
+          throw new Error("Approval completed without its accepted record.");
+        }
         return {
-          outcome: approval.outcome,
+          outcome: "approval",
           message: approval.message,
           approval: approval.state.accepted,
         };
       }
       if (active.phase === "round" || active.phase === "review") {
-        this.active = { ...active, phase: "cancelled" };
+        this.current = { ...active, phase: "cancelled" };
       }
-      if (this.active?.phase === "cancelled") {
+      if (this.current?.phase === "cancelled") {
         this.browser?.close();
         this.browser = undefined;
       }
       this.present(ctx);
       this.save(ctx);
       if (active.phase === "research" && reviewing) {
-        return { outcome: "feedback", revision, feedback: active.reviews?.at(-1)?.feedback };
+        const feedback = active.reviews?.at(-1)?.feedback;
+        if (feedback === undefined) {
+          throw new Error("Plan review ended without feedback.");
+        }
+        return { outcome: "feedback", revision, feedback };
       }
       if (active.phase === "research") {
+        if (active.round === undefined) {
+          throw new Error("Question submission ended without its round.");
+        }
         return {
           outcome: "answers",
-          roundId: active.round?.id,
-          revision: active.round?.revision,
+          roundId: active.round.id,
+          revision: active.round.revision,
           decisions: active.decisions,
         };
       }
       if (active.phase === "clarification") {
+        if (active.round === undefined) {
+          throw new Error("Clarification ended without its round.");
+        }
         return { outcome: "clarification", round: active.round, draftsSubmitted: false };
       }
       return { outcome: "cancelled", planId: active.planId };
@@ -515,8 +651,8 @@ export class PlanRuntime {
       if (generation !== this.generation) {
         return { outcome: "cancelled" };
       }
-      if (this.active?.phase === "saving") {
-        this.active = { ...this.active, phase: "review" };
+      if (this.current?.phase === "saving") {
+        this.current = { ...this.current, phase: "review" };
         this.viewVersion += 1;
         this.save(ctx);
       }
@@ -524,8 +660,10 @@ export class PlanRuntime {
       ctx.ui.notify(message, "error");
       return { outcome: "error", message };
     } finally {
-      this.waiting = false;
-      this.finishView = undefined;
+      if (this.controller === controller) {
+        this.finishView = undefined;
+        this.controller = undefined;
+      }
       signal?.removeEventListener("abort", abort);
     }
   }
@@ -541,13 +679,13 @@ export class PlanRuntime {
         message: "Planning requires interactive Pi in TUI mode.",
       };
     }
-    if (this.waiting) {
+    if (this.controller !== undefined) {
       return {
         outcome: "error",
         message: "A planning interaction is already waiting; finish or cancel it first.",
       };
     }
-    const active = this.active;
+    const active = this.current;
     if (active === undefined || active.planId !== input.planId) {
       return {
         outcome: "error",
@@ -561,7 +699,7 @@ export class PlanRuntime {
       };
     }
     try {
-      this.active = { ...active, ...presentRound(active, input) };
+      this.current = { ...active, ...presentRound(active, input) };
       this.viewVersion += 1;
       this.save(ctx);
       return await this.interact(ctx, signal);
@@ -581,13 +719,13 @@ export class PlanRuntime {
         message: "Planning requires interactive Pi in TUI mode.",
       };
     }
-    if (this.waiting) {
+    if (this.controller !== undefined) {
       return {
         outcome: "error",
         message: "Finish the current planning interaction before requesting review.",
       };
     }
-    const active = this.active;
+    const active = this.current;
     if (active === undefined || active.planId !== input.planId) {
       return {
         outcome: "error",
@@ -616,7 +754,7 @@ export class PlanRuntime {
       };
     }
     try {
-      this.active = { ...active, ...presentReview(active, input) };
+      this.current = { ...active, ...presentReview(active, input) };
       this.viewVersion += 1;
       this.save(ctx);
       return await this.interact(ctx, signal);
@@ -626,13 +764,13 @@ export class PlanRuntime {
   }
 
   present(ctx: ExtensionContext): void {
-    if (this.active !== undefined) {
+    if (this.current !== undefined) {
       ctx.ui.setStatus(
         "orbis-plan",
-        `Plan: ${this.active.phase} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
+        `Plan: ${this.current.phase} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
       );
       ctx.ui.notify(
-        `Planning: ${this.active.objective.length === 0 ? "objective not supplied" : this.active.objective}. ${this.saveStatus.message}`,
+        `Planning: ${this.current.objective.length === 0 ? "objective not supplied" : this.current.objective}. ${this.saveStatus.message}`,
         "info",
       );
     }

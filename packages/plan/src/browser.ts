@@ -270,17 +270,22 @@ export class PlanBrowser {
         response.end();
         return;
       }
-      let body = "";
+      const chunks: Buffer[] = [];
+      let bytes = 0;
       for await (const chunk of request) {
-        body += String(chunk);
-        if (Buffer.byteLength(body) > 1048576) {
+        if (!Buffer.isBuffer(chunk)) {
+          throw new Error("Expected HTTP body bytes.");
+        }
+        bytes += chunk.length;
+        if (bytes > 1048576) {
           response.writeHead(413);
           response.end();
           return;
         }
+        chunks.push(chunk);
       }
       try {
-        const input: unknown = JSON.parse(body);
+        const input: unknown = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8"));
         if (!Value.Check(requestSchema, input)) {
           throw new Error("Invalid planning action. Reload and retry.");
         }

@@ -57,16 +57,18 @@ test("branch restore preserves its drafts and unanswered clarification without i
     questionId: "scope",
     unfinished: "CLI first",
   });
-  f.runtime.active = {
-    ...active,
-    ...transitionRound(edited, "round", 1, {
-      type: "clarify",
-      questionId: "scope",
-      id: "request",
-      request: "Does the CLI include import?",
-    }),
-  };
-  expect(f.runtime.save(f.ctx).saved).toBe(true);
+  expect(
+    f.persist({
+      ...active,
+      ...transitionRound(edited, "round", 1, {
+        type: "clarify",
+        questionId: "scope",
+        id: "request",
+        request: "Does the CLI include import?",
+      }),
+    }).saved,
+  ).toBe(true);
+  f.runtime.restore(f.ctx);
   const branchA = f.manager.getLeafId();
   f.runtime.start(f.ctx, "Sibling objective", true);
   const branchB = f.manager.getLeafId();
@@ -75,15 +77,15 @@ test("branch restore preserves its drafts and unanswered clarification without i
   }
   f.manager.branch(branchA);
   f.runtime.restore(f.ctx, true);
-  expect(f.runtime.active.objective).toBe("Branch objective");
-  expect(f.runtime.active.planId).not.toBe(active.planId);
-  expect(f.runtime.active.phase).toBe("clarification");
-  expect(f.runtime.active.round?.drafts.scope?.unfinished).toBe("CLI first");
-  expect(f.runtime.active.round?.clarifications[0]?.response).toBeUndefined();
-  expect(f.runtime.active.decisions).toEqual({});
+  expect(f.runtime.active?.objective).toBe("Branch objective");
+  expect(f.runtime.active?.planId).not.toBe(active.planId);
+  expect(f.runtime.active?.phase).toBe("clarification");
+  expect(f.runtime.active?.round?.drafts.scope?.unfinished).toBe("CLI first");
+  expect(f.runtime.active?.round?.clarifications[0]?.response).toBeUndefined();
+  expect(f.runtime.active?.decisions).toEqual({});
   f.manager.branch(branchB);
   f.runtime.restore(f.ctx);
-  expect(f.runtime.active.objective).toBe("Sibling objective");
+  expect(f.runtime.active?.objective).toBe("Sibling objective");
 });
 
 test("malformed branch records cannot initialize an interaction", async ({ onTestFinished }) => {
@@ -127,16 +129,17 @@ test("reopened questions supersede pending review and resume without approving o
       },
     ],
   });
-  f.runtime.active = {
-    ...active,
-    ...transitionRound(questions, "reconsider", 1, { type: "cancel" }),
-  };
-  f.runtime.save(f.ctx);
+  expect(
+    f.persist({
+      ...active,
+      ...transitionRound(questions, "reconsider", 1, { type: "cancel" }),
+    }).saved,
+  ).toBe(true);
   f.runtime.restore(f.ctx);
   expect(f.runtime.resumeCurrent(f.ctx)).toBe(true);
-  expect(f.runtime.active.phase).toBe("round");
-  expect(f.runtime.active.reviews?.at(-1)?.markdown).toBe("# Old plan");
-  expect(f.runtime.active.reviews?.at(-1)?.status).toBe("superseded");
+  expect(f.runtime.active?.phase).toBe("round");
+  expect(f.runtime.active?.reviews?.at(-1)?.markdown).toBe("# Old plan");
+  expect(f.runtime.active?.reviews?.at(-1)?.status).toBe("superseded");
   expect(() => transitionReview({ ...questions, phase: "review" }, 1, { type: "approve" })).toThrow(
     "Plan review changed",
   );

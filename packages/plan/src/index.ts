@@ -9,6 +9,7 @@ import { readSettings, writeSettings } from "./config.ts";
 import { planningInstructions } from "./instructions.ts";
 import { PlanRuntime } from "./runtime.ts";
 import { reviewSchema, roundSchema } from "./state.ts";
+import { toolResult } from "./tool-result.ts";
 
 const startSchema = Type.Object(
   { objective: Type.Optional(Type.String()), replace: Type.Optional(Type.Boolean()) },
@@ -61,8 +62,12 @@ export default function extension(pi: ExtensionAPI): void {
         return;
       }
       try {
-        await runtime.chooseInterface(ctx, selected);
-        ctx.ui.notify(`Planning interface: ${selected}. Use /plan to reopen saved input.`, "info");
+        if (await runtime.chooseInterface(ctx, selected)) {
+          ctx.ui.notify(
+            `Planning interface: ${selected}. Use /plan to reopen saved input.`,
+            "info",
+          );
+        }
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
@@ -112,7 +117,7 @@ export default function extension(pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       const entry = runtime.start(ctx, args.trim());
       if (entry.outcome === "unsupported-mode" || entry.outcome === "error") {
-        ctx.ui.notify(entry.message ?? "Planning entry failed.", "error");
+        ctx.ui.notify(entry.message, "error");
         return;
       }
       const resumed = runtime.resumeCurrent(ctx);
@@ -136,18 +141,7 @@ export default function extension(pi: ExtensionAPI): void {
         active !== undefined &&
         (active.phase === "round" || active.phase === "review")
       ) {
-        active.phase = active.reviews?.at(-1)?.status === "pending" ? "review" : "round";
-        const result = await runtime.interact(ctx, ctx.signal);
-        if (
-          result.outcome === "answers" ||
-          result.outcome === "clarification" ||
-          result.outcome === "feedback"
-        ) {
-          pi.sendMessage(
-            { customType: "orbis-plan-input", content: JSON.stringify(result), display: true },
-            { triggerTurn: true },
-          );
-        }
+        await runtime.reopen(ctx, ctx.signal);
       }
     },
   });
@@ -160,7 +154,7 @@ export default function extension(pi: ExtensionAPI): void {
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const result = await runtime.review(ctx, params, signal);
-      return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
+      return await toolResult(result);
     },
   });
   pi.registerTool({
@@ -170,37 +164,17 @@ export default function extension(pi: ExtensionAPI): void {
       "Start collaborative planning when the user requests a plan. Repeated entry preserves active work. Replacement requires user confirmation.",
     parameters: startSchema,
     executionMode: "sequential",
-    async execute(_id, params, _signal, _update, ctx) {
+    async execute(_id, params, signal, _update, ctx) {
       if (!Value.Check(startSchema, params)) {
-        return {
-          content: [{ type: "text", text: "Invalid planning entry input." }],
-          details: { outcome: "error" },
-        };
+        throw new Error("Invalid planning entry input.");
       }
-      if (_signal?.aborted === true) {
-        return {
-          content: [{ type: "text", text: "Planning entry cancelled." }],
-          details: { outcome: "cancelled" },
-        };
-      }
-      let replace = false;
-      if (ctx.mode === "tui" && params.replace === true && runtime.active !== undefined) {
-        replace = await ctx.ui.confirm(
-          "Start another plan?",
-          "Keep the current unfinished plan and start a new objective?",
-        );
-        if (!replace) {
-          return {
-            content: [{ type: "text", text: "Replacement cancelled; current plan preserved." }],
-            details: { outcome: "cancelled" },
-          };
-        }
-      }
-      const result = {
-        ...runtime.start(ctx, params.objective?.trim() ?? "", replace),
-        instructions: planningInstructions,
-      };
-      return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
+      const result = await runtime.requestStart(
+        ctx,
+        params.objective?.trim() ?? "",
+        params.replace === true,
+        signal,
+      );
+      return await toolResult(result, planningInstructions);
     },
   });
   pi.registerTool({
@@ -212,7 +186,7 @@ export default function extension(pi: ExtensionAPI): void {
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const result = await runtime.round(ctx, params, signal);
-      return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
+      return await toolResult(result);
     },
   });
   pi.on("before_agent_start", (event) => {

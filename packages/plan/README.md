@@ -18,11 +18,27 @@ Run `/plan <objective>` to start planning, or `/plan` to use the conversation's
 objective or reopen active input. The owning Pi agent researches and calls
 `plan_start`, `plan_round`, and `plan_review`. Repeated entry preserves active work.
 When the agent requests replacement through `plan_start`, Pi asks for confirmation
-and retains saved unfinished work.
+and retains saved unfinished work. Cancelling the confirmation preserves the
+current plan. Session replacement invalidates pending confirmation.
 
 Pi loads `src/index.ts` directly. Browser assets ship with source and do not require
 a build. Interactive planning requires Pi TUI mode; RPC, JSON, and print execution
 return unsupported-mode results.
+
+## Tool results
+
+When planning tool execution fails, Pi records a failed tool result. Cancellation
+and unsupported modes return explicit outcomes.
+
+When a result exceeds Pi's default text byte or line limit, the tool saves the full
+JSON under `orbis-plan-result-*/result.json` in the operating system's temporary
+directory and returns a preview. Truncated tool details contain `outcome`,
+`truncated: true`, and `resultPath`. Read `resultPath` to retrieve the full result.
+Results from input reopened through `/plan` use the same limits and include the
+file path in their truncation notice.
+
+The extension retains these files after shutdown. Operating-system cleanup or
+manual deletion can remove them; copy any result that needs lasting storage.
 
 ## Questions and review
 
