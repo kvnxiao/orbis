@@ -79,10 +79,10 @@ With Pi installed globally and `pi` available on `PATH`, run from the repository
 root:
 
 ```sh
-pnpm install
-pnpm new:extension review
-pnpm install
-pnpm check
+just install
+just new review
+just install
+just check
 pi install .
 pi
 ```
@@ -129,7 +129,7 @@ AGENTS.md                 Instructions for coding agents
    from its requirements. Use a lowercase name such as `review` or
    `session-notes`; names must fit npm's length limit and avoid Windows device
    names.
-2. When implementation starts, run `pnpm new:extension <name>`. The script creates
+2. When implementation starts, run `just new <name>`. The recipe creates
    the npm name `@orbis/<name>`, preserves an existing `SPEC.md` and optional
    `docs/research/` and `implementation/`, and rejects other existing package
    contents. The package, `docs`, `research`, and `implementation` directories
@@ -147,7 +147,7 @@ AGENTS.md                 Instructions for coding agents
    Vitest configuration discovers it automatically.
 6. Update the package README with its behavior, configuration, side effects,
    and supported Pi versions. The scaffold copies the repository license.
-7. Run `pnpm install`, `pnpm format`, and `pnpm check`, then load the extension
+7. Run `just install`, `just format`, and `just check`, then load the extension
    through Pi and exercise its commands or tools.
 
 Every extension package uses the `@orbis/*` npm scope. The root package is
@@ -161,7 +161,7 @@ path aliases.
 
 ## TypeScript compatibility
 
-`pnpm typecheck` runs `typecheck:*` scripts in the workspace root and every
+`just typecheck` runs `typecheck:*` scripts in the workspace root and every
 package through pnpm's recursive script runner. The root `typecheck:root` checks
 repository scripts, the root Vitest configuration, and the extension template.
 Each package's `typecheck:node` checks its source, tests, and Vitest configuration.
@@ -213,19 +213,22 @@ directives. Keep exceptions limited to the code that needs them.
 
 ## Checks and publication
 
+Run `just` to list common workspace commands. Use its recipes for root workspace
+operations; use `pnpm` directly for package-filtered commands and publication.
+
 ```sh
-pnpm format
-pnpm check
+just format
+just check
 pnpm --filter @orbis/review pack --pack-destination ../../.artifacts
 ```
 
-`pnpm check` checks formatting with Oxfmt, lints with Oxlint, checks types,
+`just check` checks formatting with Oxfmt, lints with Oxlint, checks types,
 and runs Vitest across the workspace scripts, extension template, and extension
 packages. Local scripts use `.mts` and run directly with Node.js native type
 stripping. Vitest runs `.test.mts` files; test execution does not emit files for
 publication.
 
-Use `pnpm test:watch` for watch mode, or `pnpm --filter @orbis/review test` to
+Use `just test-watch` for watch mode, or `pnpm --filter @orbis/review test` to
 run one package's tests. Each package also provides `test:watch`. The scaffold
 and template tests load TypeScript source through Pi and check command
 registration. New extension behavior still needs its own runtime tests.

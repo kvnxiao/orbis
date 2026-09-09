@@ -9,7 +9,7 @@ documentation concrete.
 
 ## Package contract
 
-- Scaffold extensions with `pnpm new:extension <name>`. Every extension package
+- Scaffold extensions with `just new <name>`. Every extension package
   must use the npm name `@orbis/<name>` and directory `packages/<name>`.
 - Publish TypeScript source. Keep `pi.extensions` pointed at `./src/index.ts`,
   include `src` in the published files, and retain `noEmit` in TypeScript
@@ -21,6 +21,12 @@ documentation concrete.
 - Preserve the repository's MIT license and include `LICENSE` in each
   published package. Include `SPEC.md` with published source and keep
   package-specific usage in its README.
+
+Use the root `justfile` for common workspace commands. Run `just` to list the
+available recipes, and prefer `just install`, `just new <name>`, `just format`,
+`just check`, `just typecheck`, and `just test` over their root `pnpm` scripts.
+Use `pnpm` directly for package-filtered commands, dependency-manifest changes,
+publication, and commands without a `just` recipe.
 
 ## Specifications and implementation planning
 
@@ -55,7 +61,7 @@ documentation concrete.
   [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md).
   Read their files when automatic discovery is unavailable.
 - A package containing `SPEC.md` and optional `docs/research/` and
-  `implementation/` can await implementation. `pnpm new:extension <name>` preserves those artifacts while
+  `implementation/` can await implementation. `just new <name>` preserves those artifacts while
   adding runtime files; it rejects other existing package contents and linked
   package, `docs`, `research`, or `implementation` directories.
 
@@ -89,7 +95,7 @@ documentation concrete.
 - Keep package tests in `tests/**/*.test.mts` and configure each package in
   `vitest.config.mts`. The root Vitest configuration discovers package projects
   automatically. Use `pnpm --filter @orbis/<name> test` for package tests and
-  `pnpm test` for the workspace suite.
+  `just test` for the workspace suite.
 - Preserve strict compiler and type-aware lint settings. Narrow unchecked
   indexed reads before use, and omit optional properties unless their types
   accept the assigned value.
@@ -110,7 +116,7 @@ documentation concrete.
 
 ## Verification
 
-- Automated local tests, including Vitest, `pnpm test`, and `pnpm check`, must not
+- Automated local tests, including Vitest, `just test`, and `just check`, must not
   invoke real models, start autonomous live-agent sessions, or incur model charges.
   Use local unit and integration fixtures; Pi SDK sessions must use scripted
   in-process providers when a test exercises an agent turn. Block external network
@@ -119,8 +125,8 @@ documentation concrete.
   verification supervised by the active orchestrator. Do not include them in test
   discovery or ordinary repository check commands. Store their evidence beside
   the ignored implementation plans.
-- Run `pnpm install` after changing dependency manifests.
-- Run `pnpm format` and `pnpm check` before completing a change. Use targeted
+- Run `just install` after changing dependency manifests.
+- Run `just format` and `just check` before completing a change. Use targeted
   package tests and Pi loading checks for changed extension behavior.
 - Before publication, use `pnpm pack` and test the tarball outside the
   workspace. Check that runtime imports resolve without workspace symlinks or
