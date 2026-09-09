@@ -52,4 +52,4 @@ await Promise.all(
 );
 
 console.log(`Created @orbis/${name} in packages/${name}`);
-console.log(`Run pnpm install, then pnpm exec pi -e ./packages/${name}`);
+console.log(`Run pnpm install, then pi install ./packages/${name}`);

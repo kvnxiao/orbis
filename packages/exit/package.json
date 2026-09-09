@@ -1,7 +1,7 @@
 {
-  "name": "@orbis/example",
+  "name": "@orbis/exit",
   "version": "0.1.0",
-  "description": "Pi extension for the Orbis agent harness",
+  "description": "Add an /exit command to quit Pi",
   "keywords": [
     "orbis",
     "pi-package"

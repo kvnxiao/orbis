@@ -4,11 +4,12 @@ A TypeScript extension for the Orbis agent harness.
 
 ## Local use
 
-From the monorepo root, install workspace dependencies and register the package:
+With Pi installed globally and `pi` available on `PATH`, run from the monorepo
+root:
 
 ```sh
 pnpm install
-pnpm exec pi install ./packages/example
+pi install ./packages/example
 ```
 
 Start Pi and run `/orbis-example` to check that the extension loaded.
@@ -41,4 +42,4 @@ changes. The root `pnpm test` command discovers this package through its
 
 ## License
 
-[GPL-3.0-only](./LICENSE).
+[MIT](./LICENSE).

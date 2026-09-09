@@ -132,8 +132,8 @@ export function packageProblems(manifest: JsonObject, expectedName: string): str
   if (manifest.name !== expectedName) {
     problems.push(`name must be ${expectedName}`);
   }
-  if (manifest.license !== "GPL-3.0-only") {
-    problems.push("license must be GPL-3.0-only");
+  if (manifest.license !== "MIT") {
+    problems.push("license must be MIT");
   }
   if (manifest.type !== "module") {
     problems.push("type must be module");

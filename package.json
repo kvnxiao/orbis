@@ -2,7 +2,7 @@
   "name": "orbis",
   "private": true,
   "description": "Orbis agent harness: modular extensions for Pi",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "new:extension": "node scripts/new-extension.mts",

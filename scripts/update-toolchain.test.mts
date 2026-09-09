@@ -119,17 +119,22 @@ test("reports aliases and Git sources without querying unrelated registry identi
   );
 });
 
-test("rejects compiled entry points, missing publication files, and bundled Pi peers", () => {
+test("validates package licenses, source publication, and Pi peers", () => {
   const valid = {
     name: "@orbis/example",
     type: "module",
-    license: "GPL-3.0-only",
+    license: "MIT",
     files: ["src", "LICENSE"],
     pi: { extensions: ["./src/index.ts"] },
     devDependencies: { "@earendil-works/pi-coding-agent": "catalog:" },
     peerDependencies: { "@earendil-works/pi-coding-agent": "*" },
   };
   assert.deepEqual(packageProblems(valid, "@orbis/example"), []);
+  for (const license of [undefined, null, "", "GPL-3.0-only"]) {
+    assert.deepEqual(packageProblems({ ...valid, license }, "@orbis/example"), [
+      "license must be MIT",
+    ]);
+  }
   for (const change of [
     { name: "example" },
     { pi: { extensions: ["./dist/index.js"] } },

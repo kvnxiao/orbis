@@ -12,6 +12,10 @@ harness.
 Packages publish TypeScript source. Pi loads their `.ts` entry points through
 Jiti; development and publication do not require a transpilation step.
 
+## Packages
+
+- [@orbis/exit](packages/exit/README.md) adds `/exit` to quit Pi.
+
 ## Requirements
 
 | Component                 | Workspace version                   |
@@ -37,20 +41,21 @@ toolchain updates remove the exemptions and verify locked and fresh installs.
 
 ## Local development
 
-From the repository root:
+With Pi installed globally and `pi` available on `PATH`, run from the repository
+root:
 
 ```sh
 pnpm install
 pnpm new:extension review
 pnpm install
 pnpm check
-pnpm exec pi install .
-pnpm exec pi
+pi install .
+pi
 ```
 
 The scaffold creates `packages/review` as `@orbis/review` and registers an example
 `/orbis-review` command. Replace that command with the extension's intended
-behavior. The repository starts without active extension packages.
+behavior.
 
 The root Pi manifest discovers `packages/*/src/index.ts`. `pi install .`
 registers the local repository in Pi's user settings without copying source.
@@ -59,10 +64,10 @@ After changing extension source, use `/reload` in Pi.
 To try a package for one run, use:
 
 ```sh
-pnpm exec pi -e ./packages/review
+pi -e ./packages/review
 ```
 
-To register only that package, use `pnpm exec pi install ./packages/review`.
+To register only that package, use `pi install ./packages/review`.
 From inside the package directory, `pi install .` registers that package.
 
 ## Repository layout
@@ -213,4 +218,4 @@ compatibility decisions and new compiler or lint checks remain agent tasks.
 
 ## License
 
-[GNU General Public License v3.0](./LICENSE).
+[MIT](./LICENSE).

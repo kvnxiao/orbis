@@ -18,7 +18,7 @@ documentation concrete.
   point. Register behavior through Pi's public extension API.
 - Keep each extension independently installable. The root manifest discovers
   `packages/*/src/index.ts` for local `pi install .` use.
-- Preserve the repository's GPL v3 license and include `LICENSE` in each
+- Preserve the repository's MIT license and include `LICENSE` in each
   published package. Keep package-specific usage in its README.
 
 ## Dependencies and imports
