@@ -56,13 +56,13 @@ const template = join(root, "templates", "extension");
 await Promise.all(
   (await readdir(template))
     .filter((entry) => !preserveSpecification || entry !== "SPEC.md")
-    .map((entry) =>
-      cp(join(template, entry), join(destination, entry), {
+    .map(async (entry) => {
+      await cp(join(template, entry), join(destination, entry), {
         recursive: true,
         force: false,
         errorOnExist: true,
-      }),
-    ),
+      });
+    }),
 );
 await cp(join(root, "LICENSE"), join(destination, "LICENSE"));
 

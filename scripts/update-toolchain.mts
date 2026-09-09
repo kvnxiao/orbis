@@ -6,7 +6,11 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 type JsonObject = Record<string, unknown>;
-type Dependency = { name: string; specifier: string; source: string };
+interface Dependency {
+  name: string;
+  specifier: string;
+  source: string;
+}
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -108,7 +112,11 @@ export function collectDependencies(
   });
 }
 
-export function releaseTargets(dependencies: Dependency[]) {
+export function releaseTargets(dependencies: Dependency[]): {
+  packages: string[];
+  localDependencies: Dependency[];
+  manualDependencies: Dependency[];
+} {
   const localDependencies = dependencies.filter(({ specifier }) =>
     /^(workspace:|file:|link:)/.test(specifier),
   );
@@ -194,7 +202,7 @@ function command(executable: string, args: string[], cwd = root, env = process.e
   assert.equal(
     result.status,
     0,
-    `${executable} failed (${result.status}):\n${result.stderr}\n${result.stdout}`,
+    `${executable} failed (${String(result.status)}):\n${result.stderr}\n${result.stdout}`,
   );
   return result.stdout.trim();
 }
@@ -347,7 +355,7 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
   const response = await fetch("https://nodejs.org/dist/index.json", {
     signal: AbortSignal.timeout(30_000),
   });
-  assert.ok(response.ok, `Node release index returned ${response.status}`);
+  assert.ok(response.ok, `Node release index returned ${String(response.status)}`);
   const nodes: unknown = await response.json();
   assert.ok(Array.isArray(nodes), "Expected Node release index");
   const versions = nodes
@@ -469,7 +477,9 @@ async function verify(state: Awaited<ReturnType<typeof inventory>>, minimumNode:
     );
   }
   await Promise.all(
-    ["src/index.ts", "README.md", "LICENSE"].map((file) => readFile(join(installed, file))),
+    ["src/index.ts", "README.md", "LICENSE"].map(
+      async (file) => await readFile(join(installed, file)),
+    ),
   );
   await cp(join(root, "scripts", "toolchain-smoke.mts"), join(consumer, "smoke.mts"));
   for (const runtime of [process.execPath, minimumNode]) {
@@ -499,7 +509,10 @@ async function verify(state: Awaited<ReturnType<typeof inventory>>, minimumNode:
   };
 }
 
-export function parseArgs(args: string[]) {
+export function parseArgs(args: string[]): {
+  mode: "inventory" | "baseline" | "releases" | "verify";
+  runtime: string | undefined;
+} {
   const [mode, runtime, ...extra] = args;
   assert.ok(
     mode === "inventory" || mode === "baseline" || mode === "releases" || mode === "verify",

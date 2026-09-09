@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+
 import {
   DefaultResourceLoader,
   ExtensionRunner,
@@ -13,7 +14,9 @@ import { assert, expect, test, vi } from "vitest";
 
 test("loads the package and requests shutdown through /exit", async ({ onTestFinished }) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-extension-"));
-  onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
   const loader = new DefaultResourceLoader({
     cwd: fixture,
     agentDir: join(fixture, "agent"),

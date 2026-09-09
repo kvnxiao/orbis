@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { expect, test } from "vitest";
 
@@ -8,7 +9,9 @@ test("loads the TypeScript source and registers the package command", async ({
   onTestFinished,
 }) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-extension-"));
-  onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
   const loader = new DefaultResourceLoader({
     cwd: fixture,
     agentDir: join(fixture, "agent"),

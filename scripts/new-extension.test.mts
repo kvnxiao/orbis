@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { test } from "vitest";
+
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { test } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 
 test("scaffolds scoped TypeScript packages and preserves an existing package", async (t) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-scaffold-"));
-  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
   await cp(join(root, "scripts"), join(fixture, "scripts"), {
     recursive: true,
   });
@@ -90,7 +93,9 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
 
 test("preserves a package specification and rejects other existing directory contents", async (t) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-spec-scaffold-"));
-  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
   await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
   await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
   await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
@@ -135,7 +140,9 @@ test("preserves a package specification and rejects other existing directory con
 
 test("preserves package research and rejects conflicting or linked research directories", async (t) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-research-scaffold-"));
-  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
   await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
   await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
   await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
@@ -201,7 +208,9 @@ test("preserves package research and rejects conflicting or linked research dire
 
 test("preserves implementation plans with or without research and rejects invalid plan directories", async (t) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-implementation-scaffold-"));
-  t.onTestFinished(() => rm(fixture, { recursive: true, force: true }));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
   await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
   await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
   await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+
 import { test } from "vitest";
+
 import {
   collectDependencies,
   packageProblems,

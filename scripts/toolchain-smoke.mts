@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
+
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 
 const [extension, command] = process.argv.slice(2);
