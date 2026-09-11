@@ -34,6 +34,7 @@ export default defineConfig({
     "prefer-const": "error",
     "no-eval": "error",
     "no-new-func": "error",
+    "no-nested-ternary": "error",
     "typescript/strict-boolean-expressions": [
       "error",
       {
