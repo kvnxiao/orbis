@@ -28,13 +28,7 @@ export interface PlanDraftUpdate {
     | Extract<
         RoundAction,
         {
-          type:
-            | "focus"
-            | "edit"
-            | "answer"
-            | "edit-option"
-            | "confirm-option"
-            | "edit-clarification";
+          type: "focus" | "edit" | "answer" | "edit-option" | "edit-clarification";
         }
       >
     | Extract<

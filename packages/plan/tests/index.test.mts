@@ -29,4 +29,8 @@ test("loads the TypeScript source and registers the package command", async ({
   expect(loaded.extensions).toHaveLength(1);
   expect(typeof loaded.extensions[0]?.commands.get("plan")?.handler).toBe("function");
   expect(loaded.extensions[0]?.tools.has("plan_start")).toBe(true);
+  expect([...(loaded.extensions[0]?.commands.keys() ?? [])].toSorted()).toEqual([
+    "plan",
+    "plan-settings",
+  ]);
 });

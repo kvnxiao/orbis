@@ -5,6 +5,17 @@ import type { PlanPresenter } from "../src/presentation.ts";
 import * as terminal from "../src/terminal.ts";
 import type { RuntimeFixture } from "./runtime-fixture.mts";
 
+async function requestPresenterSelection(
+  _ctx: unknown,
+  _read: unknown,
+  _dispatch: unknown,
+  _signal: unknown,
+  switchView?: () => void,
+) {
+  switchView?.();
+  await Promise.resolve();
+}
+
 export function selectPresenter(
   f: RuntimeFixture,
   present: PlanPresenter["present"],
@@ -15,15 +26,18 @@ export function selectPresenter(
     label: "Fixture",
     present,
   });
-  const select = async () => {
-    f.runtime.chooseInterface("fixture");
-    await Promise.resolve();
-  };
-  const round = vi.spyOn(terminal, "terminalRound").mockImplementationOnce(select);
-  const review = vi.spyOn(terminal, "terminalReview").mockImplementationOnce(select);
+  const choice = vi.spyOn(f.ctx.ui, "select").mockResolvedValueOnce("fixture");
+
+  const round = vi
+    .spyOn(terminal, "terminalRound")
+    .mockImplementationOnce(requestPresenterSelection);
+  const review = vi
+    .spyOn(terminal, "terminalReview")
+    .mockImplementationOnce(requestPresenterSelection);
   return Object.assign(
     () => {
       unregister();
+      choice.mockRestore();
       round.mockRestore();
       review.mockRestore();
     },

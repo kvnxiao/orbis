@@ -8,65 +8,112 @@ import type { PlanningSession } from "../src/state.ts";
 import { toolResult } from "../src/tool-result.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
-test("disk recovery preserves question numbers and separate confirmed and unfinished option text", async () => {
+test("branch restoration preserves the selected composer mode before an objective exists", async ({
+  onTestFinished,
+}) => {
   const f = await runtimeFixture();
-  try {
-    f.runtime.start(f.ctx, "Recover drafts");
-    const plan = f.runtime.active;
-    if (plan === undefined) {
-      throw new Error("No plan");
-    }
-    let state = presentRound(plan, {
-      planId: plan.planId,
-      roundId: "round",
-      expectedRevision: 0,
-      questions: [
-        {
-          id: "scope",
-          prompt: "Scope?",
-          context: "Known",
-          prerequisites: [],
-          options: [
-            { id: "local", label: "Local", explanation: "Offline" },
-            { id: "remote", label: "Remote", explanation: "Shared" },
-          ],
-          recommendation: { optionId: "local", reason: "Offline" },
-        },
-      ],
-    });
-    state = transitionRound(state, "round", 1, {
-      type: "edit-option",
-      questionId: "scope",
-      optionId: "local",
-      text: "Confirmed",
-    });
-    state = transitionRound(state, "round", 1, {
-      type: "confirm-option",
-      questionId: "scope",
-      optionId: "local",
-    });
-    state = transitionRound(state, "round", 1, {
-      type: "edit-option",
-      questionId: "scope",
-      optionId: "local",
-      text: "Unfinished",
-    });
-    state = transitionRound(state, "round", 1, {
-      type: "edit-clarification",
-      questionId: "scope",
-      text: "Ask later",
-    });
-    expect(f.persist({ ...plan, ...state }).saved).toBe(true);
-    f.runtime.restore(f.ctx);
-    expect(f.runtime.active?.round?.questions[0]?.number).toBe(1);
-    expect(f.runtime.active?.round?.drafts.scope).toMatchObject({
-      answer: { optionId: "local", details: "Confirmed" },
-      options: { local: { confirmed: "Confirmed", unfinished: "Unfinished" } },
-      clarificationDraft: "Ask later",
-    });
-  } finally {
-    await f.dispose();
+  onTestFinished(f.dispose);
+  f.runtime.toggleMode(f.ctx);
+  const planBranch = f.manager.getLeafId();
+  f.runtime.toggleMode(f.ctx);
+  const defaultBranch = f.manager.getLeafId();
+  if (planBranch === null || defaultBranch === null) {
+    throw new Error("Missing saved mode branches");
   }
+  f.manager.branch(planBranch);
+  f.runtime.restore(f.ctx, true);
+  expect(f.runtime.mode).toBe("plan");
+  expect(f.runtime.active).toBeUndefined();
+  f.manager.branch(defaultBranch);
+  f.runtime.restore(f.ctx, true);
+  expect(f.runtime.mode).toBe("default");
+});
+
+test("clarification resumes with saved round counts and drafts", async ({ onTestFinished }) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  f.runtime.start(f.ctx, "Round recovery");
+  const plan = f.runtime.active;
+  if (plan === undefined) {
+    throw new Error("Missing plan");
+  }
+  const questions = [
+    {
+      id: "scope",
+      prompt: "Scope?",
+      context: "Known",
+      prerequisites: [],
+      options: [
+        { id: "local", label: "Local", explanation: "Offline" },
+        { id: "remote", label: "Remote", explanation: "Shared" },
+      ],
+      recommendation: { optionId: "local", reason: "Offline" },
+    },
+  ];
+  let state = presentRound(plan, {
+    planId: plan.planId,
+    roundId: "first",
+    expectedRevision: 0,
+    questions,
+  });
+  f.persist({ ...plan, ...state });
+  state = transitionRound(state, "first", 1, {
+    type: "answer",
+    questionId: "scope",
+    answer: { custom: "Small" },
+  });
+  state = transitionRound(state, "first", 1, { type: "submit" });
+  state = presentRound(state, {
+    planId: plan.planId,
+    roundId: "second",
+    expectedRevision: 0,
+    questions,
+  });
+  state = transitionRound(state, "second", 1, {
+    type: "edit",
+    questionId: "scope",
+    unfinished: "Keep this draft",
+  });
+  state = transitionRound(state, "second", 1, {
+    type: "edit-option",
+    questionId: "scope",
+    optionId: "local",
+    text: "Keep option notes",
+  });
+  state = transitionRound(state, "second", 1, {
+    type: "answer",
+    questionId: "scope",
+    answer: { optionId: "local" },
+  });
+  state = transitionRound(state, "second", 1, {
+    type: "clarify",
+    questionId: "scope",
+    id: "why",
+    request: "What is included?",
+  });
+  f.persist({ ...plan, ...state });
+  const secondBranch = f.manager.getLeafId();
+  f.runtime.restore(f.ctx);
+  expect(f.runtime.active?.roundNumber).toBe(2);
+  f.runtime.pause(f.ctx);
+  f.runtime.restore(f.ctx);
+  const resumed = await f.runtime.requestStart(f.ctx, "Continue planning", false);
+  expect(resumed.outcome).toBe("clarification");
+  expect(f.runtime.active?.round?.drafts.scope?.unfinished).toBe("Keep this draft");
+  expect(f.runtime.active?.round?.drafts.scope?.options).toEqual({ local: "Keep option notes" });
+  expect(f.runtime.active?.round?.drafts.scope?.answer).toEqual({
+    optionId: "local",
+    details: "Keep option notes",
+  });
+  expect(f.runtime.active?.round?.clarifications[0]?.request).toBe("What is included?");
+  expect(f.runtime.active?.roundNumber).toBe(2);
+  expect(f.runtime.mode).toBe("plan");
+  if (secondBranch === null) {
+    throw new Error("Missing saved branch");
+  }
+  f.manager.branch(secondBranch);
+  f.runtime.restore(f.ctx, true);
+  expect(f.runtime.active?.roundNumber).toBe(2);
 });
 
 test("review recovery preserves note anchors and unfinished edits without saving modified Markdown", async () => {
@@ -116,6 +163,8 @@ test.each([false, true])(
       cwd: "/fixture",
       objective: "Test",
       phase: "research",
+      roundNumber: 0,
+      questionNumbers: {},
       decisions: {},
     };
     let state = presentRound(plan, {
@@ -128,9 +177,19 @@ test.each([false, true])(
           prompt: "Scope?",
           context: oversized ? "Context\n".repeat(10000) : "Known",
           prerequisites: [],
-          options: [],
+          options: [
+            { id: "local", label: "Local", explanation: "Offline" },
+            { id: "remote", label: "Remote", explanation: "Shared" },
+          ],
+          recommendation: { optionId: "local", reason: "Offline first" },
         },
       ],
+    });
+    state = transitionRound(state, "round", 1, {
+      type: "edit-option",
+      questionId: "scope",
+      optionId: "remote",
+      text: "PRIVATE-OPTION-NOTE",
     });
     state = transitionRound(state, "round", 1, {
       type: "answer",
@@ -168,5 +227,6 @@ test.each([false, true])(
       }),
     );
     expect(round.drafts.scope?.unfinished).toBe("PRIVATE-UNFINISHED");
+    expect(round.drafts.scope?.options).toEqual({ remote: "PRIVATE-OPTION-NOTE" });
   },
 );

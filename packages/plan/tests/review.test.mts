@@ -5,7 +5,7 @@ import { presentReview, transitionReview } from "../src/state.ts";
 
 test("feedback requires another exact revision and stale approval preserves current Markdown", () => {
   let state = presentReview(
-    { phase: "research", decisions: {} },
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", expectedRevision: 0, markdown: "# Objective\n\nFirst revision.\n" },
   );
   state = transitionReview(state, 1, { type: "feedback", text: "Include verification." });
@@ -20,7 +20,7 @@ test("feedback requires another exact revision and stale approval preserves curr
 
 test("annotation validation rejects stale or malformed targets and excludes unfinished overall notes", () => {
   let state = presentReview(
-    { phase: "research", decisions: {} },
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", expectedRevision: 0, markdown: "Same.\n\nSame.\n" },
   );
   const block = documentBlocks("Same.\n\nSame.\n")[1];
@@ -68,7 +68,7 @@ test("annotation validation rejects stale or malformed targets and excludes unfi
 
 test("confirming overall feedback preserves it while later unfinished edits stay excluded", () => {
   let state = presentReview(
-    { phase: "research", decisions: {} },
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", expectedRevision: 0, markdown: "Plan" },
   );
   state = transitionReview(state, 1, { type: "edit-feedback", text: "Confirmed overall" });
@@ -80,7 +80,7 @@ test("confirming overall feedback preserves it while later unfinished edits stay
 
 test("blank feedback and cancellation do not approve the plan", () => {
   const state = presentReview(
-    { phase: "research", decisions: {} },
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", expectedRevision: 0, markdown: "# Plan" },
   );
   expect(() => transitionReview(state, 1, { type: "feedback", text: " " })).toThrow(

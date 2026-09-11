@@ -1,13 +1,12 @@
-import { join } from "node:path";
-
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
-import { readSettings, writeSettings } from "./config.ts";
+import { installPlanComposer } from "./composer.ts";
 import { planningInstructions } from "./instructions.ts";
 import { PlanRuntime } from "./runtime.ts";
+import { showPlanSettings } from "./settings-menu.ts";
 import { reviewSchema, roundSchema } from "./state.ts";
 import { toolResult } from "./tool-result.ts";
 
@@ -17,85 +16,15 @@ const startSchema = Type.Object(
 );
 
 export default function extension(pi: ExtensionAPI): void {
-  const runtime = new PlanRuntime(pi);
-  pi.registerCommand("plan-cancel", {
-    description: "Cancel planning and keep its saved unfinished work",
-    async handler(_args, ctx) {
-      ctx.ui.notify(JSON.stringify(runtime.cancel(ctx)), "info");
-      await Promise.resolve();
-    },
-  });
-  pi.registerCommand("plan-resume", {
-    description: "Select an archived unfinished plan from this conversation branch",
-    async handler(_args, ctx) {
-      if (ctx.mode !== "tui") {
-        ctx.ui.notify("Planning requires interactive Pi in TUI mode.", "error");
-        return;
-      }
-      const plans = runtime.unfinished.filter((plan) => plan.phase !== "accepted");
-      const selected = await ctx.ui.select(
-        "Resume unfinished planning",
-        plans.map((plan) => `${plan.objective} [${plan.planId}]`),
-      );
-      const plan = plans.find((item) => selected === `${item.objective} [${item.planId}]`);
-      if (plan !== undefined) {
-        runtime.resume(ctx, plan.planId);
-        ctx.ui.notify(
-          "Unfinished plan restored. Use /plan to reopen input or continue research.",
-          "info",
-        );
-      }
-    },
-  });
-  pi.registerCommand("plan-ui", {
-    description: "Select a registered presenter for the pending planning interaction",
-    async handler(args, ctx) {
-      if (ctx.mode !== "tui") {
-        ctx.ui.notify("Planning requires interactive Pi in TUI mode.", "error");
-        return;
-      }
-      try {
-        if (args.trim().length === 0) {
-          ctx.ui.notify(
-            "Use Ctrl+P in planning input, or /plan-ui terminal|presenter-id. Registered: " +
-              runtime.presenters.map((item) => item.id).join(", "),
-            "info",
-          );
-        } else {
-          runtime.chooseInterface(args.trim());
-        }
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-      }
-      await Promise.resolve();
-    },
-  });
+  const agentDir = getAgentDir();
+  const runtime = new PlanRuntime(pi, agentDir);
+  let removeComposer: (() => void) | undefined;
+  let interrupted = false;
   pi.registerCommand("plan-settings", {
-    description:
-      "Inspect planning settings or edit personal defaults and trusted project overrides",
+    description: "Configure Plan appearance and saved-plan directory",
     async handler(_args, ctx) {
-      if (ctx.mode !== "tui") {
-        ctx.ui.notify("Planning settings require interactive Pi in TUI mode.", "error");
-        return;
-      }
       try {
-        const settings = await readSettings(getAgentDir(), ctx.cwd, ctx.isProjectTrusted());
-        ctx.ui.notify(JSON.stringify(settings), "info");
-        const scope = await ctx.ui.select("Edit planning settings", [
-          "Personal defaults",
-          ...(ctx.isProjectTrusted() ? ["Project overrides"] : []),
-        ]);
-        if (scope === undefined) {
-          return;
-        }
-        const path =
-          scope === "Project overrides"
-            ? join(ctx.cwd, ".pi", "plan.json")
-            : join(getAgentDir(), "orbis-plan.json");
-        const value = await ctx.ui.input("Approved-plan directory", settings.planDirectory);
-        if (value !== undefined) {
-          await writeSettings(path, { planDirectory: value });
-        }
+        await showPlanSettings(ctx, agentDir);
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
@@ -104,6 +33,13 @@ export default function extension(pi: ExtensionAPI): void {
   pi.registerCommand("plan", {
     description: "Start or inspect collaborative planning; optionally supply an objective",
     handler: async (args, ctx) => {
+      if (!ctx.isIdle()) {
+        ctx.ui.notify("Stop the current turn before entering planning.", "info");
+        return;
+      }
+      if (ctx.mode === "tui" && !(await runtime.selectUnfinished(ctx, ctx.signal))) {
+        return;
+      }
       const entry = runtime.start(ctx, args.trim());
       if (entry.outcome === "unsupported-mode" || entry.outcome === "error") {
         ctx.ui.notify(entry.message, "error");
@@ -149,7 +85,7 @@ export default function extension(pi: ExtensionAPI): void {
     name: "plan_start",
     label: "Start planning",
     description:
-      "Start collaborative planning when the user requests a plan. Repeated entry preserves active work. Replacement requires user confirmation.",
+      "Start or resume collaborative planning on explicit user intent: enter plan mode, help me plan, resume the plan, or continue planning. These are examples, not exact phrases. Do not activate for quoted examples, questions about this feature, or unrelated conversation. Reopen pending input through this tool; preserve existing drafts. Ambiguous saved plans require user selection. Replacement requires confirmation.",
     parameters: startSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -169,7 +105,7 @@ export default function extension(pi: ExtensionAPI): void {
     name: "plan_round",
     label: "Planning questions",
     description:
-      "Present the researched, answerable frontier. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates. Drafts remain unsubmitted until explicit whole-round submission.",
+      "Present the researched, answerable frontier. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates. The UI adds Other and Ask for clarification; do not duplicate them in generated options. Drafts remain unsubmitted until explicit whole-round submission.",
     parameters: roundSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -179,21 +115,61 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.on("before_agent_start", (event) => {
     if (
+      runtime.mode === "plan" &&
       runtime.active !== undefined &&
       runtime.active.phase !== "accepted" &&
       runtime.active.phase !== "cancelled"
     ) {
-      return { systemPrompt: `${event.systemPrompt}\n\n${planningInstructions}` };
+      return {
+        systemPrompt: `${event.systemPrompt}\n\n${planningInstructions}
+Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active.phase}. When a question round or review is pending, call plan_start to reopen it before replacing its content.`,
+      };
     }
     return undefined;
   });
+  pi.on("input", (event, ctx) => {
+    if (
+      ctx.mode === "tui" &&
+      event.source === "interactive" &&
+      ctx.isIdle() &&
+      runtime.mode === "plan" &&
+      event.text.trim().length > 0 &&
+      !/^[!/]/u.test(event.text.trimStart())
+    ) {
+      runtime.start(ctx, event.text);
+      runtime.resumeCurrent(ctx);
+    }
+    return { action: "continue" };
+  });
+  pi.on("agent_start", () => {
+    interrupted = false;
+  });
+  pi.on("agent_end", (event, ctx) => {
+    const last = event.messages.findLast((message) => message.role === "assistant");
+    interrupted =
+      ctx.signal?.aborted === true ||
+      (last?.role === "assistant" &&
+        (last.stopReason === "aborted" || last.stopReason === "error"));
+  });
+  pi.on("agent_settled", (_event, ctx) => {
+    if (interrupted && runtime.mode === "plan") {
+      runtime.pause(ctx);
+    }
+    interrupted = false;
+  });
   pi.on("session_shutdown", (_event, ctx) => {
+    interrupted = false;
+    removeComposer?.();
+    removeComposer = undefined;
     runtime.close(ctx);
   });
   pi.on("session_start", (event, ctx) => {
+    interrupted = false;
     runtime.restore(ctx, event.reason === "fork");
+    removeComposer = installPlanComposer(ctx, runtime);
   });
   pi.on("session_tree", (_event, ctx) => {
+    interrupted = false;
     runtime.restore(ctx, true);
   });
 }

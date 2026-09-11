@@ -16,6 +16,20 @@ import { expect, test } from "vitest";
 
 import extension from "../src/index.ts";
 import { saveRecord } from "../src/persistence.ts";
+import { appendAssistantFixture } from "./runtime-fixture.mts";
+
+const fixtureModel = {
+  id: "fixture",
+  name: "Fixture",
+  api: "openai-responses",
+  provider: "fixture",
+  baseUrl: "http://127.0.0.1",
+  reasoning: false,
+  input: ["text" as const],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 10000,
+  maxTokens: 1000,
+};
 
 async function fixture(persist = true, setup?: (pi: ExtensionAPI) => void) {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-host-"));
@@ -65,26 +79,6 @@ async function fixture(persist = true, setup?: (pi: ExtensionAPI) => void) {
   };
 }
 
-function assistant(manager: SessionManager) {
-  manager.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "Fixture response" }],
-    api: "openai-responses",
-    provider: "openai",
-    model: "fixture",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "stop",
-    timestamp: Date.now(),
-  });
-}
-
 test("appendEntry defers disk creation until an assistant message", async ({ onTestFinished }) => {
   const f = await fixture();
   onTestFinished(async () => {
@@ -97,7 +91,7 @@ test("appendEntry defers disk creation until an assistant message", async ({ onT
     throw new Error("Missing session path");
   }
   await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
-  assistant(f.manager);
+  appendAssistantFixture(f.manager);
   f.api.appendEntry("probe", { revision: 2 });
   expect(SessionManager.open(path).getBranch()).toEqual(f.manager.getBranch());
 });
@@ -137,25 +131,13 @@ test("abort inside a tool prevents continuation and deferred notification observ
     await f.dispose();
   });
   let calls = 0;
-  const model = {
-    id: "fixture",
-    name: "Fixture",
-    api: "openai-responses",
-    provider: "fixture",
-    baseUrl: "http://127.0.0.1",
-    reasoning: false,
-    input: ["text" as const],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 10000,
-    maxTokens: 1000,
-  };
   f.api.registerProvider("fixture", {
     api: "openai-responses",
     baseUrl: "http://127.0.0.1",
     apiKey: "fixture",
-    models: [model],
+    models: [fixtureModel],
   });
-  await f.session.setModel(model, { persist: false });
+  await f.session.setModel(fixtureModel, { persist: false });
   f.session.agent.streamFunction = (_model, _context, options) => {
     const stream = createAssistantMessageEventStream();
     const message: AssistantMessage = {
@@ -204,7 +186,7 @@ test("disabled persistence returns normally and retains only memory", async ({
   onTestFinished(async () => {
     await f.dispose();
   });
-  assistant(f.manager);
+  appendAssistantFixture(f.manager);
   expect(() => {
     f.api.appendEntry("probe", { revision: 1 });
   }).not.toThrow();
@@ -231,25 +213,13 @@ test("Pi records rejected planning execution as an error tool result", async ({
   onTestFinished(async () => {
     await f.dispose();
   });
-  const model = {
-    id: "fixture",
-    name: "Fixture",
-    api: "openai-responses",
-    provider: "fixture",
-    baseUrl: "http://127.0.0.1",
-    reasoning: false,
-    input: ["text" as const],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 10000,
-    maxTokens: 1000,
-  };
   f.api.registerProvider("fixture", {
-    api: model.api,
-    baseUrl: model.baseUrl,
+    api: fixtureModel.api,
+    baseUrl: fixtureModel.baseUrl,
     apiKey: "fixture",
-    models: [model],
+    models: [fixtureModel],
   });
-  await f.session.setModel(model, { persist: false });
+  await f.session.setModel(fixtureModel, { persist: false });
   let calls = 0;
   f.session.agent.streamFunction = () => {
     calls += 1;
@@ -283,9 +253,9 @@ test("Pi records rejected planning execution as an error tool result", async ({
               },
             ]
           : [{ type: "text", text: "Observed the planning failure." }],
-      api: model.api,
-      provider: model.provider,
-      model: model.id,
+      api: fixtureModel.api,
+      provider: fixtureModel.provider,
+      model: fixtureModel.id,
       usage: {
         input: 0,
         output: 0,
@@ -322,7 +292,7 @@ test("failed writes advance memory and retry creates a missing-parent branch on 
   onTestFinished(async () => {
     await f.dispose();
   });
-  assistant(f.manager);
+  appendAssistantFixture(f.manager);
   const path = f.manager.getSessionFile();
   if (path === undefined) {
     throw new Error("Missing session path");
@@ -350,7 +320,7 @@ test("disk confirmation distinguishes deferred, saved, and divergent branch reco
     await f.dispose();
   });
   expect(saveRecord(f.api, f.ctx, { revision: 1 }).saved).toBe(false);
-  assistant(f.manager);
+  appendAssistantFixture(f.manager);
   expect(saveRecord(f.api, f.ctx, { revision: 2 }).saved).toBe(true);
   const path = f.manager.getSessionFile();
   if (path === undefined) {

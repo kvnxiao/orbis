@@ -1,11 +1,13 @@
+import fs from "node:fs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { saveApproval } from "../src/approval.ts";
-import type { PlanningSession } from "../src/runtime.ts";
 import { presentReview, transitionReview } from "../src/state.ts";
+import type { PlanningSession } from "../src/state.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 async function fixture() {
@@ -26,6 +28,27 @@ async function fixture() {
   };
   return { ...f, state, directory: join(f.ctx.cwd, "plans") };
 }
+
+test.for(["writeFileSync", "fsyncSync"] as const)(
+  "approval cleans temporary files after %s fails",
+  async (operation, { onTestFinished }) => {
+    const f = await fixture();
+    onTestFinished(f.dispose);
+    const failure = vi.spyOn(fs, operation).mockImplementationOnce(() => {
+      throw new Error("Disk full");
+    });
+    syncBuiltinESMExports();
+    try {
+      const result = saveApproval(f.state, f.directory, () => ({ saved: true, message: "Saved" }));
+      expect(result).toMatchObject({ outcome: "error", state: { phase: "review" } });
+      expect(result.state.accepted).toBeUndefined();
+    } finally {
+      failure.mockRestore();
+      syncBuiltinESMExports();
+    }
+    expect(await readdir(f.directory)).toEqual([]);
+  },
+);
 
 test("approval persists intent, exact file bytes, and acceptance in order", async ({
   onTestFinished,

@@ -5,28 +5,44 @@ import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
 
 export interface SaveResult {
   saved: boolean;
+  deferred?: true;
   message: string;
 }
 
-export function readSavedRecord(ctx: ExtensionContext): SessionEntry | undefined {
+export type SavedRecord =
+  | { status: "none" }
+  | { status: "record"; entry: SessionEntry }
+  | { status: "unreadable"; message: string };
+
+export function readSavedRecord(ctx: ExtensionContext): SavedRecord {
   const path = ctx.sessionManager.getSessionFile();
   if (path === undefined) {
-    return undefined;
+    return { status: "none" };
   }
+  let disk: ReturnType<typeof parseSessionEntries>;
   try {
-    const disk = parseSessionEntries(readFileSync(path, "utf8"));
-    const entries = new Map(
-      disk.filter((entry) => entry.type !== "session").map((entry) => [entry.id, entry]),
-    );
-    const branch = ctx.sessionManager.getBranch();
-    const mismatch = branch.findIndex(
-      (entry) => JSON.stringify(entries.get(entry.id)) !== JSON.stringify(entry),
-    );
-    const prefix = branch.slice(0, mismatch === -1 ? branch.length : mismatch);
-    return prefix.findLast((entry) => entry.type === "custom" && entry.customType === "orbis-plan");
-  } catch {
-    return undefined;
+    disk = parseSessionEntries(readFileSync(path, "utf8"));
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return { status: "none" };
+    }
+    return {
+      status: "unreadable",
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
+  const entries = new Map(
+    disk.filter((entry) => entry.type !== "session").map((entry) => [entry.id, entry]),
+  );
+  const branch = ctx.sessionManager.getBranch();
+  const mismatch = branch.findIndex(
+    (entry) => JSON.stringify(entries.get(entry.id)) !== JSON.stringify(entry),
+  );
+  const prefix = branch.slice(0, mismatch === -1 ? branch.length : mismatch);
+  const entry = prefix.findLast(
+    (item) => item.type === "custom" && item.customType === "orbis-plan",
+  );
+  return entry === undefined ? { status: "none" } : { status: "record", entry };
 }
 
 export function saveRecord(pi: ExtensionAPI, ctx: ExtensionContext, data: unknown): SaveResult {
@@ -51,6 +67,7 @@ export function saveRecord(pi: ExtensionAPI, ctx: ExtensionContext, data: unknow
       pi.appendEntry("orbis-plan", data);
       return {
         saved: false,
+        deferred: true,
         message:
           "Pi has not written its first assistant message. Drafts remain unsaved until that write.",
       };

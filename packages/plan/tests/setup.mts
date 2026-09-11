@@ -6,9 +6,11 @@ const loopback = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const message = "External network connections are disabled in Vitest; use local fixtures.";
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
-  const url = new URL(
-    typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-  );
+  let target = input;
+  if (input instanceof Request) {
+    target = input.url;
+  }
+  const url = new URL(target);
   if (!loopback.has(url.hostname)) {
     throw new Error(message);
   }

@@ -19,26 +19,26 @@ export async function toolResult(
   result: RuntimeResult,
   instructions?: string,
 ): Promise<AgentToolResult<ResultDetails>> {
-  switch (result.outcome) {
-    case "error":
-      throw new Error(result.message);
-    case "unsupported-mode":
-    case "started":
-    case "active":
-    case "cancelled":
-    case "approval":
-    case "feedback":
-    case "answers":
-    case "clarification":
-      break;
+  if (result.outcome === "error") {
+    throw new Error(result.message);
   }
   const projected = structuredClone(result);
-  const round =
-    projected.outcome === "clarification"
-      ? projected.round
-      : projected.outcome === "active" || projected.outcome === "started"
-        ? projected.plan.round
-        : undefined;
+  let round;
+  switch (projected.outcome) {
+    case "clarification":
+      round = projected.round;
+      break;
+    case "active":
+    case "started":
+      round = projected.plan.round;
+      break;
+    case "answers":
+    case "approval":
+    case "cancelled":
+    case "feedback":
+    case "unsupported-mode":
+      break;
+  }
   if (round !== undefined) {
     for (const draft of Object.values(round.drafts)) {
       draft.unfinished = "";

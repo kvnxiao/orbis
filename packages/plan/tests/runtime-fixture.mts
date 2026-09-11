@@ -15,11 +15,32 @@ import type { SaveResult } from "../src/persistence.ts";
 import { PlanRuntime } from "../src/runtime.ts";
 import type { PlanningSession } from "../src/state.ts";
 
+export function appendAssistantFixture(manager: SessionManager): void {
+  manager.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "Fixture response" }],
+    api: "openai-responses",
+    provider: "openai",
+    model: "fixture",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  });
+}
+
 export interface RuntimeFixture {
   runtime: PlanRuntime;
   ctx: ExtensionContext;
   manager: SessionManager;
   api: ExtensionAPI;
+  resources: DefaultResourceLoader;
   persist: (plan: PlanningSession) => SaveResult;
   dispose: () => Promise<void>;
 }
@@ -84,30 +105,20 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
       },
     },
   };
-  manager.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "Fixture response" }],
-    api: "openai-responses",
-    provider: "openai",
-    model: "fixture",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "stop",
-    timestamp: Date.now(),
-  });
+  appendAssistantFixture(manager);
   return {
     runtime: planning,
     ctx,
     manager,
     api,
+    resources: loader,
     persist(plan) {
-      return saveRecord(extensionApi, ctx, { version: 1, active: plan, unfinished: [] });
+      return saveRecord(extensionApi, ctx, {
+        version: 1,
+        mode: "plan",
+        active: plan,
+        unfinished: [],
+      });
     },
     async dispose(): Promise<void> {
       await session.abort();

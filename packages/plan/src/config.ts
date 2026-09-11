@@ -7,16 +7,36 @@ import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
+export const symbolsSchema = Type.Union([Type.Literal("unicode"), Type.Literal("emoji")]);
+export const borderSchema = Type.Union([
+  Type.Literal("rounded"),
+  Type.Literal("square"),
+  Type.Literal("double"),
+  Type.Literal("ascii"),
+  Type.Literal("none"),
+]);
+
 const settingsSchema = Type.Object(
   {
-    interface: Type.Optional(Type.Union([Type.Literal("terminal"), Type.Literal("browser")])),
     planDirectory: Type.Optional(Type.String({ minLength: 1, pattern: "\\S" })),
+    symbols: Type.Optional(symbolsSchema),
+    border: Type.Optional(borderSchema),
+    showHints: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );
 export type SettingsFields = Static<typeof settingsSchema>;
-export interface PlanSettings {
+export type PlanAppearance = Required<Pick<SettingsFields, "symbols" | "border">> &
+  Pick<SettingsFields, "showHints">;
+export const defaultAppearance = {
+  symbols: "unicode",
+  border: "rounded",
+  showHints: true,
+} satisfies PlanAppearance;
+export const defaultPlanDirectory = ".pi/plans/";
+export interface PlanSettings extends PlanAppearance {
   planDirectory: string;
+  showHints: boolean;
 }
 
 export async function readSettingsFile(path: string): Promise<SettingsFields> {
@@ -24,7 +44,7 @@ export async function readSettingsFile(path: string): Promise<SettingsFields> {
     const value: unknown = JSON.parse(await readFile(path, "utf8"));
     if (!Value.Check(settingsSchema, value) || value.planDirectory?.includes("\0") === true) {
       throw new Error(
-        "interface must be terminal or browser; planDirectory must be a nonempty path; unknown fields are rejected",
+        "planDirectory must be a nonempty path; symbols must be unicode or emoji; border must be rounded, square, double, ascii, or none; showHints must be boolean; unknown fields are rejected",
       );
     }
     return value;
@@ -47,17 +67,23 @@ export async function readSettings(
   const personal = await readSettingsFile(join(agentDir, "orbis-plan.json"));
   const project = trusted ? await readSettingsFile(join(cwd, ".pi", "plan.json")) : {};
   const settings = {
-    planDirectory: ".pi/plans/",
+    planDirectory: defaultPlanDirectory,
+    ...defaultAppearance,
     ...personal,
     ...project,
   };
-  return { planDirectory: resolve(cwd, settings.planDirectory) };
+  return {
+    planDirectory: resolve(cwd, settings.planDirectory),
+    symbols: settings.symbols,
+    border: settings.border,
+    showHints: settings.showHints,
+  };
 }
 
 export async function writeSettings(path: string, fields: SettingsFields): Promise<void> {
   if (!Value.Check(settingsSchema, fields) || fields.planDirectory?.includes("\0") === true) {
     throw new Error(
-      `Invalid planning settings for ${path}. Correct interface or planDirectory and retry.`,
+      `Invalid planning settings for ${path}. Correct the directory, symbols, border, or showHints and retry.`,
     );
   }
   await withFileMutationQueue(path, async () => {

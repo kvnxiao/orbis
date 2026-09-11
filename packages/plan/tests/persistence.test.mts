@@ -1,4 +1,6 @@
-import { expect, test } from "vitest";
+import { mkdir, readFile, rename, rm } from "node:fs/promises";
+
+import { expect, test, vi } from "vitest";
 
 import { presentReview, presentRound, transitionReview, transitionRound } from "../src/state.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
@@ -88,14 +90,102 @@ test("branch restore preserves its drafts and unanswered clarification without i
   expect(f.runtime.active?.objective).toBe("Sibling objective");
 });
 
-test("malformed branch records cannot initialize an interaction", async ({ onTestFinished }) => {
+test.for(["mode", "round", "review", "saving", "accepted", "answer", "stale-answer"])(
+  "saved records validate %s before restoration",
+  async (field, { onTestFinished }) => {
+    const f = await runtimeFixture();
+    onTestFinished(async () => {
+      await f.dispose();
+    });
+    f.runtime.start(f.ctx, "Saved objective");
+    const plan = f.runtime.active;
+    if (plan === undefined) {
+      throw new Error("Missing plan");
+    }
+    const active = {
+      ...plan,
+      ...presentRound(plan, {
+        planId: plan.planId,
+        roundId: "round",
+        expectedRevision: 0,
+        questions: [
+          { id: "scope", context: "Known", prompt: "Scope?", prerequisites: [], options: [] },
+        ],
+      }),
+    };
+    const record = { version: 1, mode: "plan", active, unfinished: [] };
+    switch (field) {
+      case "mode":
+        Reflect.deleteProperty(record, "mode");
+        break;
+      case "round":
+        Reflect.deleteProperty(active, "round");
+        break;
+      case "review":
+      case "saving":
+      case "accepted":
+        active.phase = field;
+        break;
+      default:
+        Reflect.set(active.round?.drafts ?? {}, "scope", {
+          revision: 1,
+          unfinished: "",
+          answer: { optionId: "missing" },
+        });
+        if (field === "stale-answer") {
+          const question = active.round?.questions[0];
+          if (question !== undefined) {
+            question.revision = 2;
+          }
+        }
+    }
+    f.manager.appendCustomEntry("orbis-plan", record);
+    const path = f.manager.getSessionFile();
+    if (path === undefined) {
+      throw new Error("Missing session file");
+    }
+    const saved = await readFile(path, "utf8");
+    const notify = vi.spyOn(f.ctx.ui, "notify");
+    f.runtime.restore(f.ctx);
+    const restorable = field === "stale-answer";
+    expect(f.runtime.active !== undefined).toBe(restorable);
+    expect(f.runtime.active?.round?.drafts.scope?.answer).toEqual(
+      restorable ? { optionId: "missing" } : undefined,
+    );
+    const errors = notify.mock.calls.filter((call) => call[1] === "error").map((call) => call[0]);
+    expect(errors).toEqual(
+      restorable
+        ? []
+        : ["Cannot restore malformed planning state. The saved record remains unchanged."],
+    );
+    expect(await readFile(path, "utf8")).toBe(saved);
+  },
+);
+
+test("an unreadable session file reports an error and restores nothing until it is readable", async ({
+  onTestFinished,
+}) => {
   const f = await runtimeFixture();
   onTestFinished(async () => {
     await f.dispose();
   });
-  f.manager.appendCustomEntry("orbis-plan", { version: 1, active: { phase: "round" } });
+  f.runtime.start(f.ctx, "Saved objective");
+  const path = f.manager.getSessionFile();
+  if (path === undefined) {
+    throw new Error("Missing session file");
+  }
+  await rename(path, `${path}.backup`);
+  await mkdir(path);
+  const notify = vi.spyOn(f.ctx.ui, "notify");
   f.runtime.restore(f.ctx);
   expect(f.runtime.active).toBeUndefined();
+  expect(f.runtime.mode).toBe("default");
+  const errors = notify.mock.calls.filter((call) => call[1] === "error").map((call) => call[0]);
+  expect(errors).toEqual([expect.stringContaining("Cannot read the Pi session file")]);
+  await rm(path, { recursive: true });
+  await rename(`${path}.backup`, path);
+  f.runtime.restore(f.ctx);
+  expect(f.runtime.active?.objective).toBe("Saved objective");
 });
 
 test("reopened questions supersede pending review and resume without approving obsolete text", async ({
@@ -153,7 +243,7 @@ test("explicit resumption restores cancelled research while model review remains
     await f.dispose();
   });
   f.runtime.start(f.ctx, "Research objective");
-  f.runtime.cancel(f.ctx);
+  f.runtime.pause(f.ctx);
   const planId = f.runtime.active?.planId;
   if (planId === undefined) {
     throw new Error("Missing plan identity");

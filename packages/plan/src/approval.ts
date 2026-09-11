@@ -15,9 +15,6 @@ import { dirname, isAbsolute, join } from "node:path";
 import type { SaveResult } from "./persistence.ts";
 import type { PlanApproval, PlanningSession } from "./state.ts";
 
-export { approvalSchema } from "./state.ts";
-export type { PlanApproval } from "./state.ts";
-
 export function saveApproval(
   state: PlanningSession,
   directory: string,
@@ -79,12 +76,12 @@ export function saveApproval(
       const temporary = `${intent.planPath}.${randomUUID()}.tmp`;
       const descriptor = openSync(temporary, "wx");
       try {
-        writeFileSync(descriptor, intent.planContent, "utf8");
-        fsyncSync(descriptor);
-      } finally {
-        closeSync(descriptor);
-      }
-      try {
+        try {
+          writeFileSync(descriptor, intent.planContent, "utf8");
+          fsyncSync(descriptor);
+        } finally {
+          closeSync(descriptor);
+        }
         linkSync(temporary, intent.planPath);
       } finally {
         unlinkSync(temporary);

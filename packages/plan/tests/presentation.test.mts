@@ -68,52 +68,6 @@ test("public snapshots expose detached targets for a first annotation and valida
   }
 });
 
-test.each(["terminal", "fixture"])("selecting active %s preserves pending feedback", async (id) => {
-  const f = await runtimeFixture();
-  const opened = Promise.withResolvers<AbortSignal>();
-  const finish = Promise.withResolvers<undefined>();
-  const cleanup =
-    id === "fixture"
-      ? selectPresenter(f, async (request) => {
-          opened.resolve(request.signal);
-          await finish.promise;
-          return { identity: request.identity, action: { type: "feedback", text: "Keep draft" } };
-        })
-      : () => undefined;
-  const view =
-    id === "terminal"
-      ? vi
-          .spyOn(terminal, "terminalReview")
-          .mockImplementation(async (_ctx, _read, dispatch, signal) => {
-            if (signal === undefined) {
-              throw new Error("Missing interaction signal");
-            }
-            opened.resolve(signal);
-            await finish.promise;
-            dispatch({ type: "feedback", text: "Keep draft" });
-          })
-      : undefined;
-  try {
-    f.runtime.start(f.ctx, "Objective");
-    const pending = f.runtime.review(f.ctx, {
-      planId: f.runtime.active?.planId ?? "",
-      expectedRevision: 0,
-      markdown: "# Plan",
-    });
-    const signal = await opened.promise;
-    f.runtime.chooseInterface(id);
-    const aborted = signal.aborted;
-    finish.resolve(undefined);
-    const result = await pending;
-    expect(aborted).toBe(false);
-    expect(result).toMatchObject({ outcome: "feedback", feedback: "Keep draft" });
-  } finally {
-    view?.mockRestore();
-    cleanup();
-    await f.dispose();
-  }
-});
-
 test.each([false, true])(
   "clarification resume bounds output and discards replaced owner: %s",
   async (replace) => {
@@ -307,7 +261,7 @@ test("cancellation interrupts an uncooperative presenter without reopening TUI",
     markdown: "# Plan",
   });
   const request = await opened.promise;
-  f.runtime.cancel(f.ctx);
+  f.runtime.pause(f.ctx);
   expect((await pending).outcome).toBe("cancelled");
   expect(request.signal.aborted).toBe(true);
   expect(terminal.terminalReview).toHaveBeenCalledOnce();
@@ -316,11 +270,26 @@ test("cancellation interrupts an uncooperative presenter without reopening TUI",
 });
 
 test.each([
-  { identity: { version: 2 }, action: { type: "approve" } },
-  { action: { type: "approve" } },
-  { action: { type: "answer", questionId: "scope", answer: { custom: "A", optionId: "b" } } },
-  { action: { type: "approve", markdown: "Overwrite" } },
-])("malformed presenter input is rejected before dispatch: %j", (payload) => {
+  { draft: false, payload: { identity: { version: 2 }, action: { type: "approve" } } },
+  { draft: false, payload: { identity: undefined, action: { type: "approve" } } },
+  {
+    draft: true,
+    payload: {
+      action: { type: "answer", questionId: "scope", answer: { custom: "A", optionId: "b" } },
+    },
+  },
+  { draft: false, payload: { action: { type: "approve", markdown: "Overwrite" } } },
+  {
+    draft: true,
+    payload: {
+      action: {
+        type: "answer",
+        questionId: "scope",
+        answer: { optionId: "local", details: "Hidden notes" },
+      },
+    },
+  },
+])("malformed presenter input is rejected before dispatch: %j", ({ payload, draft }) => {
   const identity = {
     version: 1 as const,
     sessionId: "session",
@@ -328,7 +297,7 @@ test.each([
     interactionId: "interaction",
     revision: 1,
   };
-  expect(() => presentationAction(payload, identity, false)).toThrow("Invalid");
+  expect(() => presentationAction({ identity, ...payload }, identity, draft)).toThrow("Invalid");
 });
 
 test("restoration rejects a pending presenter's late approval and draft update", async ({

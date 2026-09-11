@@ -110,7 +110,12 @@ test("an obsolete interaction cannot clear or abort the replacement interaction"
     f.runtime.restore(f.ctx, true);
     const replacement = f.runtime.interact(f.ctx);
     await viewOpened.promise;
-    oldSettings.resolve({ planDirectory: f.ctx.cwd });
+    oldSettings.resolve({
+      symbols: "unicode",
+      border: "rounded",
+      showHints: true,
+      planDirectory: f.ctx.cwd,
+    });
     await expect(previous).resolves.toEqual({ outcome: "cancelled" });
     oldSignal.abort();
     expect(viewSignal?.aborted).toBe(false);
@@ -118,7 +123,12 @@ test("an obsolete interaction cannot clear or abort the replacement interaction"
     viewDone.resolve(undefined);
     await replacement;
   } finally {
-    oldSettings.resolve({ planDirectory: f.ctx.cwd });
+    oldSettings.resolve({
+      symbols: "unicode",
+      border: "rounded",
+      showHints: true,
+      planDirectory: f.ctx.cwd,
+    });
     viewDone.resolve(undefined);
     settings.mockRestore();
     view.mockRestore();

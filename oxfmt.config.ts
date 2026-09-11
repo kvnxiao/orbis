@@ -13,6 +13,7 @@ export default defineConfig({
   arrowParens: "always",
   endOfLine: "lf",
   ignorePatterns: ["pnpm-lock.yaml", "LICENSE", "**/LICENSE", "node_modules/**", ".artifacts/**"],
+  proseWrap: "always",
   jsdoc: {
     addDefaultToDescription: true,
     bracketSpacing: false,

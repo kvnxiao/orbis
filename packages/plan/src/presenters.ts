@@ -16,8 +16,10 @@ type Events = ExtensionAPI["events"];
 
 export function availablePresenters(events: Events): PlanPresenter[] {
   const presenters: PlanPresenter[] = [];
-  events.emit(discovery, (presenter: PlanPresenter) => {
-    presenters.push(presenter);
+  events.emit(discovery, (presenter: unknown) => {
+    if (isPresenter(presenter)) {
+      presenters.push(presenter);
+    }
   });
   return presenters;
 }
@@ -103,10 +105,6 @@ const draftSchema = Type.Union([
     { type: Type.Literal("edit-option"), questionId: nonempty, optionId: nonempty, text },
     object,
   ),
-  Type.Object(
-    { type: Type.Literal("confirm-option"), questionId: nonempty, optionId: nonempty },
-    object,
-  ),
   Type.Object({ type: Type.Literal("edit-clarification"), questionId: nonempty, text }, object),
   Type.Object({ type: Type.Literal("edit-note"), blockId: nonempty, excerpt: text, text }, object),
   Type.Object({ type: Type.Literal("confirm-note"), blockId: nonempty }, object),
@@ -119,7 +117,7 @@ const draftSchema = Type.Union([
       type: Type.Literal("answer"),
       questionId: nonempty,
       answer: Type.Union([
-        Type.Object({ optionId: nonempty, details: Type.Optional(text) }, object),
+        Type.Object({ optionId: nonempty }, object),
         Type.Object({ custom: nonempty }, object),
       ]),
     },

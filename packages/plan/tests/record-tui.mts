@@ -12,12 +12,24 @@ import {
 } from "@earendil-works/pi-tui";
 import type { Terminal } from "@earendil-works/pi-tui";
 
+import type { PlanAppearance } from "../src/config.ts";
+import { defaultAppearance } from "../src/config.ts";
 import { presentRound, presentReview, transitionRound, transitionReview } from "../src/state.ts";
 import type { QuestionInput, RoundState } from "../src/state.ts";
+import { framedModalLines } from "../src/terminal-layout.ts";
 import { TerminalRound, TerminalReview } from "../src/terminal.ts";
 
 const output = new URL("../implementation/evidence/tui-recordings/", import.meta.url);
-const key = { down: "\x1b[B", up: "\x1b[A", right: "\x1b[C", enter: "\r", esc: "\x1b", tab: "\t" };
+const key = {
+  down: "\x1b[B",
+  up: "\x1b[A",
+  right: "\x1b[C",
+  enter: "\r",
+  shiftEnter: "\x1b[13;2u",
+  f1: "\x1bOP",
+  esc: "\x1b",
+  tab: "\t",
+};
 const questions: QuestionInput[] = [
   {
     id: "scope",
@@ -68,15 +80,22 @@ interface Recording {
 }
 const recordings: Recording[] = [];
 
-function capture(id: string, title: string, kind: "round" | "review", width = 100, height = 42) {
+function capture(
+  id: string,
+  title: string,
+  kind: "round" | "review",
+  width = 100,
+  height = 42,
+  appearance: PlanAppearance = defaultAppearance,
+) {
   let state =
     kind === "round"
       ? presentRound(
-          { phase: "research", decisions: {} },
+          { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
           { planId: "fixture", roundId: "frontier", expectedRevision: 0, questions },
         )
       : presentReview(
-          { phase: "research", decisions: {} },
+          { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
           { planId: "fixture", expectedRevision: 0, markdown },
         );
   let closed = false;
@@ -108,7 +127,7 @@ function capture(id: string, title: string, kind: "round" | "review", width = 10
     const done = () => {
       closed = true;
     };
-    const rows = () => height;
+    const rows = () => height - 2;
     if (kind === "round") {
       const revision = state.round?.revision ?? 0;
       return new TerminalRound(
@@ -120,6 +139,8 @@ function capture(id: string, title: string, kind: "round" | "review", width = 10
         noop,
         editor,
         rows,
+        undefined,
+        appearance,
       );
     }
     const revision = state.reviews?.at(-1)?.revision ?? 0;
@@ -132,13 +153,23 @@ function capture(id: string, title: string, kind: "round" | "review", width = 10
       noop,
       editor,
       rows,
+      undefined,
+      appearance,
     );
   };
   let view = create();
   const recording: Recording = { id, title, width, height, frames: [] };
   recordings.push(recording);
   function frame(label: string) {
-    const lines = closed ? ["[Capture harness] Modal closed."] : view.render(width);
+    const lines = closed
+      ? ["[Capture harness] Modal closed."]
+      : framedModalLines(
+          (contentWidth) => view.render(contentWidth),
+          width,
+          getMarkdownTheme().hr,
+          height,
+          appearance.border,
+        );
     assert(lines.length <= height, `${id}: viewport height exceeded`);
     for (const line of lines) {
       assert(visibleWidth(line) <= width, `${id}: viewport width exceeded`);
@@ -187,8 +218,6 @@ const answers = capture(
   "Questions, per-option details and explicit submission",
   "round",
 );
-answers.press("down");
-answers.press("right");
 answers.type("Keep output local; do not add a service.");
 answers.press("enter");
 assert.deepEqual(answers.state().round?.drafts.scope?.answer, {
@@ -200,6 +229,8 @@ answers.press("enter");
 answers.press("up");
 answers.press("enter");
 answers.press("tab");
+answers.press("down");
+answers.press("down");
 answers.press("enter");
 answers.press("enter");
 assert.equal(answers.state().round?.drafts.storage?.answer, undefined);
@@ -244,17 +275,20 @@ const clarify = capture(
   "Multiline clarification and scripted agent reply",
   "round",
 );
-clarify.press("down");
-clarify.press("right");
 clarify.type("No background service.");
 clarify.press("enter");
 clarify.press("down");
 clarify.press("down");
+clarify.press("down");
 clarify.press("enter");
 clarify.type("Does a project file need setup?");
-clarify.press("enter");
+clarify.press("shiftEnter");
 clarify.type("I want the first run to work offline.");
-clarify.press("tab");
+clarify.press("enter");
+assert.equal(clarify.state().phase, "round");
+clarify.contains("Send clarification");
+clarify.press("f1");
+clarify.press("f1");
 clarify.press("enter");
 assert.equal(clarify.state().phase, "clarification");
 const request = clarify.state().round?.clarifications.at(-1);
@@ -277,8 +311,6 @@ assert.deepEqual(clarify.state().round?.drafts.scope?.answer, {
   optionId: "list",
   details: "No background service.",
 });
-clarify.press("down");
-clarify.press("down");
 clarify.contains("No setup is needed");
 
 const feedback = capture(
@@ -367,6 +399,8 @@ const recovery = capture(
   64,
   22,
 );
+recovery.press("down");
+recovery.press("down");
 recovery.press("enter");
 recovery.type("A tiny reminder command.");
 recovery.press("esc");
@@ -381,9 +415,25 @@ recovery.reopen(
   { ...structuredClone(recovery.state()), phase: "round" },
   "Restore cancelled draft in memory and reopen modal",
 );
+recovery.press("up");
 recovery.press("enter");
-recovery.contains("A tiny reminder command.");
+recovery.contains("A tiny reminder");
+recovery.contains("command.");
 assert.equal(recovery.state().round?.drafts.scope?.unfinished, "A tiny reminder command.");
+
+for (const border of ["rounded", "square", "double", "ascii", "none"] as const) {
+  const appearance = capture(
+    `border-${border}`,
+    `${border} border with inline notes`,
+    "round",
+    100,
+    42,
+    { border, symbols: "emoji" },
+  );
+  appearance.type("Keep this choice simple.");
+  appearance.press("enter");
+  appearance.press("down");
+}
 
 await mkdir(output, { recursive: true });
 await Promise.all(

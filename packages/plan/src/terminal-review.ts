@@ -2,9 +2,12 @@ import { matchesKey } from "@earendil-works/pi-tui";
 import type { Component, Editor } from "@earendil-works/pi-tui";
 
 import { documentBlocks } from "./blocks.ts";
+import type { DocumentBlock } from "./blocks.ts";
+import { defaultAppearance } from "./config.ts";
+import type { PlanAppearance } from "./config.ts";
 import { hasReviewNotes, reviewFeedback } from "./state.ts";
 import type { ReviewAction, RoundState } from "./state.ts";
-import { markdownLines, modalLines } from "./terminal-layout.ts";
+import { markdownLines, modalContentWidth, modalLines } from "./terminal-layout.ts";
 
 const actions = [
   "Annotate",
@@ -25,10 +28,12 @@ export class TerminalReview implements Component {
   private scroll = 0;
   private latestPosition = { scroll: 0, block: 0 };
   private armed = false;
+  private showHints: boolean;
   private closed = false;
   private error = "";
   private width = 80;
   private resizedScroll: number | undefined;
+  private blockCache: { markdown: string; blocks: DocumentBlock[] } | undefined;
 
   private readonly read: () => RoundState;
   private readonly dispatch: (action: ReviewAction) => void;
@@ -37,6 +42,7 @@ export class TerminalReview implements Component {
   private readonly editor: Editor;
   private readonly rows: () => number;
   private readonly switchView: (() => void) | undefined;
+  private readonly appearance: PlanAppearance;
 
   constructor(
     read: () => RoundState,
@@ -46,6 +52,7 @@ export class TerminalReview implements Component {
     editor: Editor,
     rows: () => number = () => 24,
     switchView?: () => void,
+    appearance: PlanAppearance = defaultAppearance,
   ) {
     this.read = read;
     this.dispatch = dispatch;
@@ -54,6 +61,8 @@ export class TerminalReview implements Component {
     this.editor = editor;
     this.rows = rows;
     this.switchView = switchView;
+    this.appearance = appearance;
+    this.showHints = appearance.showHints ?? defaultAppearance.showHints;
     this.viewed = Math.max(0, (read().reviews?.length ?? 1) - 1);
     this.revision = read().reviews?.at(-1)?.revision ?? 0;
   }
@@ -81,19 +90,23 @@ export class TerminalReview implements Component {
       this.close();
     }
   }
-  private document(width: number): { lines: string[]; position: number } {
-    const review = this.read().reviews?.[this.viewed];
-    if (review === undefined) {
-      return { lines: [], position: 0 };
+  private blocks(markdown: string): DocumentBlock[] {
+    if (this.blockCache?.markdown !== markdown) {
+      this.blockCache = { markdown, blocks: documentBlocks(markdown) };
     }
-    const blocks = documentBlocks(review.markdown);
-    const lines = markdownLines(review.markdown, width);
-    const target = blocks[this.block];
-    const position =
-      target === undefined
-        ? 0
-        : Math.max(0, markdownLines(review.markdown.slice(0, target.start), width).length - 1);
-    return { lines, position };
+    return this.blockCache.blocks;
+  }
+  private documentLines(width: number): string[] {
+    const review = this.read().reviews?.[this.viewed];
+    return review === undefined ? [] : markdownLines(review.markdown, width);
+  }
+  private blockPosition(width: number): number {
+    const review = this.read().reviews?.[this.viewed];
+    const target = review === undefined ? undefined : this.blocks(review.markdown)[this.block];
+    if (review === undefined || target === undefined) {
+      return 0;
+    }
+    return Math.max(0, markdownLines(review.markdown.slice(0, target.start), width).length - 1);
   }
   private openAction(): void {
     const review = this.read().reviews?.at(-1);
@@ -101,7 +114,7 @@ export class TerminalReview implements Component {
       throw new Error("Older revisions are read-only. Press ] with document focus to return.");
     }
     if (this.action === 0) {
-      const block = documentBlocks(review.markdown)[this.block];
+      const block = this.blocks(review.markdown)[this.block];
       if (block === undefined) {
         throw new Error("Select a document block to annotate.");
       }
@@ -129,6 +142,12 @@ export class TerminalReview implements Component {
     if (this.closed) {
       return;
     }
+    if (matchesKey(data, "f1")) {
+      this.showHints = !this.showHints;
+      this.armed = false;
+      this.refresh();
+      return;
+    }
     if (this.resizedScroll !== undefined) {
       this.scroll = this.resizedScroll;
       this.resizedScroll = undefined;
@@ -153,7 +172,7 @@ export class TerminalReview implements Component {
         if (matchesKey(data, "ctrl+p")) {
           this.switchView?.();
         } else if (this.mode === "note" || this.mode === "overall") {
-          const block = documentBlocks(review.markdown)[this.block];
+          const block = this.blocks(review.markdown)[this.block];
           if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) {
             const count = this.mode === "note" ? 3 : 2;
             this.control = (this.control + (matchesKey(data, "tab") ? 1 : -1) + count) % count;
@@ -227,7 +246,7 @@ export class TerminalReview implements Component {
           this.scroll = Math.max(
             0,
             Math.min(
-              Math.max(0, this.document(this.width).lines.length - 1),
+              Math.max(0, this.documentLines(this.width).length - 1),
               this.scroll + (matchesKey(data, "pageDown") ? 1 : -1) * Math.max(1, this.rows() - 10),
             ),
           );
@@ -235,11 +254,11 @@ export class TerminalReview implements Component {
           this.block = Math.max(
             0,
             Math.min(
-              documentBlocks(review.markdown).length - 1,
+              this.blocks(review.markdown).length - 1,
               this.block + (matchesKey(data, "down") ? 1 : -1),
             ),
           );
-          this.scroll = this.document(this.width).position;
+          this.scroll = this.blockPosition(this.width);
         } else if (matchesKey(data, "enter")) {
           this.action = 0;
           this.openAction();
@@ -250,9 +269,10 @@ export class TerminalReview implements Component {
     }
     this.refresh();
   }
-  render(width: number): string[] {
+  render(outerWidth: number): string[] {
+    const width = modalContentWidth(outerWidth);
     if (width !== this.width && this.mode === "document") {
-      this.resizedScroll = this.document(width).position;
+      this.resizedScroll = this.blockPosition(width);
     }
     this.width = width;
     const review = this.read().reviews?.[this.viewed];
@@ -263,7 +283,7 @@ export class TerminalReview implements Component {
     const editing = this.mode === "note" || this.mode === "overall";
     this.editor.focused = this.focused && editing && this.control === 0;
     if (editing) {
-      const block = documentBlocks(review.markdown)[this.block];
+      const block = this.blocks(review.markdown)[this.block];
       const context = this.mode === "note" ? (block?.excerpt ?? "") : review.markdown;
       return modalLines(
         title,
@@ -271,13 +291,17 @@ export class TerminalReview implements Component {
         [
           ...this.editor.render(width),
           this.error,
-          `${this.control === 1 ? "→" : ""}Confirm note`,
-          ...(this.mode === "note" ? [`${this.control === 2 ? "→" : ""}Remove note`] : []),
-          "Enter: note newline · Tab: controls · Esc: back",
+          `${this.control === 1 ? "›" : ""}Confirm note`,
+          ...(this.mode === "note" ? [`${this.control === 2 ? "›" : ""}Remove note`] : []),
+          ...(this.showHints
+            ? ["Enter: note newline · Tab: controls · F1: hints · Esc: back"]
+            : []),
         ],
-        width,
+        outerWidth,
         this.rows(),
         0,
+        false,
+        this.appearance.border,
       );
     }
     if (this.mode === "discard") {
@@ -289,13 +313,15 @@ export class TerminalReview implements Component {
         ),
         [
           this.error,
-          `${this.control === 0 ? "→" : ""}Discard + approve`,
-          `${this.control === 1 ? "→" : ""}Back`,
-          "Tab: control · Enter: activate · Esc: back",
+          `${this.control === 0 ? "›" : ""}Discard + approve`,
+          `${this.control === 1 ? "›" : ""}Back`,
+          ...(this.showHints ? ["Tab: control · Enter: activate · F1: hints · Esc: back"] : []),
         ],
-        width,
+        outerWidth,
         this.rows(),
         0,
+        this.showHints,
+        this.appearance.border,
       );
     }
     if (this.mode === "preview") {
@@ -309,53 +335,51 @@ export class TerminalReview implements Component {
         markdownLines(text, width),
         [
           this.error,
-          `${this.control === 0 ? "→" : ""}Send feedback`,
-          `${this.control === 1 ? "→" : ""}Back`,
-          "Tab: control · Enter: activate · Esc: back",
+          `${this.control === 0 ? "›" : ""}Send feedback`,
+          `${this.control === 1 ? "›" : ""}Back`,
+          ...(this.showHints ? ["Tab: control · Enter: activate · F1: hints · Esc: back"] : []),
         ],
-        width,
+        outerWidth,
         this.rows(),
         this.scroll,
+        this.showHints,
+        this.appearance.border,
       );
     }
-    const shortActions = [
-      "Annotate",
-      "Overall note",
-      "Review feedback",
-      "Approve",
-      "Discard + approve",
-    ];
     const bar =
       width < 120
-        ? `${this.mode === "actions" ? "→" : "·"}${shortActions[this.action] ?? "Annotate"}`
+        ? `${this.mode === "actions" ? "›" : "·"}${actions[this.action] ?? "Annotate"}`
         : actions
             .map(
               (label, index) =>
-                `${this.mode === "actions" && this.action === index ? "→" : ""}${label}`,
+                `${this.mode === "actions" && this.action === index ? "›" : ""}${label}`,
             )
             .join(" | ");
+    let help = "↑↓: block · PgUp/PgDn: scroll · Enter: annotate · Tab: actions";
+    if (this.armed) {
+      help = "Press Esc again to close; drafts retained";
+    } else if (this.mode === "actions") {
+      help = "Arrows: action · Enter: activate · Tab: document";
+    }
     const footer = [
       this.error,
-      `Block ${String(this.block + 1)}: ${documentBlocks(review.markdown)[this.block]?.excerpt.split(/\r?\n/)[0] ?? ""}`,
+      `Block ${String(this.block + 1)}: ${this.blocks(review.markdown)[this.block]?.excerpt.split(/\r?\n/)[0] ?? ""}`,
       bar,
-      this.armed
-        ? "Press Esc again to close; drafts retained"
-        : this.mode === "actions"
-          ? "Arrows: action · Enter: activate · Tab: document"
-          : "↑↓: block · PgUp/PgDn: read · Enter: annotate · Tab: actions",
-      "[ / ]: revisions · Esc: close",
-      ...(this.switchView === undefined ? [] : ["Ctrl+P: presenter"]),
+      ...(this.showHints ? [help, "[ / ]: revisions · F1: hints · Esc: close"] : []),
+      ...(!this.showHints || this.switchView === undefined ? [] : ["Ctrl+P: presenter"]),
     ];
     if (this.current() && hasReviewNotes(review)) {
       footer.unshift("Unsent notes: send feedback or discard before approval.");
     }
     return modalLines(
       title,
-      this.document(width).lines,
+      this.documentLines(width),
       footer,
-      width,
+      outerWidth,
       this.rows(),
       this.resizedScroll ?? this.scroll,
+      this.showHints,
+      this.appearance.border,
     );
   }
 }

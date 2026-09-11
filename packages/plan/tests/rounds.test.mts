@@ -1,9 +1,28 @@
+import { Value } from "typebox/value";
 import { expect, test } from "vitest";
 
-import { presentRound, transitionRound } from "../src/state.ts";
+import { presentRound, roundStateSchema, transitionRound } from "../src/state.ts";
 import type { QuestionInput, RoundState } from "../src/state.ts";
 import { TerminalRound } from "../src/terminal.ts";
 import { testEditor } from "./terminal-fixture.mts";
+
+test.each(["roundNumber", "questionNumbers", "number", "options"])(
+  "saved rounds validate %s",
+  (field) => {
+    const state = round([question("storage")]);
+    switch (field) {
+      case "number":
+        Reflect.deleteProperty(state.round?.questions[0] ?? {}, "number");
+        break;
+      case "options":
+        Reflect.set(state.round?.drafts.storage ?? {}, "options", { local: 42 });
+        break;
+      default:
+        Reflect.deleteProperty(state, field);
+    }
+    expect(Value.Check(roundStateSchema, state)).toBe(false);
+  },
+);
 
 function question(id: string): QuestionInput {
   return {
@@ -20,7 +39,7 @@ function question(id: string): QuestionInput {
 }
 function round(questions = [question("storage"), question("scope")]): RoundState {
   return presentRound(
-    { phase: "research", decisions: {} },
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", roundId: "frontier", expectedRevision: 0, questions },
   );
 }
@@ -154,6 +173,12 @@ test("duplicate identities, unknown prerequisites and invalid recommendations ar
   const invalid = question("storage");
   invalid.recommendation = { optionId: "missing", reason: "Invalid" };
   expect(() => round([invalid])).toThrow("unknown option");
+  const lonely = question("storage");
+  lonely.options = lonely.options.slice(0, 1);
+  expect(() => round([lonely])).toThrow("meaningful alternatives");
+  const unrecommended = question("storage");
+  delete unrecommended.recommendation;
+  expect(() => round([unrecommended])).toThrow("meaningful alternatives");
   expect(() => round([question("__proto__")])).toThrow("Invalid round");
 });
 
@@ -171,6 +196,8 @@ test("terminal Tab wraps with unfinished text and submission requires review", (
     () => undefined,
     testEditor(),
   );
+  component.handleInput("\x1b[B");
+  component.handleInput("\x1b[B");
   component.handleInput("\r");
   component.handleInput("unfinished");
   component.handleInput("\x1b");
@@ -208,6 +235,7 @@ test("cancellation retains drafts without decisions", () => {
 
 test("question numbers survive revisions and continue across frontiers", () => {
   let state = round();
+  expect(state.roundNumber).toBe(1);
   expect(state.round?.questions.map((item) => item.number)).toEqual([1, 2]);
   state = presentRound(state, {
     planId: "plan",
@@ -215,6 +243,7 @@ test("question numbers survive revisions and continue across frontiers", () => {
     expectedRevision: 1,
     questions: [question("scope"), question("storage")],
   });
+  expect(state.roundNumber).toBe(1);
   expect(state.round?.questions.map((item) => item.number)).toEqual([2, 1]);
   for (const id of ["scope", "storage"]) {
     state = action(state, { type: "answer", questionId: id, answer: { optionId: "local" } });
@@ -226,10 +255,11 @@ test("question numbers survive revisions and continue across frontiers", () => {
     expectedRevision: 0,
     questions: [question("new"), question("storage")],
   });
+  expect(state.roundNumber).toBe(2);
   expect(state.round?.questions.map((item) => item.number)).toEqual([3, 1]);
 });
 
-test("option confirmation selects details while abandoned edits survive without submission", () => {
+test("option notes update immediately while unselected notes stay out of submission", () => {
   let state = round([question("storage")]);
   state = action(state, {
     type: "edit-option",
@@ -237,12 +267,12 @@ test("option confirmation selects details while abandoned edits survive without 
     optionId: "local",
     text: "Confirmed context",
   });
-  state = action(state, { type: "confirm-option", questionId: "storage", optionId: "local" });
+  state = action(state, { type: "answer", questionId: "storage", answer: { optionId: "local" } });
   state = action(state, {
     type: "edit-option",
     questionId: "storage",
     optionId: "local",
-    text: "Unfinished change",
+    text: "Updated context",
   });
   state = action(state, {
     type: "edit-option",
@@ -254,10 +284,10 @@ test("option confirmation selects details while abandoned edits survive without 
   const submitted = action(state, { type: "submit" });
   expect(submitted.decisions.storage?.answer).toEqual({
     optionId: "local",
-    details: "Confirmed context",
+    details: "Updated context",
   });
   expect(submitted.decisions.storage?.selectedOption?.label).toBe("Local");
-  expect(submitted.round?.drafts.storage?.options?.remote?.unfinished).toBe("Private alternative");
+  expect(submitted.round?.drafts.storage?.options?.remote).toBe("Private alternative");
   expect(() =>
     action(state, { type: "edit-option", questionId: "storage", optionId: "missing", text: "x" }),
   ).toThrow("Unknown option");

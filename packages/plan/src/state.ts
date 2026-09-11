@@ -10,7 +10,7 @@ const identity = Type.String({
   pattern: "^(?!__proto__$|prototype$|constructor$)[a-zA-Z0-9_-]+$",
 });
 const prose = Type.String({ minLength: 1, pattern: "\\S" });
-export const questionSchema = Type.Object(
+const questionSchema = Type.Object(
   {
     id: identity,
     prerequisites: Type.Array(identity, { uniqueItems: true }),
@@ -45,16 +45,16 @@ export type QuestionInput = Static<typeof questionSchema>;
 export type RoundInput = Static<typeof roundSchema>;
 export interface Question extends QuestionInput {
   revision: number;
-  number?: number;
+  number: number;
 }
-export type Answer =
+type Answer =
   | { optionId: string; details?: string; custom?: never }
   | { custom: string; optionId?: never };
 export interface Draft {
   revision: number;
   unfinished: string;
   answer?: Answer;
-  options?: Record<string, { unfinished: string; confirmed?: string }>;
+  options?: Record<string, string>;
   clarificationDraft?: string;
 }
 const clarificationSchema = Type.Object({
@@ -63,7 +63,7 @@ const clarificationSchema = Type.Object({
   request: prose,
   response: Type.Optional(prose),
 });
-export type Clarification = Static<typeof clarificationSchema>;
+type Clarification = Static<typeof clarificationSchema>;
 export interface Round {
   id: string;
   revision: number;
@@ -73,7 +73,7 @@ export interface Round {
   clarifications: Clarification[];
   submitted: boolean;
 }
-export interface Decision {
+interface Decision {
   questionId: string;
   questionRevision: number;
   question: Question;
@@ -82,13 +82,14 @@ export interface Decision {
   selectedOption?: QuestionInput["options"][number];
 }
 export interface RoundState {
+  roundNumber: number;
   phase: "research" | "round" | "clarification" | "review" | "saving" | "accepted" | "cancelled";
   round?: Round;
   decisions: Record<string, Decision>;
   reviews?: PlanRevision[];
-  questionNumbers?: Record<string, number>;
+  questionNumbers: Record<string, number>;
 }
-export const noteSchema = Type.Object(
+const noteSchema = Type.Object(
   {
     blockId: Type.String(),
     excerpt: Type.String(),
@@ -165,9 +166,12 @@ export type RoundAction =
   | { type: "focus"; questionId: string }
   | { type: "edit"; questionId: string; unfinished: string }
   | { type: "edit-option"; questionId: string; optionId: string; text: string }
-  | { type: "confirm-option"; questionId: string; optionId: string }
   | { type: "edit-clarification"; questionId: string; text: string }
-  | { type: "answer"; questionId: string; answer: Answer }
+  | {
+      type: "answer";
+      questionId: string;
+      answer: { optionId: string; custom?: never } | { custom: string; optionId?: never };
+    }
   | { type: "clarify"; questionId: string; request: string; id: string }
   | { type: "submit" }
   | { type: "cancel" };
@@ -175,7 +179,7 @@ export type RoundAction =
 const storedQuestionSchema = Type.Object({
   ...questionSchema.properties,
   revision: Type.Integer({ minimum: 1 }),
-  number: Type.Optional(Type.Integer({ minimum: 1 })),
+  number: Type.Integer({ minimum: 1 }),
 });
 const storedAnswerSchema = Type.Union([
   Type.Object(
@@ -186,7 +190,8 @@ const storedAnswerSchema = Type.Union([
 ]);
 
 export const roundStateSchema = Type.Object({
-  questionNumbers: Type.Optional(Type.Record(identity, Type.Integer({ minimum: 1 }))),
+  roundNumber: Type.Integer({ minimum: 0 }),
+  questionNumbers: Type.Record(identity, Type.Integer({ minimum: 1 })),
   phase: Type.Union([
     Type.Literal("research"),
     Type.Literal("round"),
@@ -221,12 +226,7 @@ export const roundStateSchema = Type.Object({
           revision: Type.Integer({ minimum: 1 }),
           unfinished: Type.String(),
           answer: Type.Optional(storedAnswerSchema),
-          options: Type.Optional(
-            Type.Record(
-              identity,
-              Type.Object({ unfinished: Type.String(), confirmed: Type.Optional(Type.String()) }),
-            ),
-          ),
+          options: Type.Optional(Type.Record(identity, Type.String())),
           clarificationDraft: Type.Optional(Type.String()),
         }),
       ),
@@ -419,12 +419,6 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   }
   const ids = new Set<string>();
   const questionNumbers = { ...state.questionNumbers };
-  for (const old of [
-    ...Object.values(state.decisions).map((item) => item.question),
-    ...(previous?.questions ?? []),
-  ]) {
-    questionNumbers[old.id] ??= old.number ?? Math.max(0, ...Object.values(questionNumbers)) + 1;
-  }
   const drafts: Record<string, Draft> = {};
   const questions = input.questions.map((question) => {
     if (ids.has(question.id)) {
@@ -474,9 +468,11 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   if (first === undefined) {
     throw new Error("A round requires questions.");
   }
+  const roundNumber = state.roundNumber + Number(!same);
   return {
     ...state,
     questionNumbers,
+    roundNumber,
     phase: "round",
     ...(state.reviews === undefined
       ? {}
@@ -511,9 +507,7 @@ export function transitionRound(
     (state.phase !== "round" &&
       !(
         state.phase === "clarification" &&
-        ["focus", "edit", "answer", "edit-option", "confirm-option", "edit-clarification"].includes(
-          action.type,
-        )
+        ["focus", "edit", "answer", "edit-option", "edit-clarification"].includes(action.type)
       )) ||
     current.submitted
   ) {
@@ -558,19 +552,17 @@ export function transitionRound(
   if (action.type === "edit-clarification") {
     draft.clarificationDraft = action.text;
   }
-  if (action.type === "edit-option" || action.type === "confirm-option") {
+  if (action.type === "edit-option") {
     if (!question.options.some((item) => item.id === action.optionId)) {
       throw new Error("Unknown option identity.");
     }
     draft.options ??= {};
-    const details = draft.options[action.optionId] ?? { unfinished: "" };
-    draft.options[action.optionId] = details;
-    if (action.type === "edit-option") {
-      details.unfinished = action.text;
-    } else {
-      details.confirmed = details.unfinished;
-      draft.answer = { optionId: action.optionId, details: details.confirmed };
-      draft.revision = question.revision;
+    draft.options[action.optionId] = action.text;
+    if (draft.answer?.optionId === action.optionId) {
+      draft.answer =
+        action.text.trim().length === 0
+          ? { optionId: action.optionId }
+          : { optionId: action.optionId, details: action.text };
     }
   }
   if (action.type === "answer") {
@@ -587,11 +579,10 @@ export function transitionRound(
     if (answer.custom?.trim().length === 0) {
       throw new Error("Custom answers must contain text.");
     }
-    const confirmed =
-      answer.optionId === undefined ? undefined : draft.options?.[answer.optionId]?.confirmed;
+    const notes = answer.optionId === undefined ? undefined : draft.options?.[answer.optionId];
     draft.answer =
-      answer.optionId !== undefined && confirmed !== undefined
-        ? { ...answer, details: confirmed }
+      answer.optionId !== undefined && notes !== undefined && notes.trim().length > 0
+        ? { ...answer, details: notes }
         : answer;
     draft.revision = question.revision;
   }
@@ -633,22 +624,4 @@ export function reviewFeedback(review: PlanRevision): string {
   ]
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
-}
-
-export function restoreQuestionNumbers<T extends RoundState>(state: T): T {
-  const restored = structuredClone(state);
-  const numbers = { ...restored.questionNumbers };
-  for (const question of [
-    ...Object.values(restored.decisions).map((decision) => decision.question),
-    ...(restored.round?.questions ?? []),
-  ]) {
-    const number =
-      numbers[question.id] ?? question.number ?? Math.max(0, ...Object.values(numbers)) + 1;
-    numbers[question.id] = number;
-    question.number = number;
-  }
-  if (Object.keys(numbers).length > 0) {
-    restored.questionNumbers = numbers;
-  }
-  return restored;
 }
