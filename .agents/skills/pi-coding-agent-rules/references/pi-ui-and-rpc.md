@@ -14,6 +14,8 @@ Use Pi TUI components, theme tokens, and key-matching helpers. Measure display w
 
 Keep rendering free of I/O and state mutations. On state, width, or theme changes, invalidate affected render caches. For asynchronous updates, request a render through the TUI API. Complete dialogs through their completion callback and release resources they own. [TUI contracts](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/tui.md).
 
+For containers with an embedded `Input` or `Editor`, implement `Focusable` and propagate focus to the active child. To position IME input at the field, preserve the child's `CURSOR_MARKER` through layout and clipping. Reuse Pi's input components for cursor movement and paste handling. [Focus and IME](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/tui.md#focusable-interface-ime-support).
+
 ## Preserve RPC framing and correlation (Required)
 
 Treat stdout as the RPC JSONL stream. Write diagnostics to stderr or a log file and capture subprocess output instead of inheriting protocol stdout. Pi v0.85.1 redirects ordinary stdout writes to stderr in RPC mode, but raw descriptor writes and inherited child stdout can bypass that guard. Frame records on LF; account for chunks that split UTF-8 characters or contain multiple records. Avoid Node's `readline` for RPC framing: it also splits at U+2028 and U+2029, which can occur inside JSON strings. Test these characters inside a record as well as split UTF-8 chunks.
