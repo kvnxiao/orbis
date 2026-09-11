@@ -1,3 +1,4 @@
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { expect, test, vi } from "vitest";
 
 import * as config from "../src/config.ts";
@@ -38,6 +39,146 @@ test.for([
     );
   },
 );
+
+test.for([
+  { scenario: "expected error", expected: "stop" },
+  { scenario: "typed abort", expected: "stop" },
+  { scenario: "provider abort", expected: "stop" },
+  { scenario: "network failure", expected: undefined },
+  { scenario: "partial content", expected: undefined },
+  { scenario: "diagnostic", expected: undefined },
+  { scenario: "later turn", expected: undefined },
+  { scenario: "unaborted signal", expected: undefined },
+  { scenario: "settled", expected: undefined },
+  { scenario: "restored", expected: undefined },
+] as const)(
+  "review closure replacement preserves $scenario boundaries",
+  async ({ scenario, expected }, { onTestFinished }) => {
+    const f = await runtimeFixture();
+    onTestFinished(f.dispose);
+    const turn = new AbortController();
+    const ctx = {
+      ...f.ctx,
+      signal: turn.signal,
+      abort() {
+        if (scenario !== "unaborted signal") {
+          turn.abort();
+        }
+      },
+    };
+    const view = vi
+      .spyOn(terminal, "terminalReview")
+      .mockImplementation(async (_ctx, _read, dispatch) => {
+        dispatch({ type: "cancel" });
+        await Promise.resolve();
+      });
+    onTestFinished(() => {
+      view.mockRestore();
+    });
+    f.runtime.start(ctx, "Review closure");
+    await f.runtime.review(ctx, {
+      planId: f.runtime.active?.planId ?? "",
+      expectedRevision: 0,
+      markdown: "# Pending",
+    });
+    const message: AssistantMessage = {
+      role: "assistant",
+      api: "openai-responses",
+      provider: "fixture",
+      model: "fixture",
+      content: [],
+      stopReason: "error",
+      errorMessage: "This operation was aborted",
+      timestamp: 123,
+      usage: {
+        input: 1,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 1,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    };
+    switch (scenario) {
+      case "expected error":
+      case "unaborted signal":
+        break;
+      case "typed abort":
+        message.stopReason = "aborted";
+        break;
+      case "provider abort":
+        message.errorMessage = "Request was aborted";
+        break;
+      case "network failure":
+        message.errorMessage = "WebSocket error";
+        break;
+      case "partial content":
+        message.content = [{ type: "text", text: "Keep this content" }];
+        break;
+      case "diagnostic":
+        message.diagnostics = [
+          {
+            type: "provider_transport_failure",
+            timestamp: 123,
+            error: { name: "Error", message: "Keep this diagnostic" },
+          },
+        ];
+        break;
+      case "later turn":
+        ctx.signal = AbortSignal.abort();
+        break;
+      case "settled":
+        f.runtime.settled(ctx);
+        break;
+      case "restored":
+        f.runtime.restore(ctx);
+        break;
+    }
+    const before = structuredClone(message);
+    const replacement = f.runtime.replaceReviewAbort(message, ctx);
+    expect(replacement?.role === "assistant" ? replacement.stopReason : undefined).toBe(expected);
+    expect(
+      replacement?.role === "assistant" ? replacement.errorMessage : undefined,
+    ).toBeUndefined();
+    expect(message).toEqual(before);
+    expect(f.runtime.replaceReviewAbort(message, ctx)).toBeUndefined();
+  },
+);
+
+test("review closure warns while idle and preserves persistence failure warnings", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  const notify = vi.spyOn(f.ctx.ui, "notify");
+  const save = vi.spyOn(persistence, "saveRecord");
+  const view = vi
+    .spyOn(terminal, "terminalReview")
+    .mockImplementation(async (_ctx, _read, dispatch) => {
+      dispatch({ type: "edit-feedback", text: "Unsent feedback" });
+      save.mockReturnValue({ saved: false, message: "Injected persistence failure" });
+      dispatch({ type: "cancel" });
+      await Promise.resolve();
+    });
+  onTestFinished(() => {
+    view.mockRestore();
+    save.mockRestore();
+    notify.mockRestore();
+  });
+  f.runtime.start(f.ctx, "Idle review");
+  const result = await f.runtime.review(f.ctx, {
+    planId: f.runtime.active?.planId ?? "",
+    expectedRevision: 0,
+    markdown: "# Pending",
+  });
+  expect(result.outcome).toBe("cancelled");
+  expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Unsent feedback");
+  expect(notify).toHaveBeenCalledWith("Injected persistence failure", "warning");
+  expect(notify).toHaveBeenLastCalledWith(
+    "Plan review closed without approval. Use /plan to resume.",
+    "warning",
+  );
+});
 
 test("cancellation flushes pending drafts and reports a failing persistence backend", async ({
   onTestFinished,

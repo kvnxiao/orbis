@@ -34,18 +34,18 @@ test("public snapshots expose detached targets for a first annotation and valida
     const snapshot = request.updateDraft(update);
     request.updateDraft({
       identity: request.identity,
-      action: { type: "confirm-note", blockId: block.id },
+      action: { ...update.action, text: "Clarify this further" },
     });
     if (snapshot.kind !== "review") {
       throw new Error("Expected review");
     }
-    expect(snapshot.review.notes?.[0]?.confirmed).toBeUndefined();
+    expect(snapshot.review.notes?.[0]?.text).toBe("Clarify this");
     expect(() =>
       request.updateDraft({
         identity: request.identity,
-        action: { type: "confirm-note", blockId: "missing" },
+        action: { type: "edit-note", blockId: "missing", excerpt: "Missing", text: "Invalid" },
       }),
-    ).toThrow("Unknown annotation");
+    ).toThrow("Unknown source block");
     await Promise.resolve();
     return { identity: request.identity, action: { type: "submit-feedback" } };
   });
@@ -158,6 +158,19 @@ test("presenter snapshots are detached and draft callbacks expire after submissi
         action: { type: "answer", questionId: "scope", answer: { custom: "CLI" } },
       });
       expect(f.runtime.active?.decisions).toEqual({});
+      const cleared = input.updateDraft({
+        identity: input.identity,
+        action: { type: "clear-answer", questionId: "scope" },
+      });
+      if (cleared.kind !== "round") {
+        throw new Error("Expected round");
+      }
+      expect(cleared.round.drafts.scope?.answer).toBeUndefined();
+      expect(cleared.round.drafts.scope?.unfinished).toBe("CLI");
+      input.updateDraft({
+        identity: input.identity,
+        action: { type: "answer", questionId: "scope", answer: { custom: "CLI" } },
+      });
       expect(() =>
         input.updateDraft({
           identity: { ...input.identity, revision: 20 },
@@ -270,6 +283,12 @@ test("cancellation interrupts an uncooperative presenter without reopening TUI",
 });
 
 test.each([
+  { draft: true, payload: { action: { type: "clear-answer", questionId: "" } } },
+  {
+    draft: true,
+    payload: { action: { type: "clear-answer", questionId: "scope", text: "Extra" } },
+  },
+  { draft: false, payload: { action: { type: "clear-answer", questionId: "scope" } } },
   { draft: false, payload: { identity: { version: 2 }, action: { type: "approve" } } },
   { draft: false, payload: { identity: undefined, action: { type: "approve" } } },
   {

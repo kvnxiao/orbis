@@ -6,8 +6,8 @@ public local API. The package does not ship a browser server or HTML renderer. C
 SSH, input method editor (IME), and model-quality verification remains pending.
 
 The [system specification](SPEC.md) and [TUI interaction contract](docs/tui-interactions.md) define
-a modal frontier with stable question numbers, per-option details, block notes, revision browsing,
-nested Escape behavior, and confirmation before discarding notes and approving. The commands,
+a modal frontier with stable question numbers, per-option details, block notes, frontier and
+revision browsing, nested Escape behavior, and approval with supplementary notes. The commands,
 keyboard controls, and public API below describe the implemented workflow.
 
 ## Local use
@@ -66,11 +66,26 @@ repeated background and immaterial choices without imposing a question quota or 
 independent questions across rounds. The package does not cap tool-input lengths, question counts,
 or retained plan revisions.
 
+For a `plan_round` question with options, supply two to four options and a `recommendation` with an
+`optionId` matching one of those options and a nonblank `reason`. A preference stated in context or
+an option's explanation does not replace this field. For a free-text question, set `options: []` and
+omit `recommendation`. Exactly one option is invalid.
+
 `plan_round` prerequisites reference stable question IDs already recorded as submitted decisions.
 For example, if `storage` depends on `interface`, submit the round containing `interface` before
 presenting `storage`. Questions in the same frontier and unsubmitted draft answers do not satisfy
 prerequisites. When an error lists unresolved prerequisite IDs, defer the dependent question and
 preserve those IDs through submission.
+
+Clarification can steer the question, options, recommendation, or frontier membership. To resolve a
+pending request, call `plan_round` with the same `roundId`, set `expectedRevision` to the returned
+round revision, and supply the complete active `questions` and `clarification: { id, response }`. To
+withdraw or defer a question already in that frontier, omit it from `questions` and include
+`retire: [{ id, status: "withdrawn" | "deferred", reason }]`. Omitted active questions require an
+explicit retirement. When every question is inactive, `questions: []` with the retirements presents
+Continue planning for an explicit handoff. Refine the same decision under its existing question ID;
+give a different decision a new ID. Reactivation retains the original number, drafts, and sent
+clarification history and requires a current answer.
 
 These workflow rules guide the agent. The extension validates identities, input, submission, and
 approval; it cannot determine whether research is sufficient or every design branch has been
@@ -99,12 +114,13 @@ remove them; copy any result that needs lasting storage.
 The modal presents the complete question frontier as a continuous list, with generated options
 followed by Other and `?. Ask for clarification`. Plan adds these actions; generated options
 describe the choices without duplicating them. The recommendation appears below the choices. Blank
-lines separate question groups. Each question heading has an accent-colored divider above it. A
-blank line separates question context and any reconfirmation warning from its options. Question
-dividers scroll with the content and remain visible when hints are hidden. The title is
-`Plan questions (round N)`; revisions of the same round retain N. Question numbers continue across
-rounds independently. Selections and current option notes remain unsubmitted until explicit
-whole-round submission. Changed questions require reconfirmation.
+lines separate question groups. A blank line separates question context and any reconfirmation
+warning from its options. The title is `Plan questions (round N)`; revisions of the same round
+retain N. Question numbers continue across rounds independently. Selections and current option notes
+remain unsubmitted until explicit whole-round submission. Changed questions show
+`Please select again` and require reconfirmation. Withdrawn questions retain only their
+struck-through heading; deferred questions show a compact waiting heading. Neither displays old
+options nor requires an answer until reactivated.
 
 Option letters restart at A for each question, with Other lettered last. Every option letter and
 label is bold before selection, including Other and `?. Ask for clarification`. A selected option's
@@ -118,27 +134,47 @@ Generated-option notes appear directly after the option text as an editable `[no
 the theme's accent color. The suffix wraps with the option; nonblank notes support Up/Down cursor
 movement between displayed rows. Typing, paste, and Backspace update the notes immediately without
 selecting the option or requiring confirmation. Editing a selected option also updates its answer
-preview. Enter selects the option with its current notes. Tab/Shift+Tab move to the adjacent
-question. When notes are empty or whitespace-only, the suffix is omitted and Up/Down navigate the
-list. Clearing a selected option's notes also removes its details from the answer, and submission
-does not include details for that option. Escape preserves edits and returns to the list. Right does
-not open a frontier field; inside a field it moves the cursor.
+preview. In the editor, Enter selects the option with its current notes and returns to its row. On a
+selected row, Enter clears the answer and preserves notes, Other text, and clarification drafts and
+history. Enter on an unselected option selects it. Tab/Shift+Tab move between active questions and
+the submission button. When notes are empty or whitespace-only, the suffix is omitted and Up/Down
+navigate the list. Clearing a selected option's notes also removes its details from the answer, and
+submission does not include details for that option. Escape preserves edits and returns to the list.
+Right does not open a frontier field; inside a field it moves the cursor.
 
-Unless the terminal is too short, a blank line separates the title from the content. Review answers
-and submit appears as a bold, accent-colored bracketed button, separated from the questions by a
-blank line. `›` marks its focus; the button does not use an option dot. The frontier footer places
-its key hints on one line directly below the divider, including `Typing on an option adds notes`. F1
-toggles all hints and their divider, including the double-Escape reminder, without hiding errors or
-action controls. Each new modal uses the configured hints default; F1 changes only the current modal
-and never saves a setting.
+A divider immediately follows the fixed title, with a blank row before scrollable content. The fixed
+call to action (CTA) bar has a blank row before its divider, another below the divider, and a blank
+row below its buttons. When hints are hidden, the CTA divider and padding remain. Enabled buttons
+use bracketed accent-colored labels; focused buttons add a contrasting background, bold text, and
+`›`. Disabled buttons are muted; focusing one shows its reason. Tab/Shift+Tab traverse controls, and
+Left/Right move within the CTA bar. Buttons wrap onto additional rows as needed. Short terminals
+omit decoration before controls or the last usable content row.
+
+Until every active question has a current answer, Review answers and submit is disabled. Focusing it
+lists unanswered question numbers and answers that need reconfirmation. With all answers current, it
+opens a local answer review showing selected answers and notes. Each question's sent clarification
+history is collapsed by default; expanding it shows the exchanges and their original question,
+options, and recommendation. Tab/Shift+Tab traverse these disclosures and the single Submit round
+button. Enter activates the focused control; Escape returns to the frontier. Submission includes
+sent history with the decisions and excludes unsent drafts. An entirely inactive frontier instead
+displays Continue planning without creating answers or approving a plan.
+
+F3/F4 browse previous/next logical frontiers. Completed frontiers are saved as detached snapshots;
+clarification updates do not create extra browsing stops. Historical frontiers are marked
+`earlier — read-only` and cannot accept edits or submissions. Returning restores the active
+frontier's drafts, focus, and position. History persists with the plan on the selected session
+branch.
+
+F1 toggles at most one hint line and its separate divider, including the double-Escape reminder.
+Errors and CTA controls remain visible. Each new modal uses the configured hints default; F1 changes
+only the current modal and never saves a setting.
 
 Pi's custom overlay, Markdown renderer, and Editor supply the terminal components. A package-local
 frame adds the configured borders and horizontal padding. Below six columns, it omits padding; below
 four columns or eight terminal rows, it omits the border.
 
-When hints are shown, a horizontal divider separates scrollable content from the fixed footer.
-Review-note editors retain their native bottom border. When a divider would displace controls or the
-last content row, it is omitted. Overflow adds a right-edge scrollbar whose thumb shows the visible
+Review-note editors retain their native borders. When decoration would displace controls or the last
+content row, it is omitted. Overflow adds a right-edge scrollbar whose thumb shows the visible
 proportion and position; the title and footer stay fixed. Extremely narrow views may omit the
 scrollbar.
 
@@ -148,58 +184,76 @@ cancellation, failure, or transfer restores Pi's defaults; an older modal's clea
 a newer modal's waiting indicator. Opening a modal while Pi is idle does not add a working
 indicator.
 
-| Context                                 | Control                | Action                                                                                                                                       |
-| --------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontier                                | Up / Down              | Move across options and question boundaries without selecting.                                                                               |
-| Frontier                                | Tab / Shift+Tab        | Jump between questions with wraparound and focus the selected option, or the first generated choice when unanswered.                         |
-| Generated option                        | Enter                  | Select without advancing to another question.                                                                                                |
-| Generated option                        | Backspace              | Edit its notes immediately and delete the preceding character without selecting the option.                                                  |
-| Question inline field                   | Tab / Shift+Tab        | Move to the next/previous question without selecting an answer.                                                                              |
-| Empty or whitespace-only question field | Up / Down              | Return to list navigation and move focus without selecting an answer.                                                                        |
-| Focused option or clarification         | Typing or paste        | Start inline notes immediately; wrapping moves following rows while preserving the cursor and fixed actions.                                 |
-| Other                                   | Enter                  | Open the required inline answer field; Enter confirms nonempty text.                                                                         |
-| Clarification action                    | Enter                  | Open the inline field; Enter retains the draft. Enter on Send clarification explicitly sends it.                                             |
-| Review answers and submit               | Enter                  | Preview answers, navigate to missing input, or explicitly submit the complete round.                                                         |
-| Plan document                           | Up / Down, Enter       | Focus a source block and open its note editor.                                                                                               |
-| Plan review                             | Tab / Shift+Tab        | Switch between document and action-bar focus. With action focus, arrows select an action and Enter opens it.                                 |
-| Block or overall note editor            | Enter, Tab / Shift+Tab | Insert a newline in the note, or move focus among its field, confirmation/removal controls, document scrolling, and review actions.          |
-| Plan document                           | `[` / `]`              | Browse full earlier or later revisions.                                                                                                      |
-| Scrollable content                      | Page Up / Page Down    | Scroll without editing Markdown.                                                                                                             |
-| Pending interaction                     | Ctrl+P                 | Select a registered presenter, when one is available.                                                                                        |
-| Nested editor, preview, or confirmation | Escape                 | Return to the outer view and preserve unfinished text without sending it.                                                                    |
-| Outermost frontier or review            | Escape, Escape         | Arm closing, showing a reminder only when hints are visible; press again to stop planning with drafts retained. Other input disarms closing. |
+| Context                                 | Control                         | Action                                                                                                                                       |
+| --------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontier                                | Up / Down                       | Move across options and question boundaries without selecting.                                                                               |
+| Frontier                                | Tab / Shift+Tab                 | Move between active questions and the CTA. On a question, focus the selected option or the first generated choice when unanswered.           |
+| Generated option                        | Enter                           | Toggle selection without advancing to another question.                                                                                      |
+| Generated option                        | Backspace                       | Edit its notes immediately and delete the preceding character without selecting the option.                                                  |
+| Question inline field                   | Tab / Shift+Tab                 | Move between active questions and the CTA without selecting an answer.                                                                       |
+| Empty or whitespace-only question field | Up / Down                       | Return to list navigation and move focus without selecting an answer.                                                                        |
+| Focused option or clarification         | Typing or paste                 | Start inline notes immediately; wrapping moves following rows while preserving the cursor and fixed actions.                                 |
+| Other                                   | Enter                           | Clear a selected answer; select nonblank draft text; otherwise open the required field.                                                      |
+| Clarification action                    | Enter                           | Open the inline field; Enter retains the draft. Enter on Send clarification explicitly sends it.                                             |
+| Review answers and submit               | Enter                           | When every answer is current, open answer review; otherwise remain on the frontier.                                                          |
+| Plan document                           | Up / Down                       | Select source blocks or the overall feedback field at the document's end.                                                                    |
+| Selected plan block                     | Typing, paste, Backspace, Enter | Open its note and apply the initiating input; Enter opens without inserting text.                                                            |
+| Plan review                             | Tab / Shift+Tab                 | Leave editing and traverse the document and individual CTA buttons. Left/Right select a button; Enter activates it.                          |
+| Block or overall note editor            | Enter / Shift+Enter             | Retain text and leave editing / insert a newline.                                                                                            |
+| Plan review                             | F2                              | Focus overall feedback.                                                                                                                      |
+| Frontier / plan review                  | F3 / F4                         | Browse previous/next frontiers or plan revisions.                                                                                            |
+| Scrollable content                      | Page Up / Page Down             | Scroll without editing Markdown.                                                                                                             |
+| Pending interaction                     | Ctrl+P                          | Select a registered presenter, when one is available.                                                                                        |
+| Editor or answer review                 | Escape                          | Return to the outer view and preserve draft text without sending it.                                                                         |
+| Outermost frontier or review            | Escape, Escape                  | Arm closing, showing a reminder only when hints are visible; press again to stop planning with drafts retained. Other input disarms closing. |
 
 Each generated option retains its current notes. Only the selected answer and its current notes
 enter the submission preview. Clarification returns to the owning agent with that selected context
 marked unsubmitted; unfinished custom text, other options' drafts, and unsent clarification text
 stay local. Tool results exclude private drafts before truncation or writing result files.
 
-In question fields, Shift+Enter inserts a newline and Tab/Shift+Tab navigate questions. Other text
-uses an accent-colored `[answer: …]` suffix; clarification text uses `[question: …]` in the theme's
-link color. Enter finishes inline editing; for Other, it also selects the nonblank custom answer. A
-nonblank clarification draft changes the list action to `?. Send clarification`. Enter on that
-action sends the request and closes the modal. The owning agent explains in the existing
-conversation, then calls `plan_round` to reopen the same round and display the response beside its
-question. Other drafts remain preserved. When a terminal cannot distinguish Shift+Enter, multiline
-paste can supply question-field newlines. Live terminal and SSH key behavior still requires
-verification.
+In question fields, Shift+Enter inserts a newline and Tab/Shift+Tab navigate active questions and
+the CTA. Other and clarification text appear directly after their row labels without brackets or
+answer/question prefixes. Other uses the theme's Markdown code-block color (green in Pi's dark
+theme); clarification uses its link color (blue). Option notes retain their accent-colored
+`[notes: …]` suffix. Enter finishes inline editing; for Other, it also selects the nonblank custom
+answer. A nonblank clarification draft changes the list action to `?. Send clarification`. Enter on
+that action sends the request and closes the modal. The owning agent explains in the existing
+conversation, then calls `plan_round` to reopen the same round and display the latest response
+beside its question. Earlier exchanges remain available in answer review. A blank line separates the
+recommendation and latest clarification exchange. Requests read `User question N: …`, numbered from
+1 within each logical question and preserved across revisions and reactivation. Responses appear
+below their requests with a blank line and two-column indentation, including wrapped Markdown. Very
+narrow terminals reduce the indent to retain a content column. Other drafts remain preserved. When a
+terminal cannot distinguish Shift+Enter, multiline paste can supply newlines. Live terminal and SSH
+key behavior still requires verification.
 
-Plan review renders the full Markdown read-only under the title `Plan review · revision N · latest`.
-Its action bar lists `Annotate`, `Overall feedback`, `Review feedback`, `Approve`, and
-`Discard notes and approve…` separated by `|`. Block notes retain their exact source excerpt and
-revision. A block-note editor appears beneath its block; overall feedback appears after the plan.
-During note editing, the full plan remains readable and scrollable. The action bar remains visible
-in every review mode, including feedback preview and discard confirmation. Confirming a block note
-or overall feedback includes it in the local batch; Review feedback previews that batch, identifies
-excluded unfinished edits, and requires an explicit `Send feedback`. The agent receives the batch
-and returns a revised plan requiring fresh approval.
+Plan review renders the full Markdown read-only under `Plan review · revision N · latest`, followed
+by a clickable path to its persisted revision file. The link targets an absolute file URL; its
+display path may use `~`. Terminals without hyperlink support retain readable path text. The file
+and session record must be saved before review opens; a write failure blocks display and reports
+retry or cancellation guidance.
 
-Unsent notes prevent ordinary approval. Discard notes and approve opens a confirmation for the
-latest revision; its `Discard + approve` control discards the pending note text only on explicit
-confirmation. Older revisions are read-only and titled
-`Plan review · revision N · older — read-only`. Returning to the latest revision restores its drafts
-and reading position. Below 120 content columns, the action bar shows only the selected action with
-its full label; arrows still reach every action.
+Blocks display source-line ranges in a gutter. Selection makes the block and its range bold without
+duplicating the excerpt in a footer. Each note appears below its target with an upward arrow, its
+source range, and a distinct background; note rows have no line numbers. Block notes retain their
+exact source excerpt and revision. F2 opens overall feedback after the complete plan. Typing on a
+selected block opens its note directly, including printable brackets. Edits are retained
+immediately; Enter or Escape leaves editing, and Shift+Enter inserts a newline. Clearing text
+removes that note from the outgoing batch. Notes remain visible outside editing and never change the
+plan file.
+
+Without nonblank notes, the CTA contains Approve. With notes, it contains Approve with notes and
+Request revision. Approve with notes accepts the displayed Markdown together with the current
+supplementary notes and saves a companion file. Request revision sends every current nonblank note
+and overall feedback directly to the owning agent, which returns a revised plan requiring fresh
+approval. There is no separate note-confirmation or feedback-preview step; the chosen button
+determines the note batch's intent.
+
+F3/F4 browse earlier/later plan revisions. Older revisions are read-only and titled
+`Plan review · revision N · older — read-only`; their approval controls are disabled. Returning to
+the latest revision restores its notes and reading position. A new revision starts without active
+notes from its predecessor.
 
 Each pending interaction starts in the terminal. When another presenter is registered, Ctrl+P closes
 the modal and opens the presenter selector. Selecting an available presenter explicitly transfers
@@ -221,13 +275,13 @@ the only supported registration entry point. The package discovers registered pr
 internal event-bus channels; those channels are not a public protocol, and definitions that fail the
 version, ID, label, or `present` checks are ignored.
 
-| Value                                       | Contract                                                                                                                                                                                                     |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `request.identity`                          | Version, session ID, plan ID, invocation-specific interaction ID, and displayed revision. Return this identity with every update and result.                                                                 |
-| `request.snapshot`                          | A detached `kind: "round"` snapshot with numbered questions, per-option drafts, and clarification history, or `kind: "review"` with exact Markdown, source blocks, block notes, and overall feedback drafts. |
-| `request.updateDraft({ identity, action })` | Synchronously validate a draft action and return the updated detached snapshot. Invalid or stale input throws without mutation.                                                                              |
-| `request.signal`                            | Abort signal for completion, transfer, cancellation, removal, or session teardown. Release the presenter's resources when it aborts.                                                                         |
-| `present()` result                          | `{ identity, action }` for explicit submission, clarification, feedback, approval, discard-and-approve, or cancellation. Returning `undefined` declines the interaction.                                     |
+| Value                                       | Contract                                                                                                                                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request.identity`                          | Version, session ID, plan ID, invocation-specific interaction ID, and displayed revision. Return this identity with every update and result.                                                               |
+| `request.snapshot`                          | A detached `kind: "round"` snapshot with the current round and completed-frontier `history`, or `kind: "review"` with exact Markdown, saved path, source blocks, block notes, and overall feedback drafts. |
+| `request.updateDraft({ identity, action })` | Synchronously validate a draft action and return the updated detached snapshot. Invalid or stale input throws without mutation.                                                                            |
+| `request.signal`                            | Abort signal for completion, transfer, cancellation, removal, or session teardown. Release the presenter's resources when it aborts.                                                                       |
+| `present()` result                          | `{ identity, action }` for explicit submission, clarification, revision feedback, approval with or without notes, or cancellation. Returning `undefined` declines the interaction.                         |
 
 Every action has a `type` discriminator. Draft actions update local input without submitting it:
 
@@ -236,20 +290,24 @@ Every action has a `type` discriminator. Draft actions update local input withou
 | Round       | `focus { questionId }`                                      | Change the focused question.                                                                                |
 | Round       | `edit { questionId, unfinished }`                           | Preserve unfinished custom-answer text.                                                                     |
 | Round       | `answer { questionId, answer: { optionId } \| { custom } }` | Select an option with its current notes or confirm nonempty custom text.                                    |
+| Round       | `clear-answer { questionId }`                               | Clear the selected answer and preserve option notes, custom text, and clarification drafts and history.     |
 | Round       | `edit-option { questionId, optionId, text }`                | Update that option's notes without selecting it. If it is already selected, also update its answer details. |
 | Round       | `edit-clarification { questionId, text }`                   | Preserve an unsent clarification note.                                                                      |
-| Review      | `edit-note { blockId, excerpt, text }`                      | Preserve unfinished note text against a current source block and exact excerpt.                             |
-| Review      | `confirm-note { blockId }`                                  | Confirm nonempty note text for the feedback batch.                                                          |
-| Review      | `remove-note { blockId }`                                   | Remove that block's unfinished and confirmed note.                                                          |
-| Review      | `edit-feedback { text }`                                    | Preserve unfinished overall feedback.                                                                       |
-| Review      | `confirm-feedback`                                          | Confirm overall feedback for the batch.                                                                     |
+| Review      | `edit-note { blockId, excerpt, text }`                      | Retain current note text against a source block and exact excerpt. Nonblank text enters the outgoing batch. |
+| Review      | `remove-note { blockId }`                                   | Remove that block's note.                                                                                   |
+| Review      | `edit-feedback { text }`                                    | Retain current overall feedback without submitting or approving it.                                         |
 
 Round drafts expose `unfinished` custom text, the selected `answer`, per-option `options` mapping
 option IDs to current note strings, and an optional `clarificationDraft`. Use `edit-option` to
 update notes and `answer` to select an option; `answer` accepts an option ID or custom text, without
-a details field. Review notes expose `blockId`, `excerpt`, `revision`, `unfinished`, and optional
-`confirmed` text. `review.feedbackDraft` contains unfinished overall feedback;
-`review.overallConfirmed` contains the confirmed text.
+a details field. When `answer` selects custom text, it also stores that text in `unfinished` for
+editing or reselection. `clear-answer` leaves the question unanswered until another `answer` action
+selects a response. Round snapshots also expose completed-frontier `history` entries with `number`
+and a detached `round`. Questions can include `status: "withdrawn" | "deferred"` and a `reason`;
+these questions reject input. Sent clarifications retain their original `question` context. Review
+notes expose `blockId`, `excerpt`, `revision`, and current `text`. `review.feedbackDraft` contains
+current overall feedback; nonblank notes enter the next explicit submission or approval-with-notes
+action without separate confirmation.
 
 Review snapshots expose `blocks`, whose entries contain `id`, `kind`, `start`, `end`, and `excerpt`.
 `start` is inclusive and `end` exclusive; both are JavaScript UTF-16 string offsets into
@@ -259,15 +317,15 @@ do not derive targets from rendered text or interpret the ID format. Targets bel
 snapshot's revision and can overlap for nested Markdown blocks.
 
 Result actions are `submit`, `clarify { questionId, id, request }`, `submit-feedback`,
-`feedback { text }`, `approve`, `discard-approve`, and `cancel`. `submit` validates the complete
-core draft set. `submit-feedback` sends confirmed block notes and overall feedback as one batch;
-unfinished edits remain excluded. `feedback { text }` sends explicit feedback directly. `approve`
-requests saving the current Markdown and rejects unsent notes. Before returning `discard-approve`,
-the presenter must obtain explicit confirmation to discard all unsent notes for the current revision
-and approve it. Presenters return results only after an explicit user action. Core validation
-rejects stale identities and actions for the wrong pending phase.
+`feedback { text }`, `approve`, `approve-with-notes`, and `cancel`. `submit` validates current
+answers for every active question. `submit-feedback` sends all current nonblank block notes and
+overall feedback as one batch; clearing a field removes its text from the batch. `feedback { text }`
+sends explicit feedback directly. `approve` accepts the current Markdown only when no nonblank notes
+exist. `approve-with-notes` requires notes and accepts them as supplementary to that exact Markdown.
+Only after an explicit user action may presenters return results. Core validation rejects stale
+identities and actions for the wrong pending phase.
 
-For example, a review UI can preserve unfinished feedback without sending it:
+For example, a review UI can retain feedback without sending it:
 
 ```ts
 request.updateDraft({
@@ -276,12 +334,11 @@ request.updateDraft({
 });
 ```
 
-When the user confirms the overall feedback, call `updateDraft` with
-`{ identity: request.identity, action: { type: "confirm-feedback" } }`. After previewing the
-confirmed notes and obtaining an explicit Send, return
+When the user requests revision, return
 `{ identity: request.identity, action: { type: "submit-feedback" } }` from `present`. The owning Pi
 agent receives the same batch as terminal feedback, revises the Markdown, and opens a new terminal
-review requiring fresh approval.
+review requiring fresh approval. To accept the displayed plan with that feedback as supplementary
+notes, return `{ identity: request.identity, action: { type: "approve-with-notes" } }` instead.
 
 While an interaction remains active, decline, failure, or unregister restores it to the terminal
 with drafts preserved. Plan cancellation and session teardown close it without reopening.
@@ -315,10 +372,11 @@ override personal values. Untrusted project settings are ignored.
 ```
 
 The defaults are shown above. Symbols can be `unicode` or `emoji`. Border styles are `rounded`,
-`square`, `double`, `ascii`, and `none`; None retains the footer divider when hints are shown.
-Appearance settings apply to the outer Plan frame and Plan-owned dividers. Pi's native editor
-decorations retain their own style. The menu uses Pi's `SettingsList`; Pi 0.85.1 does not expose an
-extension API for adding rows to native `/settings`.
+`square`, `double`, `ascii`, and `none`; None omits the outer frame while retaining modal content
+and CTA dividers. Hints add their own divider only when enabled. Appearance settings apply to the
+outer Plan frame and Plan-owned dividers. Pi's native editor decorations retain their own style. The
+menu uses Pi's `SettingsList`; Pi 0.85.1 does not expose an extension API for adding rows to native
+`/settings`.
 
 The Planning shortcut field accepts a Pi special or modified key, such as `shift+tab` or
 `ctrl+alt+p`; enter `disabled` in the menu or set `"shortcut": null` in JSON to disable it. Plain
@@ -366,18 +424,36 @@ saved branch; new sessions start in Default. Native Escape retains Pi's contextu
 including closing autocomplete. After Pi finishes automatic recovery for an interrupted or failed
 planning turn, Plan returns to Default.
 
+When outer double Escape closes plan review, Plan displays
+`Plan review closed without approval. Use /plan to resume.` Draft text is retained, and persistence
+failures remain visible. The expected empty abort response from the stopped turn does not display an
+error banner. Provider failures, unrelated interruptions, and assistant content remain unchanged.
+
 When a failed Pi write advances memory beyond disk, further planning writes stop. Correct storage
 and reload the saved session. Reload restores the last saved state and discards unsaved edits. The
 package does not repair Pi session files.
 
-Approval saves the exact reviewed Markdown as `<planId>-<revision>.md` and records acceptance in the
-session. The output filesystem must support hard links; existing files are never overwritten. When
-approval fails, the current revision remains available for review. Correct the reported settings or
-storage error, then use `/plan` to reopen review and explicitly retry approval, or Escape to pause.
-A failed acceptance save can leave the Markdown file present. Even if the configured directory
-changes or the user navigates the session tree, explicit approval of the same revision retries
-reconciliation at its recorded path and preserves its content and approval time. After confirming
-both records, the interface reports acceptance.
+Before displaying a revision, Plan saves its exact Markdown as `<planId>-<revision>.md` in the
+configured directory and persists its path and content with the session. Earlier revisions retain
+their own files. The output filesystem must support hard links; existing conflicting files are
+preserved. File existence does not imply approval. A failed artifact or session write prevents
+review from opening; correct storage and use `/plan` to retry the saved revision.
+
+Approval verifies the unchanged revision file and records acceptance in the session. Approval with
+notes also saves `<planId>-<revision>.notes.md` beside the plan. The companion contains the overall
+text and block annotations with their original excerpts and revision identities. Notes remain
+separate from the plan Markdown. When approval fails, use `/plan` to reopen review and explicitly
+retry, or Escape to pause. An approval attempt preserves its revision, destinations, exact plan and
+notes content, and approval time through retries, settings changes, and session-tree navigation.
+Partial writes do not report success; acceptance requires every required artifact and the session
+record to be confirmed.
+
+The approval payload contains `version: 1`, `planId`, `revision`, `sessionId`, `cwd`, `planPath`,
+`planContent`, and `approvedAt`. With supplementary notes it also contains `notes`, `notesPath`, and
+`notesContent`; without notes, these fields are omitted together. `notes.overall` contains the
+overall text, and `notes.blocks` contains `blockId`, `excerpt`, `revision`, and `text` for each
+nonblank annotation. `planContent` remains the exact revision Markdown, and `notesContent` matches
+the companion file. Tool results and the approval event contain the same payload.
 
 After saving approval, the package checks Pi's idleness immediately and on `agent_settled`. When Pi
 is idle, it emits `orbis:plan-approved` with the [version 1 payload](SPEC.md#approval-and-handoff).
@@ -433,10 +509,11 @@ and approves reviews automatically after selection. Use it only with disposable 
 
 Check unfinished custom text, per-option details, and multiline clarification across navigation,
 wraparound, resize, nested Escape, cancellation, and resume locally and over SSH. Exercise IME input
-and narrow terminals. During review, check block focus, note confirmation and batch submission,
-revision browsing, transfer back to the TUI, and exact-revision approval with discard confirmation.
-Separately verify reload, branch navigation, unresolved clarification, storage failures, and retry.
-Scripted fixtures do not establish real-host usability or real-model research and frontier quality.
+and narrow terminals. During review, check block focus and batch submission, frontier and revision
+browsing, transfer back to the TUI, direct notes, revision requests, and exact-revision approval
+with supplementary notes. Separately verify reload, branch navigation, unresolved clarification,
+storage failures, and retry. Scripted fixtures do not establish real-host usability or real-model
+research and frontier quality.
 
 Node.js 22.19.0 is the declared minimum. Pi 0.85.1 is the compatibility baseline; standalone Pi
 binary support remains unverified.

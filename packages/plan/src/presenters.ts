@@ -106,10 +106,9 @@ const draftSchema = Type.Union([
     object,
   ),
   Type.Object({ type: Type.Literal("edit-clarification"), questionId: nonempty, text }, object),
+  Type.Object({ type: Type.Literal("clear-answer"), questionId: nonempty }, object),
   Type.Object({ type: Type.Literal("edit-note"), blockId: nonempty, excerpt: text, text }, object),
-  Type.Object({ type: Type.Literal("confirm-note"), blockId: nonempty }, object),
   Type.Object({ type: Type.Literal("remove-note"), blockId: nonempty }, object),
-  Type.Object({ type: Type.Literal("confirm-feedback") }, object),
   Type.Object({ type: Type.Literal("focus"), questionId: nonempty }, object),
   Type.Object({ type: Type.Literal("edit"), questionId: nonempty, unfinished: text }, object),
   Type.Object(
@@ -126,7 +125,7 @@ const draftSchema = Type.Union([
   Type.Object({ type: Type.Literal("edit-feedback"), text }, object),
 ]);
 const resultSchema = Type.Union([
-  Type.Object({ type: Type.Literal("discard-approve") }, object),
+  Type.Object({ type: Type.Literal("approve-with-notes") }, object),
   Type.Object({ type: Type.Literal("submit-feedback") }, object),
   Type.Object({ type: Type.Literal("submit") }, object),
   Type.Object(
@@ -163,7 +162,11 @@ export function presentationAction(
 
 export function presentationSnapshot(state: RoundState): PlanPresentationSnapshot {
   if (state.phase === "round" && state.round !== undefined) {
-    return { kind: "round", round: structuredClone(state.round) };
+    return {
+      kind: "round",
+      round: structuredClone(state.round),
+      history: structuredClone(state.history ?? []),
+    };
   }
   const review = state.reviews?.at(-1);
   if (state.phase === "review" && review !== undefined) {

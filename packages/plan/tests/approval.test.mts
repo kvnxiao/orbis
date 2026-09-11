@@ -6,12 +6,13 @@ import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 
 import { saveApproval } from "../src/approval.ts";
+import { prepareReviewArtifact } from "../src/artifacts.ts";
 import { presentReview, transitionReview } from "../src/state.ts";
 import type { PlanningSession } from "../src/state.ts";
 import * as terminal from "../src/terminal.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
-async function fixture() {
+async function fixture(withNotes = false) {
   const f = await runtimeFixture();
   f.runtime.start(f.ctx, "Approval fixture");
   const active = f.runtime.active;
@@ -23,17 +24,22 @@ async function fixture() {
     expectedRevision: 0,
     markdown: "# Approved text\r\n\r\nPreserve **these bytes**.\r\n",
   });
+  const directory = join(f.ctx.cwd, "plans");
+  const prepared = prepareReviewArtifact({ ...active, ...reviewed }, directory, f.persist);
+  const annotated = withNotes
+    ? transitionReview(prepared, 1, { type: "edit-feedback", text: "Auxiliary context" })
+    : prepared;
   const state: PlanningSession = {
-    ...active,
-    ...transitionReview(reviewed, 1, { type: "approve" }),
+    ...prepared,
+    ...transitionReview(annotated, 1, { type: withNotes ? "approve-with-notes" : "approve" }),
   };
-  return { ...f, state, directory: join(f.ctx.cwd, "plans") };
+  return { ...f, state, directory };
 }
 
 test.for(["writeFileSync", "fsyncSync"] as const)(
   "approval cleans temporary files after %s fails",
   async (operation, { onTestFinished }) => {
-    const f = await fixture();
+    const f = await fixture(true);
     onTestFinished(f.dispose);
     const failure = vi.spyOn(fs, operation).mockImplementationOnce(() => {
       throw new Error("Disk full");
@@ -47,7 +53,7 @@ test.for(["writeFileSync", "fsyncSync"] as const)(
       failure.mockRestore();
       syncBuiltinESMExports();
     }
-    expect(await readdir(f.directory)).toEqual([]);
+    expect(await readdir(f.directory)).toEqual([`${f.state.planId}-1.md`]);
   },
 );
 
@@ -162,7 +168,7 @@ test("a foreign-session runtime retries frozen approval bytes at the recorded de
   expect(await readdir(origin.directory)).toEqual([`${origin.state.planId}-1.md`]);
 });
 
-test("failed intent saving creates no artifact and traversal identities are rejected", async ({
+test("failed approval intent preserves the review artifact and rejects traversal identities", async ({
   onTestFinished,
 }) => {
   const f = await fixture();
@@ -174,7 +180,7 @@ test("failed intent saving creates no artifact and traversal identities are reje
     message: "Disk unavailable",
   }));
   expect(failed.outcome).toBe("error");
-  await expect(readdir(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await readdir(f.directory)).toEqual([`${f.state.planId}-1.md`]);
   expect(
     saveApproval({ ...f.state, planId: "../../outside" }, f.directory, f.persist).outcome,
   ).toBe("error");
@@ -199,4 +205,84 @@ test("a collision preserves unrelated bytes and navigation retains the approval 
   f.runtime.restore(f.ctx);
   expect(f.runtime.active?.planId).toBe(f.state.planId);
   expect(f.runtime.active?.pendingApproval).toEqual(result.state.pendingApproval);
+});
+
+test("approval with notes freezes both artifacts through failed acceptance and retry", async ({
+  onTestFinished,
+}) => {
+  const f = await fixture(true);
+  onTestFinished(f.dispose);
+  const failed = saveApproval(f.state, f.directory, (state) =>
+    state.phase === "accepted"
+      ? { saved: false, message: "Acceptance unavailable" }
+      : f.persist(state),
+  );
+  expect(failed.outcome).toBe("error");
+  const intent = failed.state.pendingApproval;
+  if (intent?.notesPath === undefined) {
+    throw new Error("Missing notes artifact");
+  }
+  expect(intent.notes?.overall).toBe("Auxiliary context");
+  expect(await readFile(intent.notesPath, "utf8")).toBe(intent.notesContent);
+  expect(await readFile(intent.planPath, "utf8")).toBe(intent.planContent);
+  const changed = {
+    ...failed.state,
+    ...transitionReview(failed.state, 1, { type: "edit-feedback", text: "Changed" }),
+  };
+  expect(saveApproval({ ...changed, phase: "saving" }, f.directory, f.persist).outcome).toBe(
+    "error",
+  );
+  const retry = saveApproval(
+    { ...failed.state, phase: "saving" },
+    join(f.directory, "changed"),
+    f.persist,
+  );
+  expect(retry.outcome).toBe("approval");
+  expect(retry.state.accepted).toEqual(intent);
+});
+
+test("review opens only after exact file and session persistence succeed", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  f.runtime.start(f.ctx, "Persist before display");
+  const view = vi
+    .spyOn(terminal, "terminalReview")
+    .mockImplementation(async (_ctx, read, dispatch) => {
+      const review = read().reviews?.at(-1);
+      if (review?.path === undefined) {
+        throw new Error("Missing persisted path");
+      }
+      expect(await readFile(review.path, "utf8")).toBe("# Exact\r\n");
+      dispatch({ type: "cancel" });
+    });
+  onTestFinished(() => {
+    view.mockRestore();
+  });
+  const active = f.runtime.active;
+  if (active === undefined) {
+    throw new Error("Missing plan");
+  }
+  const reviewed = {
+    ...active,
+    ...presentReview(active, {
+      planId: active.planId,
+      expectedRevision: 0,
+      markdown: "# Exact\r\n",
+    }),
+  };
+  expect(() =>
+    prepareReviewArtifact(reviewed, join(f.ctx.cwd, "blocked"), () => ({
+      saved: false,
+      message: "Cannot persist",
+    })),
+  ).toThrow("Cannot persist");
+  await expect(readdir(join(f.ctx.cwd, "blocked"))).rejects.toMatchObject({ code: "ENOENT" });
+  await f.runtime.review(f.ctx, {
+    planId: active.planId,
+    expectedRevision: 0,
+    markdown: "# Exact\r\n",
+  });
+  expect(view).toHaveBeenCalledOnce();
 });

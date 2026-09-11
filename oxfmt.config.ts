@@ -12,7 +12,14 @@ export default defineConfig({
   sortPackageJson: true,
   arrowParens: "always",
   endOfLine: "lf",
-  ignorePatterns: ["pnpm-lock.yaml", "LICENSE", "**/LICENSE", "node_modules/**", ".artifacts/**"],
+  ignorePatterns: [
+    "pnpm-lock.yaml",
+    "LICENSE",
+    "**/LICENSE",
+    "node_modules/**",
+    ".artifacts/**",
+    ".agents/**",
+  ],
   proseWrap: "always",
   jsdoc: {
     addDefaultToDescription: true,

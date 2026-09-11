@@ -136,7 +136,6 @@ test("review recovery preserves note anchors and unfinished edits without saving
       excerpt: block.excerpt,
       text: "Confirmed note",
     });
-    state = transitionReview(state, 1, { type: "confirm-note", blockId: block.id });
     state = transitionReview(state, 1, {
       type: "edit-note",
       blockId: block.id,

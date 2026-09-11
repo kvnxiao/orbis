@@ -18,7 +18,7 @@ test("feedback requires another exact revision and stale approval preserves curr
   expect(transitionReview(state, 2, { type: "approve" }).phase).toBe("saving");
 });
 
-test("annotation validation rejects stale or malformed targets and excludes unfinished overall notes", () => {
+test("annotation validation rejects stale or malformed targets and includes current overall notes", () => {
   let state = presentReview(
     { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", expectedRevision: 0, markdown: "Same.\n\nSame.\n" },
@@ -41,41 +41,37 @@ test("annotation validation rejects stale or malformed targets and excludes unfi
     excerpt: block.excerpt,
     text: " ",
   });
-  expect(() => transitionReview(state, 1, { type: "confirm-note", blockId: block.id })).toThrow(
-    "Write a note",
-  );
+  expect(transitionReview(state, 1, { type: "approve" }).phase).toBe("saving");
   state = transitionReview(state, 1, {
     type: "edit-note",
     blockId: block.id,
     excerpt: block.excerpt,
     text: "Clarify second occurrence",
   });
-  state = transitionReview(state, 1, { type: "confirm-note", blockId: block.id });
   state = transitionReview(state, 1, { type: "edit-feedback", text: "Private unfinished overall" });
-  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow("unsent notes");
+  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow("notes");
   const submitted = transitionReview(state, 1, { type: "submit-feedback" });
   expect(submitted.reviews?.[0]?.feedback).toContain(`block ${block.id}`);
-  expect(submitted.reviews?.[0]?.feedback).not.toContain("Private unfinished");
+  expect(submitted.reviews?.[0]?.feedback).toContain("Private unfinished");
   const next = presentReview(submitted, {
     planId: "plan",
     expectedRevision: 1,
     markdown: "Changed",
   });
   expect(next.reviews?.at(-1)?.notes).toBeUndefined();
-  expect(() => transitionReview(next, 1, { type: "discard-approve" })).toThrow("changed");
+  expect(() => transitionReview(next, 1, { type: "approve-with-notes" })).toThrow("changed");
   expect(transitionReview(next, 2, { type: "approve" }).phase).toBe("saving");
 });
 
-test("confirming overall feedback preserves it while later unfinished edits stay excluded", () => {
+test("overall feedback submits the latest text", () => {
   let state = presentReview(
     { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
     { planId: "plan", expectedRevision: 0, markdown: "Plan" },
   );
   state = transitionReview(state, 1, { type: "edit-feedback", text: "Confirmed overall" });
-  state = transitionReview(state, 1, { type: "confirm-feedback" });
   state = transitionReview(state, 1, { type: "edit-feedback", text: "Unfinished replacement" });
   const submitted = transitionReview(state, 1, { type: "submit-feedback" });
-  expect(submitted.reviews?.[0]?.feedback).toBe("Confirmed overall");
+  expect(submitted.reviews?.[0]?.feedback).toBe("Unfinished replacement");
 });
 
 test("blank feedback and cancellation do not approve the plan", () => {

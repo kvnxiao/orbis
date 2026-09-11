@@ -1,20 +1,12 @@
-import { randomUUID } from "node:crypto";
-import {
-  closeSync,
-  existsSync,
-  fsyncSync,
-  linkSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
+import { writeArtifact } from "./artifacts.ts";
 import type { SaveResult } from "./persistence.ts";
+import { hasReviewNotes, reviewFeedback } from "./state.ts";
 import type { PlanApproval, PlanningSession } from "./state.ts";
 
+/** Verify the displayed revision and supplementary artifacts before recording acceptance. */
 export function saveApproval(
   state: PlanningSession,
   directory: string,
@@ -24,71 +16,71 @@ export function saveApproval(
   if (
     state.phase !== "saving" ||
     review?.status !== "pending" ||
+    review.path === undefined ||
     !/^[a-f0-9-]{36}$/.test(state.planId) ||
     !isAbsolute(directory)
   ) {
     return {
       state,
       outcome: "error",
-      message: "Approval requires the current reviewed revision and an absolute output directory.",
+      message: "Approval requires the current persisted review artifact.",
     };
   }
-  const priorIntent = state.pendingApproval;
-  const intent: PlanApproval = priorIntent ?? {
+  const notes = hasReviewNotes(review)
+    ? {
+        overall: review.feedbackDraft,
+        blocks: structuredClone((review.notes ?? []).filter((note) => note.text.trim().length > 0)),
+      }
+    : undefined;
+  const notesContent =
+    notes === undefined
+      ? undefined
+      : `# Supplementary notes\n\nPlan: ${state.planId}\nRevision: ${String(review.revision)}\n\n${reviewFeedback(review)}\n`;
+  const prior = state.pendingApproval;
+  const intent: PlanApproval = prior ?? {
     version: 1,
     planId: state.planId,
     revision: review.revision,
     sessionId: state.sessionId,
     cwd: state.cwd,
-    planPath: join(directory, `${state.planId}-${String(review.revision)}.md`),
+    planPath: review.path,
     planContent: review.markdown,
     approvedAt: new Date().toISOString(),
+    ...(notes === undefined
+      ? {}
+      : {
+          notes,
+          notesPath: `${review.path.slice(0, -3)}.notes.md`,
+          notesContent: notesContent ?? "",
+        }),
   };
-  if (
-    intent.planId !== state.planId ||
-    intent.revision !== review.revision ||
-    intent.planContent !== review.markdown ||
-    !isAbsolute(intent.planPath)
-  ) {
-    return {
-      state,
-      outcome: "error",
-      message: "An earlier approval needs reconciliation before another revision can be approved.",
-    };
-  }
   const pending: PlanningSession = { ...state, pendingApproval: intent };
   try {
+    if (
+      intent.planId !== state.planId ||
+      intent.revision !== review.revision ||
+      intent.planPath !== review.path ||
+      intent.planContent !== review.markdown ||
+      !isAbsolute(intent.planPath) ||
+      JSON.stringify(intent.notes) !== JSON.stringify(notes) ||
+      intent.notesContent !== notesContent ||
+      (intent.notes === undefined) !== (intent.notesPath === undefined)
+    ) {
+      throw new Error(
+        "An earlier approval needs reconciliation before changing its revision or notes.",
+      );
+    }
     const prepared = persist(pending);
     if (!prepared.saved) {
       throw new Error(prepared.message);
     }
-    mkdirSync(dirname(intent.planPath), { recursive: true });
-    if (existsSync(intent.planPath)) {
-      if (
-        priorIntent === undefined ||
-        readFileSync(intent.planPath, "utf8") !== intent.planContent
-      ) {
-        throw new Error(
-          `The approval path already exists: ${intent.planPath}. Preserve this file and resolve the collision before retrying.`,
-        );
-      }
-    } else {
-      const temporary = `${intent.planPath}.${randomUUID()}.tmp`;
-      const descriptor = openSync(temporary, "wx");
-      try {
-        try {
-          writeFileSync(descriptor, intent.planContent, "utf8");
-          fsyncSync(descriptor);
-        } finally {
-          closeSync(descriptor);
-        }
-        linkSync(temporary, intent.planPath);
-      } finally {
-        unlinkSync(temporary);
-      }
+    if (readFileSync(intent.planPath, "utf8") !== intent.planContent) {
+      throw new Error(
+        "Saved plan bytes differ from the reviewed revision. Preserve the file and resolve the conflict.",
+      );
     }
-    if (readFileSync(intent.planPath, "utf8") !== review.markdown) {
-      throw new Error("Saved plan bytes differ from the reviewed revision.");
+    if (intent.notesPath !== undefined && intent.notesContent !== undefined) {
+      writeArtifact(intent.notesPath, intent.notesContent, prior !== undefined);
     }
     const accepted: PlanningSession = {
       ...pending,
@@ -97,20 +89,16 @@ export function saveApproval(
       reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, status: "approved" }],
     };
     delete accepted.pendingApproval;
-    const result = persist(accepted);
-    if (!result.saved) {
-      throw new Error(result.message);
+    const saved = persist(accepted);
+    if (!saved.saved) {
+      throw new Error(saved.message);
     }
-    return {
-      state: accepted,
-      outcome: "approval",
-      message: `Approved plan saved to ${intent.planPath}.`,
-    };
+    return { state: accepted, outcome: "approval", message: `Plan approved: ${intent.planPath}` };
   } catch (error) {
     return {
       state: { ...pending, phase: "review" },
       outcome: "error",
-      message: `Approval is incomplete: ${error instanceof Error ? error.message : String(error)}. Retry this exact revision to reconcile any saved file, or cancel.`,
+      message: `${error instanceof Error ? error.message : String(error)} Use /plan to retry approval or Escape to pause.`,
     };
   }
 }

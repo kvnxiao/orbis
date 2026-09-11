@@ -114,7 +114,7 @@ export default function extension(pi: ExtensionAPI): void {
     name: "plan_round",
     label: "Planning questions",
     description:
-      "Present the researched, answerable frontier. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates. The UI adds Other and Ask for clarification; do not duplicate them in generated options. Drafts remain unsubmitted until explicit whole-round submission.",
+      "Present the researched, answerable frontier. Before calling, check every question: use 2–4 distinct options with recommendation: { optionId, reason }, where optionId matches one of this question's option IDs and reason is nonblank; or use options: [] and omit recommendation for free text. Exactly one option is invalid. Every question with options requires the recommendation field; naming a preferred option in context or explanation does not replace it. Each option needs id, label, and explanation. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates, include clarification: { id, response } for the pending request, and send the complete active questions. Clarification can steer options, recommendations, and membership. Preserve the question ID for the same decision; use a new ID for a different decision. Explicitly retire omitted active questions with retire: [{ id, status: 'withdrawn' | 'deferred', reason }]. To retire every active question, send questions: [] with retire entries. Deferred questions keep their IDs when they return. The UI adds Other and Ask for clarification; do not duplicate them in generated options. Drafts remain unsubmitted until explicit whole-round submission.",
     parameters: roundSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -152,6 +152,10 @@ Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active
   });
   pi.on("agent_start", () => {
     interrupted = false;
+  });
+  pi.on("message_end", (event, ctx) => {
+    const message = runtime.replaceReviewAbort(event.message, ctx);
+    return message === undefined ? undefined : { message };
   });
   pi.on("agent_end", (event, ctx) => {
     const last = event.messages.findLast((message) => message.role === "assistant");

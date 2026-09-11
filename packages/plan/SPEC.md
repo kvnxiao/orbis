@@ -94,8 +94,9 @@ and revise drafts before submitting them together. Navigation, highlighting, and
 recommendation are not answers. Unanswered items prevent complete submission; an explicit custom
 response that defers a decision is user input the agent must address. Deferral or uncertainty does
 not resolve a decision or authorize dependent decisions. Partial submission does not silently carry
-unanswered questions into another frontier. Submission includes a review step that identifies
-unanswered questions and lets the user return to them.
+unanswered questions into another frontier. Once every active question has a current answer, users
+can review the answers before final confirmation. Unanswered or outdated answers prevent entry to
+review.
 
 **REQ-030 — Stable question numbers.** Within a plan, new logical questions receive consecutive
 display numbers starting at 1. Later frontiers continue the sequence; clarification, reordering, and
@@ -103,14 +104,28 @@ revision of an existing question preserve its number. Numbers are not reused for
 questions. Resume preserves numbering, and a new plan starts a new sequence. Display numbers
 accompany stable identities rather than replacing them.
 
+Question revisions preserve the identity of the decision being refined. A different decision
+receives a new identity and number. Withdrawn questions retain their last displayed question and
+drafts but do not require an answer. Deferred questions retain their identity while waiting for
+submitted prerequisites. Reactivation preserves the number and revision history and requires a
+current answer. An entirely withdrawn or deferred frontier supports explicit continuation without
+creating answers or approving a plan.
+
+**REQ-035 — Frontier browsing.** Completed logical frontiers persist as detached, read-only
+snapshots scoped to the active plan and branch. Clarification updates revise their existing frontier
+rather than creating additional browsing stops. Browsing cannot change answers, send clarification,
+or submit historical input. Returning restores the active frontier's drafts, focus, and position.
+
 **REQ-031 — Options and details.** Each question supports generated options and a nonblank custom
-response. Generated options own independent optional notes. Note edits update local drafts
-immediately without changing the selected answer or requiring confirmation. Changing focus, leaving
-an editor, or selecting another option preserves those notes. Selecting an option includes its
-current notes; later edits update its answer preview, and clearing them removes its details. Only
-the selected answer and its current notes are included in round submission. The agent receives
-question numbers and text, the selected option's identity and label or custom response, and any
-selected details.
+response. Users can clear a selected answer without discarding option notes, custom text, or
+clarification drafts and history. Clearing leaves the question unanswered and blocks round
+submission until an answer is selected again. Generated options own independent optional notes. Note
+edits update local drafts immediately without changing the selected answer or requiring
+confirmation. Changing focus, leaving an editor, or selecting another option preserves those notes.
+Selecting an option includes its current notes; later edits update its answer preview, and clearing
+them removes its details. Only the selected answer and its current notes are included in round
+submission. The agent receives question numbers and text, the selected option's identity and label
+or custom response, and any selected details.
 
 Unselected option notes, unfinished custom answers, and unsent clarification text remain local in
 all agent-facing entry, inspection, clarification, and submission results. Sending a clarification
@@ -138,7 +153,7 @@ Rendering supports Unicode and input-method focus. An active planning interactio
 waiting for user input from agent work and restores the working indicator when that interaction
 closes, fails, or transfers. The required layout, labels, key mappings, hints, colors, and terminal
 fallback behavior are defined in
-[the interaction contract](docs/tui-interactions.md#required-terminal-behavior).
+[the interaction contract](docs/tui-interactions.md#modal-layout--req-016).
 
 **REQ-012 — Same-agent clarification.** Before submitting a round, the user can ask a free-text
 question about any item. The waiting interaction returns a typed clarification result identifying
@@ -147,6 +162,11 @@ notes explicitly labeled as unsubmitted; unfinished custom answers, unsent clari
 unselected option notes stay local under REQ-031. The owning Pi agent answers, researches further
 when needed, and updates the same logical round. The TUI reopens with preserved drafts and the
 question-associated response. A separate explanatory model does not satisfy this requirement.
+
+Clarification can steer the decision, alternatives, recommendation, and membership of the frontier.
+Updates preserve unaffected answers, resolve the pending clarification, and require reconfirmation
+of changed questions. Sent exchanges retain the question context in which they were asked. Round
+submission includes sent clarification history with its decisions; unsent text remains local.
 
 Editing an unsubmitted answer does not invalidate a pending clarification request. Replacing its
 session, plan, or round revision does invalidate delivery.
@@ -163,14 +183,17 @@ An annotation identifies its plan revision, source block, exact source excerpt, 
 wrapping and resize do not change its target. Arbitrary substring selection and editing plan content
 are outside this contract.
 
-Notes and overall feedback remain local drafts until explicit batch submission. Users can edit or
-remove notes and inspect the outgoing feedback before sending. Confirming a block note requires
-nonblank text. The preview identifies unfinished, unconfirmed note edits and excludes them until
-confirmed. It includes the overall feedback, confirmed block notes, original excerpts, and revision
-identities that the agent will receive. Empty feedback cannot be submitted. Persist unfinished text
-as well as confirmed notes under REQ-020. Confirming a note does not submit it to the agent or
-change Markdown. After the agent revises the plan, the new revision starts without active notes; old
-annotation targets are not silently reassigned to revised text.
+Notes and overall feedback remain local drafts until explicit submission or approval with notes.
+Edits update retained text immediately; navigation does not require separate note confirmation.
+Clearing note text removes that note from the outgoing batch. Revision requests include every
+current nonblank note, its original excerpt and revision identity, and overall feedback. Empty
+revision feedback cannot be submitted. After the agent revises the plan, the new revision starts
+without active notes; old annotation targets are not silently reassigned to revised text.
+
+Before review begins, the exact revision Markdown must exist in a distinct immutable file and its
+path and content must be persisted with the session. A failed artifact or session write prevents the
+modal from opening and reports retry or cancellation. Earlier revisions retain their paths. Existing
+conflicting files are preserved. Notes do not modify the revision artifact.
 
 **REQ-033 — Revision browsing.** Users can inspect complete earlier revisions without changing the
 latest pending review. Older revisions are read-only: annotation, feedback submission, and approval
@@ -221,6 +244,10 @@ during planning research or clarification leaves saved work paused. A later unre
 restart it. Cancellation flushes pending draft saves and reports a persistence failure instead of
 claiming that unsaved drafts are durable.
 
+Explicitly closing plan review reports cancellation without approval. An empty abort response from
+the turn stopped by that closure must not appear as a model failure. Unrelated interruptions,
+provider failures, and assistant content remain unchanged.
+
 **REQ-019 — Configuration.** Personal defaults persist across restarts; trusted project
 configuration overrides only supplied fields. The approved-plan directory defaults to `.pi/plans/`
 relative to the planning working directory. Absolute paths remain absolute. Invalid settings report
@@ -237,23 +264,27 @@ defines settings choices, visual defaults, override notices, and menu behavior.
 ## Approval and handoff
 
 **REQ-023 — Save the reviewed plan.** Approval identifies the exact reviewed revision. The package
-saves its unchanged Markdown to a distinct `.md` file and records acceptance in the Pi session.
-Filename selection prevents path traversal and accidental overwrite. Completion requires
+verifies its unchanged Markdown in the preexisting revision file and records acceptance in the Pi
+session. Filename selection prevents path traversal and accidental overwrite. Completion requires
 confirmation of both the artifact and persisted acceptance; unavailable persistence cannot report
 success.
 
-Unsent annotations, overall feedback, and unfinished note text prevent ordinary approval. Explicit
-discard-and-approve opens a confirmation identifying the latest pending revision and explaining that
-all its unsent note text will be discarded. Confirming discards that feedback and approves the
-unchanged revision. Dismissal preserves the notes and does not approve. The confirmation is bound to
-its session, plan, and revision; a stale confirmation cannot discard replacement notes or approve
-another revision. Notes are never incorporated into saved Markdown.
+Without notes, ordinary approval accepts the displayed Markdown. With notes, explicit approval with
+notes accepts that unchanged Markdown together with the current supplementary notes. The package
+saves those notes in a companion Markdown file and includes their source identities, excerpts, text,
+path, and content in the approval payload. Approval requires confirmation of the plan file,
+companion file when present, and persisted acceptance. A revision request instead submits the notes
+to the owning agent and requires fresh user approval of its revised plan. Neither action infers
+intent from the note text. Notes are never silently incorporated into the plan Markdown.
 
 On failure, review remains recoverable and the package does not emit a completion event. An
 interrupted save requires explicit retry or cancellation. Retry preserves any recorded revision,
 content, destination, and approval time, even after settings change. It reconciles a matching
 existing artifact without overwriting conflicts, creating duplicates, or inferring approval from a
 file alone.
+
+An approval retry also preserves any supplementary notes and companion destination. Partial writes
+do not emit approval. Reconciliation checks every required artifact before accepting the revision.
 
 **REQ-024 — Finish idle.** After successful approval, the package exits planning and leaves the
 owning agent idle. It does not send an implementation prompt or change other extensions' tools.
@@ -273,6 +304,10 @@ establish idleness. The version 1 payload is:
 | `planPath`    | string           | Absolute saved Markdown path.        |
 | `planContent` | string           | Exact approved and saved Markdown.   |
 | `approvedAt`  | string           | UTC ISO 8601 approval timestamp.     |
+
+When approval includes supplementary notes, the payload also contains `notes` with structured block
+annotations and overall text, `notesPath`, and `notesContent`. These fields are present together and
+describe the saved companion Markdown. Without supplementary notes they are omitted.
 
 Subscribers deduplicate by `planId` and `revision` and tolerate additional fields within version 1.
 They can subscribe without importing private source.
@@ -345,7 +380,7 @@ quality also requires representative planning tasks.
 | Clarification                | The owning agent receives the question and selected answers with current option notes labeled unsubmitted. Full drafts remain local and restore with the response; no permission-to-continue prompt is added.                                                                        | REQ-005, REQ-012          |
 | Revisions and identity       | Changed meaning requires reconfirmation; reordering preserves identity; stale input and reopened decisions cannot approve old review.                                                                                                                                                | REQ-009, REQ-010, REQ-011 |
 | Plan review                  | Complete Markdown reflects decisions and limitations; feedback produces another review requiring fresh approval.                                                                                                                                                                     | REQ-008, REQ-022          |
-| Discard and approve          | Unsent notes block ordinary approval. Explicit confirmation discards all pending notes and saves the exact latest revision; dismissal or a stale confirmation neither discards replacement notes nor approves.                                                                       | REQ-023, REQ-021          |
+| Approve with notes           | Explicit approval preserves the displayed Markdown and supplementary notes in bound artifacts and the approval payload. Revision requests require a fresh reviewed revision; stale actions cannot approve replacement content.                                                       | REQ-023, REQ-021          |
 | Recovery and cancellation    | Saved drafts restore on their branch; cancellation and late results cannot submit or replace work; unsaved state is reported.                                                                                                                                                        | REQ-020, REQ-021          |
 | Save and retry               | Saved bytes equal reviewed Markdown; partial failures preserve the recorded attempt and retries avoid conflicting or duplicate artifacts.                                                                                                                                            | REQ-023                   |
 | Approval handoff             | Saved acceptance emits the version 1 event with the agent idle; the package does not start implementation or replay after resume.                                                                                                                                                    | REQ-024, REQ-025, REQ-026 |
@@ -354,7 +389,7 @@ quality also requires representative planning tasks.
 | Oversized outcome            | Agent output is bounded and identifies a readable full result; decisions and approved content remain unchanged.                                                                                                                                                                      | REQ-028                   |
 
 Required interaction checks are defined in
-[the interaction contract](docs/tui-interactions.md#interaction-conformance), including keyboard
+[the interaction contract](docs/tui-interactions.md#interaction-scenarios), including keyboard
 routing, appearance, resizing, and draft preservation.
 
 ## References

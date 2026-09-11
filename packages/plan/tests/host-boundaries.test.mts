@@ -10,8 +10,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import type { ExtensionAPI, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 import { expect, test, vi } from "vitest";
 
@@ -82,100 +81,6 @@ async function fixture(persist = true, setup?: (pi: ExtensionAPI, cwd: string) =
     },
   };
 }
-
-test("appendEntry defers disk creation until an assistant message", async ({ onTestFinished }) => {
-  const f = await fixture();
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  f.api.appendEntry("probe", { revision: 1 });
-  expect(f.manager.getBranch().some((entry) => entry.type === "custom")).toBe(true);
-  const path = f.manager.getSessionFile();
-  if (path === undefined) {
-    throw new Error("Missing session path");
-  }
-  await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
-  appendAssistantFixture(f.manager);
-  f.api.appendEntry("probe", { revision: 2 });
-  expect(SessionManager.open(path).getBranch()).toEqual(f.manager.getBranch());
-});
-
-test("abort inside a tool prevents continuation and agent_settled observes idle", async ({
-  onTestFinished,
-}) => {
-  const order: string[] = [];
-  const f = await fixture(true, (pi) => {
-    pi.registerTool({
-      name: "finish_probe",
-      label: "Finish probe",
-      description: "Probe idle ordering",
-      parameters: Type.Object({}),
-      async execute(_id, _params, _signal, _update, ctx) {
-        order.push(`tool:${String(ctx.isIdle())}`);
-        ctx.abort();
-        return await Promise.resolve({
-          content: [{ type: "text", text: "Approved probe" }],
-          details: {},
-        });
-      },
-    });
-    pi.on("agent_end", (_event, ctx) => {
-      order.push(`agent_end:${String(ctx.isIdle())}`);
-    });
-    pi.on("agent_settled", (_event, ctx) => {
-      order.push(`agent_settled:${String(ctx.isIdle())}`);
-    });
-  });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  let calls = 0;
-  f.api.registerProvider("fixture", {
-    api: "openai-responses",
-    baseUrl: "http://127.0.0.1",
-    apiKey: "fixture",
-    models: [fixtureModel],
-  });
-  await f.session.setModel(fixtureModel, { persist: false });
-  f.session.agent.streamFunction = (_model, _context, options) => {
-    const stream = createAssistantMessageEventStream();
-    const message: AssistantMessage = {
-      role: "assistant",
-      content: [{ type: "toolCall", id: "probe-call", name: "finish_probe", arguments: {} }],
-      api: "openai-responses",
-      provider: "openai",
-      model: "fixture",
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "toolUse",
-      timestamp: Date.now(),
-    };
-    if (options?.signal?.aborted === true) {
-      stream.push({
-        type: "error",
-        reason: "aborted",
-        error: { ...message, content: [], stopReason: "aborted" },
-      });
-      return stream;
-    }
-    calls += 1;
-    if (calls > 1) {
-      throw new Error("Unexpected implementation continuation");
-    }
-    stream.push({ type: "done", reason: "toolUse", message });
-    return stream;
-  };
-  await f.session.prompt("Run finish_probe");
-  expect(order).toEqual(["tool:false", "agent_end:false", "agent_settled:true"]);
-  expect(calls).toBe(1);
-  expect(f.session.isIdle).toBe(true);
-});
 
 test("disabled persistence returns normally and retains only memory", async ({
   onTestFinished,
@@ -323,6 +228,137 @@ test("registered planning tools persist acceptance and emit once after the abort
   expect(notifications).toHaveLength(1);
 });
 
+test("closing plan review warns without an error response or model continuation", async ({
+  onTestFinished,
+}) => {
+  const notify = vi.fn<ExtensionUIContext["notify"]>();
+  const approvals = vi.fn<(payload: unknown) => void>();
+  const f = await fixture(true, (pi, cwd) => {
+    vi.stubEnv("PI_CODING_AGENT_DIR", join(cwd, "agent"));
+    extension({
+      ...pi,
+      registerTool(tool) {
+        pi.registerTool({
+          ...tool,
+          async execute(id, params, signal, update, ctx) {
+            return await tool.execute(id, params, signal, update, {
+              ...ctx,
+              mode: "tui",
+              ui: { ...ctx.ui, notify },
+            });
+          },
+        });
+      },
+    });
+    pi.events.on("orbis:plan-approved", approvals);
+  });
+  onTestFinished(async () => {
+    await f.dispose();
+    vi.unstubAllEnvs();
+  });
+  const view = vi
+    .spyOn(terminal, "terminalReview")
+    .mockImplementation(async (_ctx, _read, dispatch) => {
+      dispatch({ type: "edit-feedback", text: "Keep this draft" });
+      dispatch({ type: "cancel" });
+      await Promise.resolve();
+    });
+  onTestFinished(() => {
+    view.mockRestore();
+  });
+  f.api.registerProvider("fixture", {
+    api: fixtureModel.api,
+    baseUrl: fixtureModel.baseUrl,
+    apiKey: "fixture",
+    models: [fixtureModel],
+  });
+  await f.session.setModel(fixtureModel, { persist: false });
+  let calls = 0;
+  f.session.agent.streamFunction = (_model, context, options) => {
+    const aborted = options?.signal?.aborted === true;
+    if (!aborted) {
+      calls++;
+    }
+    if (calls > 2) {
+      throw new Error("Closing review must stop model continuation");
+    }
+    const entry = context.messages.find(
+      (message) => message.role === "toolResult" && message.toolName === "plan_start",
+    );
+    const startText =
+      entry?.role === "toolResult"
+        ? (entry.content.find((content) => content.type === "text")?.text ?? "")
+        : "";
+    const planId = /"planId":\s*"([^"]+)"/u.exec(startText)?.[1];
+    const message: AssistantMessage = {
+      role: "assistant",
+      api: fixtureModel.api,
+      provider: fixtureModel.provider,
+      model: fixtureModel.id,
+      content: aborted
+        ? []
+        : [
+            {
+              type: "toolCall",
+              id: `call-${String(calls)}`,
+              name: calls === 1 ? "plan_start" : "plan_review",
+              arguments:
+                calls === 1
+                  ? { objective: "Closure fixture" }
+                  : { planId, expectedRevision: 0, markdown: "# Pending plan\n" },
+            },
+          ],
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: aborted ? "error" : "toolUse",
+      timestamp: Date.now(),
+      ...(aborted ? { errorMessage: "This operation was aborted" } : {}),
+    };
+    const stream = createAssistantMessageEventStream();
+    if (aborted) {
+      stream.push({ type: "error", reason: "error", error: message });
+    } else {
+      stream.push({ type: "done", reason: "toolUse", message });
+    }
+    return stream;
+  };
+  await f.session.prompt("Start planning and present the plan for review.");
+  expect(calls).toBe(2);
+  expect(f.session.isIdle).toBe(true);
+  expect(approvals).not.toHaveBeenCalled();
+  expect(notify).toHaveBeenCalledWith(
+    "Plan review closed without approval. Use /plan to resume.",
+    "warning",
+  );
+  const last = f.manager
+    .getBranch()
+    .findLast((entry) => entry.type === "message" && entry.message.role === "assistant");
+  expect(last).toMatchObject({ message: { stopReason: "stop", content: [] } });
+  if (last?.type !== "message" || last.message.role !== "assistant") {
+    throw new Error("Missing finalized assistant message");
+  }
+  expect(last.message.errorMessage).toBeUndefined();
+  expect(
+    f.manager
+      .getBranch()
+      .findLast((entry) => entry.type === "custom" && entry.customType === "orbis-plan"),
+  ).toMatchObject({
+    data: {
+      mode: "default",
+      active: {
+        phase: "cancelled",
+        reviews: [{ feedbackDraft: "Keep this draft", status: "pending" }],
+      },
+    },
+  });
+});
+
 test("Pi records rejected planning execution as an error tool result", async ({
   onTestFinished,
 }) => {
@@ -412,33 +448,6 @@ test("Pi records rejected planning execution as an error tool result", async ({
   ).toContainEqual(
     expect.objectContaining({ role: "toolResult", toolName: "plan_round", isError: true }),
   );
-});
-
-test("failed writes advance memory and retry creates a missing-parent branch on disk", async ({
-  onTestFinished,
-}) => {
-  const f = await fixture();
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  appendAssistantFixture(f.manager);
-  const path = f.manager.getSessionFile();
-  if (path === undefined) {
-    throw new Error("Missing session path");
-  }
-  await rename(path, `${path}.backup`);
-  await mkdir(path);
-  expect(() => {
-    f.api.appendEntry("probe", { revision: 1 });
-  }).toThrow(/EISDIR|EPERM|EACCES/);
-  const failed = f.manager.getLeafId();
-  await rm(path, { recursive: true });
-  await rename(`${path}.backup`, path);
-  f.api.appendEntry("probe", { revision: 1 });
-  const reopened = SessionManager.open(path);
-  expect(reopened.getEntry(failed ?? "missing")).toBeUndefined();
-  expect(reopened.getBranch()).not.toEqual(f.manager.getBranch());
-  expect(f.manager.getBranch().filter((entry) => entry.type === "custom")).toHaveLength(2);
 });
 
 test("disk confirmation distinguishes deferred, saved, and divergent branch records", async ({

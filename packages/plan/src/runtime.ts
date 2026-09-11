@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  MessageEndEvent,
+} from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 import { saveApproval } from "./approval.ts";
+import { prepareReviewArtifact } from "./artifacts.ts";
 import { defaultShortcut, readSettings } from "./config.ts";
 import type { PlanSettings } from "./config.ts";
 import { fencedObjective } from "./objective.ts";
@@ -102,6 +107,7 @@ export class PlanRuntime {
   private viewController: AbortController | undefined;
   private selectedInterface = "terminal";
   private pendingCompletion: PlanApproval | undefined;
+  private dismissedReviewSignal: AbortSignal | undefined;
   private readonly emitted = new Set<string>();
   private saveStatus: SaveResult = { saved: false, message: "Planning state is unsaved." };
 
@@ -360,6 +366,7 @@ export class PlanRuntime {
   private disposeOperations() {
     this.generation += 1;
     this.pendingCompletion = undefined;
+    this.dismissedReviewSignal = undefined;
     this.controller?.abort();
     this.entryController?.abort();
     this.viewController?.abort();
@@ -516,11 +523,53 @@ export class PlanRuntime {
     }
   }
 
+  private ownReview(ctx: ExtensionContext): void {
+    const active = this.current;
+    if (active?.phase !== "review") {
+      return;
+    }
+    const branch = new Set(ctx.sessionManager.getBranch().map((entry) => entry.id));
+    const divergent =
+      active.pendingApproval === undefined &&
+      (active.sessionId !== ctx.sessionManager.getSessionId() ||
+        ctx.sessionManager.getEntries().some((entry) => {
+          if (
+            branch.has(entry.id) ||
+            entry.type !== "custom" ||
+            entry.customType !== "orbis-plan" ||
+            !Value.Check(snapshotSchema, entry.data)
+          ) {
+            return false;
+          }
+          return [entry.data.active, ...entry.data.unfinished].some(
+            (plan) => plan?.planId === active.planId,
+          );
+        }));
+    const owned = divergent
+      ? {
+          ...active,
+          planId: randomUUID(),
+          sessionId: ctx.sessionManager.getSessionId(),
+          branchId: ctx.sessionManager.getLeafId(),
+          cwd: ctx.cwd,
+        }
+      : active;
+    if (owned !== active) {
+      const reviews = structuredClone(owned.reviews ?? []);
+      const latest = reviews.at(-1);
+      if (latest !== undefined) {
+        delete latest.path;
+      }
+      this.current = { ...owned, reviews };
+    }
+  }
+
   async interact(ctx: ExtensionContext, signal?: AbortSignal): Promise<RuntimeResult> {
     const read = () => this.current;
     if (this.controller !== undefined) {
       return { outcome: "error", message: "A planning interaction is already waiting." };
     }
+    this.ownReview(ctx);
     const current = this.current;
     const reviewing = current?.phase === "review";
     const record = reviewing ? current.reviews?.at(-1) : current?.round;
@@ -531,6 +580,7 @@ export class PlanRuntime {
     const revision = record.revision;
     const generation = this.generation;
     const controller = new AbortController();
+    const reviewClosure = { requested: false };
     this.controller = controller;
     const abort = () => {
       controller.abort();
@@ -546,6 +596,12 @@ export class PlanRuntime {
       const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
       if (generation !== this.generation) {
         return { outcome: "cancelled" };
+      }
+      if (reviewing && this.current !== undefined) {
+        this.current = prepareReviewArtifact(this.current, settings.planDirectory, (state) => {
+          this.current = state;
+          return this.save(ctx);
+        });
       }
       this.selectedInterface = "terminal";
       const apply = (
@@ -569,6 +625,9 @@ export class PlanRuntime {
           throw new Error("Planning session changed; reopen the active interaction.");
         }
         apply(roundId, revision, action);
+        if (reviewing && action.type === "cancel") {
+          reviewClosure.requested = true;
+        }
       };
       const runView = async (): Promise<boolean> => {
         const view = this.selectedInterface;
@@ -755,33 +814,7 @@ export class PlanRuntime {
           this.current = { ...active, phase: "review" };
           return { outcome: "cancelled" };
         }
-        const branch = new Set(ctx.sessionManager.getBranch().map((entry) => entry.id));
-        const divergent =
-          active.pendingApproval === undefined &&
-          (active.sessionId !== ctx.sessionManager.getSessionId() ||
-            ctx.sessionManager.getEntries().some((entry) => {
-              if (
-                branch.has(entry.id) ||
-                entry.type !== "custom" ||
-                entry.customType !== "orbis-plan" ||
-                !Value.Check(snapshotSchema, entry.data)
-              ) {
-                return false;
-              }
-              return [entry.data.active, ...entry.data.unfinished].some(
-                (plan) => plan?.planId === active.planId,
-              );
-            }));
-        const owned = divergent
-          ? {
-              ...active,
-              planId: randomUUID(),
-              sessionId: ctx.sessionManager.getSessionId(),
-              branchId: ctx.sessionManager.getLeafId(),
-              cwd: ctx.cwd,
-            }
-          : active;
-        const approval = saveApproval(owned, approvalSettings.planDirectory, (state) => {
+        const approval = saveApproval(active, approvalSettings.planDirectory, (state) => {
           this.current = state;
           return this.save(ctx);
         });
@@ -829,6 +862,7 @@ export class PlanRuntime {
           roundId: active.round.id,
           revision: active.round.revision,
           decisions: active.decisions,
+          clarifications: structuredClone(active.round.clarifications),
         };
       }
       if (active.phase === "clarification") {
@@ -838,6 +872,10 @@ export class PlanRuntime {
         return { outcome: "clarification", round: active.round, draftsSubmitted: false };
       }
       this.pause(ctx);
+      if (reviewClosure.requested) {
+        this.dismissedReviewSignal = ctx.signal;
+        ctx.ui.notify("Plan review closed without approval. Use /plan to resume.", "warning");
+      }
       ctx.abort();
       return { outcome: "cancelled", planId: active.planId };
     } catch (error) {
@@ -959,7 +997,37 @@ export class PlanRuntime {
     }
   }
 
+  replaceReviewAbort(
+    message: MessageEndEvent["message"],
+    ctx: ExtensionContext,
+  ): MessageEndEvent["message"] | undefined {
+    if (message.role !== "assistant") {
+      return undefined;
+    }
+    const signal = this.dismissedReviewSignal;
+    this.dismissedReviewSignal = undefined;
+    if (
+      signal === undefined ||
+      signal !== ctx.signal ||
+      !signal.aborted ||
+      message.content.length > 0 ||
+      (message.diagnostics?.length ?? 0) > 0 ||
+      !(
+        message.stopReason === "aborted" ||
+        (message.stopReason === "error" &&
+          (message.errorMessage === "This operation was aborted" ||
+            message.errorMessage === "Request was aborted"))
+      )
+    ) {
+      return undefined;
+    }
+    const replacement = { ...message, stopReason: "stop" as const };
+    delete replacement.errorMessage;
+    return replacement;
+  }
+
   settled(ctx: ExtensionContext): void {
+    this.dismissedReviewSignal = undefined;
     const payload = this.pendingCompletion;
     if (payload === undefined || !ctx.isIdle()) {
       return;

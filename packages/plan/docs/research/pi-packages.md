@@ -82,5 +82,6 @@ browser artifact viewing without question submission. Neither observation requir
 RPC client or an execution ledger.
 
 The Orbis contract combines a terminal questionnaire, draft state, stable revisions, clarification
-through the main agent, explicit round submission, and approval followed by persistence and an
-event. Runtime compatibility, keyboard behavior, recovery, and model adherence remain unverified.
+through the main agent, explicit round submission, persisted revision files before review, and
+approval recorded before an idle-time event. Runtime compatibility, keyboard behavior, recovery, and
+model adherence remain unverified.

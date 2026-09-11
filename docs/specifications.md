@@ -13,6 +13,10 @@ as `exit`. Include source links, relevant versions, findings, design implication
 gaps. Update the synthesis as research continues. Research informs the contract; it does not
 independently define requirements.
 
+Package research documents cite external sources and their inspected versions. They do not reference
+Orbis implementation code. Implementation details belong in the package contract or local
+implementation plans.
+
 When needed, create the research directory directly. Write the specification before implementing a
 new package. A package containing research and a specification without runtime files is not an
 installable extension. Use the [specification starter](../templates/extension/SPEC.md) as writing

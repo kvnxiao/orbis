@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Editor } from "@earendil-works/pi-tui";
 
 import { defaultAppearance } from "./config.ts";
@@ -22,6 +22,7 @@ async function show(
     refresh: () => void,
     rows: () => number,
     columns: () => number,
+    theme: Theme,
   ) => TerminalRound | TerminalReview,
   signal?: AbortSignal,
   appearance: PlanAppearance = defaultAppearance,
@@ -70,6 +71,7 @@ async function show(
               tui.terminal.rows,
               appearance.border,
             ),
+          theme,
         );
         const abort = () => {
           component.close();
@@ -129,7 +131,7 @@ export async function terminalRound(
 ): Promise<void> {
   await show(
     ctx,
-    (editor, done, refresh, rows, columns) =>
+    (editor, done, refresh, rows, columns, theme) =>
       new TerminalRound(
         read,
         dispatch,
@@ -140,6 +142,7 @@ export async function terminalRound(
         switchView,
         appearance,
         columns,
+        theme,
       ),
     signal,
     appearance,
@@ -156,7 +159,7 @@ export async function terminalReview(
 ): Promise<void> {
   await show(
     ctx,
-    (editor, done, refresh, rows, columns) =>
+    (editor, done, refresh, rows, columns, theme) =>
       new TerminalReview(
         read,
         dispatch,
@@ -167,6 +170,7 @@ export async function terminalReview(
         switchView,
         appearance,
         columns,
+        theme,
       ),
     signal,
     appearance,

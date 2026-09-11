@@ -27,6 +27,7 @@ const key = {
   enter: "\r",
   shiftEnter: "\x1b[13;2u",
   f1: "\x1bOP",
+  f2: "\x1bOQ",
   esc: "\x1b",
   tab: "\t",
 };
@@ -196,8 +197,8 @@ function capture(
       frame(`Type: ${text}`);
     },
     revision(direction: "[" | "]") {
-      view.handleInput(direction);
-      frame(direction === "[" ? "[ — previous revision" : "] — next revision");
+      view.handleInput(direction === "[" ? "\x1bOR" : "\x1bOS");
+      frame(direction === "[" ? "F3 — previous revision" : "F4 — next revision");
     },
     reopen(next: RoundState, label: string) {
       state = next;
@@ -261,14 +262,19 @@ for (let i = 0; i < 7; i++) {
   missing.press("down");
 }
 missing.press("enter");
-missing.contains("UNANSWERED");
+missing.contains("Question 2");
+missing.contains("not answered");
 missing.press("enter");
 assert.equal(missing.state().phase, "round");
 missing.press("tab");
-missing.press("enter");
+missing.press("tab");
 assert.equal(missing.state().round?.focus, "storage");
-missing.press("down");
 missing.press("enter");
+for (let i = 0; i < 4; i++) {
+  missing.press("down");
+}
+missing.press("enter");
+missing.contains("Submit round");
 
 const clarify = capture(
   "clarification",
@@ -321,30 +327,19 @@ const feedback = capture(
 feedback.press("down");
 feedback.press("enter");
 feedback.type("Please state the reminder ordering.");
-feedback.press("enter");
+feedback.press("shiftEnter");
 feedback.type("Keep the output deterministic.");
-feedback.press("tab");
 feedback.press("enter");
-feedback.press("enter");
-feedback.type(" Unconfirmed addition.");
-feedback.press("esc");
-feedback.press("tab");
-feedback.press("right");
-feedback.press("enter");
+feedback.press("f2");
 feedback.type("Keep the implementation small.");
 feedback.press("tab");
-feedback.press("enter");
-feedback.press("tab");
 feedback.press("right");
-feedback.press("enter");
-feedback.contains("Unconfirmed edit excluded");
 feedback.press("enter");
 assert.equal(feedback.state().phase, "research");
 assert.equal(feedback.state().reviews?.[0]?.markdown, markdown);
 assert(
   feedback.state().reviews?.[0]?.feedback?.includes("Keep the implementation small.") === true,
 );
-assert(feedback.state().reviews?.[0]?.feedback?.includes("Unconfirmed addition.") === false);
 feedback.reopen(
   presentReview(feedback.state(), {
     planId: "fixture",
@@ -362,7 +357,7 @@ assert.equal(feedback.state().reviews?.at(-1)?.markdown, revisedMarkdown);
 
 const approval = capture(
   "approval",
-  "Unsent notes, approval guard and discard confirmation",
+  "Approve the displayed plan with supplementary notes",
   "review",
   90,
   28,
@@ -372,24 +367,10 @@ approval.press("enter");
 approval.type("Maybe add notifications later.");
 approval.press("esc");
 approval.press("tab");
-for (let i = 0; i < 3; i++) {
-  approval.press("right");
-}
-approval.press("enter");
-approval.contains("Send or discard");
-approval.press("right");
-approval.press("enter");
-approval.contains("Discard ALL");
-approval.press("esc");
-assert.equal(
-  approval.state().reviews?.[0]?.notes?.[0]?.unfinished,
-  "Maybe add notifications later.",
-);
-approval.press("tab");
-approval.press("enter");
+approval.contains("Approve with notes");
+assert.equal(approval.state().reviews?.[0]?.notes?.[0]?.text, "Maybe add notifications later.");
 approval.press("enter");
 assert.equal(approval.state().phase, "saving");
-assert.deepEqual(approval.state().reviews?.[0]?.notes, []);
 assert.equal(approval.state().reviews?.[0]?.markdown, markdown);
 
 const recovery = capture(

@@ -15,7 +15,11 @@ export interface PlanInteractionIdentity {
 }
 
 export type PlanPresentationSnapshot =
-  | { readonly kind: "round"; readonly round: ReadonlyData<Round> }
+  | {
+      readonly kind: "round";
+      readonly round: ReadonlyData<Round>;
+      readonly history: ReadonlyData<{ number: number; round: Round }[]>;
+    }
   | {
       readonly kind: "review";
       readonly review: ReadonlyData<PlanRevision>;
@@ -28,13 +32,13 @@ export interface PlanDraftUpdate {
     | Extract<
         RoundAction,
         {
-          type: "focus" | "edit" | "answer" | "edit-option" | "edit-clarification";
+          type: "focus" | "edit" | "answer" | "clear-answer" | "edit-option" | "edit-clarification";
         }
       >
     | Extract<
         ReviewAction,
         {
-          type: "edit-feedback" | "confirm-feedback" | "edit-note" | "confirm-note" | "remove-note";
+          type: "edit-feedback" | "edit-note" | "remove-note";
         }
       >;
 }
@@ -45,7 +49,7 @@ export interface PlanPresentationResult {
     | Extract<RoundAction, { type: "submit" | "clarify" | "cancel" }>
     | Extract<
         ReviewAction,
-        { type: "feedback" | "approve" | "discard-approve" | "submit-feedback" }
+        { type: "feedback" | "approve" | "approve-with-notes" | "submit-feedback" }
       >;
 }
 

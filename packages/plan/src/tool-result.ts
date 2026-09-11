@@ -39,8 +39,17 @@ export async function toolResult(
     case "unsupported-mode":
       break;
   }
-  if (round !== undefined) {
-    for (const draft of Object.values(round.drafts)) {
+  const rounds = [
+    round,
+    ...(projected.outcome === "active" || projected.outcome === "started"
+      ? (projected.plan.history ?? []).map((entry) => entry.round)
+      : []),
+  ];
+  for (const item of rounds) {
+    if (item === undefined) {
+      continue;
+    }
+    for (const draft of Object.values(item.drafts)) {
       draft.unfinished = "";
       delete draft.options;
       delete draft.clarificationDraft;
@@ -50,7 +59,6 @@ export async function toolResult(
     for (const review of projected.plan.reviews ?? []) {
       review.feedbackDraft = "";
       delete review.notes;
-      delete review.overallConfirmed;
     }
   }
   const details = instructions === undefined ? projected : { ...projected, instructions };

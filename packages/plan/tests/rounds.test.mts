@@ -60,6 +60,72 @@ test("cancelled state requires explicit resume before presenting questions", () 
   expect(state.phase).toBe("cancelled");
 });
 
+test.each(["round", "clarification"] as const)(
+  "clearing an answer in %s preserves drafts and history through restoration",
+  (phase) => {
+    let state = round([question("storage")]);
+    state = action(state, {
+      type: "edit-option",
+      questionId: "storage",
+      optionId: "local",
+      text: "Keep notes",
+    });
+    state = action(state, { type: "edit", questionId: "storage", unfinished: "Custom draft" });
+    state = action(state, { type: "answer", questionId: "storage", answer: { optionId: "local" } });
+    if (phase === "clarification") {
+      state = action(state, {
+        type: "clarify",
+        questionId: "storage",
+        request: "Explain",
+        id: "request",
+      });
+    }
+    state = action(state, {
+      type: "edit-clarification",
+      questionId: "storage",
+      text: "More questions",
+    });
+    const before = structuredClone(state);
+    state = action(state, { type: "clear-answer", questionId: "storage" });
+    expect(state.round?.drafts.storage?.answer).toBeUndefined();
+    expect(state.round?.drafts.storage).toMatchObject({
+      options: { local: "Keep notes" },
+      unfinished: "Custom draft",
+      clarificationDraft: "More questions",
+    });
+    expect(state.round?.clarifications).toEqual(before.round?.clarifications);
+    expect(before.round?.drafts.storage?.answer).toEqual({
+      optionId: "local",
+      details: "Keep notes",
+    });
+    const restored = Value.Parse(roundStateSchema, JSON.parse(JSON.stringify(state)));
+    expect(restored).toEqual(state);
+    expect(restored.phase).toBe(phase);
+    expect(() => action({ ...restored, phase: "round" }, { type: "submit" })).toThrow(
+      "Answer or reconfirm storage",
+    );
+    expect(
+      action(restored, { type: "answer", questionId: "storage", answer: { optionId: "local" } })
+        .round?.drafts.storage?.answer,
+    ).toEqual({ optionId: "local", details: "Keep notes" });
+  },
+);
+
+test("clearing rejects unknown questions and stale round revisions without mutation", () => {
+  const state = action(round(), {
+    type: "answer",
+    questionId: "storage",
+    answer: { optionId: "local" },
+  });
+  expect(() => action(state, { type: "clear-answer", questionId: "missing" })).toThrow(
+    "Unknown question",
+  );
+  expect(() =>
+    transitionRound(state, "frontier", 0, { type: "clear-answer", questionId: "storage" }),
+  ).toThrow("Round changed");
+  expect(state.round?.drafts.storage?.answer).toEqual({ optionId: "local" });
+});
+
 test("navigation and one answer never submit a round", () => {
   let state = round([question("storage")]);
   state = action(state, { type: "focus", questionId: "storage" });
@@ -246,11 +312,14 @@ test("terminal Tab wraps with unfinished text and submission requires review", (
   component.handleInput("\t");
   expect(state.round?.focus).toBe("scope");
   component.handleInput("\t");
+  component.handleInput("\t");
   expect(state.round?.focus).toBe("storage");
+  component.handleInput("\x1b[Z");
   component.handleInput("\x1b[Z");
   expect(state.round?.focus).toBe("scope");
   component.handleInput("\x1b[B");
   component.handleInput("\r");
+  component.handleInput("\t");
   component.handleInput("\t");
   component.handleInput("\x1b[B");
   component.handleInput("\r");
