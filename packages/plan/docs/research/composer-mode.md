@@ -12,7 +12,9 @@ remains active.
 [shortcut resolver](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/extensions/runner.ts)
 
 The public `getEditorComponent` and `setEditorComponent` APIs support wrapping the configured
-composer. Its input handler can consume Shift+Tab before forwarding other keys. Focused modals
+composer. The editor factory receives Pi's live keybindings manager. Before consuming the planning
+shortcut, the wrapper checks effective host bindings and forwards conflicting input to Pi. Using the
+default Shift+Tab shortcut requires rebinding `app.thinking.cycle` and reloading Pi. Focused modals
 receive their own input. A later editor replacement must compose with the installed factory to
 retain the wrapper. A global terminal input listener lacks focused-component metadata and is
 unsuitable for consuming this key unconditionally.

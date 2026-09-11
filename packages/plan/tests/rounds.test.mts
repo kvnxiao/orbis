@@ -47,6 +47,19 @@ function action(state: RoundState, input: Parameters<typeof transitionRound>[3])
   return transitionRound(state, "frontier", state.round?.revision ?? 0, input);
 }
 
+test("cancelled state requires explicit resume before presenting questions", () => {
+  const state = { ...round(), phase: "cancelled" as const };
+  expect(() =>
+    presentRound(state, {
+      planId: "plan",
+      roundId: "frontier",
+      expectedRevision: 1,
+      questions: [question("storage"), question("scope")],
+    }),
+  ).toThrow("Use /plan to explicitly resume unfinished work before changing its questions.");
+  expect(state.phase).toBe("cancelled");
+});
+
 test("navigation and one answer never submit a round", () => {
   let state = round([question("storage")]);
   state = action(state, { type: "focus", questionId: "storage" });
@@ -180,6 +193,34 @@ test("duplicate identities, unknown prerequisites and invalid recommendations ar
   delete unrecommended.recommendation;
   expect(() => round([unrecommended])).toThrow("meaningful alternatives");
   expect(() => round([question("__proto__")])).toThrow("Invalid round");
+});
+
+test("prerequisite errors identify missing decisions and drafts become eligible only after submission", () => {
+  const storage = { ...question("storage"), prerequisites: ["interface"] };
+  const message =
+    "Question storage has unresolved prerequisite IDs: interface. Prerequisites must reference submitted decisions. Defer this question until those decisions are submitted; preserve their question IDs.";
+  expect(() => round([question("interface"), storage])).toThrow(message);
+  const draft = action(round([question("interface")]), {
+    type: "answer",
+    questionId: "interface",
+    answer: { optionId: "local" },
+  });
+  expect(() =>
+    presentRound(draft, {
+      planId: "plan",
+      roundId: "frontier",
+      expectedRevision: 1,
+      questions: [question("interface"), storage],
+    }),
+  ).toThrow(message);
+  const submitted = action(draft, { type: "submit" });
+  const next = presentRound(submitted, {
+    planId: "plan",
+    roundId: "next",
+    expectedRevision: 0,
+    questions: [storage],
+  });
+  expect(next.round?.questions[0]?.id).toBe("storage");
 });
 
 test("terminal Tab wraps with unfinished text and submission requires review", () => {

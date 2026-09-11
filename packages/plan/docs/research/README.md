@@ -10,6 +10,7 @@ limits.
 | [Pi integration](pi-integration.md)                       | Can public extension APIs supply the required workflow? What does the official questionnaire already provide, and which state, keyboard, and lifecycle behavior remains to implement? |
 | [TUI interaction design](tui-interaction-design.md)       | Can public Pi components support a modal frontier, nested keyboard navigation, read-only review, and inline block annotations?                                                        |
 | [Composer mode](composer-mode.md)                         | How can Plan mode compose with Pi's editor, recognize planning intent, and preserve interruption and recovery behavior?                                                               |
+| [Planning boundaries](planning-boundaries.md)             | How do branch restoration, keyboard conflicts, agent completion, and input-size costs affect planning?                                                                                |
 | [Agent planning comparison](agent-planning-comparison.md) | How do Codex and Claude Code expose planning and structured input? How do frontier rounds and approval-only handoff differ?                                                           |
 
 Package identities and versions come from registry reads. API and implementation findings come from

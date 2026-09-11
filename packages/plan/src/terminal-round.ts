@@ -84,7 +84,14 @@ function fieldText(row: Exclude<Row, { kind: "review" }>, draft: Draft | undefin
 }
 
 export class TerminalRound implements Component {
-  focused = true;
+  private hasFocus = true;
+  get focused(): boolean {
+    return this.hasFocus;
+  }
+  set focused(value: boolean) {
+    this.hasFocus = value;
+    this.editor.focused = value && this.mode === "edit";
+  }
   private selected = 0;
   private mode: "list" | "edit" | "preview" = "list";
   private control = 0;
@@ -94,8 +101,6 @@ export class TerminalRound implements Component {
   private closed = false;
   private error = "";
   private followFocus = true;
-  private viewport = { scroll: 0, length: 0 };
-  private notePositions: { offset: number; row: number; col: number }[] = [];
   private noteColumn: number | undefined;
   private noteWidth = 0;
 
@@ -105,6 +110,7 @@ export class TerminalRound implements Component {
   private readonly refresh: () => void;
   private readonly editor: Editor;
   private readonly rows: () => number;
+  private readonly columns: () => number;
   private readonly switchView: (() => void) | undefined;
   private readonly appearance: PlanAppearance;
 
@@ -117,13 +123,16 @@ export class TerminalRound implements Component {
     rows: () => number = () => 24,
     switchView?: () => void,
     appearance: PlanAppearance = defaultAppearance,
+    columns: () => number = () => 80,
   ) {
     this.read = read;
     this.dispatch = dispatch;
     this.done = done;
     this.refresh = refresh;
     this.editor = editor;
+    this.editor.focused = false;
     this.rows = rows;
+    this.columns = columns;
     this.switchView = switchView;
     this.appearance = appearance;
     this.showHints = appearance.showHints ?? defaultAppearance.showHints;
@@ -180,7 +189,6 @@ export class TerminalRound implements Component {
   }
   private edit(row: Exclude<Row, { kind: "review" }>): void {
     this.noteColumn = undefined;
-    this.notePositions = [];
     const draft = this.read().round?.drafts[row.question.id];
     this.mode = "edit";
     this.control = 0;
@@ -237,20 +245,21 @@ export class TerminalRound implements Component {
   }
 
   private moveNoteCursor(direction: number): void {
+    const notePositions = this.layout(this.columns()).notePositions;
     const currentOffset = this.noteOffset();
-    const current = this.notePositions.find((position) => position.offset === currentOffset);
+    const current = notePositions.find((position) => position.offset === currentOffset);
     if (current === undefined) {
       return;
     }
     this.noteColumn ??= current.col;
-    const row = this.notePositions.filter((position) => position.row === current.row + direction);
+    const row = notePositions.filter((position) => position.row === current.row + direction);
     const target =
       row.findLast((position) => position.col <= (this.noteColumn ?? current.col)) ?? row[0];
     if (target === undefined) {
       return;
     }
     const key = target.offset < currentOffset ? "\x1b[D" : "\x1b[C";
-    let remaining = this.notePositions.length;
+    let remaining = notePositions.length;
     while (remaining-- > 0) {
       const before = this.noteOffset();
       if (before === target.offset) {
@@ -277,6 +286,11 @@ export class TerminalRound implements Component {
       this.armed = false;
       this.refresh();
       return;
+    }
+    const width = modalContentWidth(this.columns());
+    if (this.noteWidth !== width) {
+      this.noteWidth = width;
+      this.noteColumn = undefined;
     }
     try {
       this.error = "";
@@ -369,11 +383,12 @@ export class TerminalRound implements Component {
           }
           this.followFocus = true;
         } else if (matchesKey(data, "pageDown") || matchesKey(data, "pageUp")) {
+          const viewport = this.layout(this.columns()).viewport;
           this.scroll = Math.max(
             0,
             Math.min(
-              this.viewport.length - 1,
-              this.viewport.scroll +
+              viewport.length - 1,
+              viewport.scroll +
                 (matchesKey(data, "pageDown") ? 1 : -1) * Math.max(1, this.rows() - 8),
             ),
           );
@@ -415,18 +430,24 @@ export class TerminalRound implements Component {
       }
     } catch (error) {
       this.error = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.editor.focused = this.focused && this.mode === "edit";
     }
     this.refresh();
   }
 
   render(outerWidth: number): string[] {
+    return this.layout(outerWidth).lines;
+  }
+
+  private layout(outerWidth: number) {
+    const notePositions: { offset: number; row: number; col: number }[] = [];
     const width = modalContentWidth(outerWidth);
     const round = this.read().round;
     if (round === undefined) {
-      return ["No active round."];
+      return { lines: ["No active round."], viewport: { scroll: 0, length: 0 }, notePositions };
     }
     const editing = this.mode === "edit";
-    this.editor.focused = this.focused && editing;
     if (this.mode === "preview") {
       const preview = round.questions.flatMap((question, index) => {
         const draft = round.drafts[question.id];
@@ -455,21 +476,25 @@ export class TerminalRound implements Component {
           ...wrapTextWithAnsi(last + suffix, Math.max(1, width)),
         ];
       });
-      return modalLines(
-        "Review answers · unsubmitted",
-        preview,
-        [
-          this.error,
-          `${this.control === 0 ? "›" : ""}Submit round`,
-          `${this.control === 1 ? "›" : ""}Next unanswered`,
-          ...(this.showHints ? ["Tab: action · Enter: activate · F1: hints · Esc: back"] : []),
-        ],
-        outerWidth,
-        this.rows(),
-        this.scroll,
-        this.showHints,
-        this.appearance.border,
-      );
+      return {
+        lines: modalLines(
+          "Review answers · unsubmitted",
+          preview,
+          [
+            this.error,
+            `${this.control === 0 ? "›" : ""}Submit round`,
+            `${this.control === 1 ? "›" : ""}Next unanswered`,
+            ...(this.showHints ? ["Tab: action · Enter: activate · F1: hints · Esc: back"] : []),
+          ],
+          outerWidth,
+          this.rows(),
+          this.scroll,
+          this.showHints,
+          this.appearance.border,
+        ),
+        viewport: { scroll: this.scroll, length: preview.length },
+        notePositions,
+      };
     }
     const lines: string[] = [];
     const positions: number[] = [];
@@ -542,10 +567,6 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
       let suffix = "";
       let offsets: number[] = [];
       if (activeField) {
-        if (this.noteWidth !== width) {
-          this.noteColumn = undefined;
-          this.noteWidth = width;
-        }
         const text = this.editor.getText();
         const segments = [
           ...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text),
@@ -570,7 +591,6 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
       const styled = selected ? getMarkdownTheme().bold(last + suffix) : last + suffix;
       const wrapped = wrapTextWithAnsi(styled, Math.max(1, width));
       if (activeField) {
-        this.notePositions = [];
         let offsetIndex = 0;
         const cursorOffset = this.noteOffset();
         for (const [visualRow, line] of wrapped.entries()) {
@@ -580,7 +600,7 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
           for (const part of parts.slice(1)) {
             const offset = offsets[offsetIndex++];
             if (offset !== undefined) {
-              this.notePositions.push({ offset, row: visualRow, col });
+              notePositions.push({ offset, row: visualRow, col });
               if (this.editor.focused && offset === cursorOffset) {
                 output += CURSOR_MARKER;
               }
@@ -658,16 +678,19 @@ ${clarification.response ?? "Awaiting response"}`,
     const bodyHeight = Math.max(1, this.rows() - footer.length - 3);
     const start = this.followFocus ? Math.max(0, focus - Math.floor(bodyHeight / 2)) : this.scroll;
     const scroll = Math.max(0, Math.min(start, lines.length - bodyHeight));
-    this.viewport = { scroll, length: lines.length };
-    return modalLines(
-      `Plan questions (round ${String(this.read().roundNumber)})`,
-      lines,
-      footer,
-      outerWidth,
-      this.rows(),
-      scroll,
-      this.showHints,
-      this.appearance.border,
-    );
+    return {
+      lines: modalLines(
+        `Plan questions (round ${String(this.read().roundNumber)})`,
+        lines,
+        footer,
+        outerWidth,
+        this.rows(),
+        scroll,
+        this.showHints,
+        this.appearance.border,
+      ),
+      viewport: { scroll, length: lines.length },
+      notePositions,
+    };
   }
 }

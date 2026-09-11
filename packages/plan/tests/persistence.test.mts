@@ -78,13 +78,15 @@ test("branch restore preserves its drafts and unanswered clarification without i
     throw new Error("Missing branch leaves");
   }
   f.manager.branch(branchA);
-  f.runtime.restore(f.ctx, true);
+  f.runtime.restore(f.ctx);
   expect(f.runtime.active?.objective).toBe("Branch objective");
-  expect(f.runtime.active?.planId).not.toBe(active.planId);
+  expect(f.runtime.active?.planId).toBe(active.planId);
   expect(f.runtime.active?.phase).toBe("clarification");
   expect(f.runtime.active?.round?.drafts.scope?.unfinished).toBe("CLI first");
   expect(f.runtime.active?.round?.clarifications[0]?.response).toBeUndefined();
   expect(f.runtime.active?.decisions).toEqual({});
+  expect(f.runtime.active?.round?.questions[0]?.number).toBe(1);
+  expect(f.runtime.active?.questionNumbers).toEqual({ scope: 1 });
   f.manager.branch(branchB);
   f.runtime.restore(f.ctx);
   expect(f.runtime.active?.objective).toBe("Sibling objective");

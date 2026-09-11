@@ -1,5 +1,6 @@
+import { Theme } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { documentBlocks } from "../src/blocks.ts";
 import type { PlanAppearance } from "../src/config.ts";
@@ -92,6 +93,25 @@ test("brainstorm symbols and clarification color distinguish the field roles", (
   expect(f.view.render(140).join("\n")).toContain("\x1b[38;2;138;190;183m [answer:");
   keys(f.view, enter, down, "Question");
   expect(f.view.render(140).join("\n")).toContain("\x1b[38;2;129;162;190m [question:");
+});
+
+test("selected options use theme bold and the submission action combines bold with accent", ({
+  onTestFinished,
+}) => {
+  const f = roundFixture();
+  f.resize(80);
+  const bold = vi
+    .spyOn(Theme.prototype, "bold")
+    .mockImplementation((value) => `\x1b[1m${value}\x1b[22m`);
+  onTestFinished(() => {
+    bold.mockRestore();
+  });
+  keys(f.view, enter);
+  const rendered = f.view.render(140).join("\n");
+  expect(rendered.split("\n").find((line) => line.includes("A. Local"))).toContain("\x1b[1m");
+  expect(rendered).toContain(
+    "\x1b[38;2;138;190;183m\x1b[1m  [ Review answers and submit ]\x1b[22m\x1b[39m",
+  );
 });
 
 test("F1 hides review hints while preserving the reachable actions", () => {
@@ -477,6 +497,7 @@ function roundFixture(appearance?: PlanAppearance) {
   );
   let closed = false;
   let rows = 24;
+  let columns = 90;
   const view = new TerminalRound(
     () => state,
     (action) => {
@@ -490,7 +511,13 @@ function roundFixture(appearance?: PlanAppearance) {
     () => rows,
     undefined,
     appearance,
+    () => columns,
   );
+  const render = view.render.bind(view);
+  view.render = (width) => {
+    columns = width;
+    return render(width);
+  };
   return {
     view,
     state: () => state,
@@ -511,9 +538,10 @@ function reviewFixture(
   );
   let closed = false;
   let rows = 24;
+  let columns = 90;
   const create = () => {
     const revision = state.reviews?.at(-1)?.revision ?? 0;
-    return new TerminalReview(
+    const view = new TerminalReview(
       () => state,
       (action) => {
         state = transitionReview(state, revision, action);
@@ -526,7 +554,14 @@ function reviewFixture(
       () => rows,
       undefined,
       appearance,
+      () => columns,
     );
+    const render = view.render.bind(view);
+    view.render = (width) => {
+      columns = width;
+      return render(width);
+    };
+    return view;
   };
   return {
     create,
@@ -627,6 +662,115 @@ test("inline notes cannot edit Markdown and unfinished edits are excluded from t
   expect(f.state().reviews?.[0]?.feedback).toContain("Clarify\nthis block");
   expect(f.state().reviews?.[0]?.feedback).not.toContain("unfinished");
   expect(f.state().phase).toBe("research");
+});
+
+test("editing a block note retains surrounding plan text and the review action bar", () => {
+  const f = reviewFixture("# Context\n\nTarget paragraph.\n\nFollowing paragraph.");
+  f.resize(40);
+  const view = f.create();
+  keys(view, down, enter, "Inline note");
+  const rendered = text(view, 160);
+  expect(rendered).toContain("Context");
+  expect(rendered).toContain("Target paragraph.");
+  expect(rendered).toContain("Following paragraph.");
+  expect(rendered.indexOf("Target paragraph.")).toBeLessThan(rendered.indexOf("Inline note"));
+  expect(rendered.indexOf("Inline note")).toBeLessThan(rendered.indexOf("Following paragraph."));
+  for (const label of [
+    "Annotate",
+    "Overall feedback",
+    "Review feedback",
+    "Approve",
+    "Discard notes and approve…",
+  ]) {
+    expect(rendered).toContain(label);
+  }
+});
+
+test("scrolling above a late annotation target preserves its note and anchor", () => {
+  const paragraphs = Array.from({ length: 35 }, (_, index) => `Paragraph ${String(index)}.`);
+  const f = reviewFixture(paragraphs.join("\n\n"));
+  const view = f.create();
+  keys(view, ...Array<string>(28).fill(down));
+  expect(text(view)).not.toContain("Paragraph 0.");
+  keys(view, ...Array<string>(12).fill("\x1b[5~"));
+  expect(text(view)).toContain("Paragraph 0.");
+  keys(view, enter, "Retain this target", tab, tab, tab);
+  keys(view, ...Array<string>(100).fill("\x1b[A"));
+  expect(text(view)).toContain("Paragraph 0.");
+  expect(f.state().reviews?.[0]?.notes?.[0]).toMatchObject({
+    excerpt: "Paragraph 28.",
+    unfinished: "Retain this target",
+  });
+});
+
+test("focus propagates before rendering and repeated renders preserve subsequent editing", () => {
+  const state = presentRound(
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
+    {
+      planId: "plan",
+      roundId: "round",
+      expectedRevision: 0,
+      questions: [
+        { id: "scope", prerequisites: [], prompt: "Scope?", context: "Known", options: [] },
+      ],
+    },
+  );
+  let current = state;
+  const editor = testEditor();
+  const view = new TerminalRound(
+    () => current,
+    (action) => {
+      current = transitionRound(current, "round", 1, action);
+    },
+    () => undefined,
+    () => undefined,
+    editor,
+  );
+  view.handleInput("Draft");
+  expect(editor.focused).toBe(true);
+  const before = Object.entries(view).filter(([name]) => name !== "editor");
+  view.render(20);
+  view.render(120);
+  expect(Object.entries(view).filter(([name]) => name !== "editor")).toEqual(before);
+  view.focused = false;
+  expect(editor.focused).toBe(false);
+  expect(view.render(40).join("\n")).not.toContain(CURSOR_MARKER);
+  view.focused = true;
+  view.handleInput("!");
+  expect(current.round?.drafts.scope?.unfinished).toBe("Draft!");
+});
+
+test("clarification response is restored beside its question without submitting existing answers", () => {
+  const f = roundFixture();
+  const existing = f.state();
+  const clarified = transitionRound(existing, "round", 1, {
+    type: "clarify",
+    questionId: "scope",
+    id: "request",
+    request: "What does local mean?",
+  });
+  const restored = presentRound(clarified, {
+    planId: "plan",
+    roundId: "round",
+    expectedRevision: 1,
+    questions: (existing.round?.questions ?? []).map(
+      ({ revision: _revision, number: _number, ...question }) => question,
+    ),
+    clarification: { id: "request", response: "Local stores data on this device." },
+  });
+  const view = new TerminalRound(
+    () => restored,
+    () => undefined,
+    () => undefined,
+    () => undefined,
+    testEditor(),
+    () => 80,
+  );
+  const rendered = text(view, 100);
+  expect(rendered).toContain("What does local mean?");
+  expect(rendered).toContain("Local stores data on this device.");
+  expect(rendered.indexOf("Local stores data")).toBeLessThan(rendered.indexOf("2. Choose storage"));
+  expect(restored.round?.submitted).toBe(false);
 });
 
 test("unsent notes block approval and discard confirmation requires another explicit action", () => {

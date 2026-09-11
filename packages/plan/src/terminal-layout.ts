@@ -3,6 +3,16 @@ import { CURSOR_MARKER, Markdown, truncateToWidth, visibleWidth } from "@earendi
 
 import type { PlanAppearance } from "./config.ts";
 
+export function frameContentWidth(
+  width: number,
+  rows: number,
+  style: PlanAppearance["border"],
+): number {
+  return style === "none" || width < 4 || rows < 8
+    ? Math.max(1, width)
+    : width - 2 - (width >= 6 ? 2 : 0);
+}
+
 export function framedModalLines(
   render: (width: number) => string[],
   width: number,
@@ -14,7 +24,7 @@ export function framedModalLines(
     return render(Math.max(1, width)).map((line) => truncateToWidth(line, width));
   }
   const padding = width >= 6 ? 1 : 0;
-  const contentWidth = width - 2 - padding * 2;
+  const contentWidth = frameContentWidth(width, rows, style);
   const glyphs = {
     rounded: ["╭", "╮", "╰", "╯", "─", "│"],
     square: ["┌", "┐", "└", "┘", "─", "│"],

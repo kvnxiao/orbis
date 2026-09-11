@@ -89,7 +89,7 @@ test.each([false, true])(
     const prepare = vi.spyOn(results, "toolResult").mockImplementation(async (...args) => {
       const result = await original(...args);
       if (replace) {
-        f.runtime.restore(f.ctx, true);
+        f.runtime.restore(f.ctx);
       }
       return result;
     });
@@ -321,7 +321,7 @@ test("restoration rejects a pending presenter's late approval and draft update",
     markdown: "# Old",
   });
   const request = await opened.promise;
-  f.runtime.restore(f.ctx, true);
+  f.runtime.restore(f.ctx);
   const restored = f.runtime.active?.planId;
   expect((await pending).outcome).toBe("cancelled");
   expect(() =>
@@ -334,4 +334,57 @@ test("restoration rejects a pending presenter's late approval and draft update",
   await Promise.resolve();
   expect(f.runtime.active?.planId).toBe(restored);
   expect(f.runtime.active?.accepted).toBeUndefined();
+});
+
+test("Use terminal rejects a late presenter approval while terminal drafts remain active", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  const opened = Promise.withResolvers<PlanPresentationRequest>();
+  const finish = Promise.withResolvers<undefined>();
+  const back = Promise.withResolvers<undefined>();
+  const inTerminal = Promise.withResolvers<undefined>();
+  const selection = Promise.withResolvers<string | undefined>();
+  const cleanup = selectPresenter(f, async (request) => {
+    opened.resolve(request);
+    await finish.promise;
+    return { identity: request.identity, action: { type: "approve" } };
+  });
+  onTestFinished(cleanup);
+  vi.spyOn(f.ctx.ui, "select")
+    .mockResolvedValueOnce("fixture")
+    .mockImplementationOnce(async () => await selection.promise);
+  vi.spyOn(terminal, "terminalReview")
+    .mockImplementationOnce(async (_ctx, _read, _dispatch, _signal, switchView) => {
+      switchView?.();
+      await Promise.resolve();
+    })
+    .mockImplementationOnce(async (_ctx, _read, dispatch) => {
+      dispatch({ type: "edit-feedback", text: "Terminal draft" });
+      inTerminal.resolve(undefined);
+      await back.promise;
+      dispatch({ type: "cancel" });
+    });
+  f.runtime.start(f.ctx, "Presenter transfer");
+  const pending = f.runtime.review(f.ctx, {
+    planId: f.runtime.active?.planId ?? "",
+    expectedRevision: 0,
+    markdown: "# Plan",
+  });
+  const request = await opened.promise;
+  selection.resolve("Use terminal (Recommended)");
+  await inTerminal.promise;
+  finish.resolve(undefined);
+  await Promise.resolve();
+  expect(() =>
+    request.updateDraft({
+      identity: request.identity,
+      action: { type: "edit-feedback", text: "Stale" },
+    }),
+  ).toThrow("no longer active");
+  expect(f.runtime.active?.accepted).toBeUndefined();
+  expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Terminal draft");
+  back.resolve(undefined);
+  expect((await pending).outcome).toBe("cancelled");
 });

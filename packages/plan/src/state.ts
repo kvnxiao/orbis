@@ -403,6 +403,11 @@ function normalizeQuestion(item: QuestionInput) {
 }
 
 export function presentRound(state: RoundState, input: RoundInput): RoundState {
+  if (state.phase === "cancelled") {
+    throw new Error(
+      "Use /plan to explicitly resume unfinished work before changing its questions.",
+    );
+  }
   if (state.phase === "accepted" || state.phase === "saving") {
     throw new Error("Start another plan explicitly before presenting more questions.");
   }
@@ -425,8 +430,11 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
       throw new Error("Question identities must be unique.");
     }
     ids.add(question.id);
-    if (question.prerequisites.some((id) => !Object.hasOwn(state.decisions, id))) {
-      throw new Error(`Question ${question.id} has an unresolved prerequisite.`);
+    const unresolved = question.prerequisites.filter((id) => !Object.hasOwn(state.decisions, id));
+    if (unresolved.length > 0) {
+      throw new Error(
+        `Question ${question.id} has unresolved prerequisite IDs: ${unresolved.join(", ")}. Prerequisites must reference submitted decisions. Defer this question until those decisions are submitted; preserve their question IDs.`,
+      );
     }
     const optionIds = new Set(question.options.map((option) => option.id));
     if (optionIds.size !== question.options.length) {

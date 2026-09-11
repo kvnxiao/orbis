@@ -21,11 +21,11 @@ test("branch restoration preserves the selected composer mode before an objectiv
     throw new Error("Missing saved mode branches");
   }
   f.manager.branch(planBranch);
-  f.runtime.restore(f.ctx, true);
+  f.runtime.restore(f.ctx);
   expect(f.runtime.mode).toBe("plan");
   expect(f.runtime.active).toBeUndefined();
   f.manager.branch(defaultBranch);
-  f.runtime.restore(f.ctx, true);
+  f.runtime.restore(f.ctx);
   expect(f.runtime.mode).toBe("default");
 });
 
@@ -112,7 +112,7 @@ test("clarification resumes with saved round counts and drafts", async ({ onTest
     throw new Error("Missing saved branch");
   }
   f.manager.branch(secondBranch);
-  f.runtime.restore(f.ctx, true);
+  f.runtime.restore(f.ctx);
   expect(f.runtime.active?.roundNumber).toBe(2);
 });
 

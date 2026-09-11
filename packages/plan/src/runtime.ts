@@ -6,7 +6,9 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 import { saveApproval } from "./approval.ts";
-import { readSettings } from "./config.ts";
+import { defaultShortcut, readSettings } from "./config.ts";
+import type { PlanSettings } from "./config.ts";
+import { fencedObjective } from "./objective.ts";
 import { readSavedRecord, saveRecord } from "./persistence.ts";
 import type { SaveResult } from "./persistence.ts";
 import type { PlanInteractionIdentity } from "./presentation.ts";
@@ -23,7 +25,13 @@ import {
   roundStateSchema,
   transitionInteraction,
 } from "./state.ts";
-import type { PlanningSession, ReviewInput, RoundInput, RuntimeResult } from "./state.ts";
+import type {
+  PlanApproval,
+  PlanningSession,
+  ReviewInput,
+  RoundInput,
+  RuntimeResult,
+} from "./state.ts";
 import { terminalReview, terminalRound } from "./terminal.ts";
 import { toolResult } from "./tool-result.ts";
 
@@ -51,6 +59,27 @@ const unsupportedMode = (): RuntimeResult => ({
 
 export class PlanRuntime {
   private selectedMode: "plan" | "default" = "default";
+  private configuredShortcut: PlanSettings["shortcut"] = defaultShortcut;
+  private shortcutLabel: string | undefined = "Shift+Tab";
+  get shortcut(): PlanSettings["shortcut"] {
+    return this.configuredShortcut;
+  }
+
+  async reloadSettings(ctx: ExtensionContext): Promise<void> {
+    const generation = this.generation;
+    const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
+    if (generation === this.generation) {
+      this.configuredShortcut = settings.shortcut;
+      this.setShortcutStatus(ctx, settings.shortcut ?? undefined);
+    }
+  }
+
+  setShortcutStatus(ctx: ExtensionContext, label: string | undefined): void {
+    if (this.shortcutLabel !== label) {
+      this.shortcutLabel = label;
+      ctx.ui.setStatus("orbis-plan", this.statusLine());
+    }
+  }
   get mode(): "plan" | "default" {
     return this.selectedMode;
   }
@@ -72,7 +101,7 @@ export class PlanRuntime {
   private generation = 0;
   private viewController: AbortController | undefined;
   private selectedInterface = "terminal";
-  private completionTimer: ReturnType<typeof setInterval> | undefined;
+  private pendingCompletion: PlanApproval | undefined;
   private readonly emitted = new Set<string>();
   private saveStatus: SaveResult = { saved: false, message: "Planning state is unsaved." };
 
@@ -184,7 +213,7 @@ export class PlanRuntime {
   }
 
   private statusLine(): string {
-    const mode = `${this.selectedMode === "plan" ? "Plan" : "Default"} mode · Shift+Tab`;
+    const mode = `${this.selectedMode === "plan" ? "Plan" : "Default"} mode${this.shortcutLabel === undefined ? "" : ` · ${this.shortcutLabel}`}`;
     return this.current === undefined
       ? mode
       : `${mode} · ${this.current.phase} (${this.saveStatus.saved ? "saved" : "unsaved"})`;
@@ -232,7 +261,7 @@ export class PlanRuntime {
     ctx.ui.setStatus("orbis-plan", undefined);
   }
 
-  restore(ctx: ExtensionContext, fork = false): void {
+  restore(ctx: ExtensionContext): void {
     this.disposeOperations();
 
     this.selectedInterface = "terminal";
@@ -312,27 +341,6 @@ export class PlanRuntime {
       this.selectedMode = record.data.mode;
     }
     ctx.ui.setStatus("orbis-plan", this.statusLine());
-    const rebrand = (plan: PlanningSession) => {
-      plan.planId = randomUUID();
-      plan.sessionId = ctx.sessionManager.getSessionId();
-      plan.branchId = ctx.sessionManager.getLeafId();
-      plan.cwd = ctx.cwd;
-      delete plan.pendingApproval;
-    };
-    if (
-      this.current !== undefined &&
-      this.current.phase !== "accepted" &&
-      (fork || this.current.sessionId !== ctx.sessionManager.getSessionId())
-    ) {
-      rebrand(this.current);
-    }
-    if (fork) {
-      for (const plan of this.archived) {
-        if (plan.phase !== "accepted") {
-          rebrand(plan);
-        }
-      }
-    }
     if (this.current?.phase === "saving") {
       this.current.phase = "review";
     }
@@ -351,7 +359,7 @@ export class PlanRuntime {
 
   private disposeOperations() {
     this.generation += 1;
-    clearInterval(this.completionTimer);
+    this.pendingCompletion = undefined;
     this.controller?.abort();
     this.entryController?.abort();
     this.viewController?.abort();
@@ -747,7 +755,33 @@ export class PlanRuntime {
           this.current = { ...active, phase: "review" };
           return { outcome: "cancelled" };
         }
-        const approval = saveApproval(active, approvalSettings.planDirectory, (state) => {
+        const branch = new Set(ctx.sessionManager.getBranch().map((entry) => entry.id));
+        const divergent =
+          active.pendingApproval === undefined &&
+          (active.sessionId !== ctx.sessionManager.getSessionId() ||
+            ctx.sessionManager.getEntries().some((entry) => {
+              if (
+                branch.has(entry.id) ||
+                entry.type !== "custom" ||
+                entry.customType !== "orbis-plan" ||
+                !Value.Check(snapshotSchema, entry.data)
+              ) {
+                return false;
+              }
+              return [entry.data.active, ...entry.data.unfinished].some(
+                (plan) => plan?.planId === active.planId,
+              );
+            }));
+        const owned = divergent
+          ? {
+              ...active,
+              planId: randomUUID(),
+              sessionId: ctx.sessionManager.getSessionId(),
+              branchId: ctx.sessionManager.getLeafId(),
+              cwd: ctx.cwd,
+            }
+          : active;
+        const approval = saveApproval(owned, approvalSettings.planDirectory, (state) => {
           this.current = state;
           return this.save(ctx);
         });
@@ -758,22 +792,9 @@ export class PlanRuntime {
         if (approval.outcome === "approval" && approval.state.accepted !== undefined) {
           this.selectedMode = "default";
           this.save(ctx);
-          const payload = approval.state.accepted;
+          this.pendingCompletion = approval.state.accepted;
           ctx.abort();
-          this.completionTimer = setInterval(() => {
-            if (generation !== this.generation) {
-              clearInterval(this.completionTimer);
-              return;
-            }
-            if (ctx.isIdle()) {
-              clearInterval(this.completionTimer);
-              const key = `${payload.planId}:${String(payload.revision)}`;
-              if (!this.emitted.has(key)) {
-                this.emitted.add(key);
-                this.pi.events.emit("orbis:plan-approved", payload);
-              }
-            }
-          }, 10);
+          this.settled(ctx);
         }
         if (approval.outcome === "error") {
           return { outcome: "error", message: approval.message };
@@ -932,9 +953,22 @@ export class PlanRuntime {
     if (this.current !== undefined) {
       ctx.ui.setStatus("orbis-plan", this.statusLine());
       ctx.ui.notify(
-        `Planning: ${this.current.objective.length === 0 ? "objective not supplied" : this.current.objective}. ${this.saveStatus.message}`,
+        `Planning:\n${fencedObjective(this.current.objective.length === 0 ? "objective not supplied" : this.current.objective)}\n\n${this.saveStatus.message}`,
         "info",
       );
+    }
+  }
+
+  settled(ctx: ExtensionContext): void {
+    const payload = this.pendingCompletion;
+    if (payload === undefined || !ctx.isIdle()) {
+      return;
+    }
+    this.pendingCompletion = undefined;
+    const key = `${payload.planId}:${String(payload.revision)}`;
+    if (!this.emitted.has(key)) {
+      this.emitted.add(key);
+      this.pi.events.emit("orbis:plan-approved", payload);
     }
   }
 }

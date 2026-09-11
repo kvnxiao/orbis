@@ -3,7 +3,51 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
+
+import extension from "../src/index.ts";
+import { runtimeFixture } from "./runtime-fixture.mts";
+
+const unused = () => {
+  throw new Error("Unexpected session operation");
+};
+
+test.for([
+  { objective: "Design a task tracker.", block: "```\nDesign a task tracker.\n```" },
+  {
+    objective: "Keep this example:\n```text\nhello\n```",
+    block: "````\nKeep this example:\n```text\nhello\n```\n````",
+  },
+])(
+  "planning entry fences the objective: $objective",
+  async ({ objective, block }, { onTestFinished }) => {
+    const f = await runtimeFixture();
+    onTestFinished(f.dispose);
+    const send = vi.spyOn(f.api, "sendUserMessage").mockImplementation(() => undefined);
+    onTestFinished(() => {
+      send.mockRestore();
+    });
+    extension(f.api);
+    const command = f.resources.getExtensions().extensions[0]?.commands.get("plan");
+    if (command === undefined) {
+      throw new Error("Missing plan command");
+    }
+    await command.handler(objective, {
+      ...f.ctx,
+      getSystemPromptOptions: unused,
+      waitForIdle: unused,
+      newSession: unused,
+      fork: unused,
+      navigateTree: unused,
+      switchSession: unused,
+      reload: unused,
+    });
+    f.runtime.restore(f.ctx);
+    expect(send).toHaveBeenCalledWith(
+      `Develop a collaborative plan for:\n${block}\n\nPlanning identity: ${f.runtime.active?.planId ?? ""}. Research before presenting a plan_round.`,
+    );
+  },
+);
 
 test("loads the TypeScript source and registers the package command", async ({
   onTestFinished,

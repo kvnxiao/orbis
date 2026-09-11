@@ -83,20 +83,23 @@ context. `ctx.sessionManager.getBranch()` exposes the active conversation branch
 and startup events accompany reloads and session changes.
 [Session and lifecycle APIs](https://pi.dev/docs/latest/extensions)
 
-**Design implication:** Persist draft answers independently of submitted tool results. Restore the
-active branch's records, and return a structured clarification request from the waiting tool to let
-the main agent answer it. Reopening the round must use the saved drafts and current revision. These
-are proposed uses of the APIs, not behavior supplied by Pi automatically.
+The planning extension persists draft answers independently of submitted tool results and restores
+the active branch's records. Sending clarification closes the modal and returns a structured request
+to the owning agent. The agent explains in the existing conversation, then calls `plan_round` to
+reopen the same round with saved drafts and display the response beside its question. Tree
+navigation preserves planning identity and pending approval attempts. Before saving a new artifact
+from a divergent continuation, the extension assigns a distinct identity; explicit retries retain
+their recorded destination.
 
 The
 [event-bus implementation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/event-bus.ts)
 uses Node's `EventEmitter`. Its `emit` method returns without awaiting subscribers; the wrapper
 catches and logs handler errors. The bus does not store events or acknowledgements.
 
-**Design implication:** After the artifact and approval state are saved, `orbis:plan-approved` can
-notify companion extensions. It cannot establish successful subscriber execution or durable
-delivery. The planning extension owns saving and notification; subscribers own their implementation
-workflow and recovery.
+After saving the artifact and approval state, the extension checks Pi's idleness immediately and on
+`agent_settled`. When Pi is idle, `orbis:plan-approved` notifies companion extensions. The event
+cannot establish successful subscriber execution or durable delivery. The planning extension owns
+saving and notification; subscribers own their implementation workflow and recovery.
 
 ## Settings menus
 

@@ -1,8 +1,8 @@
 # Existing Pi planning packages
 
 Research date: 2026-09-08. Package versions were checked against the npm registry; comparisons use
-freshly inspected source and package documentation. Published tarballs were inspected where
-repository and package revisions differed. The packages were not installed or executed.
+inspected source and package documentation. Published tarballs were inspected where repository and
+package revisions differed. The packages were not installed or executed.
 
 ## Package comparison
 
@@ -64,7 +64,7 @@ compatibility conclusions. [Registry metadata](https://registry.npmjs.org/@ifi%2
 
 ## Official plan-mode example
 
-Pi 0.85.1 includes a plan-mode example in the installed package. Fresh upstream source at
+Pi 0.85.1 includes a plan-mode example in the installed package. Upstream source at
 `6160683a4a8012f0d1cd30c145df18b4ca6f5176` disables write tools, filters Bash, extracts numbered
 plan steps, persists state, and tracks completed steps. An execution choice sends an implementation
 prompt. Its questionnaire is a separate tool. This is a shipped example with a broader
@@ -77,10 +77,9 @@ The inspected packages provide concrete examples of terminal questionnaires, pla
 execution handoff, and browser artifact viewing. They do not establish a package satisfying the
 complete Orbis workflow; this conclusion is limited to the versions and source paths inspected.
 
-Narumitw answers the RPC question directly: a planning extension can support Pi RPC by implementing
-a separate dialog path. Dreki illustrates why a local HTTP server is not sufficient evidence of
-browser question submission. Neither observation requires Orbis to adopt an RPC client or an
-execution ledger.
+Narumitw's questionnaire has a separate Pi RPC dialog path. Dreki's local HTTP server supports
+browser artifact viewing without question submission. Neither observation requires Orbis to adopt an
+RPC client or an execution ledger.
 
 The Orbis contract combines a terminal questionnaire, draft state, stable revisions, clarification
 through the main agent, explicit round submission, and approval followed by persistence and an

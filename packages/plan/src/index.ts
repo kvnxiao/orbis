@@ -5,6 +5,7 @@ import { Value } from "typebox/value";
 
 import { installPlanComposer } from "./composer.ts";
 import { planningInstructions } from "./instructions.ts";
+import { fencedObjective } from "./objective.ts";
 import { PlanRuntime } from "./runtime.ts";
 import { showPlanSettings } from "./settings-menu.ts";
 import { reviewSchema, roundSchema } from "./state.ts";
@@ -20,11 +21,14 @@ export default function extension(pi: ExtensionAPI): void {
   const runtime = new PlanRuntime(pi, agentDir);
   let removeComposer: (() => void) | undefined;
   let interrupted = false;
+  let sessionGeneration = 0;
   pi.registerCommand("plan-settings", {
-    description: "Configure Plan appearance and saved-plan directory",
+    description: "Configure Plan appearance, shortcut, and saved-plan directory",
     async handler(_args, ctx) {
       try {
-        await showPlanSettings(ctx, agentDir);
+        await showPlanSettings(ctx, agentDir, async () => {
+          await runtime.reloadSettings(ctx);
+        });
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
@@ -46,18 +50,23 @@ export default function extension(pi: ExtensionAPI): void {
         return;
       }
       const resumed = runtime.resumeCurrent(ctx);
+      const active = runtime.active;
+      const objective = active?.objective ?? "";
+      const objectiveText =
+        objective.length === 0
+          ? " the objective in this conversation."
+          : `:\n${fencedObjective(objective)}`;
       if (entry.outcome === "started") {
         pi.sendUserMessage(
-          `Develop a collaborative plan for ${args.trim().length === 0 ? "the objective in this conversation" : args.trim()}. Planning identity: ${runtime.active?.planId ?? ""}. Research before presenting a plan_round.`,
+          `Develop a collaborative plan for${objectiveText}\n\nPlanning identity: ${active?.planId ?? ""}. Research before presenting a plan_round.`,
         );
       }
-      const active = runtime.active;
       if (active?.phase === "clarification" && ctx.isIdle()) {
         await runtime.resumeClarification(ctx.signal);
       }
       if (active !== undefined && resumed && active.phase === "research") {
         pi.sendUserMessage(
-          `Resume collaborative planning for ${active.objective}. Plan identity: ${active.planId}. Continue research and compute the next answerable frontier.`,
+          `Resume collaborative planning for${objectiveText}\n\nPlan identity: ${active.planId}. Continue research and compute the next answerable frontier.`,
         );
       }
       if (
@@ -105,7 +114,7 @@ export default function extension(pi: ExtensionAPI): void {
     name: "plan_round",
     label: "Planning questions",
     description:
-      "Present the researched, answerable frontier. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates. The UI adds Other and Ask for clarification; do not duplicate them in generated options. Drafts remain unsubmitted until explicit whole-round submission.",
+      "Present the researched, answerable frontier. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates. The UI adds Other and Ask for clarification; do not duplicate them in generated options. Drafts remain unsubmitted until explicit whole-round submission.",
     parameters: roundSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -156,20 +165,32 @@ Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active
       runtime.pause(ctx);
     }
     interrupted = false;
+    runtime.settled(ctx);
   });
   pi.on("session_shutdown", (_event, ctx) => {
+    sessionGeneration++;
     interrupted = false;
     removeComposer?.();
     removeComposer = undefined;
     runtime.close(ctx);
   });
-  pi.on("session_start", (event, ctx) => {
+  pi.on("session_start", async (_event, ctx) => {
+    const generation = ++sessionGeneration;
+    removeComposer?.();
+    removeComposer = undefined;
     interrupted = false;
-    runtime.restore(ctx, event.reason === "fork");
-    removeComposer = installPlanComposer(ctx, runtime);
+    runtime.restore(ctx);
+    try {
+      await runtime.reloadSettings(ctx);
+    } catch (error) {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+    }
+    if (generation === sessionGeneration) {
+      removeComposer = installPlanComposer(ctx, runtime);
+    }
   });
   pi.on("session_tree", (_event, ctx) => {
     interrupted = false;
-    runtime.restore(ctx, true);
+    runtime.restore(ctx);
   });
 }

@@ -49,6 +49,7 @@ test("settings inherit defaults and trust gates project overrides", async ({ onT
     symbols: "unicode",
     border: "rounded",
     showHints: true,
+    shortcut: "shift+tab",
   });
   await writeSettings(join(agent, "orbis-plan.json"), {
     border: "double",
@@ -60,6 +61,7 @@ test("settings inherit defaults and trust gates project overrides", async ({ onT
     symbols: "unicode",
     border: "double",
     showHints: true,
+    shortcut: "shift+tab",
   });
   expect((await readSettings(agent, cwd, false)).planDirectory).toBe(
     resolve(cwd, "personal-plans"),
@@ -88,6 +90,14 @@ test("malformed settings identify the file and preserve its bytes", async ({ onT
       '{"border":"thick"}',
       '{"showHints":"off"}',
       '{"showHints":0}',
+      '{"shortcut":"ctrl+ctrl+p"}',
+      '{"shortcut":"a"}',
+      '{"shortcut":"shift+a"}',
+      '{"shortcut":"ctrl+notakey"}',
+      '{"shortcut":"ctrl+escape"}',
+      '{"shortcut":"alt+esc"}',
+      '{"shortcut":"ctrl++"}',
+      '{"shortcut":false}',
     ].map(async (content, index) => {
       const path = join(cwd, `invalid-${String(index)}.json`);
       await writeFile(path, content);
@@ -103,7 +113,24 @@ test("malformed settings identify the file and preserve its bytes", async ({ onT
     symbols: "unicode",
     border: "rounded",
     showHints: true,
+    shortcut: "shift+tab",
   });
+});
+
+test("planning shortcut defaults, disabling and trusted overrides persist", async ({
+  onTestFinished,
+}) => {
+  const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-shortcut-"));
+  onTestFinished(async () => {
+    await rm(cwd, { recursive: true, force: true });
+  });
+  const agent = join(cwd, "agent");
+  expect((await readSettings(agent, cwd, false)).shortcut).toBe("shift+tab");
+  await writeSettings(join(agent, "orbis-plan.json"), { shortcut: null });
+  expect((await readSettings(agent, cwd, false)).shortcut).toBeNull();
+  await writeSettings(join(cwd, ".pi/plan.json"), { shortcut: "ctrl+alt+p" });
+  expect((await readSettings(agent, cwd, true)).shortcut).toBe("ctrl+alt+p");
+  expect((await readSettings(agent, cwd, false)).shortcut).toBeNull();
 });
 
 test("appearance settings merge only trusted project fields and preserve the directory", async ({
@@ -125,11 +152,13 @@ test("appearance settings merge only trusted project fields and preserve the dir
     border: "double",
     planDirectory: resolve(cwd, "plans"),
     showHints: true,
+    shortcut: "shift+tab",
   });
   expect(await readSettings(agent, cwd, true)).toEqual({
     symbols: "emoji",
     border: "ascii",
     planDirectory: resolve(cwd, "plans"),
     showHints: true,
+    shortcut: "shift+tab",
   });
 });

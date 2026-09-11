@@ -21,6 +21,7 @@ function menuContext(
   f: RuntimeFixture,
   notify: ExtensionContext["ui"]["notify"],
   drive: (menu: MenuDriver) => Promise<void>,
+  bindings: Record<string, string> = {},
 ): ExtensionContext {
   return {
     ...f.ctx,
@@ -47,7 +48,7 @@ function menuContext(
             },
           },
           { bold: (text: string) => text },
-          undefined,
+          { getResolvedBindings: () => bindings },
           completed.resolve,
         ]);
         if (
@@ -98,6 +99,7 @@ test("confirming the directory field without edits writes nothing and edits writ
     symbols: "unicode",
     border: "rounded",
     showHints: true,
+    shortcut: "shift+tab",
   });
   vi.spyOn(config, "readSettingsFile").mockResolvedValue({});
   const write = vi.spyOn(config, "writeSettings").mockResolvedValue(undefined);
@@ -141,6 +143,7 @@ test("settings menu keeps successful writes quiet and restores the displayed val
     symbols: "unicode",
     border: "rounded",
     showHints: true,
+    shortcut: "shift+tab",
   });
   vi.spyOn(config, "readSettingsFile").mockResolvedValue({});
   const write = vi.spyOn(config, "writeSettings").mockResolvedValue(undefined);
@@ -194,3 +197,96 @@ test("settings menu keeps successful writes quiet and restores the displayed val
   await showPlanSettings(ctx, join(f.ctx.cwd, "agent"));
   expect(write).toHaveBeenCalledTimes(5);
 });
+
+test("personal settings identify the trusted project value and file that mask a choice", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  initTheme("dark", false);
+  const path = join(f.ctx.cwd, ".pi", "plan.json");
+  await config.writeSettings(path, { border: "double" });
+  const ctx = menuContext(
+    f,
+    () => undefined,
+    async (menu) => {
+      menu.press("\x1b[B");
+      menu.press("\x1b[B");
+      expect(menu.rendered()).toContain("Effective project value: double");
+      expect(menu.rendered().replaceAll("\n", "")).toContain(path);
+      await menu.finish();
+    },
+  );
+  await showPlanSettings({ ...ctx, isProjectTrusted: () => true }, join(f.ctx.cwd, "agent"));
+});
+
+test("shortcut menu rejects invalid keys, applies saves and preserves the active key on write failure", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  onTestFinished(() => {
+    vi.restoreAllMocks();
+  });
+  initTheme("dark", false);
+  const notify = vi.fn<ExtensionContext["ui"]["notify"]>();
+  const ctx = menuContext(
+    f,
+    notify,
+    async ({ press, rendered, finish }) => {
+      expect(rendered()).toContain("/reload");
+      for (let index = 0; index < 4; index++) {
+        press("\x1b[B");
+      }
+      press("\r");
+      press("\x01");
+      press("\x0b");
+      press("ctrl+escape");
+      press("\r");
+      expect(rendered()).toContain("Use a Pi special or modified key");
+      expect(f.runtime.shortcut).toBe("shift+tab");
+      press("\x01");
+      press("\x0b");
+      press("ctrl+alt+p");
+      press("\r");
+      await vi.waitFor(() => {
+        expect(f.runtime.shortcut).toBe("ctrl+alt+p");
+      });
+      vi.spyOn(config, "writeSettings").mockRejectedValueOnce(new Error("Cannot save shortcut"));
+      press("\r");
+      press("\x01");
+      press("\x0b");
+      press("disabled");
+      press("\r");
+      await vi.waitFor(() => {
+        expect(notify).toHaveBeenCalledWith("Cannot save shortcut", "error");
+      });
+      expect(f.runtime.shortcut).toBe("ctrl+alt+p");
+      expect(rendered()).toMatch(/Planning shortcut\s+ctrl\+alt\+p/u);
+      await finish();
+    },
+    { "app.thinking.cycle": "shift+tab" },
+  );
+  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"), async () => {
+    await f.runtime.reloadSettings(ctx);
+  });
+});
+
+test.for(["rpc", "json", "print"] as const)(
+  "%s settings invocation reports the TUI requirement without opening a menu",
+  async (mode, { onTestFinished }) => {
+    const f = await runtimeFixture();
+    onTestFinished(f.dispose);
+    const notify = vi.fn<ExtensionContext["ui"]["notify"]>();
+    const select = vi.fn<ExtensionContext["ui"]["select"]>();
+    await showPlanSettings(
+      { ...f.ctx, mode, ui: { ...f.ctx.ui, notify, select } },
+      join(f.ctx.cwd, "agent"),
+    );
+    expect(notify).toHaveBeenCalledWith(
+      "Planning settings require interactive Pi in TUI mode.",
+      "error",
+    );
+    expect(select).not.toHaveBeenCalled();
+  },
+);

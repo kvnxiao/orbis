@@ -44,13 +44,19 @@ branch, `/plan` prompts for a selection. Replacing unfinished work requires an e
 and retains the previous plan. The base package registers only `/plan` and `/plan-settings`.
 
 **REQ-034 — Composer mode.** The main Pi composer shows Plan or Default mode. With the agent idle,
-Shift+Tab toggles the mode and preserves typed text. Selecting Plan alone does not send input or
-resume work. In Plan mode, the next ordinary user message enters or resumes planning without special
-wording or a slash prefix. Commands, shell input, and extension-injected messages retain their
-existing routing. During an active turn, Shift+Tab leaves the mode unchanged, reports that the user
-must stop the current turn to switch, and does not queue a mode change. An ordinary message
-submitted during work keeps the current turn's mode and Pi's delivery policy. Inside modal fields
-and controls, Shift+Tab retains REQ-016 navigation.
+the configured planning shortcut toggles the mode and preserves typed text. Shift+Tab is the
+default; users can rebind or disable the shortcut. While an effective Pi composer binding conflicts
+with the selected shortcut, the package preserves Pi's key handling and reports the conflict. Before
+using Shift+Tab for planning, users must rebind Pi's default `app.thinking.cycle` action in
+`keybindings.json` and reload Pi. The package does not edit Pi's keybindings. After reload, the
+shortcut uses the effective bindings without requiring another extension reload. Selecting Plan
+alone does not send input or resume work. In Plan mode, the next ordinary user message enters or
+resumes planning without special wording or a slash prefix. Commands, shell input, and
+extension-injected messages retain their existing routing. During an active turn, the enabled
+planning shortcut leaves the mode unchanged, reports that the user must stop the current turn to
+switch, and does not queue a mode change. An ordinary message submitted during work keeps the
+current turn's mode and Pi's delivery policy. Inside modal fields and controls, Shift+Tab retains
+REQ-016 navigation.
 
 Default mode does not inject active planning instructions or automatically resume paused work.
 Explicit planning intent remains supported in either mode. Switching to Default preserves unfinished
@@ -73,14 +79,16 @@ Dependent questions wait. After submission or clarification, the agent continues
 frontier or plan review without asking whether to continue planning. The agent models the design as
 decisions and dependent branches. After answers, it recomputes the frontier, develops choices within
 selected directions, and closes branches made irrelevant by those directions. It does not substitute
-its recommendation for an unresolved user decision.
+its recommendation for an unresolved user decision. Questions address material decisions with
+concise context and distinct alternatives; repeated background and immaterial choices are omitted.
+The agent does not impose a question-count quota or split independent questions to shorten a
+frontier.
 
 **REQ-006 — Useful questions.** Each question states its context and trade-offs. When meaningful
-alternatives exist, it offers two to four distinct options and explains its recommendation. The
-agent considers unconventional alternatives where useful, without inventing choices to fill a quota.
-Custom text is always available. Before narrowing its recommendation, it explores distinct
-approaches and includes an unconventional option when that option offers a relevant, viable
-alternative.
+alternatives exist, it offers two to four distinct options and explains its recommendation. Before
+narrowing its recommendation, the agent explores distinct approaches and includes an unconventional
+option when it provides a relevant, viable alternative. It does not invent choices to fill a quota.
+Custom text is always available.
 
 **REQ-007 — Explicit round submission.** Users can inspect the entire round, answer in any order,
 and revise drafts before submitting them together. Navigation, highlighting, and an unaccepted
@@ -200,12 +208,12 @@ restores the normal working indicator without changing a newer wait.
 
 Overflow scrolls within the modal. Narrow terminals can stack content, but cannot lose actions,
 question context, focused fields, or draft text. Resize preserves selection and drafts and keeps the
-focused control visible. The layout respects terminal display width, Unicode, and input-method
-focus. Shift+Enter inserts question-field newlines when the terminal distinguishes it; multiline
-paste is also supported. Mouse input is not required. The Page Up/Page Down hint says `scroll`. When
-content overflows, a right-edge scrollbar shows the visible proportion and position without
-scrolling the title or footer. Extremely narrow terminals may omit the scrollbar to preserve usable
-content width.
+focused control visible. The layout fits terminal display width and preserves Unicode text and
+input-method focus. When the terminal distinguishes Shift+Enter, that key inserts question-field
+newlines; multiline paste is also supported. Mouse input is not required. The Page Up/Page Down hint
+says `scroll`. When content overflows, a right-edge scrollbar shows the visible proportion and
+position without scrolling the title or footer. Extremely narrow terminals may omit the scrollbar to
+preserve usable content width.
 
 **REQ-012 — Same-agent clarification.** Before submitting a round, the user can ask a free-text
 question about any item. The waiting interaction returns a typed clarification result identifying
@@ -216,8 +224,9 @@ when needed, and updates the same logical round. The TUI reopens with preserved 
 question-associated response. With an empty draft, Ask for clarification focuses its inline field.
 Enter retains the draft and returns to the list without sending. With nonblank text, the row
 displays Send clarification; Enter activates that explicit send action and returns control to the
-agent. Typing or Backspace edits the draft. Upon return, focus identifies the originating question
-and makes its response accessible. A separate explanatory model does not satisfy this requirement.
+agent. Typing or Backspace edits the draft. When the round reopens, focus identifies the originating
+question and makes its response accessible. A separate explanatory model does not satisfy this
+requirement.
 
 Editing an unsubmitted answer does not invalidate a pending clarification request. Replacing its
 session, plan, or round revision does invalidate delivery.
@@ -276,7 +285,10 @@ new decision round invalidates an earlier plan review, including across cancella
 restores the last saved state on the active branch. Draft saving does not submit answers. It
 documents any saving delay and reports when persistence is disabled or unavailable. In-memory
 records alone do not establish durability. Branch changes cannot import unrelated decisions or
-approvals; divergent planning gets a distinct identity before saving another accepted artifact.
+approvals. Navigation preserves recorded planning identity and pending approval attempts. When
+planning diverges, including on sibling branches within one Pi session, the continuation receives a
+distinct identity before saving another accepted artifact. A pending approval remains bound to its
+recorded revision, content, destination, and approval time until explicit retry or cancellation.
 Round counts survive persistence and archived-plan selection. Only the current planning record and
 settings formats are supported. Unknown settings and incompatible saved records report an error
 without changing the stored bytes. The package does not migrate earlier development formats or infer
@@ -301,13 +313,17 @@ dedicated menu using Pi's settings interaction. When a setting changes, the menu
 value immediately and persists it without progress or success messages. The key hints remain
 unchanged. If persistence fails, the menu restores the previous value and reports an actionable
 error. Settings include the approved-plan directory, symbols (Unicode by default, emoji opt-in),
-modal border (Rounded by default, Square, Double, ASCII, or None), and Show hints by default (On by
-default). The hints default follows the same personal and trusted-project precedence as other
-settings. Border choice applies to the outer question, review, and note-dialog frames. Double uses
-`╔═╗`, `║`, and `╚═╝`; ASCII uses `+`, `-`, and `|`. Plan-owned footer dividers use `═` for Double,
-`-` for ASCII, and `─` otherwise. When hints are shown, None retains the divider. Pi editor
-decorations remain host-controlled. Small-terminal fallback preserves accessible content and
-controls. Appearance changes preserve drafts and do not change Markdown, decisions, or approval.
+modal border (Rounded by default, Square, Double, ASCII, or None), Show hints by default (On by
+default), and the planning shortcut (Shift+Tab by default, optionally disabled). The shortcut and
+hints settings use the same personal and trusted-project precedence as other settings. The personal
+settings menu identifies trusted project values that mask personal choices and names their
+configuration file. After a successful save, shortcut changes apply immediately; the menu
+distinguishes the saved shortcut from a shortcut blocked by a host binding. Border choice applies to
+the outer question, review, and note-dialog frames. Double uses `╔═╗`, `║`, and `╚═╝`; ASCII uses
+`+`, `-`, and `|`. Plan-owned footer dividers use `═` for Double, `-` for ASCII, and `─` otherwise.
+When hints are shown, None retains the divider. Pi editor decorations remain host-controlled.
+Small-terminal fallback preserves accessible content and controls. Appearance changes preserve
+drafts and do not change Markdown, decisions, or approval.
 
 ## Approval and handoff
 
@@ -324,11 +340,11 @@ approves the unchanged revision. Dismissal preserves the notes and does not appr
 confirmation is bound to its session, plan, and revision; a stale confirmation cannot discard
 replacement notes or approve another revision. Notes are never incorporated into saved Markdown.
 
-On failure, review remains recoverable and no completion event is emitted. An interrupted save
-requires explicit retry or cancellation. Retry preserves any recorded revision, content,
-destination, and approval time, even after settings change. It reconciles a matching existing
-artifact without overwriting conflicts, creating duplicates, or inferring approval from a file
-alone.
+On failure, review remains recoverable and the package does not emit a completion event. An
+interrupted save requires explicit retry or cancellation. Retry preserves any recorded revision,
+content, destination, and approval time, even after settings change. It reconciles a matching
+existing artifact without overwriting conflicts, creating duplicates, or inferring approval from a
+file alone.
 
 **REQ-024 — Finish idle.** After successful approval, the package exits planning and leaves the
 owning agent idle. It does not send an implementation prompt or change other extensions' tools.

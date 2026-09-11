@@ -19,20 +19,28 @@ pnpm install
 pi -e ./packages/plan
 ```
 
-While Pi is idle, press Shift+Tab to select Plan mode, then submit an ordinary objective. The
-`orbis-plan` status entry reads `Plan mode · Shift+Tab` or `Default mode · Shift+Tab`; while a plan
-exists, it appends the phase and whether the state is `saved` or `unsaved`. Switching preserves
-composer text and does not send it. During a turn, stop with Escape before switching modes. Modal
-Shift+Tab retains its navigation behavior. Entering, resuming, or restoring a plan shows an info
-notice `Planning: <objective>. <save status>`; a plan started without an objective reads
+Before using the default Shift+Tab planning shortcut, rebind Pi's `app.thinking.cycle` action to
+another key in its agent directory's `keybindings.json`, then run `/reload`. The default path is
+`~/.pi/agent/keybindings.json`; `PI_CODING_AGENT_DIR` changes the agent directory. Conflict warnings
+name the actual path. Until the conflict clears, Shift+Tab retains Pi's thinking-level action and
+`/plan` remains available.
+
+While Pi is idle, use the enabled planning shortcut to select Plan mode, then submit an ordinary
+objective. The `orbis-plan` status entry shows Plan or Default mode and the configured shortcut,
+marked `blocked` when it conflicts with a Pi binding. A disabled shortcut has no key label. While a
+plan exists, the status appends the phase and whether the state is `saved` or `unsaved`. Switching
+preserves composer text and does not send it. During a turn, stop with Escape before switching
+modes. Modal Shift+Tab retains its navigation behavior. Entering, resuming, or restoring a plan
+shows an info notice with a `Planning:` heading, the exact saved objective in a fenced block, and a
+separate paragraph for the save status. If the plan has no objective, the fenced block contains
 `objective not supplied`.
 
-The composer wraps the configured editor through Pi's public editor factory APIs and consumes
-Shift+Tab before the editor's own key handling. While this package is loaded, Pi's default
-`app.thinking.cycle` binding (Shift+Tab cycles the thinking level) does not fire from the composer.
-To keep cycling the thinking level, bind `app.thinking.cycle` to another key in
-`~/.pi/agent/keybindings.json`. A later extension that replaces the editor without composing its
-previous factory can displace the Plan shortcut.
+The composer wraps the configured editor through Pi's public editor factory APIs. Before consuming
+the planning shortcut, it checks effective Pi bindings; a conflict preserves Pi's input handling and
+reports the binding to reassign. The package does not edit Pi's keybindings. `/plan-settings` can
+change or disable the planning shortcut. A later extension that replaces the editor without
+composing its previous factory can displace the Plan shortcut. Host-binding checks do not detect
+every shortcut registered by another extension.
 
 Run `/plan <objective>` to start planning, or `/plan` to reopen saved work. With no objective and no
 saved plan, `/plan` starts a new plan and asks the agent to develop a plan for the objective in the
@@ -52,6 +60,17 @@ unconventional choices. When research delegation is available, it assigns factua
 waits for the findings. After answers, it develops the selected branches and recomputes the
 questions. Deferrals remain explicit and do not authorize dependent assumptions. Review summarizes
 the shared design and requires a separate approval action.
+
+Each frontier uses concise context and distinct alternatives for material decisions. The agent omits
+repeated background and immaterial choices without imposing a question quota or splitting
+independent questions across rounds. The package does not cap tool-input lengths, question counts,
+or retained plan revisions.
+
+`plan_round` prerequisites reference stable question IDs already recorded as submitted decisions.
+For example, if `storage` depends on `interface`, submit the round containing `interface` before
+presenting `storage`. Questions in the same frontier and unsubmitted draft answers do not satisfy
+prerequisites. When an error lists unresolved prerequisite IDs, defer the dependent question and
+preserve those IDs through submission.
 
 These workflow rules guide the agent. The extension validates identities, input, submission, and
 approval; it cannot determine whether research is sufficient or every design branch has been
@@ -98,10 +117,10 @@ selecting the option or requiring confirmation. Editing a selected option also u
 preview. Enter selects the option with its current notes. Tab/Shift+Tab move to the adjacent
 question. When notes are empty or whitespace-only, the suffix is omitted and Up/Down navigate the
 list. Clearing a selected option's notes also removes its details from the answer, and submission
-then carries no details for that option. Escape preserves edits and returns to the list. Right does
+does not include details for that option. Escape preserves edits and returns to the list. Right does
 not open a frontier field; inside a field it moves the cursor.
 
-A blank line separates the title from the content unless the terminal is too short. Review answers
+Unless the terminal is too short, a blank line separates the title from the content. Review answers
 and submit appears as a bold, accent-colored bracketed button, separated from the questions by a
 blank line. `›` marks its focus; the button does not use an option dot. The frontier footer places
 its key hints on one line directly below the divider, including `Typing on an option adds notes`. F1
@@ -139,7 +158,7 @@ indicator.
 | Review answers and submit               | Enter                  | Preview answers, navigate to missing input, or explicitly submit the complete round.                                                         |
 | Plan document                           | Up / Down, Enter       | Focus a source block and open its note editor.                                                                                               |
 | Plan review                             | Tab / Shift+Tab        | Switch between document and action-bar focus. With action focus, arrows select an action and Enter opens it.                                 |
-| Block or overall note editor            | Enter, Tab / Shift+Tab | Insert a newline in the note, or move focus to confirmation and removal controls.                                                            |
+| Block or overall note editor            | Enter, Tab / Shift+Tab | Insert a newline in the note, or move focus among its field, confirmation/removal controls, document scrolling, and review actions.          |
 | Plan document                           | `[` / `]`              | Browse full earlier or later revisions.                                                                                                      |
 | Scrollable content                      | Page Up / Page Down    | Scroll without editing Markdown.                                                                                                             |
 | Pending interaction                     | Ctrl+P                 | Select a registered presenter, when one is available.                                                                                        |
@@ -155,15 +174,21 @@ In question fields, Shift+Enter inserts a newline and Tab/Shift+Tab navigate que
 uses an accent-colored `[answer: …]` suffix; clarification text uses `[question: …]` in the theme's
 link color. Enter finishes inline editing; for Other, it also selects the nonblank custom answer. A
 nonblank clarification draft changes the list action to `?. Send clarification`. Enter on that
-action explicitly sends the request. When a terminal cannot distinguish Shift+Enter, multiline paste
-can supply question-field newlines. Live terminal and SSH key behavior still requires verification.
+action sends the request and closes the modal. The owning agent explains in the existing
+conversation, then calls `plan_round` to reopen the same round and display the response beside its
+question. Other drafts remain preserved. When a terminal cannot distinguish Shift+Enter, multiline
+paste can supply question-field newlines. Live terminal and SSH key behavior still requires
+verification.
 
 Plan review renders the full Markdown read-only under the title `Plan review · revision N · latest`.
 Its action bar lists `Annotate`, `Overall feedback`, `Review feedback`, `Approve`, and
 `Discard notes and approve…` separated by `|`. Block notes retain their exact source excerpt and
-revision. Confirming a block note or overall feedback includes it in the local batch; Review
-feedback previews that batch, identifies excluded unfinished edits, and requires an explicit
-`Send feedback`. The agent receives the batch and returns a revised plan requiring fresh approval.
+revision. A block-note editor appears beneath its block; overall feedback appears after the plan.
+During note editing, the full plan remains readable and scrollable. The action bar remains visible
+in every review mode, including feedback preview and discard confirmation. Confirming a block note
+or overall feedback includes it in the local batch; Review feedback previews that batch, identifies
+excluded unfinished edits, and requires an explicit `Send feedback`. The agent receives the batch
+and returns a revised plan requiring fresh approval.
 
 Unsent notes prevent ordinary approval. Discard notes and approve opens a confirmation for the
 latest revision; its `Discard + approve` control discards the pending note text only on explicit
@@ -269,17 +294,19 @@ remain owned by `@orbis/plan`.
 ## Settings
 
 `/plan-settings` asks which scope to edit, then opens a menu for personal defaults or trusted
-project overrides. The personal menu omits project overrides; the project menu includes inherited
-personal values. Personal settings are `orbis-plan.json` under Pi's `getAgentDir()`; trusted project
-settings are `.pi/plan.json` under the session working directory. Only explicitly supplied project
-fields override personal values. Untrusted project settings are ignored.
+project overrides. When a trusted project field masks a personal setting, the personal menu names
+its effective project value and configuration file. The project menu includes inherited personal
+values. Personal settings are `orbis-plan.json` under Pi's `getAgentDir()`; trusted project settings
+are `.pi/plan.json` under the session working directory. Only explicitly supplied project fields
+override personal values. Untrusted project settings are ignored.
 
 ```json
 {
   "planDirectory": ".pi/plans/",
   "symbols": "unicode",
   "border": "rounded",
-  "showHints": true
+  "showHints": true,
+  "shortcut": "shift+tab"
 }
 ```
 
@@ -288,6 +315,13 @@ The defaults are shown above. Symbols can be `unicode` or `emoji`. Border styles
 Appearance settings apply to the outer Plan frame and Plan-owned dividers. Pi's native editor
 decorations retain their own style. The menu uses Pi's `SettingsList`; Pi 0.85.1 does not expose an
 extension API for adding rows to native `/settings`.
+
+The Planning shortcut field accepts a Pi special or modified key, such as `shift+tab` or
+`ctrl+alt+p`; enter `disabled` in the menu or set `"shortcut": null` in JSON to disable it. Plain
+printable keys and Shift-only printable keys are rejected. The menu reports conflicts with effective
+host bindings separately from the saved setting. After a successful save, shortcut changes apply
+immediately and follow trusted-project precedence. Editing Pi's own keybindings still requires
+`/reload`.
 
 Use Up/Down to select a setting and Enter to change it. The Approved-plan directory row shows the
 value stored in the file being edited; the project menu falls back to the personal value, and both
@@ -300,14 +334,14 @@ opens, it uses the updated appearance settings.
 
 Show hints by default controls the initial hints in each question or review modal. Its default is
 On. F1 toggles hints within an open modal without changing this setting. Only `planDirectory`,
-`symbols`, `border`, and `showHints` are accepted; unknown fields and invalid values report an error
-without rewriting the file. Relative directories resolve against the planning session's working
-directory; absolute directories remain absolute. Invalid settings report the file and failed field
-or action. Settings changes preserve decisions and reviewed Markdown.
+`symbols`, `border`, `showHints`, and `shortcut` are accepted; unknown fields and invalid values
+report an error without rewriting the file. Relative directories resolve against the planning
+session's working directory; absolute directories remain absolute. Invalid settings report the file
+and failed field or action. Settings changes preserve decisions and reviewed Markdown.
 
 ## Saving and recovery
 
-Planning state is stored as Pi session custom entries of type `orbis-plan`. Each record holds
+Planning state is stored as Pi session custom entries of type `orbis-plan`. Each record contains
 `version: 1`, the selected `mode`, the `active` plan when one exists, and the `unfinished` plans.
 Runtime draft writes use a 200 ms debounce. Interaction outcomes, entry, review, and shutdown save
 immediately. Before Pi writes its first assistant message, or when persistence is disabled or
@@ -318,13 +352,15 @@ format is accepted. Incompatible or malformed records report an error without re
 When the session file exists but cannot be read, for example because of a permissions error or a
 directory at its path, restoration reports the storage error and restores nothing: the mode is
 Default with no active plan until the file is readable and Pi is reloaded. A session file that is
-missing before Pi's first assistant write is not an error. Forked planning receives a distinct
-identity before creating divergent artifacts. Escape stops planning without submitting decisions;
-drafts remain recoverable through `/plan` or explicit natural-language resume. Unrelated
-conversation in Default mode does not resume a paused plan. Mode selection restores on the saved
-branch; new sessions start in Default. Native Escape retains Pi's contextual behavior, including
-closing autocomplete. After Pi finishes automatic recovery for an interrupted or failed planning
-turn, Plan returns to Default.
+missing before Pi's first assistant write is not an error. Tree navigation preserves planning
+identity and pending approval attempts. Before saving another artifact, a divergent continuation
+receives a distinct identity, including on sibling branches within the same Pi session. A pending
+approval retry retains its recorded identity and destination. Escape stops planning without
+submitting decisions; drafts remain recoverable through `/plan` or explicit natural-language resume.
+Unrelated conversation in Default mode does not resume a paused plan. Mode selection restores on the
+saved branch; new sessions start in Default. Native Escape retains Pi's contextual behavior,
+including closing autocomplete. After Pi finishes automatic recovery for an interrupted or failed
+planning turn, Plan returns to Default.
 
 When a failed Pi write advances memory beyond disk, further planning writes stop. Correct storage
 and reload the saved session. Reload restores the last saved state and discards unsaved edits. The
@@ -335,13 +371,15 @@ session. The output filesystem must support hard links; existing files are never
 approval fails, the current revision remains available for review. Correct the reported settings or
 storage error, then use `/plan` to reopen review and explicitly retry approval, or Escape to pause.
 A failed acceptance save can leave the Markdown file present. Even if the configured directory
-changes, explicit approval of the same revision retries reconciliation at its recorded path. After
-confirming both records, the interface reports acceptance.
+changes or the user navigates the session tree, explicit approval of the same revision retries
+reconciliation at its recorded path and preserves its content and approval time. After confirming
+both records, the interface reports acceptance.
 
-After saving approval and observing Pi idle, the package emits `orbis:plan-approved` with the
-[version 1 payload](SPEC.md#approval-and-handoff). It does not start implementation or replay events
-on restoration. Subscriber failure does not revoke acceptance or trigger delivery retries. Pi can
-display its normal aborted-operation banner while the package stops model continuation.
+After saving approval, the package checks Pi's idleness immediately and on `agent_settled`. When Pi
+is idle, it emits `orbis:plan-approved` with the [version 1 payload](SPEC.md#approval-and-handoff).
+It does not start implementation or replay events on restoration. Subscriber failure does not revoke
+acceptance or trigger delivery retries. Pi can display its normal aborted-operation banner while the
+package stops model continuation.
 
 ## Verification
 

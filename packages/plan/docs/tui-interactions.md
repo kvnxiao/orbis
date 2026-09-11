@@ -11,8 +11,8 @@ The modal presents questions and options as one continuous list. A long frontier
 focused option retains visible question context. The marker for an unselected focused row is `›` in
 Unicode mode or `🔹` in emoji mode. A selected row remains bold and checkmarked, including while
 focused. The title is `Plan questions (round N)`; same-round clarification and resume preserve N,
-and new frontiers increment it. The title has a blank line beneath it unless the terminal is too
-short to retain the gap, controls, and a content row. Checkmarks identify selected answers; Answered
+and new frontiers increment it. Unless the terminal is too short to retain the gap, controls, and a
+content row, the title has a blank line beneath it. Checkmarks identify selected answers; Answered
 and Unanswered status rows are omitted. Changed questions retain their reconfirmation warning.
 
 The settings menu offers Rounded, Square, Double, ASCII, and None borders, with Rounded as the
@@ -100,11 +100,11 @@ flowchart TD
     Details -->|Up or Down with blank notes| AdjacentRow[Adjacent list row]
     List -->|Ask for clarification| Question[Inline clarification field]
     Question -->|Enter retains draft| Ready[Send clarification row]
-    Ready -->|Enter explicitly sends| Agent[Owning agent answers]
+    Ready -->|Enter sends and closes modal| Agent[Owning agent explains in conversation]
     Ready -->|Typing or Backspace| Question
     Question -->|Tab or Shift+Tab preserves draft| Adjacent
     Question -->|Escape without sending| List
-    Agent -->|Same round and originating question| List
+    Agent -->|plan_round response reopens same round| List
     List -->|Review answers and submit| Review[Answer preview]
     Review -->|Unanswered question| Missing[Explain and navigate to question]
     Missing --> List
@@ -137,11 +137,11 @@ answer. Empty or whitespace-only fields return to list navigation on Up/Down.
 
 Clarification does not require a complete answer set. Enter retains its draft without sending and
 returns to the list. With nonblank text, the row reads `?. Send clarification`; pressing Enter on
-that row explicitly sends. The modal returns control to the owning agent and then reopens with the
-response associated with the originating question and other drafts preserved. The agent receives the
-request and the selected answer with its current option notes, marked as unsubmitted. Unselected
-option notes, unfinished custom answers, and unsent clarification text stay local; the full drafts
-remain available when the modal reopens.
+that row sends the request and closes the modal. The owning agent explains in the existing
+conversation, then calls `plan_round` to reopen the same round and display the response beside its
+question, with other drafts preserved. The agent receives the request and the selected answer with
+its current option notes, marked as unsubmitted. Unselected option notes, unfinished custom answers,
+and unsent clarification text stay local; the full drafts remain available when the modal reopens.
 
 If a question remains blank, Review answers and submit explains what is missing and offers Go to
 next unanswered question. A custom answer such as “Defer until we choose deployment” counts as an
@@ -170,16 +170,18 @@ Plan review · revision 4 · latest
   Annotate | Overall feedback | Review feedback | Approve | Discard notes and approve…
 ```
 
-The action bar stays visible while document and note content scroll. Tab and Shift+Tab transfer
-focus between the document, open note fields, and actions. Arrows move within the active context:
-document navigation/scrolling, text cursor movement, or action selection. Enter in a note inserts a
-newline; it cannot insert text into the plan. Confirming a block note only stores local feedback.
+During note editing, the full plan remains readable and scrollable. The action bar stays visible in
+every review mode, including feedback preview and discard confirmation. Tab and Shift+Tab transfer
+focus between the document, open note fields, confirmation/removal controls, and actions. Arrows
+move within the active context: document navigation/scrolling, text cursor movement, or action
+selection. Enter in a note inserts a newline; it cannot insert text into the plan. Confirming a
+block note only stores local feedback.
 
 ### Annotate and submit feedback
 
 | Initial state                                       | User action                                                                       | Observable outcome                                                                                        |
 | --------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Latest revision is visible.                         | Focus a block and activate Annotate.                                              | A note field opens beneath the block's read-only source excerpt.                                          |
+| Latest revision is visible.                         | Focus a block and activate Annotate.                                              | A note field opens beneath the focused block; surrounding plan text remains readable and scrollable.      |
 | Note field is focused.                              | Type paragraphs using Enter; then Tab to its confirmation action and activate it. | The note is associated with that exact block and revision and remains unsent.                             |
 | Two paragraphs contain identical text.              | Annotate the second paragraph.                                                    | The annotation identifies that occurrence, not whichever text match is found first.                       |
 | Confirmed block notes exist.                        | Add overall feedback and open Review feedback.                                    | The preview shows notes with their source excerpts and revision, plus overall feedback.                   |
@@ -206,7 +208,7 @@ flowchart TD
     Notes -->|Yes| Blocked[Ordinary approval unavailable]
     Blocked -->|Review and submit feedback| Agent[Owning agent revises]
     Agent --> Current
-    Blocked -->|Discard notes and approve...| Confirm[Confirm discard and exact revision]
+    Blocked -->|Discard notes and approve…| Confirm[Confirm discard and exact revision]
     Confirm -->|Escape| Current
     Confirm -->|Stale session or revision| Reject[Reject without changing replacement work]
     Confirm -->|Explicit confirmation| Discard[Discard all pending note text]
@@ -218,8 +220,14 @@ flowchart TD
 
 The discard confirmation names the pending revision and includes block notes, overall feedback, and
 unfinished note text. Cancelling the confirmation preserves all notes. Confirming approves the
-unchanged plan; notes are not edits to apply during saving. A failed save remains subject to the
-SPEC's explicit retry rules.
+unchanged plan; notes are not edits to apply during saving. After a failed save, approval requires
+explicit retry or cancellation under REQ-023.
+
+When acceptance saving fails after the Markdown file was created, tree navigation preserves the
+recorded approval attempt. Explicit retry reconciles the same revision, content, destination, and
+approval time, including after a directory setting changes. Navigation alone does not allocate a new
+plan identity. Before saving a new artifact from a divergent continuation, including a sibling
+branch within the same Pi session, the continuation receives a distinct identity.
 
 Escape returns from a field, preview, or confirmation without submitting. From the outermost list or
 review, the first Escape arms closing. When hints are shown, it displays “Press Esc again to close;
@@ -236,13 +244,21 @@ as saved state. Session replacement invalidates old callbacks and pending confir
 
 Requirements: REQ-003, REQ-019, REQ-020, REQ-021, REQ-034.
 
+Before using the default Shift+Tab planning shortcut, rebind Pi's `app.thinking.cycle` in its agent
+directory's `keybindings.json` and run `/reload`. The default path is
+`~/.pi/agent/keybindings.json`; `PI_CODING_AGENT_DIR` changes the directory, and conflict warnings
+name the actual path. Until the conflict clears, Shift+Tab retains its Pi action and Plan reports
+the required correction. `/plan` remains available. In `/plan-settings`, choose another shortcut or
+disable it. The menu shows any trusted project override and any host binding that blocks the
+selected shortcut. After a successful save, shortcut changes apply immediately.
+
 ```mermaid
 flowchart TD
-    Default[Default composer, idle] -->|Shift+Tab, preserve text| Plan[Plan composer, idle]
-    Plan -->|Shift+Tab| Default
+    Default[Default composer, idle] -->|Enabled shortcut, preserve text| Plan[Plan composer, idle]
+    Plan -->|Enabled shortcut| Default
     Plan -->|Submit ordinary objective| Work[Planning turn]
     Default -->|Explicit planning intent or /plan| Work
-    Work -->|Shift+Tab| Busy[Keep mode; explain stop action]
+    Work -->|Enabled shortcut| Busy[Keep mode; explain stop action]
     Busy --> Work
     Work -->|Escape interrupts| Paused[Default; unfinished plan saved]
     Paused -->|/plan or explicit resume request| Resume[Select saved plan if ambiguous]
@@ -264,13 +280,15 @@ a plan when a reference is ambiguous.
 
 `/plan` restores the current unfinished plan or lists saved plans on this branch for selection.
 `/plan-settings` selects personal defaults or trusted project overrides and shows the approved-plan
-directory, symbols, border style, and Show hints by default. Updating appearance does not submit
-drafts. Unicode and Rounded are defaults; Double uses double-line frames and dividers, ASCII uses
-ASCII frame characters and dividers, and None keeps the divider when hints are shown, without an
-outer frame. Pi's editor lines retain native styling. When a planning interaction next opens, it
-uses the updated appearance settings and preserves its drafts. The settings menu displays each
-change immediately and saves without progress or success messages. Key hints remain unchanged. A
-failed write restores the previous setting and reports the error; Escape closes the menu.
+directory, symbols, border style, Show hints by default, and Planning shortcut. When a trusted
+project value masks a personal setting, the personal menu names that value and its configuration
+file. Updating appearance does not submit drafts. Unicode and Rounded are defaults; Double uses
+double-line frames and dividers, ASCII uses ASCII frame characters and dividers, and None retains
+the divider when hints are shown, without an outer frame. Pi's editor lines retain native styling.
+When a planning interaction next opens, it uses the updated appearance settings and preserves its
+drafts. The settings menu displays each change immediately and saves without progress or success
+messages. Key hints remain unchanged. A failed write restores the previous setting and reports the
+error; Escape closes the menu.
 
 Show hints by default uses the same personal/trusted-project precedence as the other settings. Set
 it to Off and open a modal: hints and their divider are hidden, while errors and action controls

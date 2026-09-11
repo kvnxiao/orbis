@@ -6,7 +6,6 @@ independently.
 
 The name comes from Latin _orbis_: a circle or orb. Pi is the constant that relates a circle's
 circumference to its diameter; Orbis names the collection of extensions around the Pi agent.
-Together, these modules form the Orbis agent harness.
 
 Packages publish TypeScript source. Pi loads their `.ts` entry points through Jiti; development and
 publication do not require a transpilation step.

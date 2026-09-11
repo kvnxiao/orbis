@@ -1,22 +1,131 @@
+import { join } from "node:path";
+
 import { CustomEditor, getSelectListTheme, initTheme } from "@earendil-works/pi-coding-agent";
 import type {
   ExtensionContext,
   ExtensionEvent,
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { ProcessTerminal, TuiMainScreen } from "@earendil-works/pi-tui";
+import { getKeybindings, ProcessTerminal, TuiMainScreen } from "@earendil-works/pi-tui";
 import { expect, test, vi } from "vitest";
 
-import { installPlanComposer } from "../src/composer.ts";
+import { installPlanComposer, shortcutConflict, shortcutWarning } from "../src/composer.ts";
+import { writeSettings } from "../src/config.ts";
 import extension from "../src/index.ts";
 import { presentRound } from "../src/state.ts";
 import * as terminal from "../src/terminal.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Pi exports the nominal keybindings type without its constructor; this fixture only uses matches.
-const keybindings = { matches: () => false } as unknown as KeybindingsManager;
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Pi exports the nominal keybindings type without its constructor; this fixture supplies matching and resolved bindings.
+const keybindings = {
+  matches: () => false,
+  getResolvedBindings: () => ({}),
+} as unknown as KeybindingsManager;
 const editorTheme = () => ({
   borderColor: (text: string) => text,
   selectList: getSelectListTheme(),
+});
+
+test("autocomplete bindings block colliding planning shortcuts", ({ onTestFinished }) => {
+  const bindings = vi.spyOn(keybindings, "getResolvedBindings").mockReturnValue({
+    "tui.select.cancel": "ctrl+alt+p",
+  });
+  onTestFinished(() => {
+    bindings.mockRestore();
+  });
+  expect(shortcutConflict(keybindings, "ctrl+alt+p")).toBe("tui.select.cancel");
+});
+
+test("shortcut warnings identify the configured Pi agent directory", ({ onTestFinished }) => {
+  vi.stubEnv("PI_CODING_AGENT_DIR", "/custom/pi-agent");
+  onTestFinished(() => {
+    vi.unstubAllEnvs();
+  });
+  expect(shortcutWarning("shift+tab", "app.thinking.cycle")).toContain(
+    join("/custom/pi-agent", "keybindings.json"),
+  );
+});
+
+test("host conflicts retain Pi input until live bindings change; custom and disabled shortcuts apply", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  initTheme("dark", false);
+  const bindings = vi
+    .spyOn(keybindings, "getResolvedBindings")
+    .mockReturnValue({ "app.thinking.cycle": "shift+tab" });
+  onTestFinished(() => {
+    bindings.mockRestore();
+  });
+  const tui = new TuiMainScreen(new ProcessTerminal());
+  const editor = new CustomEditor(tui, editorTheme(), keybindings);
+  editor.setText("Objective");
+  const original = vi.spyOn(editor, "handleInput");
+  let factory: ReturnType<ExtensionContext["ui"]["getEditorComponent"]> = () => editor;
+  const notify = vi.fn<ExtensionContext["ui"]["notify"]>();
+  const ctx = {
+    ...f.ctx,
+    ui: {
+      ...f.ctx.ui,
+      notify,
+      getEditorComponent: () => factory,
+      setEditorComponent: (next: typeof factory) => {
+        factory = next;
+      },
+    },
+  };
+  const cleanup = installPlanComposer(ctx, f.runtime);
+  onTestFinished(cleanup);
+  factory(tui, editorTheme(), keybindings);
+  editor.handleInput("\x1b[Z");
+  expect(f.runtime.mode).toBe("default");
+  expect(original).toHaveBeenCalledWith("\x1b[Z");
+  expect(notify).toHaveBeenCalledWith(
+    expect.stringContaining("Rebind app.thinking.cycle"),
+    "warning",
+  );
+  expect(notify).toHaveBeenCalledTimes(1);
+  bindings.mockReturnValue({ "app.thinking.cycle": "ctrl+alt+t" });
+  editor.handleInput("\x1b[Z");
+  expect(f.runtime.mode).toBe("plan");
+  const settings = join(f.ctx.cwd, "agent", "orbis-plan.json");
+  await writeSettings(settings, { shortcut: "ctrl+alt+p" });
+  await f.runtime.reloadSettings(ctx);
+  editor.handleInput("\x1b[Z");
+  expect(f.runtime.mode).toBe("plan");
+  editor.handleInput("\x1b\x10");
+  expect(f.runtime.mode).toBe("default");
+  const tuiKeys = getKeybindings();
+  const previousBindings = tuiKeys.getUserBindings();
+  onTestFinished(() => {
+    tuiKeys.setUserBindings(previousBindings);
+  });
+  tuiKeys.setUserBindings({ "tui.select.cancel": "ctrl+alt+p" });
+  bindings.mockReturnValue({ "tui.select.cancel": "ctrl+alt+p" });
+  editor.setAutocompleteProvider({
+    triggerCharacters: ["/"],
+    async getSuggestions() {
+      await Promise.resolve();
+      return { items: [{ value: "/fixture", label: "/fixture" }], prefix: "/" };
+    },
+    applyCompletion(lines, cursorLine, cursorCol) {
+      return { lines, cursorLine, cursorCol };
+    },
+  });
+  editor.setText("");
+  editor.handleInput("/");
+  await vi.waitFor(() => {
+    expect(editor.isShowingAutocomplete()).toBe(true);
+  });
+  editor.handleInput("\x1b\x10");
+  expect(editor.isShowingAutocomplete()).toBe(false);
+  expect(f.runtime.mode).toBe("default");
+  editor.setText("Objective");
+  await writeSettings(settings, { shortcut: null });
+  await f.runtime.reloadSettings(ctx);
+  editor.handleInput("\x1b\x10");
+  expect(f.runtime.mode).toBe("default");
+  expect(editor.getText()).toBe("Objective");
 });
 
 test("composer wraps an existing editor, preserves text, rejects busy toggles, and restores its factory", async ({

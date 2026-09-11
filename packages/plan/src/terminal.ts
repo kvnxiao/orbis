@@ -4,13 +4,14 @@ import { Editor } from "@earendil-works/pi-tui";
 import { defaultAppearance } from "./config.ts";
 import type { PlanAppearance } from "./config.ts";
 import type { RoundState, RoundAction, ReviewAction } from "./state.ts";
-import { framedModalLines } from "./terminal-layout.ts";
+import { frameContentWidth, framedModalLines } from "./terminal-layout.ts";
 import { TerminalReview } from "./terminal-review.ts";
 import { TerminalRound } from "./terminal-round.ts";
 
 export { TerminalRound } from "./terminal-round.ts";
 
 const waitingIndicators = new WeakMap<ExtensionContext["ui"], symbol>();
+const modalWidth = "96%";
 export { TerminalReview } from "./terminal-review.ts";
 
 async function show(
@@ -20,6 +21,7 @@ async function show(
     done: () => void,
     refresh: () => void,
     rows: () => number,
+    columns: () => number,
   ) => TerminalRound | TerminalReview,
   signal?: AbortSignal,
   appearance: PlanAppearance = defaultAppearance,
@@ -62,6 +64,12 @@ async function show(
             tui.requestRender();
           },
           () => Math.max(6, tui.terminal.rows - 4),
+          () =>
+            frameContentWidth(
+              Math.floor((tui.terminal.columns * Number.parseFloat(modalWidth)) / 100),
+              tui.terminal.rows,
+              appearance.border,
+            ),
         );
         const abort = () => {
           component.close();
@@ -96,7 +104,14 @@ async function show(
           },
         };
       },
-      { overlay: true, overlayOptions: { width: "96%", maxHeight: "100%", anchor: "center" } },
+      {
+        overlay: true,
+        overlayOptions: {
+          width: modalWidth,
+          maxHeight: "100%",
+          anchor: "center",
+        },
+      },
     );
   } finally {
     signal?.removeEventListener("abort", restore);
@@ -114,8 +129,18 @@ export async function terminalRound(
 ): Promise<void> {
   await show(
     ctx,
-    (editor, done, refresh, rows) =>
-      new TerminalRound(read, dispatch, done, refresh, editor, rows, switchView, appearance),
+    (editor, done, refresh, rows, columns) =>
+      new TerminalRound(
+        read,
+        dispatch,
+        done,
+        refresh,
+        editor,
+        rows,
+        switchView,
+        appearance,
+        columns,
+      ),
     signal,
     appearance,
   );
@@ -131,8 +156,18 @@ export async function terminalReview(
 ): Promise<void> {
   await show(
     ctx,
-    (editor, done, refresh, rows) =>
-      new TerminalReview(read, dispatch, done, refresh, editor, rows, switchView, appearance),
+    (editor, done, refresh, rows, columns) =>
+      new TerminalReview(
+        read,
+        dispatch,
+        done,
+        refresh,
+        editor,
+        rows,
+        switchView,
+        appearance,
+        columns,
+      ),
     signal,
     appearance,
   );
