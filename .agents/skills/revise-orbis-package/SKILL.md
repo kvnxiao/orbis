@@ -50,14 +50,18 @@ uncertainty. When research informs the revision, persist its synthesis before ed
 that workflow requires.
 
 Before implementing changed behavior, update the approved requirements and their conformance
-scenarios. Keep the SPEC self-contained and describe observable behavior without prescribing
-internal files or algorithms. Preserve unaffected requirements and identifiers. Retain identifiers
-for requirements whose meaning is unchanged; for replaced or removed requirements, update dependent
-references without reusing an identifier for unrelated behavior. Use Git for prior revisions.
+scenarios. Keep architecture, system behavior, interfaces, and lifecycle guarantees in the SPEC;
+keep detailed UI behavior and appearance in its linked normative interaction document. Describe
+observable behavior without prescribing internal files or algorithms. Preserve unaffected
+requirements and identifiers. Retain identifiers for requirements whose meaning is unchanged; for
+replaced or removed requirements, update dependent references without reusing an identifier for
+unrelated behavior. Use Git for prior revisions.
 
 For interactive changes, resolve affected focus, navigation, submission, back, cancel, and recovery
 behavior. Update `docs/tui-interactions.md`, its requirement references, and affected diagrams to
-agree with the SPEC. The interaction document must not introduce requirements absent from the SPEC.
+agree with the SPEC's system guarantees. The interaction document owns detailed UI requirements
+under the same requirement IDs; the SPEC links to it rather than duplicating those details. When
+moving requirements between documents, preserve their meaning and verification coverage.
 
 When implementation changes already exist, compare them with the approved request and contract
 before continuing. Amend only behavior the user has authorized, or correct the implementation within

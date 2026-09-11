@@ -58,10 +58,10 @@ skill files.
   before writing `SPEC.md`. Research documents are optional for simple packages with settled
   behavior.
 - Before implementing package behavior, define it in `packages/<name>/SPEC.md` using
-  [specification guidance](docs/specifications.md) and package-specific headings. Write a
-  self-contained contract for an independent Pi implementer: complete required behavior, public
-  contracts, permitted implementation choices, conformance criteria, and explicit implementation
-  availability.
+  [specification guidance](docs/specifications.md) and package-specific headings. Write a complete
+  system contract for an independent Pi implementer: architecture, responsibilities, public
+  interfaces, state, persistence, lifecycle guarantees, permitted implementation choices,
+  conformance criteria, and explicit implementation availability.
 - Keep the SPEC current with approved behavior, including failure, cancellation, recovery, and
   ordering guarantees. Exclude provenance, review history, and verification journals. Put file
   layouts, internal types, algorithms, and task decomposition in implementation plans unless an
@@ -69,20 +69,22 @@ skill files.
 - Use package-local requirement IDs in the form `REQ-001`. Implementation tasks reference these IDs
   and have separate names; cross-package references also name the package.
 - For prompts, menus, forms, modals, or interactive terminal views, link `docs/tui-interactions.md`
-  from the SPEC. Before design approval, explore user flows. Document scenarios and branching or
-  multistep diagrams against requirement IDs. Commands that only execute an action or print output
-  do not need an empty interaction document.
+  from the SPEC as the normative interaction contract. Put detailed appearance, labels, key
+  mappings, focus, and user flows there under the same requirement IDs; do not duplicate detailed UI
+  details in the SPEC. Together, the documents define the complete package contract. Before design
+  approval, explore user flows and document scenarios and branching or multistep diagrams. Commands
+  that only execute an action or print output do not need an empty interaction document.
 - Before deriving implementation work, review relevant specification requirements with the user.
   Existing session approval is sufficient; explicit user direction approves the behavior it
   specifies. Resolve only material unanswered decisions.
 
 ### Changes and planning
 
-- Before changing package code, read its SPEC and identify affected requirements, even when the
-  request omits specifications. Distinguish fixes within the contract, permitted implementation
-  choices, and contract changes. Before implementing contract changes, update affected requirements
-  and scenarios through `revise-orbis-package`. Keep the contract, interaction documentation, code,
-  and tests consistent within the same change set.
+- Before changing package code, read its SPEC and linked interaction contract and identify affected
+  requirements, even when the request omits specifications. Distinguish fixes within the contract,
+  permitted implementation choices, and contract changes. Before implementing contract changes,
+  update affected requirements and scenarios through `revise-orbis-package`. Keep the contract,
+  interaction documentation, code, and tests consistent within the same change set.
 - Derive tasks from the approved contract and current source. Each task identifies requirements,
   dependencies, observable outcomes, and verification. Before implementing a change, state its
   behavior and verification. Save plans under `packages/<name>/implementation/` by default; Git
@@ -145,7 +147,9 @@ skill files.
 - Conformance reviewers use clone-available artifacts, exclude ignored plans, journals, and prior
   chat conclusions, and report without editing reviewed artifacts. Derive expected results from the
   approved contract, not current output. Required behavior must be implemented and verified; public
-  behavior must be described by the SPEC or explicitly permitted as an implementation choice.
+  behavior must be described by the system or interaction contract or explicitly permitted as an
+  implementation choice. UI details belong in the interaction document and need not be repeated in
+  the SPEC. Moving rules between documents preserves their meaning and verification obligations.
 - Report requirement IDs and supporting checks; separate confirmed deviations from unverified
   obligations. Classify discrepancies as implementation defects, missing verification, or proposed
   contract amendments.

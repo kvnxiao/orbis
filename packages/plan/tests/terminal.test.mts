@@ -95,7 +95,35 @@ test("brainstorm symbols and clarification color distinguish the field roles", (
   expect(f.view.render(140).join("\n")).toContain("\x1b[38;2;129;162;190m [question:");
 });
 
-test("selected options use theme bold and the submission action combines bold with accent", ({
+test.for([
+  { border: "rounded", glyph: "─" },
+  { border: "double", glyph: "═" },
+  { border: "ascii", glyph: "-" },
+  { border: "none", glyph: "─" },
+] as const)(
+  "$border question dividers use accent and context is separated from options",
+  ({ border, glyph }) => {
+    const f = roundFixture({ symbols: "unicode", border });
+    f.resize(80);
+    const lines = f.view.render(80);
+    const plain = lines.map((line) => stripTerminalSequences(line).trimEnd());
+    const divider = `\x1b[38;2;138;190;183m${glyph.repeat(78)}\x1b[39m`;
+    for (const heading of ["? 1. Choose scope", "? 2. Choose storage"]) {
+      expect(lines[plain.indexOf(heading) - 1]).toBe(divider);
+    }
+    const context = plain.indexOf("Known é 中文 context");
+    expect(plain[context + 1]).toBe("");
+    expect(plain[context + 2]).toContain("A. Local");
+    expect(lines).toContain(`\x1b[38;2;128;128;128m${glyph.repeat(80)}\x1b[39m`);
+    keys(f.view, "\x1bOP");
+    expect(f.view.render(80).filter((line) => line === divider)).toHaveLength(
+      f.state().round?.questions.length ?? 0,
+    );
+    expect(text(f.view, 80)).not.toContain(glyph.repeat(80));
+  },
+);
+
+test("option labels are bold before selection and selected rows retain full bold styling", ({
   onTestFinished,
 }) => {
   const f = roundFixture();
@@ -106,12 +134,83 @@ test("selected options use theme bold and the submission action combines bold wi
   onTestFinished(() => {
     bold.mockRestore();
   });
+  f.state().round?.questions[0]?.options.push(
+    { id: "hybrid", label: "Hybrid", explanation: "Mixed access" },
+    { id: "hosted", label: "Hosted", explanation: "Managed access" },
+  );
+  const initial = f.view.render(140).join("\n");
+  for (const label of [
+    "A. Local",
+    "B. Remote",
+    "C. Hybrid",
+    "D. Hosted",
+    "E. Other (please specify)",
+    "?. Ask for clarification",
+  ]) {
+    expect(initial).toContain(`\x1b[1m${label}\x1b[22m`);
+  }
+  expect(initial).toContain("\x1b[22m — Offline");
+  expect(f.state().decisions).toEqual({});
   keys(f.view, enter);
   const rendered = f.view.render(140).join("\n");
   expect(rendered.split("\n").find((line) => line.includes("A. Local"))).toContain("\x1b[1m");
   expect(rendered).toContain(
     "\x1b[38;2;138;190;183m\x1b[1m  [ Review answers and submit ]\x1b[22m\x1b[39m",
   );
+});
+
+test.for([
+  { label: "Local ", paragraphs: ["A. Local"] },
+  { label: "First\n\nSecond", paragraphs: ["A. First", "Second"] },
+  { label: "Local **files** and `tags`", paragraphs: ["A. Local files and tags"] },
+])(
+  "option labels preserve Markdown without generated emphasis delimiters: $label",
+  ({ label, paragraphs }, { onTestFinished }) => {
+    const f = roundFixture();
+    f.resize(80);
+    const bold = vi
+      .spyOn(Theme.prototype, "bold")
+      .mockImplementation((value) => `\x1b[1m${value.replaceAll("\x1b[22m", "\x1b[1m")}\x1b[22m`);
+    onTestFinished(() => {
+      bold.mockRestore();
+    });
+    const option = f.state().round?.questions[0]?.options[0];
+    if (option === undefined) {
+      throw new Error("Missing option fixture.");
+    }
+    option.label = label;
+    const rendered = f.view.render(140).join("\n");
+    expect(stripTerminalSequences(rendered)).not.toContain("**");
+    expect(stripTerminalSequences(rendered)).not.toContain("`tags`");
+    for (const paragraph of paragraphs) {
+      const line = rendered
+        .split("\n")
+        .find((value) => stripTerminalSequences(value).includes(paragraph));
+      expect(line).toContain("\x1b[1m");
+    }
+    expect(stripTerminalSequences(rendered)).toContain(" — Offline");
+  },
+);
+
+test("option explanations wrap around the label and preserve separate Markdown paragraphs", () => {
+  const f = roundFixture();
+  f.resize(80);
+  const option = f.state().round?.questions[0]?.options[0];
+  if (option === undefined) {
+    throw new Error("Missing option fixture.");
+  }
+  option.label = "Local storage";
+  option.explanation =
+    "Keep small files safely on disk with a plain format.\n\nUse `JSON` for export.";
+  const lines = f.view.render(40).map((line) => stripTerminalSequences(line).trimEnd());
+  const start = lines.indexOf("› A. Local storage — Keep small files");
+  expect(start).toBeGreaterThan(-1);
+  expect(lines.slice(start, start + 4)).toEqual([
+    "› A. Local storage — Keep small files",
+    "safely on disk with a plain format.",
+    "",
+    "Use JSON for export.",
+  ]);
 });
 
 test("F1 hides review hints while preserving the reachable actions", () => {
@@ -181,7 +280,7 @@ test.each([6, 8, 12])("%i-row modals keep the final action and note cursor visib
 test("question rows omit routine answer status and Right does not open notes", () => {
   const f = roundFixture();
   const initial = text(f.view);
-  expect(initial).toMatch(/^Plan questions \(round 1\)\n\n\? 1\. Choose scope/u);
+  expect(initial).toMatch(/^Plan questions \(round 1\)\n\n─[^\n]*\n\? 1\. Choose scope/u);
   expect(initial).not.toContain("Unanswered");
   keys(f.view, right);
   expect(text(f.view)).toBe(initial);
@@ -405,7 +504,7 @@ test("Other and clarification follow generated choices and precede the recommend
     expect(position).toBeGreaterThan(previous);
     previous = position;
   }
-  expect(rendered).toMatch(/Works offline[^\n]*\n\n\? 2\. Choose storage/u);
+  expect(rendered).toMatch(/Works offline[^\n]*\n\n─[^\n]*\n\? 2\. Choose storage/u);
   expect(rendered).toContain("Plan questions (round 1)");
 });
 

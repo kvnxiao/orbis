@@ -3,8 +3,8 @@
 Status: Draft; requirements not yet defined.
 
 Replace this starter with the package contract before implementing behavior. Write for someone
-implementing the package from this document without reading the reference source. Choose headings
-that fit the package; the headings below are a starting point.
+implementing the package from this document and its linked interaction contract without reading the
+reference source. Choose headings that fit the package; the headings below are a starting point.
 
 ## Purpose
 
@@ -27,11 +27,12 @@ State which choices an independent implementation may make and must document. Re
 decisions separately from permitted choices; resolve decisions that affect an implementation task
 before starting it.
 
-For prompts, menus, forms, modals, or interactive terminal views, define the required interaction
-behavior here and link `docs/tui-interactions.md`. Write that file with user scenarios, observable
-outcomes, and Mermaid diagrams for branching or multistep flows. Reference the requirements without
-adding hidden obligations. Commands that only execute an action or print output do not need an empty
-file.
+Keep architecture, responsibilities, public interfaces, state, and lifecycle guarantees here. For
+prompts, menus, forms, modals, or interactive terminal views, link `docs/tui-interactions.md` as the
+normative contract for detailed appearance, labels, key mappings, focus, and user flows. Use the
+same requirement IDs, add scenarios and branching or multistep diagrams, and label illustrative
+examples. The documents must define the complete contract together without duplicating detailed UI
+rules. Commands that only execute an action or print output do not need an empty interaction file.
 
 ## Conformance
 

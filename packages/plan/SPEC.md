@@ -11,9 +11,11 @@ for independent Pi extension implementers.
 
 ## Scope
 
-`REQ-###` requirements and their contract tables are mandatory. Internal types, storage layouts,
-tool names, and styling not prescribed below are implementation-defined and must be documented where
-they affect usage or compatibility.
+`REQ-###` requirements and their contract tables define the system contract. The linked
+[interaction contract](docs/tui-interactions.md) defines required TUI behavior and appearance under
+the same requirement IDs. Both documents are normative; illustrative examples are labeled. Internal
+types, storage layouts, tool names, and choices not prescribed by either document are
+implementation-defined and must be documented where they affect usage or compatibility.
 
 **REQ-001 — Complete terminal package.** The package supplies planning instructions, explicit and
 model-initiated entry, structured question rounds, clarification, draft recovery, Markdown review,
@@ -43,20 +45,17 @@ saved-plan references require a selection. When multiple unfinished plans are av
 branch, `/plan` prompts for a selection. Replacing unfinished work requires an explicit user choice
 and retains the previous plan. The base package registers only `/plan` and `/plan-settings`.
 
-**REQ-034 — Composer mode.** The main Pi composer shows Plan or Default mode. With the agent idle,
-the configured planning shortcut toggles the mode and preserves typed text. Shift+Tab is the
-default; users can rebind or disable the shortcut. While an effective Pi composer binding conflicts
-with the selected shortcut, the package preserves Pi's key handling and reports the conflict. Before
-using Shift+Tab for planning, users must rebind Pi's default `app.thinking.cycle` action in
-`keybindings.json` and reload Pi. The package does not edit Pi's keybindings. After reload, the
-shortcut uses the effective bindings without requiring another extension reload. Selecting Plan
-alone does not send input or resume work. In Plan mode, the next ordinary user message enters or
-resumes planning without special wording or a slash prefix. Commands, shell input, and
-extension-injected messages retain their existing routing. During an active turn, the enabled
-planning shortcut leaves the mode unchanged, reports that the user must stop the current turn to
-switch, and does not queue a mode change. An ordinary message submitted during work keeps the
-current turn's mode and Pi's delivery policy. Inside modal fields and controls, Shift+Tab retains
-REQ-016 navigation.
+**REQ-034 — Composer mode.** The composer provides Plan and Default modes. Idle mode changes
+preserve typed text and do not send input or resume work. In Plan mode, the next ordinary user
+message enters or resumes planning without special wording or a slash prefix. Commands, shell input,
+and extension-injected messages retain their existing routing. During an active turn, mode changes
+are rejected with an explanation, and no change is queued. Messages submitted during work keep the
+current mode and Pi delivery policy.
+
+Users can configure or disable the planning shortcut. Effective host-binding conflicts preserve Pi
+input and report the conflict; the package does not edit host keybindings. After reload, the
+shortcut uses the effective bindings without requiring another extension reload. The interaction
+contract defines the default key, rebinding prerequisite, and modal key behavior.
 
 Default mode does not inject active planning instructions or automatically resume paused work.
 Explicit planning intent remains supported in either mode. Switching to Default preserves unfinished
@@ -95,10 +94,8 @@ and revise drafts before submitting them together. Navigation, highlighting, and
 recommendation are not answers. Unanswered items prevent complete submission; an explicit custom
 response that defers a decision is user input the agent must address. Deferral or uncertainty does
 not resolve a decision or authorize dependent decisions. Partial submission does not silently carry
-unanswered questions into another frontier. The visible review/submission action is labeled
-`Review answers and submit`, is separated from the questions by a blank line or divider, identifies
-unanswered questions, and offers navigation to the next one. The action uses a bold, accent-colored
-bracketed label and `›` when focused. It does not use an option-list dot.
+unanswered questions into another frontier. Submission includes a review step that identifies
+unanswered questions and lets the user return to them.
 
 **REQ-030 — Stable question numbers.** Within a plan, new logical questions receive consecutive
 display numbers starting at 1. Later frontiers continue the sequence; clarification, reordering, and
@@ -106,19 +103,18 @@ revision of an existing question preserve its number. Numbers are not reused for
 questions. Resume preserves numbering, and a new plan starts a new sequence. Display numbers
 accompany stable identities rather than replacing them.
 
-**REQ-031 — Options and details.** Each question lists its generated options first and
-`Other (please specify)` last. Alphabetic labels follow display order and restart at A for each
-question. A separate `?. Ask for clarification` action follows Other. The recommendation and reason
-appear below this list. Other requires nonblank custom text. Each generated option can have its own
-optional notes. Editing notes updates that option's local notes immediately without selecting it or
-requiring confirmation. Changing focus, pressing Escape, or selecting another option preserves those
-notes. Pressing Enter on a generated option selects it with its current notes. Editing the selected
-option's notes updates its answer preview; clearing them removes its notes. Only the selected answer
-and its current notes are included in round submission. The agent receives question numbers and
-text, the selected option's identity and label or custom response, and any selected details.
+**REQ-031 — Options and details.** Each question supports generated options and a nonblank custom
+response. Generated options own independent optional notes. Note edits update local drafts
+immediately without changing the selected answer or requiring confirmation. Changing focus, leaving
+an editor, or selecting another option preserves those notes. Selecting an option includes its
+current notes; later edits update its answer preview, and clearing them removes its details. Only
+the selected answer and its current notes are included in round submission. The agent receives
+question numbers and text, the selected option's identity and label or custom response, and any
+selected details.
+
 Unselected option notes, unfinished custom answers, and unsent clarification text remain local in
-all agent-facing entry, inspection, clarification, and submission results; sending a clarification
-is not permission to disclose abandoned option notes. Local presenters can receive the complete
+all agent-facing entry, inspection, clarification, and submission results. Sending a clarification
+does not authorize disclosure of abandoned option notes. Local presenters can receive the complete
 drafts to preserve editing and recovery.
 
 **REQ-008 — Plan readiness.** Once material decisions are resolved, the agent produces Markdown
@@ -129,91 +125,20 @@ only when the answerable frontier is empty and remaining relevant branches are s
 deferred by the user. Material assumptions require a user decision; the review identifies accepted
 assumptions, deferrals, and research limits without silently filling unresolved decisions.
 
-## TUI interaction
+## Interaction and review boundaries
 
-**REQ-016 — Modal terminal interaction.** Planning input uses a focused modal over the Pi
-conversation. The frontier is one continuous, scrollable list of numbered questions, options, and
-visible actions. Each question exposes its Markdown context, recommendation and reason, and
-clarification action. Selection checkmarks show answers without separate Answered or Unanswered
-rows. Changed questions retain a visible reconfirmation warning. Question headings use `❓` in emoji
-mode and `?` in Unicode mode; recommendations use `➡️` and `→`, respectively. Blank lines separate
-question groups. A blank line also separates the `Review answers and submit` action from the
-questions. The title is `Plan questions (round N)`. A blank line separates the modal title from its
-content. When terminal height cannot fit the gap, controls, and a content row, the gap is omitted. N
-starts at 1 and increments for each new logical frontier; clarification, same-round updates,
-reopening, and resumption preserve it. Question numbering remains independent of this count. A
-selected option's complete rendered text is bold and begins with a persistent checkmark, including
-while focused. An unselected focused row uses `🔹` in emoji mode and `›` in Unicode mode;
-recommendation arrows are reserved for recommendations. Unselected unfocused options use a dot. No
-extra focus marker is required for a selected row. Display labels do not add letter or question-mark
-shortcuts.
+**REQ-016 — Terminal interaction boundary.** Planning questions and review use a focused terminal
+modal over the existing Pi conversation. The complete frontier and plan remain readable and
+scrollable. Users can distinguish focus, draft input, selected answers, and submitted decisions.
+Visible controls expose required actions; navigation and editing do not imply submission or
+approval. Inline question fields and plan annotations preserve their context and drafts.
 
-The following key behavior is required. Extra shortcuts are optional; visible controls expose
-required actions without memorizing Ctrl-key combinations.
-
-| Focus                                   | Keys            | Behavior                                                                                                                                                         |
-| --------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontier list                           | Up / Down       | Move through options and actions across question boundaries without selecting answers.                                                                           |
-| Frontier list                           | Tab / Shift+Tab | Move to the next/previous question, wrap at the ends, and focus its selected option or its first option if unanswered.                                           |
-| Generated option                        | Enter           | Select the option and remain on its row.                                                                                                                         |
-| Generated option                        | Backspace       | Edit its notes immediately, deleting the preceding character.                                                                                                    |
-| Option row                              | Typing / paste  | Focus its inline field and insert the input immediately.                                                                                                         |
-| Other                                   | Enter           | Focus its required inline text field.                                                                                                                            |
-| Generated-option notes                  | Enter           | Select the option with its current notes and return to its row.                                                                                                  |
-| Other text                              | Enter           | Confirm the custom answer and return to its row. Empty Other is rejected.                                                                                        |
-| Clarification field                     | Enter           | Retain the text and return to the list without sending it.                                                                                                       |
-| Question text field                     | Shift+Enter     | Insert a newline in option notes, Other text, or clarification text.                                                                                             |
-| Review-note field                       | Enter           | Insert a newline in the note, never in the plan.                                                                                                                 |
-| Question inline field                   | Tab / Shift+Tab | Navigate to the next/previous question without selecting an answer.                                                                                              |
-| Other or clarification field            | Tab / Shift+Tab | Preserve drafts and navigate to the next/previous question without selecting or sending.                                                                         |
-| Review field                            | Tab / Shift+Tab | Transfer focus among visible controls without submitting.                                                                                                        |
-| Visible action                          | Enter           | Activate the focused action; merely focusing it has no effect.                                                                                                   |
-| Nested editor, preview, or confirmation | Escape          | Return one level without sending, selecting, or approving; preserve current option notes, unfinished text, confirmed custom answers, and confirmed review notes. |
-| Outermost frontier or review            | Escape          | Arm closing and, when hints are shown, display the close reminder. A second consecutive Escape closes with drafts retained; other input disarms closing.         |
-
-An Escape that returns from a nested view does not arm outer dismissal. The next opened modal starts
-unarmed. Review has an always-visible action bar; document focus supports arrow navigation and
-scrolling, while action-bar focus uses arrows to choose controls. When hints are shown,
-context-sensitive help identifies what Enter and Escape will do. The complete plan, including long
-blocks, remains readable.
-
-Answer details and clarification text are edited within the question list rather than in a
-replacement view. Typing on a generated option appends an editable `[notes: …]` suffix directly to
-its rendered text, using the theme accent color. The option row does not add a separate notes
-column, label row, or unsubmitted marker. The suffix wraps with the option and retains its color
-after editing. Empty or whitespace-only notes are omitted from the list and answer preview. Nonempty
-selected-option notes use the same suffix in the preview. As text grows, later rows move; the
-cursor, focused option, other drafts, and fixed controls remain available. Other and clarification
-text use inline `[answer: …]` and `[question: …]` suffixes with the same wrapping and cursor
-behavior. Other uses the option-note accent color; clarification uses the theme's link color. Enter
-retains the field text and exits editing; for Other it also selects the nonblank custom answer. The
-frontier footer uses one hint line directly below its divider, without a blank row between them.
-Editing changes the hints without changing the footer height. F1 toggles all hints and their divider
-in question and review views, including the double-Escape reminder. With hints hidden, the first
-outer Escape still arms closure and the second closes without displaying a reminder. The toggle
-retains drafts and focus, remains usable while hints are hidden, and does not hide action buttons or
-errors. Each new modal reads the configured hints default. F1 changes only the current modal and
-never changes that saved default. Escape returns from inline editing without arming outer dismissal.
-
-Right arrow does not open a field or activate an action from the frontier list. Generated-option
-notes have no separate Confirm action. Enter selects the option and returns to its row;
-Tab/Shift+Tab navigate to the next/previous question. When a question's inline field is empty or
-whitespace-only, Up/Down return to list navigation and move focus without selecting an answer.
-Nonblank notes retain arrow-key cursor editing. The list hint reads
-`Typing on an option adds notes`.
-
-During an agent turn, a planning question or review modal replaces Pi's working indicator with
-`Awaiting Plan` and a distinct waiting animation. Closing, cancellation, failure, or transfer
-restores the normal working indicator without changing a newer wait.
-
-Overflow scrolls within the modal. Narrow terminals can stack content, but cannot lose actions,
-question context, focused fields, or draft text. Resize preserves selection and drafts and keeps the
-focused control visible. The layout fits terminal display width and preserves Unicode text and
-input-method focus. When the terminal distinguishes Shift+Enter, that key inserts question-field
-newlines; multiline paste is also supported. Mouse input is not required. The Page Up/Page Down hint
-says `scroll`. When content overflows, a right-edge scrollbar shows the visible proportion and
-position without scrolling the title or footer. Extremely narrow terminals may omit the scrollbar to
-preserve usable content width.
+Narrow terminals and resize preserve access to content, focused fields, actions, and drafts.
+Rendering supports Unicode and input-method focus. An active planning interaction distinguishes
+waiting for user input from agent work and restores the working indicator when that interaction
+closes, fails, or transfers. The required layout, labels, key mappings, hints, colors, and terminal
+fallback behavior are defined in
+[the interaction contract](docs/tui-interactions.md#required-terminal-behavior).
 
 **REQ-012 — Same-agent clarification.** Before submitting a round, the user can ask a free-text
 question about any item. The waiting interaction returns a typed clarification result identifying
@@ -221,28 +146,22 @@ the round, question, and request. It can include current selections and current 
 notes explicitly labeled as unsubmitted; unfinished custom answers, unsent clarification text, and
 unselected option notes stay local under REQ-031. The owning Pi agent answers, researches further
 when needed, and updates the same logical round. The TUI reopens with preserved drafts and the
-question-associated response. With an empty draft, Ask for clarification focuses its inline field.
-Enter retains the draft and returns to the list without sending. With nonblank text, the row
-displays Send clarification; Enter activates that explicit send action and returns control to the
-agent. Typing or Backspace edits the draft. When the round reopens, focus identifies the originating
-question and makes its response accessible. A separate explanatory model does not satisfy this
-requirement.
+question-associated response. A separate explanatory model does not satisfy this requirement.
 
 Editing an unsubmitted answer does not invalidate a pending clarification request. Replacing its
 session, plan, or round revision does invalidate delivery.
 
-**REQ-022 — Read-only plan review.** The TUI opens on the latest complete Markdown revision with
-scrolling and an always-visible action bar for annotation, overall feedback, feedback
-review/submission, and approval. The plan cannot be edited; only user notes accept text. Feedback
-returns to the owning agent, which revises the plan and presents it for fresh approval. A new review
-opens on the latest plan without a diff or historical annotations overlaid on it.
+**REQ-022 — Read-only plan review.** Review presents the latest complete Markdown revision for
+annotation, overall feedback, feedback submission, and approval. The plan remains read-only; user
+notes are separate inputs. Feedback returns to the owning agent, which revises the plan and presents
+it for fresh approval. Each new review presents the latest revision.
 
-**REQ-032 — Inline block annotations.** Users can focus document blocks and write notes directly
-beside or beneath them while the plan remains visible. Paragraphs, list items, headings, and code
-blocks are annotation targets; other Markdown structures can be targeted as whole blocks. Repeated
-text and nested blocks remain distinguishable. An annotation identifies its plan revision, source
-block, exact source excerpt, and note. Visual wrapping and resize do not change its target.
-Arbitrary substring selection and editing plan content are outside this contract.
+**REQ-032 — Inline block annotations.** Annotations attach to document blocks and preserve source
+identity. Paragraphs, list items, headings, and code blocks are annotation targets; other Markdown
+structures can be targeted as whole blocks. Repeated text and nested blocks remain distinguishable.
+An annotation identifies its plan revision, source block, exact source excerpt, and note. Visual
+wrapping and resize do not change its target. Arbitrary substring selection and editing plan content
+are outside this contract.
 
 Notes and overall feedback remain local drafts until explicit batch submission. Users can edit or
 remove notes and inspect the outgoing feedback before sending. Confirming a block note requires
@@ -253,12 +172,11 @@ as well as confirmed notes under REQ-020. Confirming a note does not submit it t
 change Markdown. After the agent revises the plan, the new revision starts without active notes; old
 annotation targets are not silently reassigned to revised text.
 
-**REQ-033 — Revision browsing.** With document focus, `[` and `]` display the previous and next
-complete revisions; inside note fields they are ordinary text. The display identifies the viewed
-revision and whether it is the latest. Older revisions are read-only: annotation, feedback
-submission, and approval apply only to the latest pending review. Returning to the latest restores
-its drafts and reading position. Browsing does not change the pending approval identity, create a
-revision, replay feedback, or replace the latest revision with an older one.
+**REQ-033 — Revision browsing.** Users can inspect complete earlier revisions without changing the
+latest pending review. Older revisions are read-only: annotation, feedback submission, and approval
+apply only to the latest pending review. Returning to the latest restores its drafts and reading
+position. Browsing does not change the pending approval identity, create a revision, replay
+feedback, or replace the latest revision with an older one.
 
 ## State and recovery
 
@@ -297,8 +215,8 @@ missing record fields.
 **REQ-021 — Cancellation.** Cancellation ends the pending interaction without submitting drafts,
 approving a plan, or emitting completion. Saved unfinished work remains available for explicit
 resume, including unanswered clarification. After cancellation, reload, or session replacement, late
-results and confirmations cannot modify replacement work or start a stale agent continuation. Outer
-double Escape also stops the owning agent turn and returns to Default mode. Pi's normal interrupt
+results and confirmations cannot modify replacement work or start a stale agent continuation.
+Closing planning also stops the owning agent turn and returns to Default mode. Pi's normal interrupt
 during planning research or clarification leaves saved work paused. A later unrelated message cannot
 restart it. Cancellation flushes pending draft saves and reports a persistence failure instead of
 claiming that unsaved drafts are durable.
@@ -307,23 +225,14 @@ claiming that unsaved drafts are durable.
 configuration overrides only supplied fields. The approved-plan directory defaults to `.pi/plans/`
 relative to the planning working directory. Absolute paths remain absolute. Invalid settings report
 an actionable error. Configuration changes preserve unrelated settings, decisions, and reviewed
-Markdown. Filenames and configuration controls are documented implementation choices. The base
-package defaults to the TUI and does not require browser configuration. `/plan-settings` opens a
-dedicated menu using Pi's settings interaction. When a setting changes, the menu displays the new
-value immediately and persists it without progress or success messages. The key hints remain
-unchanged. If persistence fails, the menu restores the previous value and reports an actionable
-error. Settings include the approved-plan directory, symbols (Unicode by default, emoji opt-in),
-modal border (Rounded by default, Square, Double, ASCII, or None), Show hints by default (On by
-default), and the planning shortcut (Shift+Tab by default, optionally disabled). The shortcut and
-hints settings use the same personal and trusted-project precedence as other settings. The personal
-settings menu identifies trusted project values that mask personal choices and names their
-configuration file. After a successful save, shortcut changes apply immediately; the menu
-distinguishes the saved shortcut from a shortcut blocked by a host binding. Border choice applies to
-the outer question, review, and note-dialog frames. Double uses `╔═╗`, `║`, and `╚═╝`; ASCII uses
-`+`, `-`, and `|`. Plan-owned footer dividers use `═` for Double, `-` for ASCII, and `─` otherwise.
-When hints are shown, None retains the divider. Pi editor decorations remain host-controlled.
-Small-terminal fallback preserves accessible content and controls. Appearance changes preserve
-drafts and do not change Markdown, decisions, or approval.
+Markdown. Filenames and configuration controls are documented implementation choices.
+
+The base package defaults to the TUI and does not require browser configuration. `/plan-settings`
+edits the approved-plan directory, appearance, hints default, and optional planning shortcut. These
+settings use the same personal and trusted-project precedence. Failed persistence restores the
+previous displayed value and reports the failure. After a successful save, shortcut changes apply
+immediately; appearance changes apply when the next interaction opens. The interaction contract
+defines settings choices, visual defaults, override notices, and menu behavior.
 
 ## Approval and handoff
 
@@ -333,12 +242,12 @@ Filename selection prevents path traversal and accidental overwrite. Completion 
 confirmation of both the artifact and persisted acceptance; unavailable persistence cannot report
 success.
 
-Unsent annotations, overall feedback, and unfinished note text prevent ordinary approval. A visible
-`Discard notes and approve…` action opens a confirmation naming the latest pending revision and
-explaining that all its unsent note text will be discarded. Confirming discards that feedback and
-approves the unchanged revision. Dismissal preserves the notes and does not approve. The
-confirmation is bound to its session, plan, and revision; a stale confirmation cannot discard
-replacement notes or approve another revision. Notes are never incorporated into saved Markdown.
+Unsent annotations, overall feedback, and unfinished note text prevent ordinary approval. Explicit
+discard-and-approve opens a confirmation identifying the latest pending revision and explaining that
+all its unsent note text will be discarded. Confirming discards that feedback and approves the
+unchanged revision. Dismissal preserves the notes and does not approve. The confirmation is bound to
+its session, plan, and revision; a stale confirmation cannot discard replacement notes or approve
+another revision. Notes are never incorporated into saved Markdown.
 
 On failure, review remains recoverable and the package does not emit a completion event. An
 interrupted save requires explicit retry or cancellation. Retry preserves any recorded revision,
@@ -432,16 +341,11 @@ quality also requires representative planning tasks.
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
 | Install and enter planning   | The TUI completes the workflow alone; explicit and model entry share state and preserve unfinished work.                                                                                                                                                                             | REQ-001, REQ-002, REQ-003 |
 | Research and decisions       | Discoverable facts are investigated; the full answerable frontier has useful choices and custom responses.                                                                                                                                                                           | REQ-004, REQ-005, REQ-006 |
-| Navigate and submit          | Tab and Shift+Tab preserve unfinished answers; unresolved items block submission and recommendations are not silently accepted.                                                                                                                                                      | REQ-007, REQ-016          |
 | Number and qualify answers   | Later frontiers continue question numbering; revisions preserve existing numbers. Other requires text; per-option drafts survive navigation and only the selected option and its current notes are submitted with full question/option context.                                      | REQ-030, REQ-031          |
-| Nested modal navigation      | Arrows traverse question boundaries; Enter selects without advancing; editors route keys by context; one Escape returns a level, and only consecutive outer Escapes close. Resize preserves drafts and reachable controls.                                                           | REQ-016, REQ-021          |
 | Clarification                | The owning agent receives the question and selected answers with current option notes labeled unsubmitted. Full drafts remain local and restore with the response; no permission-to-continue prompt is added.                                                                        | REQ-005, REQ-012          |
 | Revisions and identity       | Changed meaning requires reconfirmation; reordering preserves identity; stale input and reopened decisions cannot approve old review.                                                                                                                                                | REQ-009, REQ-010, REQ-011 |
 | Plan review                  | Complete Markdown reflects decisions and limitations; feedback produces another review requiring fresh approval.                                                                                                                                                                     | REQ-008, REQ-022          |
-| Annotate and revise          | Block notes retain exact source/revision context through wrapping and resize. Batch preview exposes what will be sent; submission includes overall feedback and never edits Markdown. The revised plan starts without reassigned notes.                                              | REQ-022, REQ-032          |
-| Browse revisions             | Review opens on the latest plan. Bracket navigation displays full older revisions without permitting annotation or approval; returning restores current drafts and position.                                                                                                         | REQ-033, REQ-011          |
-| Discard and approve          | Unsent notes block ordinary approval. Explicit confirmation discards all pending notes and saves the exact latest revision; Escape or a stale confirmation neither discards replacement notes nor approves.                                                                          | REQ-023, REQ-021          |
-| Settings                     | Trusted project fields override supplied defaults; invalid settings fail without changing saved data or decisions. New modals use the saved hints default; F1 changes only the current modal.                                                                                        | REQ-019                   |
+| Discard and approve          | Unsent notes block ordinary approval. Explicit confirmation discards all pending notes and saves the exact latest revision; dismissal or a stale confirmation neither discards replacement notes nor approves.                                                                       | REQ-023, REQ-021          |
 | Recovery and cancellation    | Saved drafts restore on their branch; cancellation and late results cannot submit or replace work; unsaved state is reported.                                                                                                                                                        | REQ-020, REQ-021          |
 | Save and retry               | Saved bytes equal reviewed Markdown; partial failures preserve the recorded attempt and retries avoid conflicting or duplicate artifacts.                                                                                                                                            | REQ-023                   |
 | Approval handoff             | Saved acceptance emits the version 1 event with the agent idle; the package does not start implementation or replay after resume.                                                                                                                                                    | REQ-024, REQ-025, REQ-026 |
@@ -449,20 +353,17 @@ quality also requires representative planning tasks.
 | Invalid or unavailable input | Unknown identities and malformed outcomes fail without mutation; unsupported modes return explicitly and cleanup cannot affect newer work.                                                                                                                                           | REQ-013, REQ-027          |
 | Oversized outcome            | Agent output is bounded and identifies a readable full result; decisions and approved content remain unchanged.                                                                                                                                                                      | REQ-028                   |
 
-Additional conformance checks for REQ-003, REQ-016, REQ-019, REQ-021, REQ-030, REQ-031, and REQ-034
-cover: idle and busy mode toggles; plain-message entry and natural-language resume; branch
-restoration; immediate option-note edits, paste, wrapping, selection and Escape; empty-note list
-navigation; Other-last ordering and recommendation placement; selected-row styling; round count
-recovery; every border and symbol setting; invalid settings and trusted overrides; interruption
-without stale continuation.
+Required interaction checks are defined in
+[the interaction contract](docs/tui-interactions.md#interaction-conformance), including keyboard
+routing, appearance, resizing, and draft preservation.
 
 ## References
 
 - [Composer mode research](docs/research/composer-mode.md): key routing, natural-language entry, and
   harness comparison limits.
 
-- [TUI interactions](docs/tui-interactions.md): scenario walkthroughs and flow diagrams illustrating
-  the requirements; required behavior is defined above.
+- [TUI interactions](docs/tui-interactions.md): required presentation, key mappings, user flows, and
+  interaction conformance scenarios under the package requirement IDs.
 - [TUI design research](docs/research/tui-interaction-design.md): modal, keyboard, and
   block-annotation feasibility and verification limits.
 - [Planning research](docs/research/README.md): package comparisons and planning behavior;

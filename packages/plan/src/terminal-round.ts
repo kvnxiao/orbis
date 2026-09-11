@@ -5,6 +5,7 @@ import {
   CURSOR_MARKER,
   decodeKittyPrintable,
   matchesKey,
+  sliceByColumn,
   stripTerminalSequences,
   truncateToWidth,
   visibleWidth,
@@ -15,7 +16,7 @@ import type { Component, Editor } from "@earendil-works/pi-tui";
 import { defaultAppearance } from "./config.ts";
 import type { PlanAppearance } from "./config.ts";
 import type { Draft, RoundAction, RoundState, Question } from "./state.ts";
-import { markdownLines, modalContentWidth, modalLines } from "./terminal-layout.ts";
+import { dividerGlyphs, markdownLines, modalContentWidth, modalLines } from "./terminal-layout.ts";
 
 type Row =
   | { question: Question; optionId?: string; kind: "option" | "other" | "clarify" }
@@ -507,12 +508,14 @@ export class TerminalRound implements Component {
         previousQuestion = row.question.id;
         const draft = round.drafts[row.question.id];
         lines.push(
+          getSelectListTheme().selectedText(dividerGlyphs[this.appearance.border].repeat(width)),
           ...markdownLines(
             `## ${this.appearance.symbols === "emoji" ? "❓" : "?"} ${String(row.question.number)}. ${row.question.prompt}
 
 ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
             width,
           ),
+          "",
         );
       }
       if (row.kind === "review") {
@@ -547,9 +550,26 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
         !(editing && index === this.selected) &&
           (round.drafts[row.question.id]?.clarificationDraft?.trim().length ?? 0) > 0,
       );
-      const content = `${marker} ${letter === undefined ? "" : `${letter}. `}${label}${option === undefined ? "" : ` — ${option.explanation}`}`;
+      const prefix = `${marker} `;
+      const content = `${prefix}${letter === undefined ? "" : `${letter}. `}${label}`;
       const activeField = editing && index === this.selected;
-      const rendered = markdownLines(content, width).map((line) => line.trimEnd());
+      const rendered = markdownLines(content, width).map((line, lineIndex) =>
+        lineIndex === 0
+          ? prefix +
+            getMarkdownTheme().bold(sliceByColumn(line.trimEnd(), visibleWidth(prefix), width))
+          : getMarkdownTheme().bold(line.trimEnd()),
+      );
+      if (option !== undefined) {
+        const labelEnd = rendered.pop() ?? "";
+        const occupied = visibleWidth(labelEnd);
+        // Reserve the label's columns before Pi wraps the explanation's first line.
+        const explanation = markdownLines(
+          `${"x".repeat(occupied)} — ${option.explanation}`,
+          width,
+        ).map((line) => line.trimEnd());
+        const first = explanation.shift() ?? "";
+        rendered.push(labelEnd + sliceByColumn(first, occupied, width), ...explanation);
+      }
       const draft = round.drafts[row.question.id];
       let note = stripTerminalSequences(fieldText(row, draft));
       let suffixLabel: string;

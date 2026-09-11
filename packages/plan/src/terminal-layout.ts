@@ -3,6 +3,14 @@ import { CURSOR_MARKER, Markdown, truncateToWidth, visibleWidth } from "@earendi
 
 import type { PlanAppearance } from "./config.ts";
 
+export const dividerGlyphs: Record<PlanAppearance["border"], string> = {
+  rounded: "─",
+  square: "─",
+  double: "═",
+  ascii: "-",
+  none: "─",
+};
+
 export function frameContentWidth(
   width: number,
   rows: number,
@@ -70,22 +78,9 @@ export function modalLines(
       controls = [cursorLine, ...footer.slice(-Math.max(0, available - 1))];
     }
   }
-  let horizontal = "─";
-  switch (style) {
-    case "double":
-      horizontal = "═";
-      break;
-    case "ascii":
-      horizontal = "-";
-      break;
-    case "rounded":
-    case "square":
-    case "none":
-      break;
-  }
   const divider =
     separateFooter && rows > controls.length + 2
-      ? [getMarkdownTheme().hr(horizontal.repeat(Math.max(0, width)))]
+      ? [getMarkdownTheme().hr(dividerGlyphs[style].repeat(Math.max(0, width)))]
       : [];
   const headingGap = rows > controls.length + divider.length + 2 ? [""] : [];
   const height = Math.max(1, rows - controls.length - divider.length - headingGap.length - 1);

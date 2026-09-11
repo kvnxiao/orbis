@@ -1,5 +1,13 @@
 # Pi TUI interactions
 
+## Keep interaction details in the interaction contract (Required)
+
+For Orbis packages, read the SPEC and its linked `docs/tui-interactions.md` together. The SPEC owns
+system responsibilities, public interfaces, state, and lifecycle guarantees. The interaction
+document owns detailed layout, appearance, labels, key mappings, focus, and user flows under the
+same requirement IDs. Update and verify UI changes there without duplicating those details in the
+SPEC.
+
 ## Minimize navigation between the user and the task (Default)
 
 Prefer a scrollable overview with actionable rows and inline fields. Let arrows cross group

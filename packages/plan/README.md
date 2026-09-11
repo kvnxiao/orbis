@@ -5,10 +5,10 @@ Markdown review, and explicit approval. Optional Pi extensions can present pendi
 public local API. The package does not ship a browser server or HTML renderer. Complete real-host,
 SSH, input method editor (IME), and model-quality verification remains pending.
 
-The [specification](SPEC.md) and [TUI walkthroughs](docs/tui-interactions.md) define a modal
-frontier with stable question numbers, per-option details, block notes, revision browsing, nested
-Escape behavior, and confirmation before discarding notes and approving. The commands, keyboard
-controls, and public API below describe the implemented workflow.
+The [system specification](SPEC.md) and [TUI interaction contract](docs/tui-interactions.md) define
+a modal frontier with stable question numbers, per-option details, block notes, revision browsing,
+nested Escape behavior, and confirmation before discarding notes and approving. The commands,
+keyboard controls, and public API below describe the implemented workflow.
 
 ## Local use
 
@@ -99,16 +99,20 @@ remove them; copy any result that needs lasting storage.
 The modal presents the complete question frontier as a continuous list, with generated options
 followed by Other and `?. Ask for clarification`. Plan adds these actions; generated options
 describe the choices without duplicating them. The recommendation appears below the choices. Blank
-lines separate question groups. The title is `Plan questions (round N)`; revisions of the same round
-retain N. Question numbers continue across rounds independently. Selections and current option notes
-remain unsubmitted until explicit whole-round submission. Changed questions require reconfirmation.
+lines separate question groups. Each question heading has an accent-colored divider above it. A
+blank line separates question context and any reconfirmation warning from its options. Question
+dividers scroll with the content and remain visible when hints are hidden. The title is
+`Plan questions (round N)`; revisions of the same round retain N. Question numbers continue across
+rounds independently. Selections and current option notes remain unsubmitted until explicit
+whole-round submission. Changed questions require reconfirmation.
 
-Option letters restart at A for each question, with Other lettered last. Selected options remain
-bold and checkmarked as focus moves. Answered and Unanswered status rows are omitted; changed
-questions retain a reconfirmation warning. Letters are display labels, not keyboard shortcuts.
-Generated question headings in the frontier and answer preview use Pi's heading styling without
-literal hash prefixes. Pi renders Markdown emphasis as terminal styles and preserves literal markup
-inside code blocks; plan Markdown uses the existing renderer without heading rewrites.
+Option letters restart at A for each question, with Other lettered last. Every option letter and
+label is bold before selection, including Other and `?. Ask for clarification`. A selected option's
+complete row remains bold and checkmarked as focus moves. Answered and Unanswered status rows are
+omitted; changed questions retain a reconfirmation warning. Letters are display labels, not keyboard
+shortcuts. Generated question headings in the frontier and answer preview use Pi's heading styling
+without literal hash prefixes. Pi renders Markdown emphasis as terminal styles and preserves literal
+markup inside code blocks; plan Markdown uses the existing renderer without heading rewrites.
 
 Generated-option notes appear directly after the option text as an editable `[notes: …]` suffix in
 the theme's accent color. The suffix wraps with the option; nonblank notes support Up/Down cursor

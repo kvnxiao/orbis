@@ -46,9 +46,12 @@ implementation's behavior as the contract.
 
 ## Compare the contract and implementation
 
-Derive expected behavior from mandatory requirements and their contract tables before examining
-current output. Treat recommendations, research, and illustrative examples as informative unless the
-SPEC makes them normative.
+Derive expected behavior from the SPEC's system requirements and its linked normative
+`docs/tui-interactions.md` before examining current output. Verify detailed UI behavior and
+appearance against the interaction document under the same requirement IDs. UI details do not need
+to be duplicated in the SPEC. Check that moving rules between documents preserves obligations and
+that both documents agree on state, submission, cancellation, and recovery. Treat recommendations,
+research, and explicitly illustrative examples as informative.
 
 For each requirement in scope, identify:
 
@@ -66,10 +69,10 @@ ownership across the complete interaction. Distinguish agent-instruction obligat
 enforced by the extension; schema validation alone does not verify planning quality.
 
 Check the reverse direction by inspecting public commands, tools, configuration, events, persisted
-artifacts, and user-visible failure behavior. Each must be described by the SPEC or fall within an
-explicitly permitted implementation choice. Check that required documentation records those choices.
-Do not require internal types, algorithms, module layouts, or exact source-code correspondence
-unless an external compatibility contract requires them.
+artifacts, and user-visible failure behavior. Each must be described by the system or interaction
+contract, or fall within an explicitly permitted implementation choice. Check that required
+documentation records those choices. Do not require internal types, algorithms, module layouts, or
+exact source-code correspondence unless an external compatibility contract requires them.
 
 Classify discrepancies as implementation deviations, verification gaps, or contract ambiguities and
 proposed amendments. A missing test is not proof of a runtime bug; a passing test is not authority

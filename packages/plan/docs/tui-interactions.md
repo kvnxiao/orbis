@@ -1,19 +1,220 @@
 # Planning TUI interactions
 
-These walkthroughs illustrate the required behavior in [SPEC.md](../SPEC.md). Requirement IDs refer
-to that specification, which remains the contract. The modal and annotation workflow is implemented.
-The [README](../README.md) describes its controls and pending real-host, SSH, IME, and model-quality
-verification. Examples are illustrative, not a wire format.
+This document defines the required TUI behavior and appearance alongside the system requirements in
+[SPEC.md](../SPEC.md). Both documents form the package contract and use the same requirement IDs.
+Normative interaction rules and scenario outcomes apply together; fenced examples illustrate them.
+The modal and annotation workflow is implemented. The [README](../README.md) describes its controls
+and pending real-host, SSH, IME, and model-quality verification. Examples are illustrative, not a
+wire format.
+
+## Required terminal behavior
+
+### Explicit round submission — REQ-007
+
+The visible review/submission action is labeled `Review answers and submit`, is separated from the
+questions by a blank line or divider, identifies unanswered questions, and offers navigation to the
+next one. The action uses a bold, accent-colored bracketed label and `›` when focused. It does not
+use an option-list dot.
+
+### Options and details — REQ-031
+
+Each question lists its generated options first and `Other (please specify)` last. Alphabetic labels
+follow display order and restart at A for each question. A separate `?. Ask for clarification`
+action follows Other. The recommendation and reason appear below this list. Other requires nonblank
+custom text. Each generated option can have its own optional notes. Editing notes updates that
+option's local notes immediately without selecting it or requiring confirmation. Changing focus,
+pressing Escape, or selecting another option preserves those notes. Pressing Enter on a generated
+option selects it with its current notes. Editing the selected option's notes updates its answer
+preview; clearing them removes its notes.
+
+### Modal terminal interaction — REQ-016
+
+Planning input uses a focused modal over the Pi conversation. The frontier is one continuous,
+scrollable list of numbered questions, options, and visible actions. Each question exposes its
+Markdown context, recommendation and reason, and clarification action. Selection checkmarks show
+answers without separate Answered or Unanswered rows. Changed questions retain a visible
+reconfirmation warning. Question headings use `❓` in emoji mode and `?` in Unicode mode;
+recommendations use `➡️` and `→`, respectively. Blank lines separate question groups. Each question
+heading has a divider above it in the theme's accent color; question dividers scroll with the
+content and remain visible when hints are hidden. A blank line separates question context and
+reconfirmation warnings from the option list. Every option letter and label, including Other and the
+`?.` clarification action, is bold before selection. A blank line also separates the
+`Review answers and submit` action from the questions. The title is `Plan questions (round N)`. A
+blank line separates the modal title from its content. When terminal height cannot fit the gap,
+controls, and a content row, the gap is omitted. N starts at 1 and increments for each new logical
+frontier; clarification, same-round updates, reopening, and resumption preserve it. Question
+numbering remains independent of this count. A selected option's complete rendered text is bold and
+begins with a persistent checkmark, including while focused. An unselected focused row uses `🔹` in
+emoji mode and `›` in Unicode mode; recommendation arrows are reserved for recommendations.
+Unselected unfocused options use a dot. No extra focus marker is required for a selected row.
+Display labels do not add letter or question-mark shortcuts.
+
+The following key behavior is required. Extra shortcuts are optional; visible controls expose
+required actions without memorizing Ctrl-key combinations.
+
+| Focus                                   | Keys            | Behavior                                                                                                                                                         |
+| --------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontier list                           | Up / Down       | Move through options and actions across question boundaries without selecting answers.                                                                           |
+| Frontier list                           | Tab / Shift+Tab | Move to the next/previous question, wrap at the ends, and focus its selected option or its first option if unanswered.                                           |
+| Generated option                        | Enter           | Select the option and remain on its row.                                                                                                                         |
+| Generated option                        | Backspace       | Edit its notes immediately, deleting the preceding character.                                                                                                    |
+| Option row                              | Typing / paste  | Focus its inline field and insert the input immediately.                                                                                                         |
+| Other                                   | Enter           | Focus its required inline text field.                                                                                                                            |
+| Generated-option notes                  | Enter           | Select the option with its current notes and return to its row.                                                                                                  |
+| Other text                              | Enter           | Confirm the custom answer and return to its row. Empty Other is rejected.                                                                                        |
+| Clarification field                     | Enter           | Retain the text and return to the list without sending it.                                                                                                       |
+| Question text field                     | Shift+Enter     | Insert a newline in option notes, Other text, or clarification text.                                                                                             |
+| Review-note field                       | Enter           | Insert a newline in the note, never in the plan.                                                                                                                 |
+| Question inline field                   | Tab / Shift+Tab | Navigate to the next/previous question without selecting an answer.                                                                                              |
+| Other or clarification field            | Tab / Shift+Tab | Preserve drafts and navigate to the next/previous question without selecting or sending.                                                                         |
+| Review field                            | Tab / Shift+Tab | Transfer focus among visible controls without submitting.                                                                                                        |
+| Visible action                          | Enter           | Activate the focused action; merely focusing it has no effect.                                                                                                   |
+| Nested editor, preview, or confirmation | Escape          | Return one level without sending, selecting, or approving; preserve current option notes, unfinished text, confirmed custom answers, and confirmed review notes. |
+| Outermost frontier or review            | Escape          | Arm closing and, when hints are shown, display the close reminder. A second consecutive Escape closes with drafts retained; other input disarms closing.         |
+
+An Escape that returns from a nested view does not arm outer dismissal. The next opened modal starts
+unarmed. Review has an always-visible action bar; document focus supports arrow navigation and
+scrolling, while action-bar focus uses arrows to choose controls. When hints are shown,
+context-sensitive help identifies what Enter and Escape will do. The complete plan, including long
+blocks, remains readable.
+
+Answer details and clarification text are edited within the question list rather than in a
+replacement view. Typing on a generated option appends an editable `[notes: …]` suffix directly to
+its rendered text, using the theme accent color. The option row does not add a separate notes
+column, label row, or unsubmitted marker. The suffix wraps with the option and retains its color
+after editing. Empty or whitespace-only notes are omitted from the list and answer preview. Nonempty
+selected-option notes use the same suffix in the preview. As text grows, later rows move; the
+cursor, focused option, other drafts, and fixed controls remain available. Other and clarification
+text use inline `[answer: …]` and `[question: …]` suffixes with the same wrapping and cursor
+behavior. Other uses the option-note accent color; clarification uses the theme's link color. Enter
+retains the field text and exits editing; for Other it also selects the nonblank custom answer. The
+frontier footer uses one hint line directly below its divider, without a blank row between them.
+Editing changes the hints without changing the footer height. F1 toggles all hints and their divider
+in question and review views, including the double-Escape reminder. With hints hidden, the first
+outer Escape still arms closure and the second closes without displaying a reminder. The toggle
+retains drafts and focus, remains usable while hints are hidden, and does not hide action buttons or
+errors. Each new modal reads the configured hints default. F1 changes only the current modal and
+never changes that saved default. Escape returns from inline editing without arming outer dismissal.
+
+Right arrow does not open a field or activate an action from the frontier list. Generated-option
+notes have no separate Confirm action. Enter selects the option and returns to its row;
+Tab/Shift+Tab navigate to the next/previous question. When a question's inline field is empty or
+whitespace-only, Up/Down return to list navigation and move focus without selecting an answer.
+Nonblank notes retain arrow-key cursor editing. The list hint reads
+`Typing on an option adds notes`.
+
+During an agent turn, a planning question or review modal replaces Pi's working indicator with
+`Awaiting Plan` and a distinct waiting animation. Closing, cancellation, failure, or transfer
+restores the normal working indicator without changing a newer wait.
+
+Overflow scrolls within the modal. Narrow terminals can stack content, but cannot lose actions,
+question context, focused fields, or draft text. Resize preserves selection and drafts and keeps the
+focused control visible. The layout fits terminal display width and preserves Unicode text and
+input-method focus. When the terminal distinguishes Shift+Enter, that key inserts question-field
+newlines; multiline paste is also supported. Mouse input is not required. The Page Up/Page Down hint
+says `scroll`. When content overflows, a right-edge scrollbar shows the visible proportion and
+position without scrolling the title or footer. Extremely narrow terminals may omit the scrollbar to
+preserve usable content width.
+
+### Read-only plan review — REQ-022
+
+The TUI opens on the latest complete Markdown revision with scrolling and an always-visible action
+bar for annotation, overall feedback, feedback review/submission, and approval. The plan cannot be
+edited; only user notes accept text. Feedback returns to the owning agent, which revises the plan
+and presents it for fresh approval. A new review opens on the latest plan without a diff or
+historical annotations overlaid on it.
+
+### Discard confirmation — REQ-023
+
+Review exposes a visible `Discard notes and approve…` action. Activating it opens a confirmation
+that identifies the latest pending revision and explains that all its unsent block notes, overall
+feedback, and unfinished note text will be discarded. Dismissing the confirmation preserves the
+notes and does not approve the plan. Explicit confirmation discards the notes and approves the
+unchanged revision under the saving and revision-validation requirements in `SPEC.md`.
+
+### Revision browsing — REQ-033
+
+With document focus, `[` and `]` display the previous and next complete revisions; inside note
+fields they are ordinary text. The display identifies the viewed revision and whether it is the
+latest. Older revisions are read-only: annotation, feedback submission, and approval apply only to
+the latest pending review. Returning to the latest restores its drafts and reading position.
+Browsing does not change the pending approval identity, create a revision, replay feedback, or
+replace the latest revision with an older one.
+
+### Configuration — REQ-019
+
+`/plan-settings` opens a dedicated menu using Pi's settings interaction. When a setting changes, the
+menu displays the new value immediately and persists it without progress or success messages. The
+key hints remain unchanged. If persistence fails, the menu restores the previous value and reports
+an actionable error. Settings include the approved-plan directory, symbols (Unicode by default,
+emoji opt-in), modal border (Rounded by default, Square, Double, ASCII, or None), Show hints by
+default (On by default), and the planning shortcut (Shift+Tab by default, optionally disabled). The
+shortcut and hints settings use the same personal and trusted-project precedence as other settings.
+The personal settings menu identifies trusted project values that mask personal choices and names
+their configuration file. After a successful save, shortcut changes apply immediately; the menu
+distinguishes the saved shortcut from a shortcut blocked by a host binding. Border choice applies to
+the outer question, review, and note-dialog frames. Double uses `╔═╗`, `║`, and `╚═╝`; ASCII uses
+`+`, `-`, and `|`. Question and footer dividers use `═` for Double, `-` for ASCII, and `─`
+otherwise. Question dividers use the theme's accent color; footer dividers retain the theme's
+horizontal-rule style. When hints are shown, None retains the divider. Pi editor decorations remain
+host-controlled. Small-terminal fallback preserves accessible content and controls. Appearance
+changes preserve drafts and do not change Markdown, decisions, or approval.
+
+### Composer shortcut — REQ-034
+
+The main Pi composer shows Plan or Default mode. With the agent idle, the configured planning
+shortcut toggles the mode and preserves typed text. Shift+Tab is the default; users can rebind or
+disable the shortcut. While an effective Pi composer binding conflicts with the selected shortcut,
+the package preserves Pi's key handling and reports the conflict. Before using Shift+Tab for
+planning, users must rebind Pi's default `app.thinking.cycle` action in `keybindings.json` and
+reload Pi. The package does not edit Pi's keybindings. After reload, the shortcut uses the effective
+bindings without requiring another extension reload. Selecting Plan alone does not send input or
+resume work. In Plan mode, the next ordinary user message enters or resumes planning without special
+wording or a slash prefix. Commands, shell input, and extension-injected messages retain their
+existing routing. During an active turn, the enabled planning shortcut leaves the mode unchanged,
+reports that the user must stop the current turn to switch, and does not queue a mode change. An
+ordinary message submitted during work keeps the current turn's mode and Pi's delivery policy.
+Inside modal fields and controls, Shift+Tab retains REQ-016 navigation.
+
+### Clarification field — REQ-012
+
+With an empty draft, Ask for clarification focuses its inline field. Enter retains the draft and
+returns to the list without sending. With nonblank text, the row displays Send clarification; Enter
+activates that explicit send action and returns control to the agent. Typing or Backspace edits the
+draft. When the round reopens, focus identifies the originating question and makes its response
+accessible.
+
+### Inline annotation placement — REQ-032
+
+Users can focus document blocks and write notes directly beside or beneath them while the plan
+remains visible.
+
+### Closing planning — REQ-021
+
+Outer double Escape stops the owning agent turn and returns to Default mode.
+
+## Interaction conformance
+
+| Scenario                | Expected outcome                                                                                                                                                                                                                        | Requirements     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Navigate and submit     | Tab and Shift+Tab preserve unfinished answers; unresolved items block submission and recommendations are not silently accepted.                                                                                                         | REQ-007, REQ-016 |
+| Nested modal navigation | Arrows traverse question boundaries; Enter selects without advancing; editors route keys by context; one Escape returns a level, and only consecutive outer Escapes close. Resize preserves drafts and reachable controls.              | REQ-016, REQ-021 |
+| Annotate and revise     | Block notes retain exact source/revision context through wrapping and resize. Batch preview exposes what will be sent; submission includes overall feedback and never edits Markdown. The revised plan starts without reassigned notes. | REQ-022, REQ-032 |
+| Browse revisions        | Review opens on the latest plan. Bracket navigation displays full older revisions without permitting annotation or approval; returning restores current drafts and position.                                                            | REQ-033, REQ-011 |
+| Settings                | Trusted project fields override supplied defaults; invalid settings fail without changing saved data or decisions. New modals use the saved hints default; F1 changes only the current modal.                                           | REQ-019          |
+
+Additional conformance checks for REQ-003, REQ-016, REQ-019, REQ-021, REQ-030, REQ-031, and REQ-034
+cover: idle and busy mode toggles; plain-message entry and natural-language resume; branch
+restoration; immediate option-note edits, paste, wrapping, selection and Escape; empty-note list
+navigation; Other-last ordering and recommendation placement; selected-row styling; round count
+recovery; every border and symbol setting; invalid settings and trusted overrides; interruption
+without stale continuation.
 
 ## Frontier overview
 
-The modal presents questions and options as one continuous list. A long frontier scrolls, and each
-focused option retains visible question context. The marker for an unselected focused row is `›` in
-Unicode mode or `🔹` in emoji mode. A selected row remains bold and checkmarked, including while
-focused. The title is `Plan questions (round N)`; same-round clarification and resume preserve N,
-and new frontiers increment it. Unless the terminal is too short to retain the gap, controls, and a
-content row, the title has a blank line beneath it. Checkmarks identify selected answers; Answered
-and Unanswered status rows are omitted. Changed questions retain their reconfirmation warning.
+The example uses Unicode symbols with question 3 answered and question 4 focused. REQ-016 and
+REQ-031 define its layout and option behavior. A long frontier scrolls, and each focused option
+retains visible question context.
 
 The settings menu offers Rounded, Square, Double, ASCII, and None borders, with Rounded as the
 default. Unicode symbols are the default; emoji is optional. Selected options use `✓` or `✅`,
@@ -24,24 +225,27 @@ headings in the frontier and answer preview use Pi's heading styles without lite
 Ordinary plan Markdown uses Pi's renderer: emphasis becomes terminal styling, and code blocks
 preserve literal markup.
 
-Each question starts generated-option letters at A and lists Other last. The
-`?. Ask for clarification` action follows Other, then the recommendation and reason. Blank lines
-separate question groups. Letters are display labels; typing on an option begins its inline field
-rather than selecting an option by letter.
-
 When hints are shown, a horizontal divider separates the scrollable body from the fixed footer.
 Review-note editors retain their native bottom border. When a divider would displace controls or the
 last content row, it is omitted.
 
 ```text
+Plan questions (round 2)
+
+──────────────────────────────────────────────────────────────────────────
 ? 3. Primary navigation
+  The modal contains several questions.
+
   ✓ A. Continuous option list with Tab shortcuts
   · B. Switch questions with Tab
   · C. Other (please specify)
   · ?. Ask for clarification
   → Recommendation: A — preserves continuous navigation.
 
+──────────────────────────────────────────────────────────────────────────
 ? 4. Notes on unselected options
+  A user may edit notes on more than one option.
+
   › A. Submit selected answer and details only [notes: Keep other drafts local]
   · B. Include notes on every option
   · C. Other (please specify)
@@ -51,9 +255,9 @@ last content row, it is omitted.
   [Review answers and submit]
 ```
 
-The selected row is bold in the terminal. The review button is bold and uses the theme's accent
-color. When focused, it displays `›` without an option dot. A recommendation does not count as an
-answer.
+Option letters and labels are bold in the terminal; the selected row's explanation is bold as well.
+The review button is bold and uses the theme's accent color. When focused, it displays `›` without
+an option dot. A recommendation does not count as an answer.
 
 ### Choose, qualify, and revise an answer
 

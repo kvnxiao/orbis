@@ -36,11 +36,14 @@ reference implementation already conforms to its specification.
 
 ## Derive tasks from requirements
 
-Keep the SPEC at the behavioral-contract level. In the plan, select files, internal types,
-algorithms, and task boundaries within that contract. Translate failure, cancellation, recovery, and
-ordering guarantees into concrete edits and checks; do not require the SPEC to prescribe the
-mechanism. When a missing behavioral decision would change acceptance, resolve it with the user
-before planning dependent work.
+Read the SPEC and its linked normative interaction document as the approved contract. Keep system
+design in the SPEC and detailed UI behavior, appearance, and key mappings in
+`docs/tui-interactions.md`. Derive interaction tasks and expected checks from that document without
+copying UI rules into the SPEC. In the plan, select files, internal types, algorithms, and task
+boundaries within that contract. Translate failure, cancellation, recovery, and ordering guarantees
+into concrete edits and checks; do not require the SPEC to prescribe the mechanism. When a missing
+behavioral decision would change acceptance, resolve it with the user before planning dependent
+work.
 
 Map the requested scope to specification requirements and conformance scenarios. Keep complete,
 partial, remaining, and out-of-scope requirements visible. Separate proposed checks from recorded

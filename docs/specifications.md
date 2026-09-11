@@ -1,9 +1,9 @@
 # Package specifications
 
-Each Orbis package has a `packages/<name>/SPEC.md` that defines its intended behavior. The
-specification is written for developers and coding agents building an independent Pi extension
-without reading the reference implementation. Orbis specifications and reference implementations are
-distributed under the repository's [MIT license](../LICENSE).
+Each Orbis package has a `packages/<name>/SPEC.md` that defines its architecture and system
+behavior. The specification is written for developers and coding agents building an independent Pi
+extension without reading the reference implementation. Orbis specifications and reference
+implementations are distributed under the repository's [MIT license](../LICENSE).
 
 ## Specify a package
 
@@ -43,10 +43,11 @@ its related conditions. State the trigger or precondition, required result, and 
 behavior. Define exact values and formats when compatibility depends on them. Avoid adjectives such
 as "fast" or "intuitive" as the sole acceptance criterion.
 
-Declare which text defines conformance. In Orbis specs, `REQ-###` requirements and their associated
-contract tables define mandatory behavior. Label recommendations and illustrative examples
-separately; examples do not silently add obligations. Conformance scenarios verify the requirements
-and must agree with them.
+Declare which text defines conformance. The SPEC's `REQ-###` requirements and associated contract
+tables define system behavior; its linked normative interaction document defines detailed UI
+behavior under the same IDs. Label recommendations and illustrative examples separately; examples do
+not silently add obligations. Conformance scenarios verify the requirements and must agree with
+them.
 
 Distinguish an implementation-defined choice from an unresolved decision. For an
 implementation-defined choice, state the allowed variation and require the implementation to
@@ -74,11 +75,17 @@ scenarios with initial state, user actions, and observable outcomes. Include Mer
 branching or multistep flows. Cover failure and interruption as well as successful completion, and
 reference the applicable `REQ-###` identifiers.
 
-The SPEC remains self-contained and defines required behavior. The auxiliary document illustrates
-and exercises that contract; it does not introduce hidden requirements or prescribe a shared layout
-or keymap across packages. Keep it consistent with the SPEC and separate from research synthesis and
-execution logs. The design workflow checks the document's existence, SPEC reference, scenario
-coverage, and agreement with requirements before reporting completion.
+The SPEC owns system responsibilities, public interfaces, state, persistence, ordering, and recovery
+guarantees. The linked interaction document owns detailed layout, appearance, labels, key mappings,
+focus, and user flows. Declare both documents normative and keep them complete together for an
+independent implementer. Avoid duplicating UI rules in the SPEC; link the relevant sections under
+stable requirement IDs. When moving rules, preserve their meaning and verification obligations.
+
+The interaction document states required behavior and supplies scenarios that exercise it. Label
+illustrative examples separately. Do not impose a shared layout or keymap across packages. Keep the
+system and interaction contracts consistent and separate from research synthesis and execution logs.
+The design workflow checks the document's existence, SPEC link, scenario coverage, and agreement
+with system guarantees before reporting completion.
 
 ### Conformance evidence
 
@@ -117,11 +124,11 @@ verification commands or interaction steps, and expected results. Follow the
 [plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md). The user can
 request another destination, tracked plans, or chat-only output.
 
-The package scaffold does not create plan directories. `SPEC.md` remains the tracked package
-contract; local implementation plans record proposed work and verification evidence. They are
-separate from the approved Markdown artifacts produced by `@orbis/plan`. The
-[format research](implementation-plan-research.md) compares host defaults, published recipes, and Pi
-package formats.
+The package scaffold does not create plan directories. `SPEC.md` and its linked interaction document
+remain the tracked package contract; local implementation plans record proposed work and
+verification evidence. They are separate from the approved Markdown artifacts produced by
+`@orbis/plan`. The [format research](implementation-plan-research.md) compares host defaults,
+published recipes, and Pi package formats.
 
 When implementation starts, run:
 
@@ -142,19 +149,21 @@ runtime example with package behavior.
 ## Maintain the contract
 
 Use [verify-orbis-conformance](../.agents/skills/verify-orbis-conformance/SKILL.md) to review the
-reference implementation against the SPEC and check that the SPEC describes its public behavior. An
-explicit full-package review covers every requirement; `verify-changes` reviews affected contracts
-and their interactions. Reviews use clone-available source, tests, and documentation. Ignored plans
-and verification journals do not supply missing requirements or establish conformance.
+reference implementation against the SPEC and linked interaction contract and check that they
+describe its public behavior. An explicit full-package review covers every requirement;
+`verify-changes` reviews affected contracts and their interactions. Reviews use clone-available
+source, tests, and documentation. Ignored plans and verification journals do not supply missing
+requirements or establish conformance.
 
-Keep `SPEC.md` focused on required behavior and the README focused on the available reference
-implementation. A specification does not establish that a feature is implemented or tested. State
-implementation availability in the repository package index and package README.
+Keep `SPEC.md` focused on architecture and system behavior, `docs/tui-interactions.md` on detailed
+UI behavior and appearance, and the README focused on the available reference implementation. A
+specification does not establish that a feature is implemented or tested. State implementation
+availability in the repository package index and package README.
 
-Before changing package code, inspect the SPEC and identify affected requirements, including for
-requests that do not mention specifications. Fixes within the contract preserve its requirements.
-Changes within permitted implementation choices update the implementation and any required
-documentation of those choices.
+Before changing package code, inspect the SPEC and linked interaction contract and identify affected
+requirements, including for requests that do not mention specifications. Fixes within the contract
+preserve its requirements. Changes within permitted implementation choices update the implementation
+and any required documentation of those choices.
 
 When requested behavior changes the contract, use
 [revise-orbis-package](../.agents/skills/revise-orbis-package/SKILL.md) to amend the affected

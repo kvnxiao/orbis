@@ -1,9 +1,10 @@
 # Local implementation plan format
 
 Write ordinary Markdown that another implementer can use with the repository and linked local plans.
-The approved `SPEC.md` defines behavior; the plan selects concrete edits and checks. Do not copy the
-entire specification or research corpus. Include the constraints needed to execute each task and
-link their sources.
+The approved `SPEC.md` and its linked normative interaction document define behavior; the plan
+selects concrete edits and checks. System design belongs in the SPEC; detailed appearance, key
+mappings, and user flows belong in `docs/tui-interactions.md`. Do not copy the entire specification
+or research corpus. Include the constraints needed to execute each task and link their sources.
 
 Verification records and run evidence belong beside the implementation plans in their default
 Git-ignored directory. Use task evidence fields or sibling records; tracking or publishing them

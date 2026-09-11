@@ -94,17 +94,18 @@ actions, and observable outcomes. Include Mermaid diagrams for branching or mult
 scenarios to package requirement IDs. Scale detail to the package. Use the agreed interaction in
 examples; do not impose another package's keybindings, modal layout, or approval workflow.
 
-Link `docs/tui-interactions.md` from `SPEC.md`. Keep required behavior self-contained in the SPEC;
-the auxiliary file illustrates and exercises that behavior without silently introducing additional
-requirements. Keep research in `docs/research/` and execution evidence in the ignored implementation
-directory.
+Link `docs/tui-interactions.md` from `SPEC.md` as the normative interaction contract. Keep system
+responsibilities, interfaces, state, persistence, and ordering guarantees in the SPEC. Put detailed
+layout, appearance, labels, key mappings, and user flows in the interaction document under the same
+requirement IDs. The linked documents form the complete package contract; avoid duplicating UI rules
+in the SPEC. Keep research and execution evidence separate from required behavior.
 
 ## Write the specification
 
 When research informed the design, confirm that its synthesis exists on disk and reflects the
 evidence used. Existing design approval does not waive persistence of research performed during the
-brainstorm. Keep the normative contract self-contained; link supporting research without making it
-an additional source of requirements.
+brainstorm. Keep the system and interaction contracts complete together; link supporting research
+without making it an additional source of requirements.
 
 Once the decisions are settled, summarize the resulting contract and confirm shared understanding.
 Existing explicit agreement is sufficient; do not ask for the same decision again. When uncertainty
