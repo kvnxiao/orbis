@@ -26,11 +26,38 @@ Use the public custom-editor contract for editor interception and account for co
 replacements.
 [Custom editor](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#custom-editor).
 
+`pi.registerShortcut` binds a raw key rather than a rebindable id, and dispatches only while the
+composer editor holds focus; a focused `ctx.ui.custom()` component matches its own keys. Give every
+registered shortcut a description, which `/hotkeys` lists in place of the extension path.
+[registerShortcut](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#piregistershortcutshortcut-options).
+
 In Pi v0.85.1, when streaming and Bash handlers do not consume Escape and the composer is empty or
 whitespace-only, a second Escape less than 500 ms after the first runs the configured `tree` or
 `fork` action; `none` disables it. Scope an extension's second-Escape dismissal to a focused
 `ctx.ui.custom()` component that owns input.
 [Host Escape handling](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts).
+
+## Derive key labels from the bound key (Required)
+
+Render every key label from the value the handler matches. For a host action, pass the namespaced
+`app.*` or `tui.*` id to `keyHint(id, description)` or `keyText(id)`, which resolve the user's
+`keybindings.json` override. For an extension-owned key, hold one `KeyId` and pass it to both
+`matchesKey` and `rawKeyHint`. Both formatters capitalize key parts and render `alt` as `option` on
+macOS; a label written as literal text states a key that the handler may not match.
+[Keybinding hints](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#keybinding-hints),
+[Keybinding ids](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/keybindings.md).
+
+Inside `ctx.ui.custom()` and a custom-editor factory, resolve host keys through the injected
+`KeybindingsManager`: `matches(data, id)` for input and `getKeys(id)` for labels. `keyHint` and
+`keyText` read the global manager and are display-only.
+
+Pi v0.85.1 resolves `keybindings.json` entries against a static definition table and ignores unknown
+ids, so an extension cannot publish a rebindable id; declaration merging on the `Keybindings`
+interface adds the type, not the host definition. Expose an extension-owned key as a setting, label
+from the configured value, and name the fallback when the key is disabled or blocked by a host
+binding.
+[Definition table](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/keybindings.ts),
+[Shortcut conflicts](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/extensions/runner.ts).
 
 ## Separate editing, submission, and cancellation (Required)
 
