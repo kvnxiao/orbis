@@ -7,10 +7,6 @@ their tests close enough to review the contract together. When a module's respon
 different dependencies or lifetimes, split the module; line count alone does not identify a module
 boundary.
 
-Keep a local helper local until another caller needs the same semantics. A shared abstraction must
-represent a shared contract, not merely similar syntax. Avoid a generic `utils` module whose callers
-depend on unrelated helpers.
-
 ## Separate policy from integration code when it has an independent contract (Default)
 
 For a workflow with domain decisions, keep parsing and Pi event wiring at the adapter boundary. Pass
@@ -33,6 +29,11 @@ and indexes from authoritative state unless measured cost requires a maintained 
 At an ownership boundary, decide whether a value is borrowed, transferred, or copied. A `readonly`
 property does not freeze an object at runtime or prevent another alias from mutating nested data.
 Use defensive copying only where the ownership contract requires it.
+
+A getter that returns internal state exposes an alias to callers, regardless of its declared type.
+Return a copy, a projection, or a named read view. Apply the module's copy-on-write discipline to
+every mutation site, including restoration and repair paths; one direct field assignment beside
+copy-on-write updates leaves the ownership contract unverifiable.
 [TypeScript readonly properties](https://www.typescriptlang.org/docs/handbook/2/objects.html#readonly-properties).
 
 ## Derive choices and counts from declared contracts (Default)

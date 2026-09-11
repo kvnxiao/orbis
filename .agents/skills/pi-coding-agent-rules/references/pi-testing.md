@@ -11,6 +11,10 @@ When the operation supports cancellation, cover cancellation before work starts 
 the owner can change, test a stale completion after replacement. Avoid timing assertions that depend
 on arbitrary sleeps.
 
+Name each test file for the contract it enforces and use one naming basis across the suite; a suite
+that mixes module names with workflow names gives no rule for where a new test belongs. When a test
+file grows beyond the modules it covers, split it along the same module boundaries as the source.
+
 ## Test ordering, equality, and recovery at their boundaries (Default)
 
 When correctness depends on event delivery, resource cleanup, or storage commits, exercise the

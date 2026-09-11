@@ -53,3 +53,7 @@ When a schema defines an external contract, derive its TypeScript type where the
 supports it. Maintain a separate domain type only when the translation has meaning. For exported
 results, decide which fields callers may rely on and keep transient rendering or transport details
 private.
+
+Without an external API, a hand-written interface and a hand-written schema for one piece of
+internal state still define one contract twice. Derive the type from the schema, and split the
+representations only where the persisted form and the in-memory form differ in meaning.

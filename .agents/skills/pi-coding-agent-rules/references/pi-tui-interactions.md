@@ -44,17 +44,18 @@ across reopening and report persistence failures before claiming that work is sa
 
 ## Scope behavior to the extension's workflow (Conditional)
 
-For question flows, distinguish focus, selection, and recommendation. When custom answers and
-clarification cause different transitions, expose separate actions and mark answer context sent with
-clarification as unsubmitted. Keep option notes inline and selections visible during navigation.
-When required answers are missing, explain the failure and focus an unanswered question.
+For a flow that collects structured answers, keep focus, selection, and any recommended default
+distinct. When a side request against an item follows a different transition from answering it, give
+each action its own control and treat the item as unanswered until the user submits it. Keep
+per-item notes inline and keep selections visible during navigation. When required answers are
+missing, name the failure and focus an unanswered item.
 
-For document review flows, prefer read-only content with editable annotations. Attach notes to the
-reviewed revision and source target. Keep annotation edits, requests for changes, and approval
-distinct.
+For a flow that reviews a document, prefer read-only content with editable annotations. Anchor each
+annotation to the document version and the span it targets. Keep editing an annotation, submitting
+the collected annotations, and accepting the document as separate actions.
 
-For extensions with composer modes, show the active mode, preserve typed text across switches, and
-define switching during active work.
+For an extension with composer modes, show the active mode, preserve typed text across switches, and
+define what switching does during active work.
 
 ## Preserve context as content grows (Default)
 

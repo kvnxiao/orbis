@@ -1,11 +1,11 @@
 ---
 name: pi-coding-agent-rules
-description: "Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, domain modeling, asynchronous work, errors, performance, and testing."
+description: "Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, code organization, public API documentation, domain modeling, asynchronous work, errors, performance, and testing."
 ---
 
 # TypeScript and Pi Coding Agent Rules
 
-Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, domain modeling, asynchronous work, errors, performance, and testing.
+Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, code organization, public API documentation, domain modeling, asynchronous work, errors, performance, and testing.
 
 ## Rule Strength
 
@@ -24,7 +24,8 @@ Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TU
 - [Pi UI and RPC](references/pi-ui-and-rpc.md): Read when prompting users, rendering terminal components, supporting noninteractive modes, or implementing an RPC client.
 - [Pi TUI interactions](references/pi-tui-interactions.md): Read when designing keyboard navigation, inline editing, question or review flows, modal dismissal, composer modes, or terminal layout.
 - [Pi packages and SDK](references/pi-packages-and-sdk.md): Read when distributing Pi resources, declaring package dependencies, embedding sessions, or configuring resource discovery and working directories.
-- [TypeScript architecture](references/typescript-architecture.md): Read when organizing modules, separating domain logic from adapters, defining ownership, transforming derived data, deriving schema or registry metadata, or introducing an abstraction.
+- [TypeScript architecture](references/typescript-architecture.md): Read when separating domain logic from adapters, defining ownership and copy semantics, transforming derived data, deriving schema or registry metadata, or introducing an abstraction.
+- [TypeScript code organization](references/typescript-code-organization.md): Read when placing or naming a module, deciding what a module exports, documenting an exported symbol, colocating a type with its validator, promoting a helper to shared code, or defining a package entry point.
 - [TypeScript domain boundaries](references/typescript-domain-boundaries.md): Read when modeling workflow states, validating external data, comparing structured input by meaning, distinguishing identifiers or units, or designing public data contracts.
 - [TypeScript asynchronous work and errors](references/typescript-async-and-errors.md): Read when assigning asynchronous task ownership, propagating cancellation, coordinating concurrent mutations, retrying operations, or translating errors.
 - [TypeScript workflows](references/typescript-workflows.md): Read when binding actions to state versions, defining derived-output validity, recovering partial transitions, or replacing modal interactions.

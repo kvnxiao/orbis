@@ -13,6 +13,11 @@ path, matching Pi's built-in tools. After schema validation, check domain precon
 resource existence, permitted state transitions, and relationships between arguments. If the
 provider-compatible schema requires optional action-specific fields, validate those fields for the
 selected action before mutating state.
+
+The model receives one constraint through the parameter schema, tool description, injected
+instructions, and rejection message. Name one owner for the wording and let the other surfaces
+reference or reuse it. Four independent statements of one requirement drift into contradictory
+guidance, and the model receives all four.
 [Custom tools](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#custom-tools).
 
 ## Separate model output from structured state (Required)
