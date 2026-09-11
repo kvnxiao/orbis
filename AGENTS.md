@@ -54,6 +54,15 @@ publication, and commands without a `just` recipe.
   package as well.
 - Review the relevant specification requirements with the user before deriving
   implementation work. Existing approval in the session is sufficient.
+- Before changing package code, read its SPEC and identify affected requirements,
+  even when the request does not mention specifications. Distinguish fixes within
+  the contract, permitted implementation choices, and contract changes. For
+  contract changes, follow
+  [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md) and update
+  affected requirements and scenarios before implementation. Explicit user
+  direction approves the behavior it specifies; resolve only material unanswered
+  decisions. Keep the contract, interaction documentation, code, and tests
+  consistent within the same change set.
 - Derive implementation tasks from the approved contract and current source.
   Each task identifies requirements, dependencies, observable outcomes, and
   verification. Save local implementation plans under
@@ -154,6 +163,12 @@ publication, and commands without a `just` recipe.
   Use its full-package scope for an explicit package conformance review. Read the
   skill file when automatic discovery is unavailable. Review SPEC-only changes
   against available source and tests as well.
+- When conformance review finds a discrepancy, the `verify-changes` coordinator
+  resolves it within the authorized scope and reruns affected verification.
+  For approved behavior changes, use `revise-orbis-package` to synchronize the
+  contract and implementation. For unresolved behavior, obtain the missing user
+  decision. Conformance reviewers report findings without editing the artifacts
+  under review.
 - Conformance reviews use clone-available artifacts, not ignored plans, journals,
   or prior chat conclusions. Required behavior must be implemented and verified;
   public behavior must be described by the SPEC or fall within an explicitly

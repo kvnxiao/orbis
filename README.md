@@ -40,7 +40,8 @@ views, explore the user flows before approving the design and document them in
 `docs/tui-interactions.md`, linked from the SPEC. Commands that only execute an
 action or print output do not need this file.
 
-Repository-local skills support both stages:
+Repository-local skills support package design, implementation planning, and
+revision:
 
 - [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md)
   researches existing packages and Pi APIs, works through decision rounds,
@@ -48,10 +49,15 @@ Repository-local skills support both stages:
 - [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md)
   turns an approved specification into saved implementation plans with concrete
   edits, task dependencies, and verification against the current code.
+- [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md)
+  coordinates approved behavior changes across the SPEC, interaction scenarios,
+  plans, code, and tests. Package code requests require contract inspection even
+  without an explicit skill invocation.
 
-In Codex, invoke `$brainstorm-orbis-package` or `$plan-orbis-implementation`.
-In Pi, use `/skill:brainstorm-orbis-package` or
-`/skill:plan-orbis-implementation`. After project trust is established, Pi discovers
+In Codex, invoke `$brainstorm-orbis-package`, `$plan-orbis-implementation`, or
+`$revise-orbis-package`. In Pi, use `/skill:brainstorm-orbis-package`,
+`/skill:plan-orbis-implementation`, or `/skill:revise-orbis-package`.
+After project trust is established, Pi discovers
 the repository's `.agents/skills`. When a host does not discover these skills,
 ask it to read the linked `SKILL.md` directly.
 

@@ -166,11 +166,25 @@ reference implementation. A specification does not establish that a feature is
 implemented or tested. State implementation availability in the repository package
 index and package README.
 
-When a behavior change alters the contract, update the specification and review
-its affected requirements before implementation. Preserve requirement identifiers
-when their meaning is unchanged. Use version control for previous revisions;
-record unresolved design questions explicitly instead of silently changing their
-meaning in code.
+Before changing package code, inspect the SPEC and identify affected requirements,
+including for requests that do not mention specifications. Fixes within the
+contract preserve its requirements. Changes within permitted implementation choices
+update the implementation and any required documentation of those choices.
+
+When requested behavior changes the contract, use
+[revise-orbis-package](../.agents/skills/revise-orbis-package/SKILL.md) to amend
+the affected requirements and scenarios before implementation, then update the
+plan, code, tests, and usage documentation. Explicit user direction approves the
+behavior it specifies; material unanswered decisions still need resolution. For
+interactive changes, keep `docs/tui-interactions.md` consistent with the SPEC.
+Preserve requirement identifiers when their meaning is unchanged. Use version
+control for previous revisions.
+
+Within `verify-changes`, conformance reviewers report discrepancies without editing
+the contract or implementation. The coordinator resolves authorized findings,
+uses the revision workflow for approved contract changes, and reruns affected
+verification. Proposed amendments remain proposals until the user authorizes their
+behavior; passing tests do not establish that authorization.
 
 When code and a scenario disagree with a requirement, resolve the inconsistency
 against the approved contract. A passing test does not authorize changing that
