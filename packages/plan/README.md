@@ -3,7 +3,10 @@
 Collaborative planning in Pi with terminal and browser question rounds, saved
 drafts, Markdown review, and explicit approval. The implementation is available;
 complete workflow verification remains pending.
-The [specification](SPEC.md) defines the required behavior.
+The [specification](SPEC.md) defines a complete TUI planning package with a small
+optional presentation hook for other extensions. The available implementation
+still bundles its browser server; removing that server and adding the public hook
+remain implementation work. The instructions below describe the available package.
 
 ## Local use
 

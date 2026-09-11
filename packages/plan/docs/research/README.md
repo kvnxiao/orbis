@@ -1,8 +1,8 @@
 # Collaborative planning research
 
-Research date: 2026-09-08. These documents synthesize newly inspected sources
-against the existing [Draft v1 specification](../../SPEC.md). They do not
-reconstruct the earlier design session or claim that the research preceded it.
+Research dates: 2026-09-08 and 2026-09-10. These documents synthesize inspected
+sources for the [planning specification](../../SPEC.md). Each document identifies
+its evidence and verification limits.
 
 | Document                                                  | Questions investigated                                                                                                                                                                |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -16,10 +16,14 @@ installed in this workspace. README claims, source inspection, design implicatio
 and unverified runtime behavior remain distinct in each document.
 
 The evidence supports implementing the required experience as a Pi extension with
-commands, model-callable operations, shared state, and custom renderers. It does
+commands, model-callable operations, saved drafts, and a terminal questionnaire. It does
 not establish an already conforming package or a best-practice consensus. The
-complete browser/terminal experience and approval-only boundary are Orbis design
+complete TUI workflow and approval-only boundary are Orbis design
 requirements, not conclusions about what every Pi package should implement.
+
+Optional external presentation is discussed only as a boundary supported by Pi's
+extension APIs. Companion application architecture and integration protocols are
+maintained outside this package.
 
 Research is informative. `SPEC.md` defines the contract; implementation tasks and
 test results must identify their own requirement coverage and verification limits.

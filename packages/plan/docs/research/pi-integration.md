@@ -1,6 +1,6 @@
 # Pi integration for collaborative planning
 
-Research date: 2026-09-08. The local dependency inspected is
+Research dates: 2026-09-08 and 2026-09-10. The local dependency inspected is
 `@earendil-works/pi-coding-agent` 0.85.1. Its public release tag resolves to
 `d981de1229ef899957bbe968bc8dcda02a21f477`. Documentation and source inspection
 establish API capabilities. The package implementation is available; complete
@@ -15,7 +15,7 @@ required by `@orbis/plan`. [Extension API](https://pi.dev/docs/latest/extensions
 
 Pi skills supply instructions that the agent loads when relevant. A skill can
 describe research and questioning, but it does not itself register a stateful
-question tool, serve a browser UI, or persist renderer state.
+question tool or persist answer drafts.
 [Skills documentation](https://pi.dev/docs/latest/skills)
 
 **Design implication:** The extension owns the interaction and saved state.
@@ -37,13 +37,13 @@ The input handler routes free-text editing to `Editor` before reaching the
 question-navigation branch. Esc clears that unfinished editor text. The example
 therefore provides useful UI mechanics, but does not satisfy Orbis's requirement
 to navigate the whole round while preserving unfinished input. It also lacks the
-required browser renderer and main-agent clarification exchange.
+main-agent clarification exchange.
 
 **Design implication:** Reuse the public component model, and implement the
 specified draft state and key routing explicitly. A recommendation, a selection,
 and submission must remain distinct even for a one-question round.
 
-## Terminal, RPC, and browser transport
+## Terminal support and optional presentation
 
 Pi's RPC mode forwards standard `select`, `confirm`, `input`, and `editor` dialogs
 through request/response messages. `ctx.ui.custom()` returns `undefined` in RPC
@@ -51,15 +51,32 @@ mode. `ctx.hasUI` is true in both TUI and RPC; `ctx.mode === "tui"` identifies a
 real terminal component environment. [RPC extension UI protocol](https://pi.dev/docs/latest/rpc#extension-ui-protocol)
 
 **Design implication:** RPC dialog support does not establish support for the
-specified terminal questionnaire. Orbis's browser renderer can communicate with
-an HTTP server inside the extension while Pi continues running in TUI mode.
-An RPC client controlling a Pi process is a different integration and remains
-outside the package contract.
+specified terminal questionnaire. Local and SSH terminals can use the complete
+planning workflow without an external renderer. An RPC client controlling a Pi
+process is a different integration and remains outside the package contract.
 
-An SSH connection does not establish that the user's browser can reach a server
-bound to the remote machine's loopback interface. Terminal selection must remain
-available from Pi. Browser reachability cannot be inferred from a successful server
-start or browser-launch command.
+A separate extension can present a pending question round or Markdown review and
+return the same planning outcomes as the TUI. Pi's public extension API provides
+tools, lifecycle callbacks, and a shared event bus that extensions can use for
+registration. A package-defined presentation hook can expose the current
+interaction, draft updates, a result, and cancellation without prescribing a
+browser protocol. The shared event bus does not define that hook or await
+asynchronous presenters. [Public extension API](https://pi.dev/docs/latest/extensions)
+
+**Design implication:** Keep planning state and validation in `@orbis/plan` and
+let an installed presenter supply optional rendering. The presenter owns external
+connections and any annotation or chat state; it returns clarification or revision
+feedback through the existing planning interaction. When an active interaction's
+presenter fails or is removed, Pi can reopen the TUI with the current drafts. This is a proposed
+package boundary, not a shipped Pi facility or verified adapter.
+
+Pi's SDK exposes `createAgentSession()`, `prompt()`, `followUp()`, and event
+subscriptions for applications that own an agent session.
+[SDK documentation](https://pi.dev/docs/latest/sdk)
+
+**Design implication:** An integration with the existing TUI session uses Pi's
+extension APIs and the presentation hook. Creating another SDK session would
+change agent ownership; the package does not require a separate SDK host.
 
 ## Persistence, clarification, and handoff
 
@@ -90,8 +107,8 @@ notification; subscribers own their implementation workflow and recovery.
   wraparound, in real Pi terminals.
 - Exercise clarification, interruption, reload, and branch changes while drafts
   exist; verify that only explicit submission supplies decisions to the agent.
-- Test local browser rendering, stale submissions, switching interfaces, and
-  server shutdown. Source inspection does not establish browser or SSH usability.
+- Use a fake optional presenter to check draft preservation, stale results,
+  cancellation, and terminal fallback. External-app testing belongs to its adapter.
 - Evaluate model behavior on discoverable facts, dependent decisions, and plan
   approval; schema validation alone does not establish planning quality.
 - Verify supported Pi and Node versions during implementation. The inspected

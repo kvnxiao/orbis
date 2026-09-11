@@ -10,11 +10,8 @@ Codex CLI documents `/plan` with an optional inline request. It changes the acti
 chat's mode; the command is temporarily unavailable while Codex is working.
 [Command reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli)
 
-The App Server documents `item/tool/requestUserInput` and a corresponding request
-resolution notification. It separately streams proposed-plan text and publishes
-the completed plan item. Input requests can carry `autoResolutionMs`; clients may
-automatically resolve such prompts after the interval. These are host protocol
-capabilities, not proof that every UI exposes the same controls.
+Codex's App Server documents structured user-input requests and plan output.
+These are host capabilities, not proof that every UI exposes the same controls.
 [App Server reference](https://learn.chatgpt.com/docs/app-server)
 
 **Design implication:** Explicit mode entry and structured user input are useful
@@ -38,8 +35,8 @@ described options, and optional multiple selection. Calls support one to four
 questions with two to four options each. A host can render terminal prompts or a
 web form and return selected or custom answers through the callback. The SDK
 currently excludes this tool from Agent-tool subagents. This describes an SDK
-integration contract; it does not establish a shipped standalone browser review
-server in the CLI. [User-input documentation](https://code.claude.com/docs/en/agent-sdk/user-input)
+input contract; it does not establish identical behavior in the CLI.
+[User-input documentation](https://code.claude.com/docs/en/agent-sdk/user-input)
 
 **Design implication:** Structured questions and review-before-action match the
 requested interaction. Orbis's approval completes planning and emits a handoff
@@ -76,10 +73,10 @@ records its findings and limitations alongside related studies.
 | ----------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | Entry       | Codex and Claude Code document explicit plan entry.                                                    | `/plan` plus a model-callable entry operation share state and instructions.                              |
 | Questions   | Both expose structured input mechanisms. SDK or protocol support does not imply identical UI behavior. | Complete frontier rounds, stable identities, custom text, recommendations, and main-agent clarification. |
-| Navigation  | The inspected documentation does not establish the entire requested draft-preservation behavior.       | Browser navigation and terminal Tab/Shift+Tab preserve unfinished answers.                               |
+| Navigation  | The inspected documentation does not establish the entire requested draft-preservation behavior.       | Terminal Tab/Shift+Tab preserve unfinished answers.                                                      |
 | Approval    | Claude Code explicitly continues into editing after approval.                                          | Save the reviewed Markdown, finish planning, and notify subscribers.                                     |
 | Permissions | Claude Code's planning enforcement depends on session permission settings.                             | Planning instructions govern workflow; Orbis does not implement shell filtering or a sandbox.            |
-| Remote use  | Host protocols allow externally rendered input, but require client implementations.                    | A complete terminal workflow remains available when the local browser interface is inaccessible.         |
+| Remote use  | Host protocols allow externally rendered input, but require client implementations.                    | The complete workflow works in an SSH terminal.                                                          |
 
 The [package specification](../../SPEC.md) defines the chosen behavior. This
 comparison explains relevant alternatives and verification gaps; it does not add
