@@ -68,9 +68,10 @@ let an installed presenter supply optional rendering. The presenter owns externa
 connections, browser annotation mapping, and any separate chat state; it returns clarification or revision
 feedback through the existing planning interaction. When an active interaction's
 presenter fails or is removed, Pi can reopen the TUI with the current drafts.
-The package implements the presentation hook using Pi's public APIs. The current
-contract also assigns terminal block annotations and overall feedback drafts to
-`@orbis/plan`; the extended note state and modal workflow await implementation.
+The package implements the presentation hook using Pi's public APIs and owns
+block annotations, overall feedback drafts, and modal interaction state.
+Review snapshots expose source blocks for presenters to use as annotation targets.
+The [package README](../../README.md#optional-presenters) documents the implemented API.
 
 Pi's SDK exposes `createAgentSession()`, `prompt()`, `followUp()`, and event
 subscriptions for applications that own an agent session.

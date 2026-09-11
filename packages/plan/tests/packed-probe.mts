@@ -121,7 +121,11 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
             typeof component.handleInput === "function",
         );
         const keys =
-          order === "base" ? (phase === "round" ? ["\r", "\x12", "\x13"] : ["\x01"]) : ["\x10"];
+          order === "base"
+            ? phase === "round"
+              ? ["\x1b[B", "\r", "\x1b[B", "\x1b[B", "\x1b[B", "\r", "\r"]
+              : ["\t", "\x1b[C", "\x1b[C", "\x1b[C", "\r"]
+            : ["\x10"];
         for (const key of keys) {
           Reflect.apply(component.handleInput, component, [key]);
         }

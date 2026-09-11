@@ -58,8 +58,9 @@ experience separately from this development-time skill.
 
 **Design implication:** A frontier can contain related questions that users need
 to revisit. Whole-round navigation and explicit submission preserve that freedom.
-Per-question clarification must return to the main agent with unsubmitted drafts;
-rendering a form alone does not implement the research and clarification process.
+Per-question clarification returns to the main agent with selected, confirmed
+context marked unsubmitted; unfinished drafts remain local. Form rendering does
+not establish the research and clarification process.
 
 [HumanEvalComm](https://arxiv.org/abs/2406.00215) studies clarification for ambiguous,
 inconsistent, and incomplete small coding tasks. It supplies relevant evidence

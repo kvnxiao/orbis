@@ -2,6 +2,8 @@ import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
+import { documentBlocks } from "./blocks.ts";
+
 const identity = Type.String({
   minLength: 1,
   maxLength: 200,
@@ -43,12 +45,17 @@ export type QuestionInput = Static<typeof questionSchema>;
 export type RoundInput = Static<typeof roundSchema>;
 export interface Question extends QuestionInput {
   revision: number;
+  number?: number;
 }
-export type Answer = { optionId: string; custom?: never } | { custom: string; optionId?: never };
+export type Answer =
+  | { optionId: string; details?: string; custom?: never }
+  | { custom: string; optionId?: never };
 export interface Draft {
   revision: number;
   unfinished: string;
   answer?: Answer;
+  options?: Record<string, { unfinished: string; confirmed?: string }>;
+  clarificationDraft?: string;
 }
 const clarificationSchema = Type.Object({
   id: identity,
@@ -72,13 +79,25 @@ export interface Decision {
   question: Question;
   roundId: string;
   answer: Answer;
+  selectedOption?: QuestionInput["options"][number];
 }
 export interface RoundState {
   phase: "research" | "round" | "clarification" | "review" | "saving" | "accepted" | "cancelled";
   round?: Round;
   decisions: Record<string, Decision>;
   reviews?: PlanRevision[];
+  questionNumbers?: Record<string, number>;
 }
+export const noteSchema = Type.Object(
+  {
+    blockId: Type.String(),
+    excerpt: Type.String(),
+    revision: Type.Integer({ minimum: 1 }),
+    unfinished: Type.String(),
+    confirmed: Type.Optional(prose),
+  },
+  { additionalProperties: false },
+);
 const planRevisionSchema = Type.Object({
   revision: Type.Integer({ minimum: 1 }),
   markdown: prose,
@@ -90,6 +109,8 @@ const planRevisionSchema = Type.Object({
   ]),
   feedbackDraft: Type.String(),
   feedback: Type.Optional(prose),
+  notes: Type.Optional(Type.Array(noteSchema)),
+  overallConfirmed: Type.Optional(Type.String()),
 });
 export type PlanRevision = Static<typeof planRevisionSchema>;
 
@@ -126,6 +147,12 @@ export type RuntimeResult =
 
 export type ReviewAction =
   | { type: "approve" }
+  | { type: "discard-approve" }
+  | { type: "edit-note"; blockId: string; excerpt: string; text: string }
+  | { type: "confirm-note"; blockId: string }
+  | { type: "remove-note"; blockId: string }
+  | { type: "confirm-feedback" }
+  | { type: "submit-feedback" }
   | { type: "feedback"; text: string }
   | { type: "edit-feedback"; text: string }
   | { type: "cancel" };
@@ -137,6 +164,9 @@ export type ReviewInput = Static<typeof reviewSchema>;
 export type RoundAction =
   | { type: "focus"; questionId: string }
   | { type: "edit"; questionId: string; unfinished: string }
+  | { type: "edit-option"; questionId: string; optionId: string; text: string }
+  | { type: "confirm-option"; questionId: string; optionId: string }
+  | { type: "edit-clarification"; questionId: string; text: string }
   | { type: "answer"; questionId: string; answer: Answer }
   | { type: "clarify"; questionId: string; request: string; id: string }
   | { type: "submit" }
@@ -145,13 +175,18 @@ export type RoundAction =
 const storedQuestionSchema = Type.Object({
   ...questionSchema.properties,
   revision: Type.Integer({ minimum: 1 }),
+  number: Type.Optional(Type.Integer({ minimum: 1 })),
 });
 const storedAnswerSchema = Type.Union([
-  Type.Object({ optionId: identity }, { additionalProperties: false }),
+  Type.Object(
+    { optionId: identity, details: Type.Optional(Type.String()) },
+    { additionalProperties: false },
+  ),
   Type.Object({ custom: prose }, { additionalProperties: false }),
 ]);
 
 export const roundStateSchema = Type.Object({
+  questionNumbers: Type.Optional(Type.Record(identity, Type.Integer({ minimum: 1 }))),
   phase: Type.Union([
     Type.Literal("research"),
     Type.Literal("round"),
@@ -170,6 +205,7 @@ export const roundStateSchema = Type.Object({
       question: storedQuestionSchema,
       roundId: identity,
       answer: storedAnswerSchema,
+      selectedOption: Type.Optional(questionSchema.properties.options.items),
     }),
   ),
   round: Type.Optional(
@@ -185,6 +221,13 @@ export const roundStateSchema = Type.Object({
           revision: Type.Integer({ minimum: 1 }),
           unfinished: Type.String(),
           answer: Type.Optional(storedAnswerSchema),
+          options: Type.Optional(
+            Type.Record(
+              identity,
+              Type.Object({ unfinished: Type.String(), confirmed: Type.Optional(Type.String()) }),
+            ),
+          ),
+          clarificationDraft: Type.Optional(Type.String()),
         }),
       ),
       clarifications: Type.Array(clarificationSchema),
@@ -219,6 +262,7 @@ export function presentReview(state: RoundState, input: ReviewInput): RoundState
         markdown: input.markdown,
         status: "pending",
         feedbackDraft: "",
+        overallConfirmed: "",
       },
     ],
   };
@@ -241,21 +285,72 @@ export function transitionReview(
   if (action.type === "cancel") {
     return { ...state, phase: "cancelled" };
   }
+  if (action.type === "approve" && hasReviewNotes(current)) {
+    throw new Error("Send or discard the unsent notes before approving.");
+  }
   if (action.type === "approve") {
     return { ...state, phase: "saving" };
   }
-  if (action.type === "feedback" && action.text.trim().length === 0) {
-    throw new Error("Describe the requested changes before sending feedback.");
+  if (action.type === "submit-feedback") {
+    return transitionReview(state, revision, { type: "feedback", text: reviewFeedback(current) });
   }
-  const updated: PlanRevision =
-    action.type === "feedback"
-      ? { ...current, status: "feedback", feedback: action.text }
-      : { ...current, feedbackDraft: action.text };
-  return {
-    ...state,
-    phase: action.type === "feedback" ? "research" : "review",
-    reviews: [...(state.reviews?.slice(0, -1) ?? []), updated],
-  };
+  if (action.type === "feedback" || action.type === "edit-feedback") {
+    if (action.type === "feedback" && action.text.trim().length === 0) {
+      throw new Error("Describe the requested changes before sending feedback.");
+    }
+    const updated: PlanRevision =
+      action.type === "feedback"
+        ? { ...current, status: "feedback", feedback: action.text }
+        : { ...current, feedbackDraft: action.text };
+    return {
+      ...state,
+      phase: action.type === "feedback" ? "research" : "review",
+      reviews: [...(state.reviews?.slice(0, -1) ?? []), updated],
+    };
+  }
+  const review = structuredClone(current);
+  if (action.type === "discard-approve") {
+    review.notes = [];
+    review.feedbackDraft = "";
+    review.overallConfirmed = "";
+    return { ...state, phase: "saving", reviews: [...(state.reviews?.slice(0, -1) ?? []), review] };
+  }
+  if (action.type === "edit-note") {
+    const block = documentBlocks(current.markdown).find((item) => item.id === action.blockId);
+    if (block === undefined || block.excerpt !== action.excerpt) {
+      throw new Error("Unknown source block or changed excerpt.");
+    }
+    review.notes ??= [];
+    const note = review.notes.find((item) => item.blockId === block.id);
+    if (note === undefined) {
+      review.notes.push({
+        blockId: block.id,
+        excerpt: block.excerpt,
+        revision,
+        unfinished: action.text,
+      });
+    } else {
+      note.unfinished = action.text;
+    }
+  }
+  if (action.type === "confirm-note" || action.type === "remove-note") {
+    const note = review.notes?.find((item) => item.blockId === action.blockId);
+    if (note === undefined) {
+      throw new Error("Unknown annotation.");
+    }
+    if (action.type === "remove-note") {
+      review.notes = (review.notes ?? []).filter((item) => item !== note);
+    } else {
+      if (note.unfinished.trim().length === 0) {
+        throw new Error("Write a note before confirming.");
+      }
+      note.confirmed = note.unfinished;
+    }
+  }
+  if (action.type === "confirm-feedback") {
+    review.overallConfirmed = review.feedbackDraft;
+  }
+  return { ...state, reviews: [...(state.reviews?.slice(0, -1) ?? []), review] };
 }
 
 export function transitionInteraction(
@@ -265,6 +360,12 @@ export function transitionInteraction(
   action: RoundAction | ReviewAction,
 ): RoundState {
   if (
+    action.type === "discard-approve" ||
+    action.type === "edit-note" ||
+    action.type === "confirm-note" ||
+    action.type === "remove-note" ||
+    action.type === "confirm-feedback" ||
+    action.type === "submit-feedback" ||
     action.type === "approve" ||
     action.type === "feedback" ||
     action.type === "edit-feedback" ||
@@ -317,6 +418,13 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
     throw new Error("Resume or cancel the unfinished round before replacing it.");
   }
   const ids = new Set<string>();
+  const questionNumbers = { ...state.questionNumbers };
+  for (const old of [
+    ...Object.values(state.decisions).map((item) => item.question),
+    ...(previous?.questions ?? []),
+  ]) {
+    questionNumbers[old.id] ??= old.number ?? Math.max(0, ...Object.values(questionNumbers)) + 1;
+  }
   const drafts: Record<string, Draft> = {};
   const questions = input.questions.map((question) => {
     if (ids.has(question.id)) {
@@ -348,7 +456,10 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
     const revision = old === undefined ? 1 : old.revision + (unchanged ? 0 : 1);
     const draft = same ? previous.drafts[question.id] : undefined;
     drafts[question.id] = draft === undefined ? { revision, unfinished: "" } : { ...draft };
-    return { ...question, revision };
+    const number =
+      questionNumbers[question.id] ?? Math.max(0, ...Object.values(questionNumbers)) + 1;
+    questionNumbers[question.id] = number;
+    return { ...question, revision, number };
   });
   const clarifications = same ? previous.clarifications.map((item) => ({ ...item })) : [];
   if (input.clarification !== undefined) {
@@ -365,6 +476,7 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   }
   return {
     ...state,
+    questionNumbers,
     phase: "round",
     ...(state.reviews === undefined
       ? {}
@@ -397,7 +509,12 @@ export function transitionRound(
   }
   if (
     (state.phase !== "round" &&
-      !(state.phase === "clarification" && ["focus", "edit", "answer"].includes(action.type))) ||
+      !(
+        state.phase === "clarification" &&
+        ["focus", "edit", "answer", "edit-option", "confirm-option", "edit-clarification"].includes(
+          action.type,
+        )
+      )) ||
     current.submitted
   ) {
     throw new Error("This round is not accepting input.");
@@ -414,12 +531,14 @@ export function transitionRound(
       if (draft?.answer === undefined || draft.revision !== question.revision) {
         throw new Error(`Answer or reconfirm ${question.id} before submitting.`);
       }
+      const selectedOption = question.options.find((item) => item.id === draft.answer?.optionId);
       decisions[question.id] = {
         questionId: question.id,
         questionRevision: question.revision,
         question,
         roundId: round.id,
         answer: draft.answer,
+        ...(selectedOption === undefined ? {} : { selectedOption }),
       };
     }
     round.submitted = true;
@@ -436,6 +555,24 @@ export function transitionRound(
   if (action.type === "edit") {
     draft.unfinished = action.unfinished;
   }
+  if (action.type === "edit-clarification") {
+    draft.clarificationDraft = action.text;
+  }
+  if (action.type === "edit-option" || action.type === "confirm-option") {
+    if (!question.options.some((item) => item.id === action.optionId)) {
+      throw new Error("Unknown option identity.");
+    }
+    draft.options ??= {};
+    const details = draft.options[action.optionId] ?? { unfinished: "" };
+    draft.options[action.optionId] = details;
+    if (action.type === "edit-option") {
+      details.unfinished = action.text;
+    } else {
+      details.confirmed = details.unfinished;
+      draft.answer = { optionId: action.optionId, details: details.confirmed };
+      draft.revision = question.revision;
+    }
+  }
   if (action.type === "answer") {
     const answer = action.answer;
     if ((answer.optionId !== undefined) === (answer.custom !== undefined)) {
@@ -450,7 +587,12 @@ export function transitionRound(
     if (answer.custom?.trim().length === 0) {
       throw new Error("Custom answers must contain text.");
     }
-    draft.answer = answer;
+    const confirmed =
+      answer.optionId === undefined ? undefined : draft.options?.[answer.optionId]?.confirmed;
+    draft.answer =
+      answer.optionId !== undefined && confirmed !== undefined
+        ? { ...answer, details: confirmed }
+        : answer;
     draft.revision = question.revision;
   }
   if (action.type === "clarify") {
@@ -462,7 +604,51 @@ export function transitionRound(
       throw new Error("Provide a clarification request with a new identity.");
     }
     round.clarifications.push({ id: action.id, questionId: question.id, request: action.request });
+    round.focus = question.id;
+    draft.clarificationDraft = "";
     return { ...next, phase: "clarification" };
   }
   return next;
+}
+
+export function hasReviewNotes(review: PlanRevision): boolean {
+  return (
+    review.feedbackDraft.length > 0 ||
+    (review.overallConfirmed?.length ?? 0) > 0 ||
+    (review.notes?.some((note) => note.unfinished.length > 0 || note.confirmed !== undefined) ??
+      false)
+  );
+}
+
+export function reviewFeedback(review: PlanRevision): string {
+  const overall = review.overallConfirmed ?? "";
+  return [
+    overall,
+    ...(review.notes ?? [])
+      .filter((note) => note.confirmed !== undefined)
+      .map(
+        (note) =>
+          `Revision ${String(note.revision)} · block ${note.blockId}\nSource excerpt:\n${note.excerpt}\nNote:\n${note.confirmed ?? ""}`,
+      ),
+  ]
+    .filter((text) => text.trim().length > 0)
+    .join("\n\n");
+}
+
+export function restoreQuestionNumbers<T extends RoundState>(state: T): T {
+  const restored = structuredClone(state);
+  const numbers = { ...restored.questionNumbers };
+  for (const question of [
+    ...Object.values(restored.decisions).map((decision) => decision.question),
+    ...(restored.round?.questions ?? []),
+  ]) {
+    const number =
+      numbers[question.id] ?? question.number ?? Math.max(0, ...Object.values(numbers)) + 1;
+    numbers[question.id] = number;
+    question.number = number;
+  }
+  if (Object.keys(numbers).length > 0) {
+    restored.questionNumbers = numbers;
+  }
+  return restored;
 }

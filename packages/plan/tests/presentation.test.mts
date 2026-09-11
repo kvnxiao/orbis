@@ -9,6 +9,65 @@ import * as results from "../src/tool-result.ts";
 import { selectPresenter } from "./presenter-fixture.mts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
+test("public snapshots expose detached targets for a first annotation and validated batch submission", async () => {
+  const f = await runtimeFixture();
+  const cleanup = selectPresenter(f, async (request) => {
+    if (request.snapshot.kind !== "review") {
+      throw new Error("Expected review");
+    }
+    const block = request.snapshot.blocks.find((item) => item.kind === "paragraph");
+    if (block === undefined) {
+      throw new Error("No public paragraph target");
+    }
+    const update = {
+      identity: request.identity,
+      action: {
+        type: "edit-note" as const,
+        blockId: block.id,
+        excerpt: block.excerpt,
+        text: "Clarify this",
+      },
+    };
+    expect(() =>
+      request.updateDraft({ ...update, action: { ...update.action, excerpt: "Wrong source" } }),
+    ).toThrow("excerpt");
+    const snapshot = request.updateDraft(update);
+    request.updateDraft({
+      identity: request.identity,
+      action: { type: "confirm-note", blockId: block.id },
+    });
+    if (snapshot.kind !== "review") {
+      throw new Error("Expected review");
+    }
+    expect(snapshot.review.notes?.[0]?.confirmed).toBeUndefined();
+    expect(() =>
+      request.updateDraft({
+        identity: request.identity,
+        action: { type: "confirm-note", blockId: "missing" },
+      }),
+    ).toThrow("Unknown annotation");
+    await Promise.resolve();
+    return { identity: request.identity, action: { type: "submit-feedback" } };
+  });
+  try {
+    f.runtime.start(f.ctx, "Public annotation");
+    const result = await f.runtime.review(f.ctx, {
+      planId: f.runtime.active?.planId ?? "",
+      expectedRevision: 0,
+      markdown: "# Plan\n\nOriginal source.",
+    });
+    expect(result).toMatchObject({ outcome: "feedback" });
+    if (result.outcome !== "feedback") {
+      throw new Error("Expected feedback");
+    }
+    expect(result.feedback).toContain("Original source.");
+    expect(result.feedback).toContain("Clarify this");
+  } finally {
+    cleanup();
+    await f.dispose();
+  }
+});
+
 test.each(["terminal", "fixture"])("selecting active %s preserves pending feedback", async (id) => {
   const f = await runtimeFixture();
   const opened = Promise.withResolvers<AbortSignal>();
@@ -66,7 +125,7 @@ test.each([false, true])(
         dispatch({
           type: "clarify",
           questionId: "scope",
-          request: "Explain scope",
+          request: "Explain scope " + "Ω".repeat(60_000),
           id: "clarification",
         });
         await Promise.resolve();
@@ -96,6 +155,7 @@ test.each([false, true])(
         const text = JSON.stringify(message.content);
         expect(Buffer.byteLength(text)).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
         expect(text).toContain("Full JSON:");
+        expect(text).not.toContain("é");
       }
     } finally {
       prepare.mockRestore();

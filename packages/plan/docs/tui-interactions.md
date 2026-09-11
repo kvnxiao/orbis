@@ -2,8 +2,9 @@
 
 These walkthroughs illustrate the required behavior in [SPEC.md](../SPEC.md).
 Requirement IDs refer to that specification, which remains the contract.
-The modal and annotation design awaits implementation; the [README](../README.md)
-describes the available interface. Examples are illustrative, not a wire format.
+The modal and annotation workflow is implemented. The [README](../README.md)
+describes its controls and pending real-host, SSH, IME, and model-quality
+verification. Examples are illustrative, not a wire format.
 
 ## Frontier overview
 

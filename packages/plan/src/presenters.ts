@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
+import { documentBlocks } from "./blocks.ts";
 import type {
   PlanInteractionIdentity,
   PlanPresenter,
@@ -98,6 +99,19 @@ const identitySchema = Type.Object(
   object,
 );
 const draftSchema = Type.Union([
+  Type.Object(
+    { type: Type.Literal("edit-option"), questionId: nonempty, optionId: nonempty, text },
+    object,
+  ),
+  Type.Object(
+    { type: Type.Literal("confirm-option"), questionId: nonempty, optionId: nonempty },
+    object,
+  ),
+  Type.Object({ type: Type.Literal("edit-clarification"), questionId: nonempty, text }, object),
+  Type.Object({ type: Type.Literal("edit-note"), blockId: nonempty, excerpt: text, text }, object),
+  Type.Object({ type: Type.Literal("confirm-note"), blockId: nonempty }, object),
+  Type.Object({ type: Type.Literal("remove-note"), blockId: nonempty }, object),
+  Type.Object({ type: Type.Literal("confirm-feedback") }, object),
   Type.Object({ type: Type.Literal("focus"), questionId: nonempty }, object),
   Type.Object({ type: Type.Literal("edit"), questionId: nonempty, unfinished: text }, object),
   Type.Object(
@@ -105,7 +119,7 @@ const draftSchema = Type.Union([
       type: Type.Literal("answer"),
       questionId: nonempty,
       answer: Type.Union([
-        Type.Object({ optionId: nonempty }, object),
+        Type.Object({ optionId: nonempty, details: Type.Optional(text) }, object),
         Type.Object({ custom: nonempty }, object),
       ]),
     },
@@ -114,6 +128,8 @@ const draftSchema = Type.Union([
   Type.Object({ type: Type.Literal("edit-feedback"), text }, object),
 ]);
 const resultSchema = Type.Union([
+  Type.Object({ type: Type.Literal("discard-approve") }, object),
+  Type.Object({ type: Type.Literal("submit-feedback") }, object),
   Type.Object({ type: Type.Literal("submit") }, object),
   Type.Object(
     { type: Type.Literal("clarify"), questionId: nonempty, id: nonempty, request: nonempty },
@@ -153,7 +169,11 @@ export function presentationSnapshot(state: RoundState): PlanPresentationSnapsho
   }
   const review = state.reviews?.at(-1);
   if (state.phase === "review" && review !== undefined) {
-    return { kind: "review", review: structuredClone(review) };
+    return {
+      kind: "review",
+      review: structuredClone(review),
+      blocks: documentBlocks(review.markdown),
+    };
   }
   throw new Error("This planning interaction is no longer accepting input.");
 }

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan TUI recordings</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #11151b;
+        color: #e5e9f0;
+      }
+      body {
+        max-width: 1100px;
+        margin: 32px auto;
+        padding: 0 20px;
+      }
+      h1 {
+        font-size: 1.6rem;
+      }
+      p {
+        color: #b6c0cf;
+        line-height: 1.5;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+      }
+      select,
+      button {
+        font: inherit;
+        background: #232d3b;
+        color: inherit;
+        border: 1px solid #526379;
+        border-radius: 6px;
+        padding: 8px 12px;
+      }
+      select {
+        max-width: 100%;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      :focus-visible {
+        outline: 2px solid #9ed7ff;
+        outline-offset: 3px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin: 16px 0;
+      }
+      input[type="range"] {
+        flex: 1;
+        min-width: 160px;
+      }
+      a {
+        color: #9ed7ff;
+      }
+      #action {
+        min-height: 1.5em;
+        color: #a6e3b4;
+      }
+      #status {
+        font-size: 0.9rem;
+      }
+      .terminal {
+        overflow: auto;
+        padding: 16px;
+        border: 1px solid #526379;
+        border-radius: 8px;
+        background: #080c11;
+      }
+      pre {
+        font:
+          14px/1.35 Consolas,
+          "Liberation Mono",
+          monospace;
+        margin: 0;
+        white-space: pre;
+        tab-size: 4;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Plan TUI recordings</h1>
+    <p>
+      These recordings use the actual plan modal components and Pi text editor with a fake terminal
+      and scripted replies. Each frame lasts two seconds. The preview displays plain text; download
+      a cast to replay ANSI colors in asciinema.
+    </p>
+    <p>
+      The fixture's editor colors differ from the production wrapper. The recordings do not include
+      the Pi shell, hardware cursor, real input timing, or disk recovery.
+    </p>
+    <label for="scenario">Scenario</label>
+    <select id="scenario"></select>
+    <div class="controls">
+      <button id="previous" type="button">Previous</button>
+      <button id="play" type="button">Play</button>
+      <button id="next" type="button">Next</button>
+      <input id="seek" type="range" min="0" value="0" aria-label="Recording frame" />
+      <a id="download" download>Download .cast</a>
+    </div>
+    <div id="action" aria-live="polite"></div>
+    <p id="status"></p>
+    <div class="terminal" tabindex="0" aria-label="Recorded modal screen">
+      <pre id="screen"></pre>
+    </div>
+    <script type="application/json" id="recordings">
+      __RECORDINGS__
+    </script>
+    <script>
+      const recordings = JSON.parse(document.getElementById("recordings").textContent);
+      const scenario = document.getElementById("scenario");
+      const seek = document.getElementById("seek");
+      const play = document.getElementById("play");
+      const previous = document.getElementById("previous");
+      const next = document.getElementById("next");
+      let timer;
+      let position = 0;
+      for (const recording of recordings) {
+        const option = document.createElement("option");
+        option.textContent = recording.title;
+        option.value = recording.id;
+        scenario.append(option);
+      }
+      function stop() {
+        clearInterval(timer);
+        timer = undefined;
+        play.textContent = "Play";
+      }
+      function render() {
+        const recording = recordings[scenario.selectedIndex];
+        const frame = recording.frames[position];
+        seek.max = recording.frames.length - 1;
+        seek.value = position;
+        document.getElementById("action").textContent = frame.label;
+        document.getElementById("status").textContent =
+          `Frame ${position + 1}/${recording.frames.length} · ${frame.time}s · ${recording.width}×${recording.height} cells · phase: ${frame.phase}${frame.closed ? " · modal closed" : ""}`;
+        document.getElementById("screen").textContent = frame.text.replaceAll("\r\n", "\n");
+        document.getElementById("screen").style.minHeight = `${recording.height * 1.35}em`;
+        document.getElementById("download").href = `${recording.id}.cast`;
+        previous.disabled = position === 0;
+        next.disabled = position === recording.frames.length - 1;
+        if (next.disabled) stop();
+      }
+      scenario.addEventListener("change", () => {
+        stop();
+        position = 0;
+        render();
+      });
+      seek.addEventListener("input", () => {
+        stop();
+        position = Number(seek.value);
+        render();
+      });
+      previous.addEventListener("click", () => {
+        stop();
+        position--;
+        render();
+      });
+      next.addEventListener("click", () => {
+        stop();
+        position++;
+        render();
+      });
+      play.addEventListener("click", () => {
+        if (timer !== undefined) {
+          stop();
+          return;
+        }
+        if (next.disabled) position = 0;
+        render();
+        play.textContent = "Pause";
+        timer = setInterval(() => {
+          position++;
+          render();
+        }, 2000);
+      });
+      render();
+    </script>
+  </body>
+</html>

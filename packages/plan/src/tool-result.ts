@@ -32,7 +32,28 @@ export async function toolResult(
     case "clarification":
       break;
   }
-  const details = instructions === undefined ? result : { ...result, instructions };
+  const projected = structuredClone(result);
+  const round =
+    projected.outcome === "clarification"
+      ? projected.round
+      : projected.outcome === "active" || projected.outcome === "started"
+        ? projected.plan.round
+        : undefined;
+  if (round !== undefined) {
+    for (const draft of Object.values(round.drafts)) {
+      draft.unfinished = "";
+      delete draft.options;
+      delete draft.clarificationDraft;
+    }
+  }
+  if (projected.outcome === "active" || projected.outcome === "started") {
+    for (const review of projected.plan.reviews ?? []) {
+      review.feedbackDraft = "";
+      delete review.notes;
+      delete review.overallConfirmed;
+    }
+  }
+  const details = instructions === undefined ? projected : { ...projected, instructions };
   const serialized = JSON.stringify(details, null, 2);
   const truncated = truncateHead(serialized);
   if (!truncated.truncated) {

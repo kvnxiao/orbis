@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import { presentRound, transitionRound } from "../src/state.ts";
 import type { QuestionInput, RoundState } from "../src/state.ts";
 import { TerminalRound } from "../src/terminal.ts";
+import { testEditor } from "./terminal-fixture.mts";
 
 function question(id: string): QuestionInput {
   return {
@@ -168,23 +169,29 @@ test("terminal Tab wraps with unfinished text and submission requires review", (
       done = true;
     },
     () => undefined,
+    testEditor(),
   );
-  component.handleInput("\x05");
+  component.handleInput("\r");
   component.handleInput("unfinished");
+  component.handleInput("\x1b");
+  expect(state.round?.drafts.storage?.unfinished).toBe("unfinished");
   component.handleInput("\t");
   expect(state.round?.focus).toBe("scope");
-  expect(state.round?.drafts.storage?.unfinished).toBe("unfinished");
   component.handleInput("\t");
   expect(state.round?.focus).toBe("storage");
   component.handleInput("\x1b[Z");
   expect(state.round?.focus).toBe("scope");
+  component.handleInput("\x1b[B");
   component.handleInput("\r");
   component.handleInput("\t");
+  component.handleInput("\x1b[B");
   component.handleInput("\r");
-  component.handleInput("\x13");
   expect(done).toBe(false);
-  component.handleInput("\x12");
-  component.handleInput("\x13");
+  for (let i = 0; i < 7; i++) {
+    component.handleInput("\x1b[B");
+  }
+  component.handleInput("\r");
+  component.handleInput("\r");
   expect(done).toBe(true);
   expect(state.phase).toBe("research");
 });
@@ -197,4 +204,61 @@ test("cancellation retains drafts without decisions", () => {
   expect(state.phase).toBe("cancelled");
   expect(state.round?.drafts.scope?.unfinished).toBe("draft");
   expect(state.decisions).toEqual({});
+});
+
+test("question numbers survive revisions and continue across frontiers", () => {
+  let state = round();
+  expect(state.round?.questions.map((item) => item.number)).toEqual([1, 2]);
+  state = presentRound(state, {
+    planId: "plan",
+    roundId: "frontier",
+    expectedRevision: 1,
+    questions: [question("scope"), question("storage")],
+  });
+  expect(state.round?.questions.map((item) => item.number)).toEqual([2, 1]);
+  for (const id of ["scope", "storage"]) {
+    state = action(state, { type: "answer", questionId: id, answer: { optionId: "local" } });
+  }
+  state = action(state, { type: "submit" });
+  state = presentRound(state, {
+    planId: "plan",
+    roundId: "next",
+    expectedRevision: 0,
+    questions: [question("new"), question("storage")],
+  });
+  expect(state.round?.questions.map((item) => item.number)).toEqual([3, 1]);
+});
+
+test("option confirmation selects details while abandoned edits survive without submission", () => {
+  let state = round([question("storage")]);
+  state = action(state, {
+    type: "edit-option",
+    questionId: "storage",
+    optionId: "local",
+    text: "Confirmed context",
+  });
+  state = action(state, { type: "confirm-option", questionId: "storage", optionId: "local" });
+  state = action(state, {
+    type: "edit-option",
+    questionId: "storage",
+    optionId: "local",
+    text: "Unfinished change",
+  });
+  state = action(state, {
+    type: "edit-option",
+    questionId: "storage",
+    optionId: "remote",
+    text: "Private alternative",
+  });
+  state = action(state, { type: "answer", questionId: "storage", answer: { optionId: "local" } });
+  const submitted = action(state, { type: "submit" });
+  expect(submitted.decisions.storage?.answer).toEqual({
+    optionId: "local",
+    details: "Confirmed context",
+  });
+  expect(submitted.decisions.storage?.selectedOption?.label).toBe("Local");
+  expect(submitted.round?.drafts.storage?.options?.remote?.unfinished).toBe("Private alternative");
+  expect(() =>
+    action(state, { type: "edit-option", questionId: "storage", optionId: "missing", text: "x" }),
+  ).toThrow("Unknown option");
 });

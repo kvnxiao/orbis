@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+import type { DocumentBlock } from "./blocks.ts";
 import { registerPresenter } from "./presenters.ts";
 import type { PlanRevision, Round, RoundAction, ReviewAction } from "./state.ts";
 
@@ -15,20 +16,43 @@ export interface PlanInteractionIdentity {
 
 export type PlanPresentationSnapshot =
   | { readonly kind: "round"; readonly round: ReadonlyData<Round> }
-  | { readonly kind: "review"; readonly review: ReadonlyData<PlanRevision> };
+  | {
+      readonly kind: "review";
+      readonly review: ReadonlyData<PlanRevision>;
+      readonly blocks: ReadonlyData<DocumentBlock[]>;
+    };
 
 export interface PlanDraftUpdate {
   readonly identity: PlanInteractionIdentity;
   readonly action:
-    | Extract<RoundAction, { type: "focus" | "edit" | "answer" }>
-    | Extract<ReviewAction, { type: "edit-feedback" }>;
+    | Extract<
+        RoundAction,
+        {
+          type:
+            | "focus"
+            | "edit"
+            | "answer"
+            | "edit-option"
+            | "confirm-option"
+            | "edit-clarification";
+        }
+      >
+    | Extract<
+        ReviewAction,
+        {
+          type: "edit-feedback" | "confirm-feedback" | "edit-note" | "confirm-note" | "remove-note";
+        }
+      >;
 }
 
 export interface PlanPresentationResult {
   readonly identity: PlanInteractionIdentity;
   readonly action:
     | Extract<RoundAction, { type: "submit" | "clarify" | "cancel" }>
-    | Extract<ReviewAction, { type: "feedback" | "approve" }>;
+    | Extract<
+        ReviewAction,
+        { type: "feedback" | "approve" | "discard-approve" | "submit-feedback" }
+      >;
 }
 
 export interface PlanPresentationRequest {

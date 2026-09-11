@@ -1,8 +1,8 @@
 # @orbis/plan specification
 
-Status: Package contract. The implementation provides question-by-question TUI
-input and an optional presentation hook. The modal frontier, option details,
-block annotations, and revision browsing specified here await implementation.
+Status: Package contract. The implementation provides the modal frontier, option
+details, block annotations, revision browsing, and an optional presentation hook.
+Complete real-host, SSH, IME, and model-quality verification remains pending.
 The [README](README.md) describes available behavior and verification limits.
 
 `@orbis/plan` develops a researched, user-approved Markdown plan in the user's

@@ -20,6 +20,7 @@ import {
   presentReview,
   presentRound,
   roundStateSchema,
+  restoreQuestionNumbers,
   transitionInteraction,
 } from "./state.ts";
 import type { PlanningSession, ReviewInput, RoundInput, RuntimeResult } from "./state.ts";
@@ -207,8 +208,9 @@ export class PlanRuntime {
       );
       return;
     }
-    this.current = structuredClone(record.data.active);
-    this.archived.push(...structuredClone(record.data.unfinished));
+    this.current =
+      record.data.active === undefined ? undefined : restoreQuestionNumbers(record.data.active);
+    this.archived.push(...record.data.unfinished.map((plan) => restoreQuestionNumbers(plan)));
     if (
       this.current !== undefined &&
       this.current.phase !== "accepted" &&
