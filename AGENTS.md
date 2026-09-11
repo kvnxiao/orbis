@@ -9,6 +9,9 @@ documentation concrete.
 
 ## Package contract
 
+- Before touching any package, ensure that the
+  [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md) skill
+  is used.
 - Scaffold extensions with `just new <name>`. Every extension package
   must use the npm name `@orbis/<name>` and directory `packages/<name>`.
 - Publish TypeScript source. Keep `pi.extensions` pointed at `./src/index.ts`,
