@@ -39,6 +39,11 @@ publication, and commands without a `just` recipe.
 - Write specifications for an independent Pi implementer. State the complete
   required behavior, public contracts, permitted implementation choices, and
   conformance criteria. Keep implementation availability explicit.
+- For packages with prompts, menus, forms, modals, or interactive terminal views,
+  require `docs/tui-interactions.md` linked from `SPEC.md`. Explore user flows
+  before design approval; document scenarios and branching or multistep diagrams
+  against requirement IDs. Keep the SPEC self-contained. Commands that only
+  execute an action or print output do not need an empty interaction document.
 - Keep specifications current with approved behavior, including failure,
   cancellation, recovery, and ordering guarantees. Put file layouts, internal
   types, algorithms, and task decomposition in implementation plans unless an
@@ -65,7 +70,8 @@ publication, and commands without a `just` recipe.
   For implementation planning, use
   [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md).
   Read their files when automatic discovery is unavailable.
-- A package containing `SPEC.md` and optional `docs/research/` and
+- A package containing `SPEC.md` and optional `docs/research/`,
+  `docs/tui-interactions.md`, and
   `implementation/` can await implementation. `just new <name>` preserves those artifacts while
   adding runtime files; it rejects other existing package contents and linked
   package, `docs`, `research`, or `implementation` directories.

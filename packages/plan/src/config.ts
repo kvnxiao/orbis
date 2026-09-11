@@ -16,7 +16,6 @@ const settingsSchema = Type.Object(
 );
 export type SettingsFields = Static<typeof settingsSchema>;
 export interface PlanSettings {
-  interface: "terminal" | "browser";
   planDirectory: string;
 }
 
@@ -48,28 +47,20 @@ export async function readSettings(
   const personal = await readSettingsFile(join(agentDir, "orbis-plan.json"));
   const project = trusted ? await readSettingsFile(join(cwd, ".pi", "plan.json")) : {};
   const settings = {
-    interface: "terminal" as const,
     planDirectory: ".pi/plans/",
     ...personal,
     ...project,
   };
-  return { ...settings, planDirectory: resolve(cwd, settings.planDirectory) };
+  return { planDirectory: resolve(cwd, settings.planDirectory) };
 }
 
-export async function writeSettings(
-  path: string,
-  fields: SettingsFields,
-  current: () => boolean = () => true,
-): Promise<void> {
+export async function writeSettings(path: string, fields: SettingsFields): Promise<void> {
   if (!Value.Check(settingsSchema, fields) || fields.planDirectory?.includes("\0") === true) {
     throw new Error(
       `Invalid planning settings for ${path}. Correct interface or planDirectory and retry.`,
     );
   }
   await withFileMutationQueue(path, async () => {
-    if (!current()) {
-      return;
-    }
     const previous = await readSettingsFile(path);
     await mkdir(dirname(path), { recursive: true });
     const temporary = `${path}.${randomUUID()}.tmp`;
@@ -77,9 +68,7 @@ export async function writeSettings(
       await writeFile(temporary, `${JSON.stringify({ ...previous, ...fields }, null, 2)}\n`, {
         flag: "wx",
       });
-      if (current()) {
-        await rename(temporary, path);
-      }
+      await rename(temporary, path);
     } finally {
       await rm(temporary, { force: true });
     }

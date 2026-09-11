@@ -83,6 +83,30 @@ events without assuming every package needs all of them. Let current requirement
 determine conformance; portability and hypothetical consumers are secondary unless
 the user asks for them.
 
+## Explore terminal interactions
+
+When the package owns prompts, menus, forms, modals, or interactive terminal
+views, require `packages/<name>/docs/tui-interactions.md`. A command that only
+executes an action or prints output does not require an empty interaction document.
+
+Before confirming the design, walk through its user interactions with the user.
+Resolve focus, navigation, text entry, confirmation versus submission, back and
+cancel behavior, recovery, and relevant narrow-terminal, resize, and SSH behavior.
+Distinguish highlighted controls, local drafts, submitted input, and completed
+actions. Explore failure and interruption paths as well as successful completion;
+do not infer an interaction merely from a proposed widget or hotkey.
+
+After shared design confirmation, write the auxiliary document with concrete
+initial states, user actions, and observable outcomes. Include Mermaid diagrams
+for branching or multistep flows and link scenarios to package requirement IDs.
+Scale detail to the package. Use the agreed interaction in examples; do not impose
+another package's keybindings, modal layout, or approval workflow.
+
+Link `docs/tui-interactions.md` from `SPEC.md`. Keep required behavior self-contained
+in the SPEC; the auxiliary file illustrates and exercises that behavior without
+silently introducing additional requirements. Keep research in `docs/research/`
+and execution evidence in the ignored implementation directory.
+
 ## Write the specification
 
 When research informed the design, confirm that its synthesis exists on disk and
@@ -111,7 +135,11 @@ behavior. Do not create runtime stubs or package-local plan directories merely t
 store a specification.
 
 Follow the repository verification requirements for changed files. Report the
-research and specification paths, any unresolved decisions, and verification limits. When the
+research, specification, and applicable interaction-document paths, any unresolved
+decisions, and verification limits. For an interactive package, check that
+`docs/tui-interactions.md` exists, the SPEC links to it, and its scenarios cover
+the agreed flows and match the requirements. Do not report a settled interaction
+design while required scenarios or material interaction decisions are missing. When the
 user requests implementation planning, continue with
 [plan-orbis-implementation](../plan-orbis-implementation/SKILL.md) against the
 approved specification.

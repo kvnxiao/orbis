@@ -29,6 +29,12 @@ State which choices an independent implementation may make and must document.
 Record unresolved decisions separately from permitted choices; resolve decisions
 that affect an implementation task before starting it.
 
+For prompts, menus, forms, modals, or interactive terminal views, define the
+required interaction behavior here and link `docs/tui-interactions.md`. Write that
+file with user scenarios, observable outcomes, and Mermaid diagrams for branching
+or multistep flows. Reference the requirements without adding hidden obligations.
+Commands that only execute an action or print output do not need an empty file.
+
 ## Conformance
 
 State that conformance requires every mandatory requirement, including every

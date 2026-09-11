@@ -14,10 +14,10 @@ Jiti; development and publication do not require a transpilation step.
 
 ## Packages
 
-| Package       | Contract                               | Reference implementation                                                                                                                                                |
-| ------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@orbis/exit` | [Specification](packages/exit/SPEC.md) | [Available](packages/exit/README.md): adds `/exit` to quit Pi.                                                                                                          |
-| `@orbis/plan` | [Specification](packages/plan/SPEC.md) | [Implementation available](packages/plan/README.md): terminal and bundled browser workflow; TUI-only packaging and the optional presentation hook await implementation. |
+| Package       | Contract                               | Reference implementation                                                                                                                                      |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@orbis/exit` | [Specification](packages/exit/SPEC.md) | [Available](packages/exit/README.md): adds `/exit` to quit Pi.                                                                                                |
+| `@orbis/plan` | [Specification](packages/plan/SPEC.md) | [Implementation available](packages/plan/README.md): question-by-question TUI and optional presenters; the modal and annotation design awaits implementation. |
 
 Each package specification defines the behavior for an independent Pi
 implementation. Use the available reference package or build from its `SPEC.md`.
@@ -34,6 +34,11 @@ write package-specific contracts. The planning skill saves local Markdown tasks
 under `packages/<name>/implementation/`, which Git ignores. `PLAN.md` contains a
 single plan or indexes numbered outcome files for larger work. The scaffold
 preserves existing plans without creating empty implementation directories.
+
+For packages that own prompts, menus, forms, modals, or interactive terminal
+views, explore the user flows before approving the design and document them in
+`docs/tui-interactions.md`, linked from the SPEC. Commands that only execute an
+action or print output do not need this file.
 
 Repository-local skills support both stages:
 
@@ -89,7 +94,7 @@ pi
 
 The scaffold creates `packages/review` as `@orbis/review` and registers an example
 `/orbis-review` command. When the directory contains `SPEC.md` and optional
-`docs/research/` and `implementation/`, the scaffold preserves those artifacts and
+`docs/research/`, `docs/tui-interactions.md`, and `implementation/`, the scaffold preserves those artifacts and
 adds runtime files.
 For a new directory, it includes a
 specification starter. Define and review the contract before replacing the example
@@ -131,7 +136,7 @@ AGENTS.md                 Instructions for coding agents
    names.
 2. When implementation starts, run `just new <name>`. The recipe creates
    the npm name `@orbis/<name>`, preserves an existing `SPEC.md` and optional
-   `docs/research/` and `implementation/`, and rejects other existing package
+   `docs/research/`, `docs/tui-interactions.md`, and `implementation/`, and rejects other existing package
    contents. The package, `docs`, `research`, and `implementation` directories
    must be real directories. Implement `packages/<name>/src/index.ts`
    as a default factory that receives `ExtensionAPI`. Use the factory to register
@@ -165,8 +170,6 @@ path aliases.
 package through pnpm's recursive script runner. The root `typecheck:root` checks
 repository scripts, the root Vitest configuration, and the extension template.
 Each package's `typecheck:node` checks its source, tests, and Vitest configuration.
-`@orbis/plan` also runs `typecheck:browser` to check browser JavaScript with DOM
-types and without Node.js globals.
 
 The extension scaffold includes `typecheck:node`. To add another TypeScript
 configuration, add a `typecheck:<name>` script to its package. The root command

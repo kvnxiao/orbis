@@ -15,7 +15,7 @@ import type { SaveResult } from "../src/persistence.ts";
 import { PlanRuntime } from "../src/runtime.ts";
 import type { PlanningSession } from "../src/state.ts";
 
-interface RuntimeFixture {
+export interface RuntimeFixture {
   runtime: PlanRuntime;
   ctx: ExtensionContext;
   manager: SessionManager;
@@ -65,6 +65,18 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
     ui: {
       ...base.ui,
       notify() {
+        return undefined;
+      },
+      async select(_title, _options, options) {
+        await new Promise<undefined>((resolve) => {
+          const finish = () => {
+            resolve(undefined);
+          };
+          options?.signal?.addEventListener("abort", finish, { once: true });
+          if (options?.signal?.aborted === true) {
+            finish();
+          }
+        });
         return undefined;
       },
       setStatus() {

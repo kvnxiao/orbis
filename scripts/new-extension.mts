@@ -30,14 +30,20 @@ try {
       ? await readdir(destination, { withFileTypes: true })
       : [];
     const specification = entries.find((entry) => entry.name === "SPEC.md");
-    let validResearch = true;
+    let validDocs = true;
     if (entries.some((entry) => entry.name === "docs" && entry.isDirectory())) {
       const docs = await readdir(join(destination, "docs"), { withFileTypes: true });
-      validResearch = docs.length === 1 && docs[0]?.name === "research" && docs[0].isDirectory();
+      validDocs =
+        docs.length > 0 &&
+        docs.every(
+          (entry) =>
+            (entry.name === "research" && entry.isDirectory()) ||
+            (entry.name === "tui-interactions.md" && entry.isFile()),
+        );
     }
     preserveSpecification =
       specification?.isFile() === true &&
-      validResearch &&
+      validDocs &&
       entries.every(
         (entry) =>
           entry.name === "SPEC.md" ||

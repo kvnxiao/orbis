@@ -66,6 +66,28 @@ change the required behavior. Background reading does not add requirements.
 
 ## Define conformance
 
+### Terminal interaction document
+
+Packages that own prompts, menus, forms, modals, or interactive terminal views
+must include `docs/tui-interactions.md` and link it from `SPEC.md`. Commands that
+only execute an action or print output do not require an empty auxiliary file.
+
+Before design approval, explore focus, navigation, text entry, confirmation,
+submission, cancellation, recovery, and applicable terminal constraints. After
+approval, document concrete scenarios with initial state, user actions, and
+observable outcomes. Include Mermaid diagrams for branching or multistep flows.
+Cover failure and interruption as well as successful completion, and reference
+the applicable `REQ-###` identifiers.
+
+The SPEC remains self-contained and defines required behavior. The auxiliary
+document illustrates and exercises that contract; it does not introduce hidden
+requirements or prescribe a shared layout or keymap across packages. Keep it
+consistent with the SPEC and separate from research synthesis and execution logs.
+The design workflow checks the document's existence, SPEC reference, scenario
+coverage, and agreement with requirements before reporting completion.
+
+### Conformance evidence
+
 A conforming implementation satisfies every mandatory requirement of the package.
 An implemented slice can satisfy its assigned requirements without establishing
 full package conformance. Neither task priority nor implementation difficulty
@@ -119,9 +141,11 @@ pnpm install
 ```
 
 The scaffold accepts a new package name or an existing real directory containing
-a regular `SPEC.md` file and optional `docs/research/` and `implementation/`.
-In an existing package, `docs` may contain only the real `research` directory.
-The scaffold preserves the specification, research, and plan bytes and adds the runtime
+a regular `SPEC.md` file and optional `docs/research/`, `docs/tui-interactions.md`,
+and `implementation/`. In an existing package, `docs` may contain only the real
+`research` directory and the regular `tui-interactions.md` file, separately or
+together. The scaffold preserves specification, interaction, research, and plan
+bytes and adds the runtime
 template. It rejects other existing directory contents and linked package, `docs`,
 `research`, or `implementation` directories.
 For a new directory, it includes the specification

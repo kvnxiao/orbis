@@ -29,7 +29,6 @@ test("settings inherit defaults and trust gates project overrides", async ({ onT
   });
   const agent = join(cwd, "agent");
   expect(await readSettings(agent, cwd, false)).toEqual({
-    interface: "terminal",
     planDirectory: resolve(cwd, ".pi/plans"),
   });
   await writeSettings(join(agent, "orbis-plan.json"), {
@@ -38,7 +37,6 @@ test("settings inherit defaults and trust gates project overrides", async ({ onT
   });
   await writeSettings(join(cwd, ".pi/plan.json"), { planDirectory: "project-plans" });
   expect(await readSettings(agent, cwd, true)).toEqual({
-    interface: "browser",
     planDirectory: resolve(cwd, "project-plans"),
   });
   expect((await readSettings(agent, cwd, false)).planDirectory).toBe(
@@ -50,7 +48,7 @@ test("settings inherit defaults and trust gates project overrides", async ({ onT
   );
   await writeSettings(join(agent, "orbis-plan.json"), { planDirectory: cwd });
   expect((await readSettings(agent, other, false)).planDirectory).toBe(cwd);
-  expect((await readSettings(agent, other, false)).interface).toBe("browser");
+  expect(await readSettings(agent, other, false)).not.toHaveProperty("interface");
 });
 
 test("malformed settings identify the file and preserve its bytes", async ({ onTestFinished }) => {
@@ -77,7 +75,7 @@ test("malformed settings identify the file and preserve its bytes", async ({ onT
   );
   await mkdir(join(cwd, ".pi"));
   await writeFile(join(cwd, ".pi/plan.json"), "invalid");
-  await expect(readSettings(join(cwd, "absent"), cwd, false)).resolves.toMatchObject({
-    interface: "terminal",
+  await expect(readSettings(join(cwd, "absent"), cwd, false)).resolves.toEqual({
+    planDirectory: resolve(cwd, ".pi/plans"),
   });
 });

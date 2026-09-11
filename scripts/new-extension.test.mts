@@ -279,3 +279,65 @@ test("preserves implementation plans with or without research and rejects invali
   assert.deepEqual(await readFile(join(linkedTarget, "PLAN.md")), plan);
   assert.deepEqual(await readdir(linkedTarget), ["PLAN.md"]);
 });
+
+test("preserves TUI interaction documents and rejects directories or links in their place", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-tui-scaffold-"));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+  const script = join(fixture, "scripts", "new-extension.mts");
+  const content = Buffer.from("# Interaction\r\nPreserve @orbis/example and é.\r\n");
+
+  await Promise.all(
+    ["interactive", "researched-interactive"].map(async (name) => {
+      const destination = join(fixture, "packages", name);
+      const docs = join(destination, "docs");
+      await mkdir(docs, { recursive: true });
+      await writeFile(join(destination, "SPEC.md"), content);
+      await writeFile(join(docs, "tui-interactions.md"), content);
+      if (name === "researched-interactive") {
+        await mkdir(join(docs, "research"));
+        await writeFile(join(docs, "research", "pi.md"), content);
+        await mkdir(join(destination, "implementation"));
+        await writeFile(join(destination, "implementation", "PLAN.md"), content);
+      }
+      const result = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(await readFile(join(destination, "SPEC.md")), content);
+      assert.deepEqual(await readFile(join(docs, "tui-interactions.md")), content);
+      const manifest: unknown = JSON.parse(
+        await readFile(join(destination, "package.json"), "utf8"),
+      );
+      assert.ok(typeof manifest === "object" && manifest !== null && "files" in manifest);
+      assert.ok(Array.isArray(manifest.files) && manifest.files.includes("docs"));
+      assert.match(await readFile(join(destination, "src", "index.ts"), "utf8"), /registerCommand/);
+    }),
+  );
+
+  const target = join(fixture, "linked-interactions-target");
+  await mkdir(target);
+  await writeFile(join(target, "untouched.md"), content);
+  await Promise.all(
+    ["document-directory", "linked-document"].map(async (name) => {
+      const destination = join(fixture, "packages", name);
+      const docs = join(destination, "docs");
+      await mkdir(docs, { recursive: true });
+      await writeFile(join(destination, "SPEC.md"), content);
+      const document = join(docs, "tui-interactions.md");
+      if (name === "linked-document") {
+        await symlink(target, document, "junction");
+      } else {
+        await mkdir(document);
+      }
+      const result = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /already exists/);
+      assert.deepEqual((await readdir(destination)).toSorted(), ["SPEC.md", "docs"]);
+      assert.deepEqual(await readFile(join(destination, "SPEC.md")), content);
+    }),
+  );
+  assert.deepEqual(await readFile(join(target, "untouched.md")), content);
+});

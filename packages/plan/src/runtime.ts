@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -7,9 +6,15 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 import { saveApproval } from "./approval.ts";
-import { PlanBrowser } from "./browser.ts";
-import { readSettings, readSettingsFile, writeSettings } from "./config.ts";
+import { readSettings } from "./config.ts";
 import { readSavedRecord, saveRecord } from "./persistence.ts";
+import type { PlanInteractionIdentity } from "./presentation.ts";
+import {
+  availablePresenters,
+  presentationAction,
+  presentationSnapshot,
+  presentersChanged,
+} from "./presenters.ts";
 import {
   approvalSchema,
   presentReview,
@@ -58,12 +63,8 @@ export class PlanRuntime {
   private controller: AbortController | undefined;
   private entryController: AbortController | undefined;
   private generation = 0;
-  private viewVersion = 0;
-  private browser: PlanBrowser | undefined;
   private viewController: AbortController | undefined;
-  private finishView: (() => void) | undefined;
-  private selectedInterface: "terminal" | "browser" | undefined;
-  private interfaceRequest = 0;
+  private selectedInterface = "terminal";
   private completionTimer: ReturnType<typeof setInterval> | undefined;
   private readonly emitted = new Set<string>();
   saveStatus = { saved: false, message: "Planning state is unsaved." };
@@ -88,7 +89,7 @@ export class PlanRuntime {
             : "round"
           : "research";
     this.current = { ...active, phase };
-    this.viewVersion += 1;
+
     this.save(ctx);
     return true;
   }
@@ -102,7 +103,7 @@ export class PlanRuntime {
       return { outcome: "error", message: "No cancellable planning interaction is active." };
     }
     this.current = { ...this.current, phase: "cancelled" };
-    this.viewVersion += 1;
+
     this.disposeOperations();
     this.save(ctx);
     ctx.abort();
@@ -125,57 +126,27 @@ export class PlanRuntime {
       this.archived.push(this.current);
     }
     this.current = selected;
-    this.viewVersion += 1;
+
     this.save(ctx);
     this.present(ctx);
   }
 
-  switchInterface(interfaceName: "terminal" | "browser"): void {
-    this.interfaceRequest += 1;
-    if (interfaceName === "terminal") {
-      this.browser?.close();
-      this.browser = undefined;
-    }
-    this.selectedInterface = interfaceName;
-    this.viewController?.abort();
+  get presenters(): readonly { id: string; label: string }[] {
+    return availablePresenters(this.pi.events).map(({ id, label }) => ({ id, label }));
   }
 
-  async chooseInterface(
-    ctx: ExtensionContext,
-    selected: "terminal" | "browser",
-    signal?: AbortSignal,
-  ): Promise<boolean> {
-    const generation = this.generation;
-    const request = ++this.interfaceRequest;
-    const current = () =>
-      generation === this.generation &&
-      request === this.interfaceRequest &&
-      signal?.aborted !== true;
-    if (!current()) {
-      return false;
+  chooseInterface(selected: string): void {
+    if (this.controller === undefined || this.controller.signal.aborted) {
+      throw new Error("Open a planning interaction before selecting a presenter.");
     }
-    try {
-      const projectPath = join(ctx.cwd, ".pi", "plan.json");
-      const project = ctx.isProjectTrusted() ? await readSettingsFile(projectPath) : {};
-      if (!current()) {
-        return false;
-      }
-      await writeSettings(
-        project.interface === undefined ? join(this.agentDir, "orbis-plan.json") : projectPath,
-        { interface: selected },
-        current,
-      );
-      if (!current()) {
-        return false;
-      }
-      this.switchInterface(selected);
-      return true;
-    } catch (error) {
-      if (!current()) {
-        return false;
-      }
-      throw error;
+    if (selected !== "terminal" && !this.presenters.some((item) => item.id === selected)) {
+      throw new Error("The selected planning presenter is unavailable.");
     }
+    if (selected === this.selectedInterface) {
+      return;
+    }
+    this.selectedInterface = selected;
+    this.viewController?.abort();
   }
 
   save(ctx: ExtensionContext): { saved: boolean; message: string } {
@@ -220,8 +191,8 @@ export class PlanRuntime {
 
   restore(ctx: ExtensionContext, fork = false): void {
     this.disposeOperations();
-    this.viewVersion += 1;
-    this.selectedInterface = undefined;
+
+    this.selectedInterface = "terminal";
     clearTimeout(this.saveTimer);
     this.current = undefined;
     this.archived.length = 0;
@@ -282,11 +253,8 @@ export class PlanRuntime {
     this.controller?.abort();
     this.entryController?.abort();
     this.viewController?.abort();
-    this.browser?.close();
-    this.browser = undefined;
     this.controller = undefined;
     this.viewController = undefined;
-    this.finishView = undefined;
   }
 
   async requestStart(
@@ -359,7 +327,7 @@ export class PlanRuntime {
       phase: "research",
       decisions: {},
     };
-    this.viewVersion += 1;
+
     this.present(ctx);
     this.save(ctx);
     return { outcome: "started", plan: this.current };
@@ -379,30 +347,42 @@ export class PlanRuntime {
       result.outcome === "clarification" ||
       result.outcome === "feedback"
     ) {
-      const plan = this.current;
-      if (plan === undefined) {
-        return;
+      await this.deliverInput(result, signal);
+    }
+  }
+
+  async resumeClarification(signal?: AbortSignal): Promise<void> {
+    const active = this.current;
+    if (active?.phase === "clarification" && active.round !== undefined) {
+      await this.deliverInput(
+        { outcome: "clarification", round: active.round, draftsSubmitted: false },
+        signal,
+      );
+    }
+  }
+
+  private async deliverInput(result: RuntimeResult, signal?: AbortSignal): Promise<void> {
+    const plan = this.current;
+    const generation = this.generation;
+    const current = () =>
+      plan !== undefined &&
+      this.current === plan &&
+      generation === this.generation &&
+      signal?.aborted !== true;
+    if (!current()) {
+      return;
+    }
+    try {
+      const prepared = await toolResult(result);
+      if (current()) {
+        this.pi.sendMessage(
+          { customType: "orbis-plan-input", content: prepared.content, display: true },
+          { triggerTurn: true },
+        );
       }
-      try {
-        const prepared = await toolResult(result);
-        const updated = this.current;
-        if (
-          current() &&
-          updated !== undefined &&
-          updated.phase === plan.phase &&
-          updated.round?.id === plan.round?.id &&
-          updated.round?.revision === plan.round?.revision &&
-          updated.reviews?.at(-1)?.revision === plan.reviews?.at(-1)?.revision
-        ) {
-          this.pi.sendMessage(
-            { customType: "orbis-plan-input", content: prepared.content, display: true },
-            { triggerTurn: true },
-          );
-        }
-      } catch (error) {
-        if (current()) {
-          throw error;
-        }
+    } catch (error) {
+      if (current()) {
+        throw error;
       }
     }
   }
@@ -434,11 +414,11 @@ export class PlanRuntime {
       controller.abort();
     }
     try {
-      const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
+      await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
       if (generation !== this.generation) {
         return { outcome: "cancelled" };
       }
-      this.selectedInterface ??= settings.interface;
+      this.selectedInterface = "terminal";
       const apply = (
         id: string,
         expectedRevision: number,
@@ -452,11 +432,8 @@ export class PlanRuntime {
           ...active,
           ...transitionInteraction(active, id, expectedRevision, action),
         };
-        this.viewVersion += 1;
+
         this.scheduleSave(ctx);
-        if (this.current.phase !== "round" && this.current.phase !== "review") {
-          this.finishView?.();
-        }
       };
       const dispatch = (action: Parameters<typeof transitionInteraction>[3]) => {
         if (generation !== this.generation) {
@@ -465,91 +442,167 @@ export class PlanRuntime {
         apply(roundId, revision, action);
       };
       const runView = async (): Promise<boolean> => {
-        const obsolete = () => controller.signal.aborted || generation !== this.generation;
         const view = this.selectedInterface;
         const viewController = new AbortController();
-        const interrupted = () => viewController.signal.aborted;
         this.viewController = viewController;
-        if (obsolete()) {
+        const valid = () =>
+          this.controller === controller &&
+          !controller.signal.aborted &&
+          !viewController.signal.aborted &&
+          this.viewController === viewController &&
+          generation === this.generation &&
+          this.current?.planId === current?.planId;
+        if (!valid()) {
           return false;
         }
-        if (view === "terminal") {
-          const show = reviewing ? terminalReview : terminalRound;
-          await show(
-            ctx,
-            () => {
-              if (this.current === undefined) {
-                throw new Error("Planning session ended.");
-              }
-              return this.current;
-            },
-            dispatch,
-            viewController.signal,
-            () => {
-              this.chooseInterface(ctx, "browser", controller.signal).catch((error: unknown) => {
-                if (generation === this.generation && !controller.signal.aborted) {
-                  ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-                }
-              });
-            },
-          );
-        } else {
-          this.browser ??= new PlanBrowser(
-            () => ({
-              state: this.current,
-              version: this.viewVersion,
-              saving: this.saveStatus.message,
-            }),
-            (version, id, expectedRevision, action) => {
-              if (version !== this.viewVersion || generation !== this.generation) {
-                throw new Error(
-                  "Planning state changed. Reload the current revision before retrying.",
-                );
-              }
-              if (
-                this.controller === undefined &&
-                !["focus", "edit", "answer", "edit-feedback"].includes(action.type)
-              ) {
-                throw new Error(
-                  "This interaction is paused. Use /plan in Pi to reopen it before submitting.",
-                );
-              }
-              apply(id, expectedRevision, action);
-            },
-          );
-          const url = await this.browser.start();
-          if (obsolete()) {
-            return false;
+        const chooser = { requested: false };
+        let fallback = false;
+        const guardedDispatch = (action: Parameters<typeof transitionInteraction>[3]) => {
+          if (!valid()) {
+            throw new Error("Planning presenter is no longer active.");
           }
-          ctx.ui.notify(
-            `Planning browser: ${url}\nIf unreachable, select Use terminal below.`,
-            "info",
-          );
-          this.finishView = () => {
+          dispatch(action);
+        };
+        const remove = this.pi.events.on(presentersChanged, () => {
+          if (view !== "terminal" && !this.presenters.some((item) => item.id === view)) {
+            fallback = true;
             viewController.abort();
-          };
+          }
+        });
+        try {
+          if (view === "terminal") {
+            const show = reviewing ? terminalReview : terminalRound;
+            await show(
+              ctx,
+              () => {
+                if (this.current === undefined) {
+                  throw new Error("Planning session ended.");
+                }
+                return this.current;
+              },
+              guardedDispatch,
+              viewController.signal,
+              this.presenters.length === 0
+                ? undefined
+                : () => {
+                    chooser.requested = true;
+                    viewController.abort();
+                  },
+            );
+          } else {
+            const presenter = availablePresenters(this.pi.events).find((item) => item.id === view);
+            if (presenter === undefined) {
+              fallback = true;
+            } else {
+              const identity: PlanInteractionIdentity = {
+                version: 1,
+                sessionId: ctx.sessionManager.getSessionId(),
+                planId: current?.planId ?? "",
+                interactionId: randomUUID(),
+                revision,
+              };
+              const stop = Symbol("interrupted");
+              const interrupted = Promise.withResolvers<typeof stop>();
+              const onAbort = () => {
+                interrupted.resolve(stop);
+              };
+              viewController.signal.addEventListener("abort", onAbort, { once: true });
+              try {
+                const pending = Promise.resolve().then(async () => {
+                  if (!valid()) {
+                    return undefined;
+                  }
+                  const active = this.current;
+                  if (active === undefined) {
+                    return undefined;
+                  }
+                  return await presenter.present({
+                    identity: { ...identity },
+                    snapshot: presentationSnapshot(active),
+                    signal: viewController.signal,
+                    updateDraft: (update) => {
+                      guardedDispatch(presentationAction(update, identity, true));
+                      if (this.current === undefined) {
+                        throw new Error("Planning session ended.");
+                      }
+                      return presentationSnapshot(this.current);
+                    },
+                  });
+                });
+                const control = ctx.ui
+                  .select(
+                    "Planning presenter: " + presenter.label,
+                    ["Use terminal (Recommended)", "Cancel planning"],
+                    { signal: viewController.signal },
+                  )
+                  .then((selection) => {
+                    if (valid()) {
+                      if (selection === "Cancel planning") {
+                        guardedDispatch({ type: "cancel" });
+                      } else {
+                        this.selectedInterface = "terminal";
+                      }
+                      viewController.abort();
+                    }
+                    return stop;
+                  });
+                const result = await Promise.race([pending, interrupted.promise, control]);
+                if (result !== stop && valid()) {
+                  if (result === undefined) {
+                    fallback = true;
+                  } else {
+                    guardedDispatch(presentationAction(result, identity, false));
+                  }
+                }
+              } catch (error) {
+                if (valid()) {
+                  ctx.ui.notify(
+                    "Presenter failed: " +
+                      (error instanceof Error ? error.message : String(error)) +
+                      ". Returning to terminal input.",
+                    "error",
+                  );
+                  fallback = true;
+                }
+              } finally {
+                viewController.signal.removeEventListener("abort", onAbort);
+              }
+            }
+          }
+        } finally {
+          remove();
+          viewController.abort();
+          if (this.viewController === viewController) {
+            this.viewController = undefined;
+          }
+        }
+        const active =
+          !controller.signal.aborted &&
+          generation === this.generation &&
+          (this.current?.phase === "round" || this.current?.phase === "review");
+        if (!active) {
+          return false;
+        }
+        if (chooser.requested) {
+          const choices = ["terminal", ...this.presenters.map((item) => item.id)];
+          const selected = await ctx.ui.select("Planning presenter", choices, {
+            signal: controller.signal,
+          });
           if (
-            viewController.signal.aborted ||
-            (this.current?.phase !== "round" && this.current?.phase !== "review")
+            signal?.aborted === true ||
+            this.controller !== controller ||
+            generation !== this.generation
           ) {
             return false;
           }
-          const selection = await ctx.ui.select(
-            `Browser planning: ${url}\nAnswer in the browser, or choose an action here.`,
-            ["Use terminal (Recommended)", "Cancel planning"],
-            { signal: viewController.signal },
-          );
-          if (selection === "Use terminal (Recommended)") {
-            await this.chooseInterface(ctx, "terminal", controller.signal);
-          } else if (!interrupted() && (read()?.phase === "round" || read()?.phase === "review")) {
-            dispatch({ type: "cancel" });
-          }
+          this.selectedInterface =
+            selected !== undefined && choices.includes(selected) ? selected : "terminal";
+          return true;
         }
-        return (
-          generation === this.generation &&
-          view !== this.selectedInterface &&
-          (this.current?.phase === "round" || this.current?.phase === "review")
-        );
+        if (fallback) {
+          this.selectedInterface = "terminal";
+        }
+        return fallback || view !== this.selectedInterface;
       };
       let switching: boolean;
       do {
@@ -577,7 +630,7 @@ export class PlanRuntime {
           return this.save(ctx);
         });
         this.current = approval.state;
-        this.viewVersion += 1;
+
         ctx.ui.setStatus(
           "orbis-plan",
           `Plan: ${this.current.phase} (${this.saveStatus.saved ? "saved" : "unsaved"})`,
@@ -616,10 +669,6 @@ export class PlanRuntime {
       if (active.phase === "round" || active.phase === "review") {
         this.current = { ...active, phase: "cancelled" };
       }
-      if (this.current?.phase === "cancelled") {
-        this.browser?.close();
-        this.browser = undefined;
-      }
       this.present(ctx);
       this.save(ctx);
       if (active.phase === "research" && reviewing) {
@@ -653,7 +702,7 @@ export class PlanRuntime {
       }
       if (this.current?.phase === "saving") {
         this.current = { ...this.current, phase: "review" };
-        this.viewVersion += 1;
+
         this.save(ctx);
       }
       const message = `${error instanceof Error ? error.message : String(error)} Use /plan to retry the current interaction, /plan-ui to switch interfaces, or /plan-cancel to cancel.`;
@@ -661,7 +710,6 @@ export class PlanRuntime {
       return { outcome: "error", message };
     } finally {
       if (this.controller === controller) {
-        this.finishView = undefined;
         this.controller = undefined;
       }
       signal?.removeEventListener("abort", abort);
@@ -700,7 +748,7 @@ export class PlanRuntime {
     }
     try {
       this.current = { ...active, ...presentRound(active, input) };
-      this.viewVersion += 1;
+
       this.save(ctx);
       return await this.interact(ctx, signal);
     } catch (error) {
@@ -755,7 +803,7 @@ export class PlanRuntime {
     }
     try {
       this.current = { ...active, ...presentReview(active, input) };
-      this.viewVersion += 1;
+
       this.save(ctx);
       return await this.interact(ctx, signal);
     } catch (error) {

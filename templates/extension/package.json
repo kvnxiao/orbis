@@ -9,6 +9,7 @@
   "license": "MIT",
   "files": [
     "src",
+    "docs",
     "SPEC.md",
     "LICENSE"
   ],

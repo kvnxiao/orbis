@@ -21,7 +21,7 @@ export class TerminalRound implements Component {
   private readonly done: () => void;
   private readonly refresh: () => void;
   private readonly rows: number;
-  private readonly switchView: () => void;
+  private readonly switchView: (() => void) | undefined;
 
   constructor(
     read: () => RoundState,
@@ -29,7 +29,7 @@ export class TerminalRound implements Component {
     done: () => void,
     refresh: () => void,
     rows = 24,
-    switchView: () => void = () => undefined,
+    switchView?: () => void,
   ) {
     this.read = read;
     this.dispatch = dispatch;
@@ -68,8 +68,8 @@ export class TerminalRound implements Component {
       return;
     }
     try {
-      if (matchesKey(data, "ctrl+b")) {
-        this.switchView();
+      if (matchesKey(data, "ctrl+p")) {
+        this.switchView?.();
       } else if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) {
         const index = round.questions.findIndex((item) => item.id === question.id);
         const next =
@@ -195,7 +195,8 @@ export class TerminalRound implements Component {
       "Tab/Shift+Tab: questions • ↑/↓: options • Enter: select",
       "Ctrl+A: accept recommendation • Ctrl+E: custom • Ctrl+Q: clarify",
       "Ctrl+R: review/back • Ctrl+S: submit from review • Esc: cancel",
-      "PgUp/PgDn: scroll • Ctrl+B: browser • Drafts remain unsubmitted",
+      "PgUp/PgDn: scroll • Drafts remain unsubmitted",
+      ...(this.switchView === undefined ? [] : ["Ctrl+P: select presenter"]),
     ].map((line) => truncateToWidth(line, width));
   }
 }
@@ -205,7 +206,7 @@ export async function terminalRound(
   read: () => RoundState,
   dispatch: (action: RoundAction) => void,
   signal?: AbortSignal,
-  switchView: () => void = () => undefined,
+  switchView?: () => void,
 ): Promise<void> {
   await ctx.ui.custom<undefined>((tui, _theme, _keys, done) => {
     const component = new TerminalRound(
@@ -247,7 +248,7 @@ export async function terminalReview(
   read: () => RoundState,
   dispatch: (action: ReviewAction) => void,
   signal?: AbortSignal,
-  switchView: () => void = () => undefined,
+  switchView?: () => void,
 ): Promise<void> {
   await ctx.ui.custom<undefined>((tui, _theme, _keys, done) => {
     const input = new Input({ prompt: "Changes: " });
@@ -282,7 +283,8 @@ export async function terminalReview(
           ...(editing ? input.render(width) : []),
           error,
           "PgUp/PgDn: read plan • Ctrl+A: approve this revision",
-          "Ctrl+E: changes • Enter: send • Ctrl+B: browser • Esc: cancel",
+          "Ctrl+E: changes • Enter: send • Esc: cancel",
+          ...(switchView === undefined ? [] : ["Ctrl+P: select presenter"]),
         ].map((line) => truncateToWidth(line, width));
       },
       handleInput(data) {
@@ -290,8 +292,8 @@ export async function terminalReview(
           return;
         }
         try {
-          if (matchesKey(data, "ctrl+b")) {
-            switchView();
+          if (matchesKey(data, "ctrl+p")) {
+            switchView?.();
           } else if (matchesKey(data, "escape")) {
             dispatch({ type: "cancel" });
             close();

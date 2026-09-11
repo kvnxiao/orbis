@@ -1,113 +1,19 @@
-import { appendFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 
-import { PlanRuntime } from "../src/runtime.ts";
-
-const log = (value: unknown) => {
-  appendFileSync(join(getAgentDir(), "plan-probe.jsonl"), `${JSON.stringify(value)}\n`);
-};
-
-export default function probe(pi: ExtensionAPI): void {
-  const runtime = new PlanRuntime(pi);
-  let timer: ReturnType<typeof setInterval> | undefined;
-  pi.registerCommand("probe-ui", {
-    description: "Switch the probe interface",
-    async handler(args) {
-      if (args === "terminal" || args === "browser") {
-        runtime.switchInterface(args);
-      }
-      await Promise.resolve();
-    },
-  });
-  pi.registerCommand("probe-review", {
-    description: "Review and save a deterministic Markdown plan",
-    async handler(_args, ctx) {
-      runtime.start(ctx, "Review probe");
-      const plan = runtime.active;
-      if (plan === undefined) {
-        throw new Error("Missing probe plan");
-      }
-      const result = await runtime.review(ctx, {
-        planId: plan.planId,
-        expectedRevision: plan.reviews?.at(-1)?.revision ?? 0,
-        markdown:
-          "# Review probe\n\n## Objective\nVerify terminal review.\n\n## Decisions\nUse explicit approval.\n\n## Approach\nSave the exact reviewed Markdown.\n\n## Verification\nInspect the file and approval event.\n\n## Limitations\nThis is a scripted fixture.\n",
-      });
-      log({ event: "review-result", result });
-      ctx.ui.notify(JSON.stringify(result), "info");
-    },
-  });
-  pi.events.on("orbis:plan-approved", (payload) => {
-    log({ event: "approval-event", payload });
-  });
-  pi.registerCommand("probe-round", {
-    description: "Exercise planning terminal input without a model",
-    async handler(_args, ctx) {
-      runtime.start(ctx, "Terminal probe");
-      const plan = runtime.active;
-      if (plan === undefined) {
-        throw new Error("Missing probe plan");
-      }
-      const result = await runtime.round(ctx, {
-        planId: plan.planId,
-        roundId: "probe",
-        expectedRevision: plan.round?.revision ?? 0,
-        questions: ["storage", "scope"].map((id) => ({
-          id,
-          prerequisites: [],
-          prompt: `Choose ${id}`,
-          context: "**Verified fixture:** local and remote alternatives.",
-          options: [
-            { id: "local", label: "Local", explanation: "Works offline." },
-            { id: "remote", label: "Remote", explanation: "Shares access." },
-          ],
-          recommendation: { optionId: "local", reason: "The fixture requires offline access." },
-        })),
-      });
-      log({ result, state: runtime.active });
-      ctx.ui.notify(JSON.stringify(result), "info");
-    },
-  });
-  pi.registerTool({
-    name: "finish_probe",
-    label: "Finish probe",
-    description: "Verify approval idle ordering",
-    parameters: Type.Object({}),
-    async execute(_id, _params, _signal, _update, ctx) {
-      const approved = await ctx.ui.confirm(
-        "Approve probe?",
-        "Verify deferred notification after Pi becomes idle.",
-      );
-      log({ event: "approval", approved, idle: ctx.isIdle() });
-      if (approved) {
-        ctx.abort();
-        timer = setInterval(() => {
-          if (ctx.isIdle()) {
-            clearInterval(timer);
-            log({ event: "notification", idle: ctx.isIdle() });
-            ctx.ui.notify("Probe notification: idle", "info");
-          }
-        }, 10);
-      }
-      return {
-        content: [{ type: "text", text: JSON.stringify({ approved }) }],
-        details: { approved },
-      };
-    },
-  });
-  pi.on("agent_end", (_event, ctx) => {
-    log({ event: "agent_end", idle: ctx.isIdle() });
-  });
-  pi.on("session_shutdown", (_event, ctx) => {
-    clearInterval(timer);
-    runtime.close(ctx);
-  });
+export default function terminalProbe(pi: ExtensionAPI): void {
+  let mode: "round" | "review" = "round";
+  for (const name of ["round", "review"] as const) {
+    pi.registerCommand("probe-" + name, {
+      description: "Run the package tools with the scripted " + name + " fixture",
+      async handler(_args, ctx) {
+        await ctx.waitForIdle();
+        mode = name;
+        pi.sendUserMessage("Run the scripted planning fixture.");
+      },
+    });
+  }
   pi.registerProvider("plan-probe", {
     api: "plan-probe-api",
     apiKey: "fixture",
@@ -115,19 +21,85 @@ export default function probe(pi: ExtensionAPI): void {
     models: [
       {
         id: "probe",
-        name: "Planning probe",
+        name: "Planning fixture",
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 10000,
-        maxTokens: 1000,
+        contextWindow: 100000,
+        maxTokens: 2000,
       },
     ],
-    streamSimple(_model, _context, options) {
+    streamSimple(_model, context, options) {
       const stream = createAssistantMessageEventStream();
+      const previous = context.messages.at(-1);
+      let details: unknown;
+      if (previous?.role === "toolResult") {
+        const content = previous.content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("");
+        try {
+          details = JSON.parse(content);
+        } catch {
+          details = undefined;
+        }
+      }
+      let call: { name: string; arguments: Record<string, unknown> } | undefined;
+      if (previous?.role === "user") {
+        call = { name: "plan_start", arguments: { objective: "Scripted terminal verification" } };
+      } else if (
+        typeof details === "object" &&
+        details !== null &&
+        "plan" in details &&
+        typeof details.plan === "object" &&
+        details.plan !== null &&
+        "planId" in details.plan &&
+        typeof details.plan.planId === "string"
+      ) {
+        call =
+          mode === "round"
+            ? {
+                name: "plan_round",
+                arguments: {
+                  planId: details.plan.planId,
+                  roundId: "probe",
+                  expectedRevision: 0,
+                  questions: ["storage", "scope"].map((id) => ({
+                    id,
+                    prerequisites: [],
+                    prompt: "Choose " + id,
+                    context: "**Fixture:** local and remote choices.",
+                    options: [
+                      { id: "local", label: "Local", explanation: "Works offline." },
+                      { id: "remote", label: "Remote", explanation: "Shares access." },
+                    ],
+                    recommendation: { optionId: "local", reason: "Offline fixture." },
+                  })),
+                },
+              }
+            : {
+                name: "plan_review",
+                arguments: {
+                  planId: details.plan.planId,
+                  expectedRevision: 0,
+                  markdown:
+                    "# Fixture plan\n\n## Objective\nVerify review.\n\n## Approach\nPreserve Markdown.\n\n## Verification\nInspect approval and saved bytes.\n",
+                },
+              };
+      }
       const message: AssistantMessage = {
         role: "assistant",
-        content: [{ type: "toolCall", id: "probe", name: "finish_probe", arguments: {} }],
+        content:
+          call === undefined
+            ? [{ type: "text", text: "Fixture interaction finished." }]
+            : [
+                {
+                  type: "toolCall",
+                  id: "probe-" + String(context.messages.length),
+                  name: call.name,
+                  arguments: call.arguments,
+                },
+              ],
         api: "plan-probe-api",
         provider: "plan-probe",
         model: "probe",
@@ -139,7 +111,7 @@ export default function probe(pi: ExtensionAPI): void {
           totalTokens: 0,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
-        stopReason: "toolUse",
+        stopReason: call === undefined ? "stop" : "toolUse",
         timestamp: Date.now(),
       };
       if (options?.signal?.aborted === true) {
@@ -149,8 +121,7 @@ export default function probe(pi: ExtensionAPI): void {
           error: { ...message, content: [], stopReason: "aborted" },
         });
       } else {
-        log({ event: "provider" });
-        stream.push({ type: "done", reason: "toolUse", message });
+        stream.push({ type: "done", reason: call === undefined ? "stop" : "toolUse", message });
       }
       return stream;
     },

@@ -65,10 +65,12 @@ asynchronous presenters. [Public extension API](https://pi.dev/docs/latest/exten
 
 **Design implication:** Keep planning state and validation in `@orbis/plan` and
 let an installed presenter supply optional rendering. The presenter owns external
-connections and any annotation or chat state; it returns clarification or revision
+connections, browser annotation mapping, and any separate chat state; it returns clarification or revision
 feedback through the existing planning interaction. When an active interaction's
-presenter fails or is removed, Pi can reopen the TUI with the current drafts. This is a proposed
-package boundary, not a shipped Pi facility or verified adapter.
+presenter fails or is removed, Pi can reopen the TUI with the current drafts.
+The package implements the presentation hook using Pi's public APIs. The current
+contract also assigns terminal block annotations and overall feedback drafts to
+`@orbis/plan`; the extended note state and modal workflow await implementation.
 
 Pi's SDK exposes `createAgentSession()`, `prompt()`, `followUp()`, and event
 subscriptions for applications that own an agent session.

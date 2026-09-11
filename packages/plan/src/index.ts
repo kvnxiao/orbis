@@ -48,29 +48,26 @@ export default function extension(pi: ExtensionAPI): void {
     },
   });
   pi.registerCommand("plan-ui", {
-    description: "Switch the current planning interaction between terminal and browser",
+    description: "Select a registered presenter for the pending planning interaction",
     async handler(args, ctx) {
       if (ctx.mode !== "tui") {
         ctx.ui.notify("Planning requires interactive Pi in TUI mode.", "error");
         return;
       }
-      const selected =
-        args === "terminal" || args === "browser"
-          ? args
-          : await ctx.ui.select("Planning interface", ["terminal", "browser"]);
-      if (selected !== "terminal" && selected !== "browser") {
-        return;
-      }
       try {
-        if (await runtime.chooseInterface(ctx, selected)) {
+        if (args.trim().length === 0) {
           ctx.ui.notify(
-            `Planning interface: ${selected}. Use /plan to reopen saved input.`,
+            "Use Ctrl+P in planning input, or /plan-ui terminal|presenter-id. Registered: " +
+              runtime.presenters.map((item) => item.id).join(", "),
             "info",
           );
+        } else {
+          runtime.chooseInterface(args.trim());
         }
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
+      await Promise.resolve();
     },
   });
   pi.registerCommand("plan-settings", {
@@ -95,17 +92,9 @@ export default function extension(pi: ExtensionAPI): void {
           scope === "Project overrides"
             ? join(ctx.cwd, ".pi", "plan.json")
             : join(getAgentDir(), "orbis-plan.json");
-        const field = await ctx.ui.select(`Edit ${path}`, ["interface", "planDirectory"]);
-        if (field === "interface") {
-          const value = await ctx.ui.select("Preferred interface", ["terminal", "browser"]);
-          if (value === "terminal" || value === "browser") {
-            await writeSettings(path, { interface: value });
-          }
-        } else if (field === "planDirectory") {
-          const value = await ctx.ui.input("Approved-plan directory", settings.planDirectory);
-          if (value !== undefined) {
-            await writeSettings(path, { planDirectory: value });
-          }
+        const value = await ctx.ui.input("Approved-plan directory", settings.planDirectory);
+        if (value !== undefined) {
+          await writeSettings(path, { planDirectory: value });
         }
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
@@ -127,13 +116,12 @@ export default function extension(pi: ExtensionAPI): void {
         );
       }
       const active = runtime.active;
-      if (
-        active !== undefined &&
-        ((resumed && active.phase === "research") ||
-          (active.phase === "clarification" && ctx.isIdle()))
-      ) {
+      if (active?.phase === "clarification" && ctx.isIdle()) {
+        await runtime.resumeClarification(ctx.signal);
+      }
+      if (active !== undefined && resumed && active.phase === "research") {
         pi.sendUserMessage(
-          `Resume collaborative planning for ${active.objective}. Plan identity: ${active.planId}. ${active.phase === "clarification" ? `Answer the unresolved clarification in this conversation before reopening the round. These drafts remain unsubmitted: ${JSON.stringify(active.round)}` : "Continue research and compute the next answerable frontier."}`,
+          `Resume collaborative planning for ${active.objective}. Plan identity: ${active.planId}. Continue research and compute the next answerable frontier.`,
         );
       }
       if (
