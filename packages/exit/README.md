@@ -1,37 +1,32 @@
 # @orbis/exit
 
-Adds `/exit` to quit Pi through its graceful shutdown API.
+Adds `/exit` to quit [Pi](https://pi.dev/).
 
-[SPEC.md](SPEC.md) defines the contract for independent implementations.
+## Install
 
-## Local use
-
-With Pi installed globally and `pi` available on `PATH`, run from the monorepo root:
+Requires Pi and Node.js `>=22.19.0`.
 
 ```sh
-pi install ./packages/exit
-pi
+pi install npm:@orbis/exit
 ```
 
-The install command registers the local package for future sessions. In an existing Pi session, run
-`/reload` to load the package. Run `/exit` to quit.
+Start Pi, or run `/reload` in an existing session.
 
-The command calls `ctx.shutdown()`. When Pi is busy, shutdown waits until the agent becomes idle. Pi
-emits `session_shutdown` before exiting. The package has no configuration.
+## Try it
 
-## Compatibility
-
-Requires Node.js `>=22.19.0`. Tested with Pi `0.85.1`. Pi loads `src/index.ts` directly without a
-build step.
-
-## Tests
-
-```sh
-pnpm --filter @orbis/exit test
+```text
+/exit
 ```
 
-The test loads the package through Pi and checks that `/exit` requests shutdown.
+Pi shuts down gracefully. When the agent is busy, Pi waits until it becomes idle before exiting. The
+extension has no configuration.
+
+## Development
+
+See the
+[contribution guide](https://github.com/kvnxiao/orbis/blob/main/CONTRIBUTING.md#package-checks) for
+source installation and tests, or the [specification](SPEC.md) for the command contract.
 
 ## License
 
-[MIT](./LICENSE).
+[MIT](LICENSE).

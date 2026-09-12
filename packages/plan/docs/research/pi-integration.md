@@ -67,7 +67,7 @@ existing planning interaction. When an active interaction's presenter fails or i
 reopen the TUI with the current drafts. The package implements the presentation hook using Pi's
 public APIs and owns block annotations, overall feedback drafts, and modal interaction state. Review
 snapshots expose source blocks for presenters to use as annotation targets. The
-[package README](../../README.md#optional-presenters) documents the implemented API.
+[integration reference](../integrations.md#optional-presenters) documents the implemented API.
 
 Pi's SDK exposes `createAgentSession()`, `prompt()`, `followUp()`, and event subscriptions for
 applications that own an agent session. [SDK documentation](https://pi.dev/docs/latest/sdk)

@@ -3,7 +3,8 @@
 Status: Package contract. The implementation provides the modal frontier, option details, block
 annotations, revision browsing, implementation selection, and an optional presentation hook.
 Complete real-host, SSH, IME, and model-quality verification remains pending. The
-[README](README.md) describes available behavior and verification limits.
+[README](README.md) describes first use; the [development guide](docs/development.md) describes
+compatibility checks and verification limits.
 
 `@orbis/plan` develops a researched, user-approved Markdown plan in the user's existing Pi
 conversation. Installing the package supplies the complete terminal workflow. This specification is

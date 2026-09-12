@@ -28,7 +28,8 @@ baseline or explicitly skips checks.
 
 The baseline records Node.js and pnpm versions, root/package/template manifests, all default and
 named catalog entries, release-age and build policies, and files requiring review. Read `AGENTS.md`
-and the reported `reviewFiles` relevant to the update. Preserve existing user changes.
+and the reported `reviewFiles` relevant to the update. Also read `CONTRIBUTING.md` for the workspace
+toolchain and package `docs/development.md` files for compatibility checks. Preserve existing user changes.
 
 Release discovery queries the configured npm registries through pnpm and the
 [official Node.js release index](https://nodejs.org/dist/index.json). It sorts stable versions
@@ -74,7 +75,9 @@ it. Previews require a user request.
 ## Apply the selected versions
 
 Update default and named catalog values, `.node-version`, `packageManager`, affected manifests, and
-README version tables together. Preserve `catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer
+the `CONTRIBUTING.md` version table together. Update package runtime requirements and compatibility
+documentation where affected; keep workspace development versions out of READMEs. Preserve
+`catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer
 contracts. Keep dependency build policies and `minimumReleaseAge: 1440`; remove exclusions marked
 `remove` in the release report. Do not add exceptions for younger releases.
 

@@ -1,46 +1,30 @@
 # @orbis/example
 
-A TypeScript extension for the Orbis agent harness.
+Adds `/orbis-example` to [Pi](https://pi.dev/) to check that the extension loaded.
 
-Define the package contract in [SPEC.md](SPEC.md) before implementing its behavior. This README
-describes the reference implementation as it becomes available.
+## Install
 
-## Local use
-
-With Pi installed globally and `pi` available on `PATH`, run from the monorepo root:
-
-```sh
-pnpm install
-pi install ./packages/example
-```
-
-Start Pi and run `/orbis-example` to check that the extension loaded. Replace the example command
-with the package's intended behavior and document its commands, tools, configuration, and side
-effects here.
-
-## Install from npm
-
-After this package is published:
+Requires Pi and Node.js `>=22.19.0`.
 
 ```sh
 pi install npm:@orbis/example
 ```
 
-Pi loads `src/index.ts` directly. The package does not require a build step.
+Start Pi, or run `/reload` in an existing session.
 
-## Tests
+## Try it
 
-From the monorepo root:
-
-```sh
-pnpm --filter @orbis/example test
-pnpm --filter @orbis/example test:watch
+```text
+/orbis-example
 ```
 
-Vitest runs `tests/**/*.test.mts`. The included test loads the extension through Pi and checks
-command registration. Add tests for the package's behavior as it changes. The root `pnpm test`
-command discovers this package through its `vitest.config.mts` project.
+Pi displays `@orbis/example is loaded`. The command has no configuration.
+
+## Development
+
+See the [contribution guide](https://github.com/kvnxiao/orbis/blob/main/CONTRIBUTING.md) for source
+installation and tests, or the [specification](SPEC.md) for the package contract.
 
 ## License
 
-[MIT](./LICENSE).
+[MIT](LICENSE).

@@ -19,6 +19,10 @@ Read the repository's `AGENTS.md`, `README.md`, and
 and source when the request concerns that package. Preserve the user's settled requirements,
 exclusions, and prior decisions.
 
+The repository README introduces the packages; `CONTRIBUTING.md` describes the development
+workflow. For README work, use [write-orbis-readme](../write-orbis-readme/SKILL.md) and keep design
+detail in the specification and research documents.
+
 Before proposing an architecture, research current relevant Pi packages and official Pi APIs when
 those facts can affect the design. A simple, settled package may not need research docs; do not
 create an empty folder or ceremonial report. Use primary documentation and source to compare actual

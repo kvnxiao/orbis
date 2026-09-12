@@ -137,9 +137,14 @@ Colocate verification records and run evidence with the implementation plans. Re
 evidence fields or sibling files under the same default Git-ignored directory. Keep session logs,
 environment details, command results, and remaining checks there; do not create publicly referenced
 verification documents or link package documentation to these local records. Tracking or publishing
-evidence requires an explicit user opt-in. Keep reusable test instructions in the package README.
+evidence requires an explicit user opt-in. Keep reusable test instructions in the root
+`CONTRIBUTING.md` or package `docs/development.md`.
 Package documentation describes behavior and compatibility limits without session logs or test-run
 results.
+
+For affected READMEs, plan the purpose, installation, and first-use example through
+[write-orbis-readme](../write-orbis-readme/SKILL.md). Link advanced usage and integration details
+from focused package documents instead of adding them to the README.
 
 When evidence invalidates an assumption, revise the affected tasks, dependencies, and coverage
 claims. Preserve unaffected work and settled requirements. Distinguish a task adjustment within the
