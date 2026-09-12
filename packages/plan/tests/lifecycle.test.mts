@@ -8,6 +8,42 @@ import * as config from "../src/storage/config.ts";
 import * as persistence from "../src/storage/persistence.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
+test("planning notices omit pending draft saves", async ({ onTestFinished }) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  const notify = vi.spyOn(f.ctx.ui, "notify");
+  let pendingNotice: unknown;
+  let savedNotice: unknown;
+  const view = vi
+    .spyOn(terminal, "terminalReview")
+    .mockImplementation(async (_ctx, _read, dispatch) => {
+      dispatch({ type: "edit-feedback", text: "Revise this" });
+      f.runtime.present(f.ctx);
+      pendingNotice = notify.mock.lastCall;
+      f.runtime.save(f.ctx);
+      f.runtime.present(f.ctx);
+      savedNotice = notify.mock.lastCall;
+      dispatch({ type: "cancel" });
+      await Promise.resolve();
+    });
+  onTestFinished(() => {
+    notify.mockRestore();
+    view.mockRestore();
+  });
+  f.runtime.start(f.ctx, "Review selection");
+  await f.runtime.review(f.ctx, {
+    planId: f.runtime.active?.planId ?? "",
+    expectedRevision: 0,
+    markdown: "# Plan",
+  });
+  expect(view).toHaveBeenCalledOnce();
+  expect(pendingNotice).toEqual(["Planning:\n```\nReview selection\n```", "info"]);
+  expect(savedNotice).toEqual([
+    "Planning:\n```\nReview selection\n```\n\nPlanning state saved.",
+    "info",
+  ]);
+});
+
 test.for([
   { objective: "Choose the next priority.", block: "```\nChoose the next priority.\n```" },
   {

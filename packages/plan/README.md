@@ -32,8 +32,9 @@ plan exists, the status appends the phase and whether the state is `saved` or `u
 preserves composer text and does not send it. During a turn, stop with Escape before switching
 modes. Modal Shift+Tab retains its navigation behavior. Entering, resuming, or restoring a plan
 shows an info notice with a `Planning:` heading, the exact saved objective in a fenced block, and a
-separate paragraph for the save status. If the plan has no objective, the fenced block contains
-`objective not supplied`.
+separate paragraph for the save status. Pending debounced saves omit that paragraph; disabled
+persistence and failed saves still report warnings. If the plan has no objective, the fenced block
+contains `objective not supplied`.
 
 Plan preserves the configured editor factory and registers its planning shortcut through Pi's SDK.
 The registered shortcut appears in `/hotkeys`. Before registration, Plan checks effective Pi
@@ -241,19 +242,29 @@ display path may use `~`. Terminals without hyperlink support retain readable pa
 and session record must be saved before review opens; a write failure blocks display and reports
 retry or cancellation guidance.
 
-Blocks display source-line ranges in a gutter. Every actual blank source line has its own numbered
-row, including consecutive blank lines. Wrapped rows and renderer-added spacing remain unnumbered.
-Selection makes the block and its range bold without duplicating the excerpt in a footer. Unless a
-simple list item's paragraph has its own annotation, Up/Down skip the duplicate paragraph stop.
-Separate paragraphs and nested blocks remain reachable, and source targets stay unchanged.
+The document renders without source-line numbers and preserves actual blank source lines. Equal
+outer margins surround the content; the left margin reserves space for `→` beside the selected
+block's first visual row. Selection makes the entire block bold, including wrapped rows, without
+duplicating the excerpt in a footer. Headings target only their heading text. Unless a simple list
+item's paragraph has its own annotation, Up/Down skip the duplicate paragraph stop. Separate
+paragraphs and nested blocks remain reachable, and source targets stay unchanged. Down visits a
+parent list item, its distinct paragraphs and nested items, then the next sibling; Up reverses that
+order. Wrapped rows do not add stops. Selecting a parent item highlights and annotates its full
+subtree; selecting a child narrows the target to that child.
 
-Each note appears below its target with an upward arrow, its source range, and a distinct
-background; note rows have no line numbers. Block notes retain their exact source excerpt and
-revision. Overall feedback follows the complete plan beneath a divider. Its heading, field, and
-retained text align with the document content after the gutter. On the latest revision, an empty
-field displays `Add overall feedback` with the effective edit key. F2 opens the field and moves
-document focus to it; leaving editing retains focus at the document's end. Empty feedback on earlier
-revisions displays `No overall feedback · read-only`.
+Each note appears below its target with the label `↑ Note` and a distinct background; note rows have
+no line numbers. Block notes retain their exact source excerpt and revision. When the selected block
+owns a note, its label and retained text are also bold. Moving to another block removes that note's
+bold highlight and preserves its background. Overall feedback follows the complete plan beneath a
+divider and blank padding row. Its nonselectable title and persistent bordered input align with the
+document content. On the latest revision, an empty unfocused field displays muted
+`Add overall feedback` placeholder text. Down from the final block or F2 immediately focuses the
+editor, displays its cursor, and hides the placeholder. Leaving an empty field restores the
+placeholder. The F2 hint reads `overall feedback`. Within the editor, arrows move the cursor. When
+Pi's cursor-up action cannot move the cursor, it returns focus to the final document block; on the
+top visual row, a cursor after column zero first moves to column zero. Tab and Shift+Tab leave
+editing and traverse the action buttons. Empty feedback on earlier revisions displays
+`No overall feedback · read-only`.
 
 Typing on a selected block opens its note directly, including printable brackets. Edits are retained
 immediately; Enter or Escape leaves editing, and Shift+Enter and Ctrl+J insert newlines by default.

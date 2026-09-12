@@ -25,6 +25,7 @@ import { dividerGlyphs, modalContentWidth, modalLines } from "./terminal-layout.
 import type { TerminalOptions } from "./terminal-options.ts";
 
 const home = homedir();
+const blockMarker = "→ ";
 const approvalActions = [{ type: "approve", label: "Approve" }] as const;
 const feedbackActions = [
   { type: "approve-with-notes", label: "Approve with notes" },
@@ -162,13 +163,12 @@ export class TerminalReview implements Component {
     this.syncFocus();
   }
   private contentWidth(): number {
-    return Math.max(1, modalContentWidth(this.columns()) - this.gutterWidth());
+    return Math.max(1, modalContentWidth(this.columns()) - this.gutterWidth() * 2);
   }
-  private gutterWidth(): number {
-    const count = (this.read().reviews?.[this.viewed]?.markdown ?? "").split(/\r\n|\r|\n/u).length;
+  private gutterWidth(outerWidth = this.columns()): number {
     return Math.min(
-      Math.max(0, modalContentWidth(this.columns()) - 1),
-      String(count).length * 2 + 3,
+      Math.max(0, Math.floor((modalContentWidth(outerWidth) - 1) / 2)),
+      visibleWidth(blockMarker),
     );
   }
   private browse(direction: number): void {
@@ -243,23 +243,39 @@ export class TerminalReview implements Component {
             if (this.action < 0 || this.action >= count) {
               this.mode = "document";
               this.action = Math.max(0, Math.min(count - 1, this.action));
+              if (this.block === blocks.length && this.current()) {
+                this.open(true);
+              }
             }
           }
         } else if (this.mode === "note" || this.mode === "overall") {
           if (this.keys.matches(data, "finish") && !this.keys.matches(data, "newline")) {
             this.mode = "document";
           } else {
+            const before = this.editor.getCursor();
             this.keys.edit(this.editor, data);
-            const block = blocks[this.block];
-            if (this.mode === "overall") {
-              this.send({ type: "edit-feedback", text: this.editor.getExpandedText() });
-            } else if (block !== undefined) {
-              this.send({
-                type: "edit-note",
-                blockId: block.id,
-                excerpt: block.excerpt,
-                text: this.editor.getExpandedText(),
-              });
+            const after = this.editor.getCursor();
+            if (
+              this.mode === "overall" &&
+              this.keys.matches(data, "cursorUp") &&
+              before.line === after.line &&
+              before.col === after.col &&
+              blocks.length > 0
+            ) {
+              this.mode = "document";
+              this.moveBlock(-1, layout);
+            } else {
+              const block = blocks[this.block];
+              if (this.mode === "overall") {
+                this.send({ type: "edit-feedback", text: this.editor.getExpandedText() });
+              } else if (block !== undefined) {
+                this.send({
+                  type: "edit-note",
+                  blockId: block.id,
+                  excerpt: block.excerpt,
+                  text: this.editor.getExpandedText(),
+                });
+              }
             }
             this.follow = true;
           }
@@ -282,28 +298,7 @@ export class TerminalReview implements Component {
           );
           this.follow = false;
         } else if (this.keys.matches(data, "up") || this.keys.matches(data, "down")) {
-          const direction = this.keys.matches(data, "down") ? 1 : -1;
-          do {
-            this.block = Math.max(0, Math.min(blocks.length, this.block + direction));
-            const block = blocks[this.block];
-            const parent = blocks[this.block - 1];
-            const span = block === undefined ? undefined : layout.spans.get(block.id);
-            const parentSpan = parent === undefined ? undefined : layout.spans.get(parent.id);
-            if (
-              block?.kind !== "paragraph" ||
-              parent?.kind !== "list_item" ||
-              block.start < parent.start ||
-              block.end > parent.end ||
-              span === undefined ||
-              span.range !== parentSpan?.range ||
-              review.notes?.some(
-                (note) => note.blockId === block.id && note.text.trim().length > 0,
-              ) === true
-            ) {
-              break;
-            }
-          } while (this.block > 0 && this.block < blocks.length);
-          this.follow = true;
+          this.moveBlock(this.keys.matches(data, "down") ? 1 : -1, layout);
         } else if (
           this.current() &&
           (this.keys.matches(data, "enter") ||
@@ -329,17 +324,40 @@ export class TerminalReview implements Component {
   render(outerWidth: number): string[] {
     return this.renderLayout(outerWidth).lines;
   }
+  private moveBlock(direction: number, layout: DocumentLayout): void {
+    const blocks = layout.blocks;
+    const notes = this.read().reviews?.[this.viewed]?.notes;
+    do {
+      this.block = Math.max(0, Math.min(blocks.length, this.block + direction));
+      const block = blocks[this.block];
+      const parent = blocks[this.block - 1];
+      const span = block === undefined ? undefined : layout.spans.get(block.id);
+      const parentSpan = parent === undefined ? undefined : layout.spans.get(parent.id);
+      if (
+        block?.kind !== "paragraph" ||
+        parent?.kind !== "list_item" ||
+        block.start < parent.start ||
+        block.end > parent.end ||
+        span === undefined ||
+        span.range !== parentSpan?.range ||
+        notes?.some((note) => note.blockId === block.id && note.text.trim().length > 0) === true
+      ) {
+        break;
+      }
+    } while (this.block > 0 && this.block < blocks.length);
+    if (this.block === blocks.length && this.current()) {
+      this.open(true);
+    }
+    this.follow = true;
+  }
   private renderLayout(outerWidth: number): { lines: string[]; scroll: number } {
     const review = this.read().reviews?.[this.viewed];
     if (review === undefined) {
       return { lines: ["Plan review unavailable."], scroll: 0 };
     }
     const width = modalContentWidth(outerWidth);
-    const gutter = Math.min(
-      Math.max(0, width - 1),
-      String(review.markdown.split(/\r\n|\r|\n/u).length).length * 2 + 3,
-    );
-    const contentWidth = Math.max(1, width - gutter);
+    const gutter = this.gutterWidth(outerWidth);
+    const contentWidth = Math.max(1, width - gutter * 2);
     const layout = this.layout(contentWidth);
     const target = layout.blocks[this.block];
     const selected = target === undefined ? undefined : layout.spans.get(target.id);
@@ -365,28 +383,18 @@ export class TerminalReview implements Component {
         );
       }
     }
-    const ranges = new Map<number, string>();
-    for (const span of layout.spans.values()) {
-      if (!ranges.has(span.start)) {
-        ranges.set(span.start, span.range);
-      }
-    }
     for (let row = 0; row <= layout.lines.length; row++) {
       for (const block of insertions.get(row) ?? []) {
         const active = this.mode === "note" && target?.id === block.id;
         const note = notes.get(block.id);
-        const span = layout.spans.get(block.id);
         const annotation = active
           ? this.editor.render(contentWidth)
           : wrapTextWithAnsi(stripTerminalSequences(note?.text ?? ""), contentWidth);
-        lines.push(noteBackground(" ".repeat(gutter) + `↑ Note on ${span?.range ?? ""}`));
-        for (const text of annotation) {
+        for (const text of ["↑ Note", ...annotation]) {
+          const styled = target?.id === block.id && !active ? markdown.bold(text) : text;
           lines.push(
-            noteBackground(
-              " ".repeat(gutter) +
-                text +
-                " ".repeat(Math.max(0, contentWidth - visibleWidth(text))),
-            ),
+            " ".repeat(gutter) +
+              noteBackground(styled + " ".repeat(Math.max(0, contentWidth - visibleWidth(text)))),
           );
         }
       }
@@ -397,12 +405,8 @@ export class TerminalReview implements Component {
       if (row === selected?.start) {
         selectedPosition = lines.length;
       }
-      const blank = layout.blankLines.get(row);
-      let label = row === selected?.start ? selected.range : (ranges.get(row) ?? "");
-      if (blank !== undefined) {
-        label = String(blank);
-      }
-      const text = (gutter > 0 ? label.padStart(gutter - 1) + " " : "") + content;
+      const marker = row === selected?.start ? blockMarker.slice(0, gutter) : " ".repeat(gutter);
+      const text = marker + content;
       lines.push(
         selected !== undefined && row >= selected.start && row < selected.end
           ? markdown.bold(text)
@@ -414,33 +418,25 @@ export class TerminalReview implements Component {
     lines.push(
       "",
       indent + markdown.hr(dividerGlyphs[this.appearance.border].repeat(contentWidth)),
-      ...wrapTextWithAnsi(
-        this.block === layout.blocks.length
-          ? markdown.bold("Overall feedback")
-          : "Overall feedback",
-        contentWidth,
-      ).map((line) => indent + line),
+      "",
+      ...wrapTextWithAnsi("Overall feedback", contentWidth).map((line) => indent + line),
     );
     if (this.mode === "overall") {
       lines.push(...this.editor.render(contentWidth).map((line) => indent + line));
-    } else if (review.feedbackDraft.trim().length > 0) {
-      lines.push(
-        ...wrapTextWithAnsi(stripTerminalSequences(review.feedbackDraft), contentWidth).map(
-          (line) =>
-            indent +
-            noteBackground(line + " ".repeat(Math.max(0, contentWidth - visibleWidth(line)))),
-        ),
-      );
     } else {
-      const edit = this.keys.hint(
-        this.block === layout.blocks.length ? "enter" : "overall",
-        "edit",
-      );
       const placeholder = this.current()
-        ? `Add overall feedback${edit.length > 0 ? ` · ${edit}` : ""}`
+        ? "Add overall feedback"
         : "No overall feedback · read-only";
+      const value =
+        review.feedbackDraft.length > 0
+          ? stripTerminalSequences(review.feedbackDraft)
+          : (this.theme?.fg("dim", placeholder) ?? `\x1b[2m${placeholder}\x1b[22m`);
+      const border =
+        this.theme?.fg("border", "─".repeat(contentWidth)) ?? markdown.hr("─".repeat(contentWidth));
       lines.push(
-        ...wrapTextWithAnsi(placeholder, contentWidth).map((line) => indent + noteBackground(line)),
+        indent + border,
+        ...wrapTextWithAnsi(value, Math.max(1, contentWidth - 1)).map((line) => indent + line),
+        indent + border,
       );
     }
     const cursor = lines.findIndex((line) => line.includes(CURSOR_MARKER));
@@ -475,7 +471,7 @@ export class TerminalReview implements Component {
       this.keys.hint(["up", "down"], "block"),
       "Type: note",
       this.keys.hint("tab", "focus"),
-      this.keys.hint("overall", "overall"),
+      this.keys.hint("overall", "overall feedback"),
       this.keys.hint(["older", "newer"], "revisions"),
     ]
       .filter(Boolean)
@@ -485,7 +481,7 @@ export class TerminalReview implements Component {
         this.keys.hint("finish", "finish"),
         this.keys.hint("newline", "newline"),
         this.keys.hint("tab", "actions"),
-        this.keys.hint("overall", "overall"),
+        this.keys.hint("overall", "overall feedback"),
       ]
         .filter(Boolean)
         .join(" · ");
@@ -499,7 +495,7 @@ export class TerminalReview implements Component {
     return {
       lines: modalLines(
         title,
-        lines,
+        lines.map((line) => " ".repeat((outerWidth - width) / 2) + line),
         {
           buttons: labels.map((label) =>
             this.current()

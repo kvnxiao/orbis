@@ -32,16 +32,146 @@ const enter = "\r";
 const tab = "\t";
 const shiftEnter = "\x1b[13;2u";
 
-test.each([24, 90])("review numbers actual blank corpus lines at width %i", (width) => {
+test.each([24, 90])("review omits source numbers from corpus rows at width %i", (width) => {
   const source = readFileSync(new URL("./fixtures/review-document.md", import.meta.url), "utf8");
   const f = reviewFixture(source);
   f.resize(200);
   const screen = text(f.create(), width);
-  const sourceLines = source.trimEnd().split("\n");
-  const blanks = sourceLines.flatMap((line, index) => (line.length === 0 ? [index + 1] : []));
-  for (const number of blanks) {
-    expect(screen).toMatch(new RegExp(`^ +${String(number)} +$`, "mu"));
+  expect(screen).not.toMatch(/^ +\d+(?:–\d+)? /mu);
+  expect(screen.match(/→/gu)).toHaveLength(1);
+  expect(screen).toContain("→ Sample document");
+});
+
+test.for([24, 90])(
+  "selected blocks bold wrapped rows and their retained notes at width %i",
+  (width, { onTestFinished }) => {
+    const paragraph = "A paragraph with enough words to wrap across several terminal rows.";
+    const f = reviewFixture(`${paragraph}\n\nNext paragraph.`);
+    f.resize(80);
+    const view = f.create();
+    const bold = vi
+      .spyOn(Theme.prototype, "bold")
+      .mockImplementation((value) => `\x1b[1m${value}\x1b[22m`);
+    onTestFinished(() => {
+      bold.mockRestore();
+    });
+    view.render(width);
+    keys(view, "Attached note", shiftEnter, "Second note line", escape);
+    const screen = view.render(width);
+    const noteRow = screen.findIndex((line) => line.includes("↑ Note"));
+    const start = screen.findIndex((line) => line.includes("→"));
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(noteRow).toBeGreaterThan(start);
+    const blockRows = screen.slice(start, noteRow);
+    expect(blockRows.every((line) => line.includes("\x1b[1m"))).toBe(true);
+    expect(blockRows.map(stripTerminalSequences).join(" ").replace(/\s+/gu, " ")).toContain(
+      paragraph,
+    );
+    for (const label of ["↑ Note", "Attached note", "Second note line"]) {
+      expect(screen.find((line) => line.includes(label))).toContain("\x1b[1m");
+    }
+    expect(screen.filter((line) => line.includes("→"))).toHaveLength(1);
+    keys(view, down);
+    const next = view.render(width);
+    expect(stripTerminalSequences(next.join("\n"))).toContain("→ Next paragraph.");
+    for (const label of ["↑ Note", "Attached note", "Second note line"]) {
+      const row = next.find((line) => line.includes(label));
+      expect(row).not.toContain("\x1b[1m");
+      expect(row).toContain("\x1b[48;5;236m");
+    }
+    expect(f.state().reviews?.[0]?.notes?.[0]).toMatchObject({
+      excerpt: paragraph,
+      text: "Attached note\nSecond note line",
+    });
+  },
+);
+
+test("parent selection bolds descendants and child selection narrows the highlight", ({
+  onTestFinished,
+}) => {
+  const f = reviewFixture("- Parent\n  - Child\n- Sibling");
+  f.resize(80);
+  const view = f.create();
+  const bold = vi
+    .spyOn(Theme.prototype, "bold")
+    .mockImplementation((value) => `\x1b[1m${value}\x1b[22m`);
+  onTestFinished(() => {
+    bold.mockRestore();
+  });
+  for (const selected of [["Parent", "Child"], ["Parent"], ["Child"], ["Sibling"]]) {
+    const screen = view.render(90);
+    for (const label of ["Parent", "Child", "Sibling"]) {
+      expect(screen.find((line) => line.includes(label))?.includes("\x1b[1m")).toBe(
+        selected.includes(label),
+      );
+    }
+    expect(screen.filter((line) => line.includes("→"))).toHaveLength(1);
+    keys(view, down);
   }
+});
+
+test("empty overall feedback restores its placeholder after cursor-boundary navigation", () => {
+  const f = reviewFixture("Final paragraph.");
+  f.resize(80);
+  const view = f.create();
+  expect(text(view)).toContain("Add overall feedback");
+  expect(text(view, 180)).toContain("F2: overall feedback");
+  keys(view, down);
+  expect(view.render(90).join("\n")).toContain(CURSOR_MARKER);
+  expect(text(view)).not.toContain("Add overall feedback");
+  keys(view, "\x1b[A");
+  expect(view.render(90).join("\n")).not.toContain(CURSOR_MARKER);
+  expect(text(view)).toContain("→ Final paragraph.");
+  expect(text(view)).toContain("Add overall feedback");
+  keys(view, "\x1bOQ");
+  expect(view.render(90).join("\n")).toContain(CURSOR_MARKER);
+  expect(text(view)).not.toContain("Add overall feedback");
+  keys(view, tab);
+  expect(text(view)).toContain("Add overall feedback");
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe("");
+  expect(f.state().reviews?.[0]?.notes).toBeUndefined();
+});
+
+test("Up traverses wrapped and multiline overall feedback before returning to the document", () => {
+  const f = reviewFixture("Final paragraph.");
+  f.resize(80);
+  const view = f.create();
+  view.render(24);
+  const draft = "Feedback wraps across several visual rows in this narrow terminal.\nLast line";
+  keys(view, down, draft);
+  keys(view, "\x1b[A");
+  expect(view.render(24).join("\n")).toContain(CURSOR_MARKER);
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe(draft);
+  keys(view, ...Array<string>(20).fill("\x1b[A"));
+  expect(view.render(24).join("\n")).not.toContain(CURSOR_MARKER);
+  expect(text(view, 90)).toContain("→ Final paragraph.");
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe(draft);
+  expect(f.state().reviews?.[0]?.notes).toBeUndefined();
+});
+
+test("overall feedback preserves native Up movement to the start of its first row", () => {
+  const f = reviewFixture("Final paragraph.");
+  f.resize(80);
+  const view = f.create();
+  keys(view, "\x1bOQ", "Draft", "\x1b[A");
+  expect(view.render(90).join("\n")).toContain(CURSOR_MARKER);
+  keys(view, "Prefix ", "\x1b[A", "\x1b[A");
+  expect(view.render(90).join("\n")).not.toContain(CURSOR_MARKER);
+  expect(text(view)).toContain("→ Final paragraph.");
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe("Prefix Draft");
+});
+
+test.each([24, 90])("scrolling feedback balances margins within the modal at width %i", (width) => {
+  const f = reviewFixture("Paragraph.\n\n".repeat(20));
+  f.resize(10);
+  const view = f.create();
+  view.render(width);
+  keys(view, "\x1bOQ");
+  const screen = view.render(width).map(stripTerminalSequences);
+  const border = screen.find((line) => /^ +─+/u.test(line));
+  expect(border).toBeDefined();
+  expect(border?.indexOf("─")).toBe(width - 1 - (border?.lastIndexOf("─") ?? 0));
+  expect(screen.every((line) => visibleWidth(line) <= width)).toBe(true);
 });
 
 test.each([24, 90])(
@@ -58,6 +188,17 @@ test.each([24, 90])(
       "## Ordered entries",
       "1. Gamma entry.",
       "2. Delta entry.",
+      "## Nested entries",
+      "- Parent entry.\n  - Child entry with enough descriptive text to wrap across multiple rows in a narrow terminal.\n    1. Grandchild entry.\n    2. Repeated entry.\n  - [ ] Task child.\n\n    Another paragraph inside the task child.",
+      "Parent entry.",
+      "- Child entry with enough descriptive text to wrap across multiple rows in a narrow terminal.\n    1. Grandchild entry.\n    2. Repeated entry.",
+      "Child entry with enough descriptive text to wrap across multiple rows in a narrow terminal.",
+      "1. Grandchild entry.",
+      "2. Repeated entry.",
+      "- [ ] Task child.\n\n    Another paragraph inside the task child.",
+      "Task child.",
+      "Another paragraph inside the task child.",
+      "- Repeated entry.",
       "## Details",
       "A final paragraph.",
     ];
@@ -71,6 +212,8 @@ test.each([24, 90])(
     }
     keys(view, "overall", enter);
     expect(f.state().reviews?.[0]?.feedbackDraft).toBe("overall");
+    expect(f.state().reviews?.[0]?.notes).toHaveLength(expected.length);
+    view.render(width === 24 ? 90 : 24);
     for (const excerpt of expected.toReversed()) {
       keys(view, "\x1b[A", enter, " backward", enter);
       expect(
@@ -94,9 +237,13 @@ test.each(["rounded", "double", "ascii", "none"] as const)(
     expect(indentation).toBeDefined();
     expect(screen[heading]?.indexOf("Overall feedback")).toBe(indentation);
     const dividers = { rounded: /^─+$/u, double: /^═+$/u, ascii: /^-+$/u, none: /^─+$/u };
-    expect(screen[heading - 1]?.trim()).toMatch(dividers[border]);
-    expect(screen[heading + 1]?.indexOf("Add overall feedback")).toBe(indentation);
-    expect(screen[heading + 1]).toContain("F2: edit");
+    expect(screen[heading - 2]?.trim()).toMatch(dividers[border]);
+    expect(screen[heading - 1]?.trim()).toBe("");
+    expect(screen[heading + 1]?.trim()).toMatch(/^─+$/u);
+    expect(screen[heading + 2]?.indexOf("Add overall feedback")).toBe(indentation);
+    expect(screen[heading + 3]?.trim()).toMatch(/^─+$/u);
+    const divider = screen[heading - 2] ?? "";
+    expect(indentation).toBe(90 - divider.trimEnd().length);
     keys(view, "\x1bOQ", "Overall draft", enter);
     const retained = text(view, 90)
       .split("\n")
@@ -170,7 +317,7 @@ test("warm review navigation and note edits reuse Markdown until width or theme 
   expect(render.mock.calls.filter(([source]) => source === markdown)).toHaveLength(3);
 });
 
-test("overall feedback uses the rebound confirmation key at the document end", ({
+test("overall feedback focuses directly without the rebound confirmation key", ({
   onTestFinished,
 }) => {
   const bindings = getKeybindings();
@@ -183,12 +330,10 @@ test("overall feedback uses the rebound confirmation key at the document end", (
   f.resize(60);
   const view = f.create();
   keys(view, down);
-  const placeholder = text(view, 90)
-    .split("\n")
-    .find((line) => line.includes("Add overall feedback"));
-  expect(placeholder).toContain("Ctrl+G: edit");
-  expect(placeholder).not.toContain("Enter");
-  keys(view, "\x07", "Retained", escape);
+  const screen = view.render(90).join("\n");
+  expect(screen).toContain(CURSOR_MARKER);
+  expect(screen).not.toContain("Add overall feedback");
+  keys(view, "Retained", escape);
   expect(f.state().reviews?.[0]?.feedbackDraft).toBe("Retained");
   expect(f.state().phase).toBe("review");
 });
@@ -1176,8 +1321,9 @@ test("nested paragraph notes render after their source and before the next item"
     }),
   );
   const screen = text(f.create(), 80);
-  expect(screen).toMatch(/4\s+Paragraph/u);
-  expect(screen).toContain("↑ Note on 4");
+  expect(screen).toContain("Paragraph");
+  expect(screen).toContain("↑ Note");
+  expect(screen).not.toContain("Note on");
   expect(screen.indexOf("Paragraph")).toBeLessThan(screen.indexOf("Paragraph note"));
   expect(screen.indexOf("Paragraph note")).toBeLessThan(screen.indexOf("3. Last"));
 });
@@ -1599,14 +1745,14 @@ test("narrow CTA buttons show focus while Tab and arrows choose revision or appr
   expect(f.state().phase).toBe("research");
 });
 
-test("review preserves cross-block Markdown links with source ranges", () => {
+test("review preserves cross-block Markdown links without source numbers", () => {
   const f = reviewFixture("See [API][api].\n\nOther text.\n\n[api]: https://example.com\n");
   f.resize(60);
   const view = f.create();
   const rendered = view.render(100).join("\n");
   expect(rendered).toContain("https://example.com");
-  expect(stripTerminalSequences(rendered)).toContain("1 See API");
-  expect(stripTerminalSequences(rendered)).toContain("3 Other text.");
+  expect(stripTerminalSequences(rendered)).toContain("→ See API");
+  expect(stripTerminalSequences(rendered)).toMatch(/^ +Other text\./mu);
   expect(stripTerminalSequences(rendered)).not.toContain("[api]");
 });
 

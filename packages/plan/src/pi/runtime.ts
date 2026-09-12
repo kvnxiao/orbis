@@ -213,6 +213,7 @@ export class PlanRuntime {
 
   save(ctx: ExtensionContext): SaveResult {
     clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
     this.saveStatus = saveRecord(
       this.pi,
       ctx,
@@ -248,6 +249,7 @@ export class PlanRuntime {
     }
     this.disposeOperations();
     clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
     this.current = undefined;
     this.selectedMode = "default";
     this.archived.length = 0;
@@ -259,6 +261,7 @@ export class PlanRuntime {
 
     this.selectedInterface = "terminal";
     clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
     this.current = undefined;
     this.selectedMode = "default";
     ctx.ui.setStatus("orbis-plan", this.statusLine());
@@ -980,8 +983,9 @@ export class PlanRuntime {
   present(ctx: ExtensionContext): void {
     if (this.current !== undefined) {
       ctx.ui.setStatus("orbis-plan", this.statusLine());
+      const status = this.saveTimer === undefined ? `\n\n${this.saveStatus.message}` : "";
       ctx.ui.notify(
-        `Planning:\n${fencedObjective(this.current.objective.length === 0 ? "objective not supplied" : this.current.objective)}\n\n${this.saveStatus.message}`,
+        `Planning:\n${fencedObjective(this.current.objective.length === 0 ? "objective not supplied" : this.current.objective)}${status}`,
         "info",
       );
     }
