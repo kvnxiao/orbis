@@ -9,7 +9,8 @@ or research corpus. Include the constraints needed to execute each task and link
 Verification records and run evidence belong beside the implementation plans in their default
 Git-ignored directory. Use task evidence fields or sibling records; tracking or publishing them
 requires explicit user opt-in. Do not create publicly referenced verification documents or link
-public documentation to local evidence. Keep reusable test instructions in the package README.
+public documentation to local evidence. Keep reusable test instructions in the root
+`CONTRIBUTING.md` or package `docs/development.md`.
 Package documentation describes behavior and compatibility limits without session logs or test-run
 results.
 
@@ -81,7 +82,8 @@ Assign interaction checks across tasks and repository verification to executable
 verify-changes after the accumulated implementation and immediately before any requested commit or
 PR. List checks that require a real Pi session. Confirm that plans and evidence share the ignored
 directory and are untracked unless the user explicitly opted in. Public docs must not reference run
-evidence; reusable test instructions belong in the package README.
+evidence; reusable test instructions belong in the root `CONTRIBUTING.md` or package
+`docs/development.md`.
 
 ## Resume notes
 

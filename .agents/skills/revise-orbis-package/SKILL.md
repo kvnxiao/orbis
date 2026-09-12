@@ -9,6 +9,10 @@ description:
 
 # Revise an Orbis package
 
+For affected READMEs, use [write-orbis-readme](../write-orbis-readme/SKILL.md). Keep installation
+and first use in the README; update linked usage, integration, and development documents for
+detailed behavior. Moving documentation does not change the package contract.
+
 Carry a requested behavior change through the package contract and authorized implementation work. A
 design-only or planning-only request stops at its requested deliverable. A request to change package
 code includes synchronizing its affected contract; the user does not need to invoke this skill

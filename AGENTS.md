@@ -31,6 +31,7 @@ skill files.
 | Package contract changes                              | [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md)           |
 | Dependency refreshes or newly supported strict checks | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                   |
 | Package conformance review                            | [verify-orbis-conformance](.agents/skills/verify-orbis-conformance/SKILL.md)   |
+| README creation or revision                           | [write-orbis-readme](.agents/skills/write-orbis-readme/SKILL.md)               |
 
 ## Package requirements
 
@@ -186,15 +187,27 @@ skill files.
 - Colocate verification records and run evidence, including real-agent checks, with plans in the
   default Git-ignored implementation directory. Tracking or publishing evidence requires explicit
   user opt-in. Do not create publicly referenced verification documents or link package
-  documentation to local evidence. Keep reusable test instructions in the package README; package
-  documentation describes behavior and compatibility limits without session logs or test-run
-  results.
+  documentation to local evidence. Keep reusable test instructions in `CONTRIBUTING.md` or package
+  `docs/development.md`; package documentation describes behavior and compatibility limits without
+  session logs or test-run results.
 - Before publication, use `pnpm pack` and test the tarball outside the workspace. Check that runtime
   imports resolve without workspace symlinks or development dependencies and that Pi registers the
   expected behavior.
 - Do not publish packages, push commits, or create releases unless the user requests those actions.
 
 ## Writing
+
+- Follow [README guidance](docs/readme-guidelines.md) for repository and package READMEs. Before
+  advanced reference or contributor material, state the purpose, required setup, installation, and a
+  realistic first use with its expected result. Keep npm installation commands without temporary
+  publication or repository-visibility notices.
+- Put workspace development and toolchain documentation in `CONTRIBUTING.md`. Put detailed package
+  usage, integrations, and development in focused package docs when needed; preserve complete
+  contracts in the SPEC and interaction document. Use the extension README template as an example,
+  not a mandatory section list or word limit.
+- During `verify-changes`, apply `write-orbis-readme` to affected READMEs and review their links and
+  published file inclusion. Conformance review checks behavioral claims; README review checks the
+  path from installation to first use.
 
 - Open with the result or constraint. Put prerequisites before their actions.
 - Use direct execution verbs and preserve exact package names and runtime requirements. Distinguish
