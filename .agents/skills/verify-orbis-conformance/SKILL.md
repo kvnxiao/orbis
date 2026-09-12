@@ -44,6 +44,13 @@ When a SPEC or implementation is absent, report what is missing. When requiremen
 an observable acceptance condition, identify the ambiguity rather than choosing the current
 implementation's behavior as the contract.
 
+Check the package's requirement identifiers as part of the review. Every `REQ-<slug>` cited in the
+SPEC, interaction document, README, and tracked tests must resolve to a requirement the SPEC
+defines, and every defined slug must be unique within the package and have at least one conformance
+check. An ordinal identifier, a duplicate slug, a dangling reference left by a retirement or rename,
+and a requirement with no check are each review findings. Cross-package references name their
+package.
+
 ## Compare the contract and implementation
 
 Derive expected behavior from the SPEC's system requirements and its linked normative
@@ -108,7 +115,8 @@ verification.
 ## Report the verdict
 
 Use a requirement coverage table with the requirement ID, status, source evidence, check or observed
-result, and remaining obligation. Use these statuses:
+result, and remaining obligation. Order rows by responsibility or by the SPEC's own section order;
+requirement slugs carry no sequence to sort by. Use these statuses:
 
 - **Verified:** Inspected source and sufficient evidence establish the requirement in the stated
   environment. Identify whether evidence is static inspection, executed tests, or supervised

@@ -66,14 +66,24 @@ skill files.
   ordering guarantees. Exclude provenance, review history, and verification journals. Put file
   layouts, internal types, algorithms, and task decomposition in implementation plans unless an
   external compatibility contract requires them in the SPEC.
-- Use package-local requirement IDs in the form `REQ-001`. Implementation tasks reference these IDs
-  and have separate names; cross-package references also name the package.
+- Use package-local requirement IDs in the form `REQ-<behavior-slug>`, written in kebab-case as a
+  two-to-four-word noun phrase matching the requirement's title, such as `REQ-approval-event`. Never
+  use ordinals, obligation verbs, library names, or the package name. Implementation tasks reference
+  these IDs and have separate names; cross-package references also name the package.
+- A slug implies no order or completeness, so document order and section headings define the reading
+  path. Amend requirements through the lifecycle rules in
+  [specification guidance](docs/specifications.md): keep the slug when the behavior's identity
+  survives, mint one for separated behavior, retire one for defunct behavior, and rename only a slug
+  that contradicts what it names. After a retirement or rename, sweep the package for the old slug
+  and resolve every reference. Do not reuse a retired slug.
 - For prompts, menus, forms, modals, or interactive terminal views, link `docs/tui-interactions.md`
   from the SPEC as the normative interaction contract. Put detailed appearance, labels, key
   mappings, focus, and user flows there under the same requirement IDs; do not duplicate detailed UI
-  details in the SPEC. Together, the documents define the complete package contract. Before design
-  approval, explore user flows and document scenarios and branching or multistep diagrams. Commands
-  that only execute an action or print output do not need an empty interaction document.
+  details in the SPEC. Headings there name the interaction area alone and keep stable anchors; a
+  `Requirements:` line in the section body lists its requirement IDs. Together, the documents define
+  the complete package contract. Before design approval, explore user flows and document scenarios
+  and branching or multistep diagrams. Commands that only execute an action or print output do not
+  need an empty interaction document.
 - Before deriving implementation work, review relevant specification requirements with the user.
   Existing session approval is sufficient; explicit user direction approves the behavior it
   specifies. Resolve only material unanswered decisions.
@@ -85,6 +95,10 @@ skill files.
   permitted implementation choices, and contract changes. Before implementing contract changes,
   update affected requirements and scenarios through `revise-orbis-package`. Keep the contract,
   interaction documentation, code, and tests consistent within the same change set.
+- When iteration has already landed in code without a contract update, reconcile the drift through
+  `revise-orbis-package`. Enumerate current public behavior, then keep, amend, mint, or retire each
+  slug. Minting and retirement need a user decision; existing code is evidence of implementation,
+  not approval of behavior.
 - Derive tasks from the approved contract and current source. Each task identifies requirements,
   dependencies, observable outcomes, and verification. Before implementing a change, state its
   behavior and verification. Save plans under `packages/<name>/implementation/` by default; Git

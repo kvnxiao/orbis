@@ -49,9 +49,11 @@ Map the requested scope to specification requirements and conformance scenarios.
 partial, remaining, and out-of-scope requirements visible. Separate proposed checks from recorded
 results; identify the evidence behind completion claims. When a requirement lacks a check, derive
 one from its approved behavior or flag the ambiguity for resolution. Reference the package-local
-`REQ-001` identifier format and keep task names separate from requirement IDs. Cross-package
-references include the package name. If an existing spec lacks these IDs, identify the missing
-references before presenting the plan as ready; do not silently invent or renumber requirements.
+`REQ-<behavior-slug>` identifier format and keep task names separate from requirement IDs.
+Cross-package references include the package name. If an existing spec lacks these IDs, identify the
+missing references before presenting the plan as ready; do not silently invent, rename, or retire
+requirements. A slug implies no sequence, so derive task order from dependencies rather than from
+identifier order.
 
 When several tasks contribute to a requirement, name each task's contribution and remaining
 obligations. Assign the check that establishes full coverage to a task. A requirement reference

@@ -46,8 +46,8 @@ proposed additions. Record assumptions.
 
 ### T-001 — <observable outcome>
 
-Status: pending Requirements: <REQ-###, this task's contribution, remaining obligations> Depends on:
-<task or plan links, or none>
+Status: pending Requirements: <REQ-<slug>, this task's contribution, remaining obligations> Depends
+on: <task or plan links, or none>
 
 Changes: Name the existing or proposed files and symbols, the edits to make, and behavior to reuse.
 State shared contracts that constrain concurrent work.
@@ -68,11 +68,12 @@ plan and link them only from local plans.
 
 ## Requirement coverage
 
-| Requirement | Current evidence                       | Contributing tasks | Full-coverage check |
-| ----------- | -------------------------------------- | ------------------ | ------------------- |
-| REQ-###     | Absent/partial/verified, with evidence | T-001              | Task and scenario   |
+| Requirement        | Current evidence                       | Contributing tasks | Full-coverage check |
+| ------------------ | -------------------------------------- | ------------------ | ------------------- |
+| REQ-approval-event | Absent/partial/verified, with evidence | T-001              | Task and scenario   |
 
-Include every requirement in the requested scope. Identify exclusions explicitly.
+Include every requirement in the requested scope. Identify exclusions explicitly. Order rows by
+responsibility or dependency; requirement slugs carry no sequence to sort by.
 
 ## Final verification
 
@@ -137,8 +138,8 @@ This example plans an investigation for `@orbis/plan`; it records no test result
 
 ### T-001 — Establish how Pi reports a failed session save
 
-Status: pending Requirements: REQ-020 and REQ-023 feasibility; does not implement persistence.
-Depends on: package scaffold and its Vitest project.
+Status: pending Requirements: REQ-session-recovery and REQ-plan-save feasibility; does not implement
+persistence. Depends on: package scaffold and its Vitest project.
 
 Changes: Add `packages/plan/tests/session-persistence.test.mts` using a disposable Pi session and a
 minimal extension that calls `pi.appendEntry()`. Exercise a fresh session, a session with an
@@ -154,7 +155,7 @@ records. Report the observed public API behavior and the persistence mechanism a
 extension.
 
 Blockers: Approval saving remains blocked until the experiment establishes how to confirm a saved
-session record or return a recoverable error. If public APIs cannot satisfy REQ-023, report the
-limitation before implementing dependent behavior.
+session record or return a recoverable error. If public APIs cannot satisfy REQ-plan-save, report
+the limitation before implementing dependent behavior.
 
 Evidence: Not run.

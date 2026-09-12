@@ -91,8 +91,11 @@ completion; do not infer an interaction merely from a proposed widget or hotkey.
 
 After shared design confirmation, write the auxiliary document with concrete initial states, user
 actions, and observable outcomes. Include Mermaid diagrams for branching or multistep flows and link
-scenarios to package requirement IDs. Scale detail to the package. Use the agreed interaction in
-examples; do not impose another package's keybindings, modal layout, or approval workflow.
+scenarios to package requirement IDs. Name the interaction area alone in each heading and list its
+requirement IDs in a `Requirements:` line inside the section body; when a section gains or loses a
+requirement, a heading that embeds requirement IDs breaks inbound SPEC links. Scale detail to the
+package. Use the agreed interaction in examples; do not impose another package's keybindings, modal
+layout, or approval workflow.
 
 Link `docs/tui-interactions.md` from `SPEC.md` as the normative interaction contract. Keep system
 responsibilities, interfaces, state, persistence, and ordering guarantees in the SPEC. Put detailed
@@ -114,11 +117,19 @@ approved contract.
 
 Write `packages/<name>/SPEC.md` using headings appropriate to the package. Define observable
 requirements, applicable interfaces, ordering and failure behavior, implementation choices, and
-conformance scenarios. Assign stable package-local requirement IDs in the form `REQ-001`. These
-identify requirements, not vertical tasks; task names remain separate. Link every requirement to a
-conformance check with observable expected results. Apply the specification guide's distinctions
-between mandatory text, examples, permitted choices, and unresolved decisions. Readers must be able
-to implement the package without reading the reference source.
+conformance scenarios. Assign stable package-local requirement IDs in the form
+`REQ-<behavior-slug>`: kebab-case, two to four words, matching the requirement's title and naming
+the behavior rather than its mechanism, as in `REQ-planning-entry`, `REQ-approval-event`, or
+`REQ-recoverable-failures`. Reject ordinals, obligation verbs, library names, and the package name;
+prefix with an area only to separate siblings. These identify requirements, not vertical tasks; task
+names remain separate. Link every requirement to a conformance check with observable expected
+results.
+
+Because slugs have no position, section headings and document order define the reading path, and
+the requirement headings index the package. Group requirements by responsibility rather
+than by minting order. Apply the specification guide's distinctions between mandatory text,
+examples, permitted choices, and unresolved decisions. Readers must be able to implement the package
+without reading the reference source.
 
 Use the repository's specification starter as guidance, not a mandatory outline. Write original
 prose under the repository license and cite external contracts that implementers need. Describe

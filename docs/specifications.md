@@ -40,14 +40,24 @@ cancellation, and recovery belong in the specification when they affect the pack
 Internal module names and dependency choices belong in implementation work unless compatibility
 requires them.
 
-Assign requirements stable identifiers in the form `REQ-001`, with zero-padded digits. Identifiers
-are local to a package; cross-package references include the package name. Keep requirement
-identifiers distinct from implementation task names. Keep each requirement focused on a behavior and
-its related conditions. State the trigger or precondition, required result, and applicable failure
-behavior. Define exact values and formats when compatibility depends on them. Avoid adjectives such
-as "fast" or "intuitive" as the sole acceptance criterion.
+Assign requirements stable identifiers in the form `REQ-<behavior-slug>`: kebab-case, two to four
+words, naming the behavior rather than its mechanism. The slug matches the requirement's title; the
+requirement headings form the package index. Reject ordinals, obligation verbs such as `must-`,
+implementation nouns such as a library name, and the package's own name. Prefix with an area only to
+separate siblings, as in `REQ-review-cancellation` beside `REQ-round-cancellation`. Identifiers are
+local to a package; cross-package references include the package name. Keep requirement identifiers
+distinct from implementation task names.
 
-Declare which text defines conformance. The SPEC's `REQ-###` requirements and associated contract
+Order requirements by responsibility. Descriptive identifiers name the behavior; requirement text
+defines its conditions and outcomes. Document order, section headings, and the conformance table
+define the reading path. Identifiers do not establish sequence or completeness.
+
+Keep each requirement focused on a behavior and its related conditions. State the trigger or
+precondition, required result, and applicable failure behavior. Define exact values and formats when
+compatibility depends on them. Avoid adjectives such as "fast" or "intuitive" as the sole acceptance
+criterion.
+
+Declare which text defines conformance. The SPEC's `REQ-<slug>` requirements and associated contract
 tables define system behavior; its linked normative interaction document defines detailed UI
 behavior under the same IDs. Label recommendations and illustrative examples separately; examples do
 not silently add obligations. Conformance scenarios verify the requirements and must agree with
@@ -77,7 +87,11 @@ Before design approval, explore focus, navigation, text entry, confirmation, sub
 cancellation, recovery, and applicable terminal constraints. After approval, document concrete
 scenarios with initial state, user actions, and observable outcomes. Include Mermaid diagrams for
 branching or multistep flows. Cover failure and interruption as well as successful completion, and
-reference the applicable `REQ-###` identifiers.
+reference the applicable `REQ-<slug>` identifiers.
+
+Interaction headings name the interaction area alone and keep their anchors stable; a
+`Requirements:` line in the section body lists the requirement IDs it defines. When a section gains
+or loses a requirement, a heading that embeds requirement IDs breaks every inbound SPEC link.
 
 The SPEC owns system responsibilities, public interfaces, state, persistence, ordering, and recovery
 guarantees. The linked interaction document owns detailed layout, appearance, labels, key mappings,
@@ -137,8 +151,8 @@ published recipes, and Pi package formats.
 When implementation starts, run:
 
 ```sh
-pnpm new:extension <name>
-pnpm install
+just new <name>
+just install
 ```
 
 The scaffold accepts a new package name or an existing real directory containing a regular `SPEC.md`
@@ -174,8 +188,7 @@ When requested behavior changes the contract, use
 requirements and scenarios before implementation, then update the plan, code, tests, and usage
 documentation. Explicit user direction approves the behavior it specifies; material unanswered
 decisions still need resolution. For interactive changes, keep `docs/tui-interactions.md` consistent
-with the SPEC. Preserve requirement identifiers when their meaning is unchanged. Use version control
-for previous revisions.
+with the SPEC. Use version control for previous revisions.
 
 Within `verify-changes`, conformance reviewers report discrepancies without editing the contract or
 implementation. The coordinator resolves authorized findings, uses the revision workflow for
@@ -185,6 +198,45 @@ until the user authorizes their behavior; passing tests do not establish that au
 When code and a scenario disagree with a requirement, resolve the inconsistency against the approved
 contract. A passing test does not authorize changing that contract. Follow the repository's runtime
 verification and publication checks as well.
+
+### Requirement lifecycle
+
+Every amendment resolves to one of these operations. Use version control for history. Do not add
+retirement ledgers, redirect tables, or renamed-identifier notes to the SPEC.
+
+| Operation                                 | Rule                                                                                           |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Meaning unchanged                         | The slug persists verbatim.                                                                    |
+| Meaning refined, behavior identity intact | The slug persists; only the requirement text changes.                                          |
+| Behavior split                            | Preserve the slug for the dominant part. Assign each separated behavior a new slug.            |
+| Behaviors merged                          | The surviving slug is the one that still describes the merged behavior; the other retires.     |
+| Behavior defunct                          | Retire the slug and delete its requirement, conformance rows, and interaction references.      |
+| Slug contradicts the behavior it names    | Rename it. Rename for a wrong name, never for tidiness or consistency with a neighboring slug. |
+
+A retired or renamed slug leaves dangling references in tracked Markdown. Before finishing the
+change set, sweep the package with `rg 'REQ-<old-slug>'` and resolve every hit. Do not reuse a
+retired slug for different behavior.
+
+### Reconcile an iterated implementation
+
+When iteration lands in code before the contract is updated, the SPEC describes an earlier package.
+When the user requests whole-package reconciliation, `revise-orbis-package` reviews the accumulated
+drift in one pass. Scoped revisions reconcile affected requirements and report unrelated drift
+separately. Enumerate current public behavior from source, tests, the README, and the interaction
+document. Map each behavior to every applicable requirement, then classify every requirement and
+uncovered behavior in scope:
+
+| Finding                                                       | Action                                                                                          |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Code implements the requirement and the contract describes it | Verify the wording and keep the slug.                                                           |
+| Code implements it differently and the user authorizes that   | Amend the requirement text and keep the slug.                                                   |
+| Code implements behavior that no slug claims                  | Mint a slug, write the requirement and its conformance check, and have the behavior authorized. |
+| No code implements it and the behavior is abandoned           | Retire the slug under the lifecycle rules.                                                      |
+| No code implements it and the behavior is still wanted        | Keep the slug and record it as unimplemented.                                                   |
+
+Existing code is evidence of implementation, not approval of behavior. Minting and retirement both
+need a user decision; an absent implementation alone does not retire a requirement. Report the
+minted, amended, retired, and unchanged slugs.
 
 ## References
 

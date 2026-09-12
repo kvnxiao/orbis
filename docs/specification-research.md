@@ -20,7 +20,7 @@ judgments, not measured Orbis results.
 | [Gherkin reference](https://cucumber.io/docs/gherkin/reference/)                                                   | Scenarios describe initial context, an event, and an observable result.                                                                          | Use that relationship in plain Markdown. A scenario language or test-framework dependency is unnecessary.                                                                            |
 
 These sources establish specification-writing practices and concrete workflows. Their existence does
-not demonstrate improved coding-agent performance. Stable `REQ-###` identifiers are an Orbis
+not demonstrate improved coding-agent performance. Stable `REQ-<slug>` identifiers are an Orbis
 traceability convention, not an empirically validated prompt technique.
 
 ## Scholarly evidence
@@ -37,7 +37,7 @@ simulated by an LLM, and question-quality scoring is sensitive to prompts.
 
 **Orbis judgment:** Resolve discoverable facts before questioning the user. Ask about decisions that
 affect the contract, preserve settled answers, and stop asking when the relevant uncertainty is
-resolved. This study does not establish that frontier rounds or either proposed UI outperform other
+resolved. This study does not establish the effectiveness of Orbis question rounds or terminal
 interfaces.
 
 ### Checkable conditions can detect defects without proving completeness
@@ -120,8 +120,8 @@ The [specification guide](specifications.md) defines the authoring rules. The te
 content needed to implement and evaluate the package:
 
 - **Purpose and scope:** the user problem, Pi boundary, and intended implementer.
-- **Behavioral contract:** stable `REQ-###` requirements with triggers, results, and relevant
-  interface, state, ordering, and failure rules.
+- **Behavioral contract:** stable `REQ-<slug>` requirements with triggers, results, and the
+  interface, state, ordering, and failure rules that apply.
 - **Explicit variation:** implementation-defined choices, informative examples, and unresolved
   decisions that cannot be treated as approved behavior.
 - **Conformance:** the complete required behavior and checks that expose whether each requirement is

@@ -3,7 +3,8 @@ name: revise-orbis-package
 description:
   Revise an existing Orbis package's behavior while keeping its SPEC, interaction scenarios,
   implementation plans, code, and tests consistent. Use when user feedback or a code-change request
-  alters the package contract, or when an approved amendment needs implementation.
+  alters the package contract, when an approved amendment needs implementation, or when iteration
+  has already landed in code and the SPEC must be reconciled with the current package.
 ---
 
 # Revise an Orbis package
@@ -37,6 +38,30 @@ For fixes and permitted choices, proceed under the existing contract without inv
 When a visual adjustment changes prescribed behavior or exceeds permitted variation, amend the
 contract. Keep unrelated deviations separate from the requested revision.
 
+## Reconcile an iterated implementation
+
+When iteration lands in code before the contract is updated, the SPEC describes an earlier package.
+When the user requests whole-package reconciliation, review the accumulated drift in one pass.
+For a scoped revision, reconcile affected requirements and report unrelated drift separately.
+
+Enumerate current public behavior from source, tests, README, and the interaction document.
+Map commands, tools, configuration, events, persisted artifacts, ordering rules, and user-visible
+failure behavior to every applicable requirement. Identify behavior without requirement coverage.
+Then classify every requirement and uncovered behavior in scope:
+
+| Finding                                                       | Action                                                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Code implements the requirement and the contract describes it | Verify the wording against observed behavior and keep the slug.                                 |
+| Code implements it differently and the user authorizes that   | Amend the requirement text and keep the slug.                                                   |
+| Code implements behavior that no slug claims                  | Mint a slug, write the requirement and its conformance check, and have the behavior authorized. |
+| No code implements it and the behavior is abandoned           | Retire the slug under the requirement lifecycle rules.                                          |
+| No code implements it and the behavior is still wanted        | Keep the slug and record it as unimplemented in the package status.                             |
+
+Minting and retirement both need a user decision. An absent implementation does not retire a
+requirement, and existing code does not approve the behavior it implements. Present the proposed
+mints, amendments, and retirements together with the behavior each one covers, then apply the
+authorized set. Report the minted, amended, retired, and unchanged slugs.
+
 ## Resolve and amend behavior
 
 Explicit user direction approves the behavior it specifies. Do not request the same approval again.
@@ -53,9 +78,9 @@ Before implementing changed behavior, update the approved requirements and their
 scenarios. Keep architecture, system behavior, interfaces, and lifecycle guarantees in the SPEC;
 keep detailed UI behavior and appearance in its linked normative interaction document. Describe
 observable behavior without prescribing internal files or algorithms. Preserve unaffected
-requirements and identifiers. Retain identifiers for requirements whose meaning is unchanged; for
-replaced or removed requirements, update dependent references without reusing an identifier for
-unrelated behavior. Use Git for prior revisions.
+requirements and identifiers. Before changing an identifier, read and apply the
+[requirement lifecycle rules](../../../docs/specifications.md#requirement-lifecycle), including
+the reference sweep after retirement or renaming.
 
 For interactive changes, resolve affected focus, navigation, submission, back, cancel, and recovery
 behavior. Update `docs/tui-interactions.md`, its requirement references, and affected diagrams to

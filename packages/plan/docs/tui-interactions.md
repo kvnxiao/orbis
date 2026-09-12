@@ -3,7 +3,9 @@
 This document is normative with [SPEC.md](../SPEC.md). Requirement identifiers name the shared
 system contract. Examples illustrate the required interactions without defining a wire format.
 
-## Modal layout — REQ-016
+## Modal layout
+
+Requirements: REQ-terminal-interaction-boundary.
 
 The modal uses the configured border and occupies 96% of terminal width. Title, action bar, and
 optional hints remain fixed while content scrolls. A divider immediately follows the title, with a
@@ -28,7 +30,10 @@ An active agent waiting for a modal displays `Awaiting Plan` and a rotating work
 Closing, failure, transfer, cancellation, and shutdown restore Pi's defaults. Cleanup from an older
 modal cannot replace a newer wait indicator. Idle modal use does not create agent activity.
 
-## Question frontier — REQ-005, REQ-007, REQ-011, REQ-012, REQ-030, REQ-031
+## Question frontier
+
+Requirements: REQ-complete-frontier, REQ-explicit-round-submission, REQ-revision-validation,
+REQ-same-agent-clarification, REQ-stable-question-numbers, REQ-option-details.
 
 The title is `Plan questions (round N)`. Question numbers belong to logical decisions and never
 change when questions move, change wording, or are reactivated. A distinct decision gets the next
@@ -76,7 +81,10 @@ disabled; focus shows `Question N is not answered` or `Question N needs reconfir
 question is withdrawn or deferred, the frontier shows `Continue planning`, which returns control
 without creating decisions or approving a plan.
 
-## Answer review — REQ-007, REQ-012, REQ-028
+## Answer review
+
+Requirements: REQ-explicit-round-submission, REQ-same-agent-clarification,
+REQ-bounded-agent-results.
 
 The review shows the current questions, selected answers, and selected notes. Sent clarification
 history is collapsed by default and expandable per question. It contains the sent user questions,
@@ -88,7 +96,9 @@ disclosures and the submit button. Enter expands a focused history or activates 
 Scrolling retains the action bar and all draft data. Entering review and expanding history do not
 submit. The package's normal bounded-result policy also applies to clarification history.
 
-## Frontier history — REQ-020, REQ-035
+## Frontier history
+
+Requirements: REQ-session-recovery, REQ-frontier-browsing.
 
 F3/F4 browse previous/next logical frontiers within the plan. Each frontier has one browsing stop,
 its latest completed snapshot; clarification updates do not create additional stops. Earlier
@@ -98,7 +108,10 @@ frontier restores its drafts, selection, focus, and reading position. Browsing d
 session-tree state or change the owning interaction identity. Snapshot history survives session
 reload on the active branch.
 
-## Plan review — REQ-022, REQ-023, REQ-032, REQ-033
+## Plan review
+
+Requirements: REQ-read-only-plan-review, REQ-plan-save, REQ-inline-block-annotations,
+REQ-revision-browsing.
 
 The title identifies the revision and renders its saved Markdown path as a clickable file link. The
 path may be shortened for display; its link targets the absolute file URL. Unsupported terminals
@@ -136,7 +149,10 @@ notes, revision requests, or approval. Returning to the latest restores its note
 Browsing cannot change the pending approval identity. New revisions do not inherit active notes from
 their predecessors.
 
-## Closing and recovery — REQ-011, REQ-020, REQ-021, REQ-027
+## Closing and recovery
+
+Requirements: REQ-revision-validation, REQ-session-recovery, REQ-interaction-cancellation,
+REQ-recoverable-failures.
 
 Escape leaves an editor, disclosure view, or answer review without submitting. From the outermost
 frontier or plan review, Escape arms closure; a consecutive Escape closes, stops the owning agent
@@ -148,17 +164,18 @@ work requires explicit resume. Late callbacks cannot modify a replacement sessio
 
 ## Interaction scenarios
 
-| Scenario                                                       | Expected result                                                                                                  | Requirements                       |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Clarification revises options and withdraws a sibling question | Current choices require reconfirmation; the sibling retains only its struck heading; drafts and history survive. | REQ-005, REQ-011, REQ-012, REQ-030 |
-| All active questions are withdrawn                             | Continue planning returns an explicit empty-decision outcome after user activation.                              | REQ-007                            |
-| Browse an earlier frontier and return                          | Historical input is rejected; current drafts, focus, and scroll remain intact.                                   | REQ-020, REQ-035                   |
-| Expand history in answer review                                | Sent exchanges appear; submission includes them and excludes unsent drafts.                                      | REQ-012, REQ-028, REQ-031          |
-| Type notes on repeated or nested blocks                        | Each note remains bound to the selected source range through resize and appears beneath that target.             | REQ-016, REQ-032                   |
-| Request revision                                               | All current nonblank notes are submitted once; the next revision requires fresh review.                          | REQ-022, REQ-032                   |
-| Approve with supplementary notes                               | Both immutable artifacts and session acceptance are confirmed before the idle approval event.                    | REQ-020, REQ-023, REQ-025          |
-| File creation or session save fails before display             | Review does not open; exact content remains recoverable for retry.                                               | REQ-022, REQ-027                   |
-| Hide hints or shrink the terminal                              | CTA focus and activation remain available; decoration yields before controls.                                    | REQ-016                            |
+| Scenario                                                       | Expected result                                                                                                                                                                  | Requirements                                                                                              |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Browse an earlier revision and return                          | Earlier revisions reject notes, revision requests, and approval. Returning to the latest restores its notes and reading position without changing the pending approval identity. | REQ-revision-browsing                                                                                     |
+| Clarification revises options and withdraws a sibling question | Current choices require reconfirmation; the sibling retains only its struck heading; drafts and history survive.                                                                 | REQ-complete-frontier, REQ-revision-validation, REQ-same-agent-clarification, REQ-stable-question-numbers |
+| All active questions are withdrawn                             | Continue planning returns an explicit empty-decision outcome after user activation.                                                                                              | REQ-explicit-round-submission                                                                             |
+| Browse an earlier frontier and return                          | Historical input is rejected; current drafts, focus, and scroll remain intact.                                                                                                   | REQ-session-recovery, REQ-frontier-browsing                                                               |
+| Expand history in answer review                                | Sent exchanges appear; submission includes them and excludes unsent drafts.                                                                                                      | REQ-same-agent-clarification, REQ-bounded-agent-results, REQ-option-details                               |
+| Type notes on repeated or nested blocks                        | Each note remains bound to the selected source range through resize and appears beneath that target.                                                                             | REQ-terminal-interaction-boundary, REQ-inline-block-annotations                                           |
+| Request revision                                               | All current nonblank notes are submitted once; the next revision requires fresh review.                                                                                          | REQ-read-only-plan-review, REQ-inline-block-annotations                                                   |
+| Approve with supplementary notes                               | Both immutable artifacts and session acceptance are confirmed before the idle approval event.                                                                                    | REQ-session-recovery, REQ-plan-save, REQ-approval-event                                                   |
+| File creation or session save fails before display             | Review does not open; exact content remains recoverable for retry.                                                                                                               | REQ-read-only-plan-review, REQ-recoverable-failures                                                       |
+| Hide hints or shrink the terminal                              | CTA focus and activation remain available; decoration yields before controls.                                                                                                    | REQ-terminal-interaction-boundary                                                                         |
 
 ```mermaid
 flowchart TD
@@ -177,7 +194,8 @@ flowchart TD
 
 ## Composer mode, entry, and settings
 
-Requirements: REQ-003, REQ-019, REQ-020, REQ-021, REQ-034.
+Requirements: REQ-planning-entry, REQ-configuration-precedence, REQ-session-recovery,
+REQ-interaction-cancellation, REQ-composer-mode.
 
 Before using the default Shift+Tab planning shortcut, rebind Pi's `app.thinking.cycle` in its agent
 directory's `keybindings.json` and run `/reload`. The default path is
@@ -230,9 +248,16 @@ it to Off and open a modal: hints and their divider are hidden, while errors and
 remain visible. Press F1 to show hints for that modal, then reopen it: the saved Off default applies
 again. The first outer Escape arms closing even when the reminder is hidden.
 
+| Scenario                                                                                       | Expected result                                                                                                                 | Requirements                 |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Switch composer modes while idle, then attempt a switch during work                            | Idle switching preserves typed text without sending input. During work, switching is rejected and does not queue a mode change. | REQ-composer-mode            |
+| Update a personal setting with a trusted project override, then force a settings write failure | The menu identifies the overriding value and file. A failed write restores the previous displayed value and reports the error.  | REQ-configuration-precedence |
+
 ## Terminal and integration scenarios
 
-Requirements: REQ-001, REQ-011, REQ-014, REQ-016, REQ-020, REQ-027, REQ-029.
+Requirements: REQ-complete-terminal-package, REQ-revision-validation, REQ-exclusive-interaction,
+REQ-terminal-interaction-boundary, REQ-session-recovery, REQ-recoverable-failures,
+REQ-public-presentation-boundary.
 
 | Situation                                                    | Observable outcome                                                                                                                      |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
