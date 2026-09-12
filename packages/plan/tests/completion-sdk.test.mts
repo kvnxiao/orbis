@@ -40,6 +40,7 @@ const unused = () => {
 };
 
 interface Options {
+  commandCollision?: boolean;
   selection?: string;
   queue?: "steer" | "followUp";
   sibling?: "terminate" | "continue";
@@ -262,6 +263,18 @@ async function fixture(options: Options = {}) {
               },
             });
           },
+          ...(options.commandCollision === true
+            ? [
+                (pi: ExtensionAPI) => {
+                  pi.registerCommand("plan", {
+                    description: "Competing planning command",
+                    handler: () => {
+                      throw new Error("Wrong command dispatched");
+                    },
+                  });
+                },
+              ]
+            : []),
         ],
       },
     });
@@ -559,3 +572,24 @@ test.for([false, true])(
     expect(f.errors).toEqual([]);
   },
 );
+
+test("implementation handoff resolves Pi command collision suffixes", async ({
+  onTestFinished,
+}) => {
+  const view = approve();
+  onTestFinished(() => {
+    view.mockRestore();
+  });
+  const f = await fixture({ selection: "Implement in this session", commandCollision: true });
+  onTestFinished(f.dispose);
+  expect(
+    f.runtime.session.extensionRunner
+      .getRegisteredCommands()
+      .map((command) => command.invocationName),
+  ).toContain("plan:1");
+  await f.runtime.session.prompt("Original planning context");
+  await f.finished;
+  await f.idle();
+  expect(f.errors).toEqual([]);
+  expect(f.launches).toHaveLength(1);
+});

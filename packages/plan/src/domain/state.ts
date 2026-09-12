@@ -129,6 +129,7 @@ const approvedNotesSchema = Type.Object({ overall: Type.String(), blocks: Type.A
 /** Describe immutable artifacts bound to one explicit approval. */
 export const approvalSchema = Type.Object({
   version: Type.Literal(1),
+  approvalId: Type.Optional(identity),
   planId: Type.String(),
   revision: Type.Integer({ minimum: 1 }),
   sessionId: Type.String(),
@@ -242,6 +243,8 @@ export const sessionSchema = Type.Object({
   branchId: Type.Union([Type.String(), Type.Null()]),
   cwd: Type.String(),
   objective: Type.String(),
+  approvals: Type.Optional(Type.Array(approvalSchema)),
+  approvalRequired: Type.Optional(Type.Boolean()),
   accepted: Type.Optional(approvalSchema),
   pendingApproval: Type.Optional(approvalSchema),
 });
@@ -352,8 +355,67 @@ function validApproval(
     approval.notesContent === notesContent &&
     (notes === undefined
       ? approval.notesPath === undefined
-      : approval.notesPath === `${approval.planPath.slice(0, -3)}.notes.md`)
+      : approval.notesPath === approvalNotesPath(approval))
   );
+}
+
+/** Derive the immutable companion destination for one approval. */
+export function approvalNotesPath(approval: Pick<PlanApproval, "planPath" | "approvalId">): string {
+  return `${approval.planPath.slice(0, -3)}${approval.approvalId === undefined ? "" : `.${approval.approvalId}`}.notes.md`;
+}
+
+/** Identify one approval across events and ephemeral launch deduplication. */
+export function approvalKey(approval: PlanApproval): string {
+  return approval.approvalId ?? `${approval.planId}:${String(approval.revision)}`;
+}
+
+/** Find the approval of the current revision and exact supplementary drafts. */
+export function matchingApproval(plan: PlanningSession): PlanApproval | undefined {
+  if (plan.approvalRequired === true) {
+    return undefined;
+  }
+  const approval = plan.approvals?.at(-1);
+  return approval !== undefined && validApproval(approval, plan, plan.reviews?.at(-1))
+    ? approval
+    : undefined;
+}
+
+/** Reopen accepted content without advancing the Markdown revision. */
+export function reopenApproval(plan: PlanningSession, requireApproval = false): PlanningSession {
+  const review = plan.reviews?.at(-1);
+  if (plan.accepted === undefined || review === undefined) {
+    return plan;
+  }
+  const acceptedKey = approvalKey(plan.accepted);
+  const result: PlanningSession = {
+    ...plan,
+    phase: "review",
+    approvals: [
+      ...(plan.approvals ?? []).filter((approval) => approvalKey(approval) !== acceptedKey),
+      structuredClone(plan.accepted),
+    ],
+    reviews: [...(plan.reviews?.slice(0, -1) ?? []), { ...review, status: "pending" }],
+    ...(requireApproval ? { approvalRequired: true } : {}),
+  };
+  delete result.accepted;
+  return result;
+}
+
+/** Restore unchanged acceptance when an inspected review closes. */
+export function closeReview(plan: PlanningSession): PlanningSession {
+  const approval = matchingApproval(plan);
+  const review = plan.reviews?.at(-1);
+  if (approval === undefined || review?.status !== "pending") {
+    return { ...plan, phase: "cancelled" };
+  }
+  const accepted: PlanningSession = {
+    ...plan,
+    phase: "accepted",
+    accepted: approval,
+    reviews: [...(plan.reviews?.slice(0, -1) ?? []), { ...review, status: "approved" }],
+  };
+  delete accepted.pendingApproval;
+  return accepted;
 }
 
 /** Validate recorded ownership, revisions, histories, and artifact bindings before restoration. */
@@ -365,6 +427,27 @@ export function validSession(plan: PlanningSession): boolean {
   if (
     new Set(numbers).size !== numbers.length ||
     numbers.some((number) => number < 1 || number > numbers.length)
+  ) {
+    return false;
+  }
+  if (
+    plan.approvals?.some((approval) => {
+      const review: PlanRevision = {
+        revision: approval.revision,
+        markdown: approval.planContent,
+        path: approval.planPath,
+        status: "approved",
+        feedbackDraft: approval.notes?.overall ?? "",
+        ...(approval.notes === undefined ? {} : { notes: approval.notes.blocks }),
+      };
+      return (
+        !validReview(review) ||
+        !validApproval(approval, plan, review) ||
+        plan.reviews?.some(
+          (item) => item.revision === approval.revision && item.markdown === approval.planContent,
+        ) !== true
+      );
+    }) === true
   ) {
     return false;
   }
@@ -418,7 +501,9 @@ export function validSession(plan: PlanningSession): boolean {
   }
   if (
     plan.accepted !== undefined &&
-    (plan.phase !== "accepted" || !validApproval(plan.accepted, plan, review))
+    (plan.phase !== "accepted" ||
+      plan.approvalRequired === true ||
+      !validApproval(plan.accepted, plan, review))
   ) {
     return false;
   }
@@ -654,6 +739,7 @@ export function acceptApproval(state: PlanningSession): PlanningSession {
     reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, status: "approved" }],
   };
   delete accepted.pendingApproval;
+  delete accepted.approvalRequired;
   return accepted;
 }
 
@@ -1115,3 +1201,14 @@ export type ReviewAction = Exclude<
   DraftAction | ResultAction,
   Exclude<RoundAction, { type: "cancel" }>
 >;
+
+/** Validate the complete branch snapshot before restoration or recovery. */
+export function validSnapshot(value: unknown): value is Static<typeof snapshotSchema> {
+  return (
+    Value.Check(snapshotSchema, value) &&
+    [value.active, ...value.unfinished].every((plan) => plan === undefined || validSession(plan))
+  );
+}
+
+/** Describe validated records selected from a disk-confirmed branch. */
+export type PlanningSnapshot = Static<typeof snapshotSchema>;

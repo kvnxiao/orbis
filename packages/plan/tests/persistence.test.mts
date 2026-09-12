@@ -163,7 +163,9 @@ test.for(["mode", "round", "review", "saving", "accepted", "answer", "stale-answ
     expect(errors).toEqual(
       restorable
         ? []
-        : ["Cannot restore malformed planning state. The saved record remains unchanged."],
+        : [
+            "Cannot restore malformed planning state. The saved record remains unchanged. Use /plan or plan_start to select recovery.",
+          ],
     );
     expect(await readFile(path, "utf8")).toBe(saved);
   },

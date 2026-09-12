@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerPlanPresenter } from "@orbis/plan/presentation";
 
+/** Register automatic fixture input for disposable terminal verification. */
 export default function presenterProbe(pi: ExtensionAPI): void {
   registerPlanPresenter(pi, {
     version: 1,

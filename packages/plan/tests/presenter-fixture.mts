@@ -16,6 +16,7 @@ async function requestPresenterSelection(
   await Promise.resolve();
 }
 
+/** Select a disposable presenter and return its listener and mock cleanup. */
 export function selectPresenter(
   f: RuntimeFixture,
   present: PlanPresenter["present"],

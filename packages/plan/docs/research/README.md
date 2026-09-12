@@ -14,6 +14,7 @@ limits.
 | [Planning boundaries](planning-boundaries.md)                   | How do branch restoration, keyboard conflicts, agent completion, and input-size costs affect planning?                                                                                |
 | [Agent planning comparison](agent-planning-comparison.md)       | How do Codex and Claude Code expose planning and structured input? How do frontier rounds and separate implementation authorization differ?                                           |
 | [Completion and implementation handoff](completion-handoff.md)  | How do graceful tool termination, native selectors, command routing, and fresh-session submission preserve approval and queued input?                                                 |
+| [Recovery and command routing](recovery.md)                     | How do resolved command names, streamed tool calls, and branch-local session records constrain restoration and dispatch?                                                              |
 
 Package identities and versions come from registry reads. API and implementation findings come from
 current official documentation, pinned source, and Pi 0.85.1 installed in this workspace. README

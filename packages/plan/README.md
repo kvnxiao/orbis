@@ -58,7 +58,7 @@ not detect every shortcut registered by another extension.
 Run `/plan <objective>` to start planning, or `/plan` to reopen saved work. With no objective and no
 saved plan, `/plan` starts a new plan and asks the agent to develop a plan for the objective in the
 conversation. During an active turn, `/plan` is refused with
-`Stop the current turn before entering planning.` When several unfinished plans exist on the current
+`Stop the current turn before entering planning.` When several saved plans exist on the current
 branch, select the intended plan. Natural-language requests such as “enter plan mode,” “help me plan
 this change,” “resume the plan,” and “continue planning” also invoke the planning tools. These are
 examples, not required phrases; recognition depends on the model. The owning Pi agent researches and
@@ -510,21 +510,22 @@ their own files. The output filesystem must support hard links; existing conflic
 preserved. File existence does not imply approval. A failed artifact or session write prevents
 review from opening; correct storage and use `/plan` to retry the saved revision.
 
-Approval verifies the unchanged revision file and records acceptance in the session. Approval with
-notes also saves `<planId>-<revision>.notes.md` beside the plan. The companion contains the overall
-text and block annotations with their original excerpts and revision identities. Notes remain
-separate from the plan Markdown. When approval fails, use `/plan` to reopen review and explicitly
-retry, or Escape to pause. An approval attempt preserves its revision, destinations, exact plan and
-notes content, and approval time through retries, settings changes, and session-tree navigation.
-Partial writes do not report success; acceptance requires every required artifact and the session
-record to be confirmed.
+Approval verifies the unchanged revision file and records acceptance in the session. New approvals
+with notes also save a companion beside the plan. To derive its path, Plan replaces the plan's `.md`
+suffix with `.<approvalId>.notes.md`, including for recreated artifacts. The companion contains the
+overall text and block annotations with their original excerpts and revision identities. Notes
+remain separate from the plan Markdown. When approval fails, use `/plan` to reopen review and
+explicitly retry, or Escape to pause. An approval attempt preserves its revision, destinations,
+exact plan and notes content, and approval time through retries, settings changes, and session-tree
+navigation. Partial writes do not report success; acceptance requires every required artifact and
+the session record to be confirmed.
 
-The approval payload contains `version: 1`, `planId`, `revision`, `sessionId`, `cwd`, `planPath`,
-`planContent`, and `approvedAt`. With supplementary notes it also contains `notes`, `notesPath`, and
-`notesContent`; without notes, these fields are omitted together. `notes.overall` contains the
-overall text, and `notes.blocks` contains `blockId`, `excerpt`, `revision`, and `text` for each
-nonblank annotation. `planContent` remains the exact revision Markdown, and `notesContent` matches
-the companion file. Tool results and the approval event contain the same payload.
+The approval payload contains `version: 1`, `approvalId`, `planId`, `revision`, `sessionId`, `cwd`,
+`planPath`, `planContent`, and `approvedAt`. With supplementary notes it also contains `notes`,
+`notesPath`, and `notesContent`; without notes, these fields are omitted together. `notes.overall`
+contains the overall text, and `notes.blocks` contains `blockId`, `excerpt`, `revision`, and `text`
+for each nonblank annotation. `planContent` remains the exact revision Markdown, and `notesContent`
+matches the companion file. Tool results and the approval event contain the same payload.
 
 After saving approval, the package checks Pi's idleness immediately and on `agent_settled`. When Pi
 is idle, it emits `orbis:plan-approved` with the [version 1 payload](SPEC.md#approval-and-handoff).
@@ -551,8 +552,9 @@ Natural-language requests to implement here, implement in a fresh session, or sh
 use `plan_implement` with action `here`, `new`, or `options`. These are intent examples, not exact
 phrases; recognition depends on the model. An optional `planId` identifies an unambiguous approved
 plan. Without `planId`, multiple saved approvals require explicit selection. Unknown or unapproved
-plans cannot launch implementation. Internal token routing uses the existing `/plan` command; users
-do not need a launcher command.
+plans cannot launch implementation. Internal token routing resolves the planning command's
+invocation name, including any numeric suffix Pi assigns for a command collision. Missing or
+ambiguous command registration fails before dispatch. Users do not need a launcher command.
 
 Before scheduling implementation for a saved approval, Plan returns to Default mode and pauses other
 unfinished planning work. Dismissing the options preserves that unfinished work's mode and state.
@@ -565,6 +567,35 @@ launch is never automatically retried. Inspect the intended session before reque
 Changed or missing approved artifacts must be restored before dispatch. When the user interrupts the
 originating turn during the idle wait, its pending implementation action expires without launching
 work.
+
+## Reopening approved plans and recovery
+
+To inspect or fine-tune an approved plan, ask to resume its review or run `/plan`. The normal review
+modal restores the same Markdown revision, overall notes, and block annotations. Closing unchanged
+content preserves approval. Approving unchanged content reopens implementation options without
+replaying its approval event. Editing notes creates unapproved drafts; approval binds their exact
+contents to a new `approvalId`. When approved notes are nonblank, Plan saves an immutable companion
+file. Only agent-returned Markdown creates the next review revision. Historical approvals do not
+approve later revisions or changed notes.
+
+Approval-event subscribers deduplicate by `approvalId`. Older version-1 records without that field
+retain their original plan/revision identity and companion path. Plan accepts records that omit
+those optional fields without rewriting historical entries.
+
+When the latest planning record is incompatible, explicit entry offers the latest valid earlier
+checkpoint on the same disk-confirmed branch and warns that newer drafts may be missing. Escape or
+Decide later preserves the records. Recovery appends new state; it does not rewind files or external
+effects. Unfinished drafts reopen normally. Recovered accepted content requires fresh review and
+approval. Without a valid checkpoint, the package reports the limitation and permits explicitly
+requested replacement planning.
+
+When a recorded artifact is missing or changed, review offers to recreate its exact recorded bytes
+at a new path. Existing files remain unchanged, and the recovered copy requires fresh approval.
+Failed recovery reports its error and preserves the original records for another explicit attempt.
+
+During model generation, Pi can display a streamed tool call before executing it. If the user
+interrupts that generation, the modal has not opened. Explicit resume restores saved work;
+unfinished tool arguments are not a saved question frontier or review revision.
 
 ## Verification
 

@@ -7,7 +7,9 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
+import { approvalKey } from "../domain/state.ts";
 import type { PlanApproval } from "../domain/state.ts";
+import { planCommandDescription } from "./instructions.ts";
 
 const choices = ["Implement in this session", "Implement in a new session", "Decide later"];
 
@@ -51,12 +53,7 @@ export class PlanHandoff {
     if (this.controller !== undefined || this.pending !== undefined) {
       throw new Error("An implementation selection or launch is already pending.");
     }
-    const key = `${approval.planId}:${String(approval.revision)}`;
-    if (this.dispatched.has(key)) {
-      throw new Error(
-        "Implementation was already dispatched for this approval. Inspect the session before requesting further work.",
-      );
-    }
+    const key = approvalKey(approval);
     const generation = this.generation;
     const sessionId = ctx.sessionManager.getSessionId();
     const controller = new AbortController();
@@ -87,6 +84,25 @@ export class PlanHandoff {
       if (!current()) {
         return "Approval preserved. The implementation action expired.";
       }
+      if (this.dispatched.has(key)) {
+        throw new Error(
+          "Implementation was already dispatched for this approval. Inspect the session before requesting further work.",
+        );
+      }
+      const commands = this.pi
+        .getCommands()
+        .filter(
+          (command) =>
+            command.source === "extension" &&
+            /^plan(?::[0-9]+)?$/u.test(command.name) &&
+            command.description === planCommandDescription,
+        );
+      const command = commands[0];
+      if (commands.length !== 1 || command === undefined) {
+        throw new Error(
+          "The planning command is missing or ambiguous. Resolve extension command registration before requesting implementation.",
+        );
+      }
       beforeDispatch?.();
       const token = randomUUID();
       this.pending = {
@@ -99,7 +115,9 @@ export class PlanHandoff {
         ...(signal === undefined ? {} : { signal }),
       };
       // Command dispatch precedes queueing; its idle wait must not be awaited by this tool.
-      this.pi.sendUserMessage(`/plan __handoff ${token}`, { expandPromptTemplates: true });
+      this.pi.sendUserMessage(`/${command.name} __handoff ${token}`, {
+        expandPromptTemplates: true,
+      });
       return "Implementation authorized and scheduled after planning completes. Acknowledge approval and finish this planning turn.";
     } catch (error) {
       if (generation === this.generation) {
@@ -144,7 +162,7 @@ export class PlanHandoff {
         );
       }
       const prompt = `Implement the approved plan at this absolute Markdown path: ${JSON.stringify(approval.planPath)}.\n\nThe user selected implementation and authorizes execution now, even if the saved plan says implementation awaits separate authorization. Follow the approved plan and the repository instructions. Start implementation without asking for the same authorization again.${approval.notesContent === undefined ? "" : `\n\nSupplementary approved notes (${JSON.stringify(approval.notesPath)}):\n${approval.notesContent}`}`;
-      const key = `${approval.planId}:${String(approval.revision)}`;
+      const key = approvalKey(approval);
       this.dispatched.add(key);
       if (launch.destination === "here") {
         this.pi.sendUserMessage(prompt, { deliverAs: "followUp", expandPromptTemplates: false });

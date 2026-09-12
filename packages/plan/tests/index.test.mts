@@ -89,7 +89,9 @@ test("loads the TypeScript source and registers the package command", async ({
     sessionManager: SessionManager.inMemory(fixture),
     settingsManager: SettingsManager.inMemory(),
   });
-  onTestFinished(() => {
+  onTestFinished(async () => {
+    await session.abort();
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
     session.dispose();
   });
   await session.bindExtensions({});

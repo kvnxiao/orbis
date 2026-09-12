@@ -16,7 +16,7 @@ export interface SaveResult {
 /** Report the last branch-compatible planning entry without modifying the session. */
 export type SavedRecord =
   | { status: "none" }
-  | { status: "record"; entry: SessionEntry }
+  | { status: "record"; entry: SessionEntry; records: SessionEntry[] }
   | { status: "unreadable"; message: string };
 
 /** Read the last planning record in the matching disk and memory branch prefix. */
@@ -43,10 +43,11 @@ export function readSavedRecord(ctx: ExtensionContext, file?: SessionFile): Save
   const branch = ctx.sessionManager.getBranch();
   const mismatch = branch.findIndex((entry) => !sameRecord(entries.get(entry.id), entry));
   const prefix = branch.slice(0, mismatch === -1 ? branch.length : mismatch);
-  const entry = prefix.findLast(
+  const records = prefix.filter(
     (item) => item.type === "custom" && item.customType === "orbis-plan",
   );
-  return entry === undefined ? { status: "none" } : { status: "record", entry };
+  const entry = records.at(-1);
+  return entry === undefined ? { status: "none" } : { status: "record", entry, records };
 }
 
 /** Compare branch records before append and confirm the appended record on disk. */

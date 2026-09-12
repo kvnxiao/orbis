@@ -11,10 +11,12 @@ import {
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import type { PlanningSession } from "../src/domain/state.ts";
+import { planCommandDescription } from "../src/pi/instructions.ts";
 import { PlanRuntime } from "../src/pi/runtime.ts";
 import { saveRecord } from "../src/storage/persistence.ts";
 import type { SaveResult } from "../src/storage/persistence.ts";
 
+/** Establish Pi’s initial persistence boundary without a model request. */
 export function appendAssistantFixture(manager: SessionManager): void {
   manager.appendMessage({
     role: "assistant",
@@ -35,6 +37,7 @@ export function appendAssistantFixture(manager: SessionManager): void {
   });
 }
 
+/** Describe a disposable planning runtime and its cleanup. */
 export interface RuntimeFixture {
   runtime: PlanRuntime;
   ctx: ExtensionContext;
@@ -46,6 +49,7 @@ export interface RuntimeFixture {
   startup: () => Promise<void>;
   dispose: () => Promise<void>;
 }
+/** Create an isolated disk-backed planning runtime without model turns. */
 export async function runtimeFixture(): Promise<RuntimeFixture> {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-runtime-"));
   let cleanup = async () => {
@@ -67,6 +71,12 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
       extensionFactories: [
         (pi) => {
           api = pi;
+          pi.registerCommand("plan", {
+            description: planCommandDescription,
+            handler: async () => {
+              await Promise.resolve();
+            },
+          });
           runtime = new PlanRuntime(pi, join(cwd, "agent"));
         },
       ],

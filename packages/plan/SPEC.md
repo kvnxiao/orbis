@@ -43,14 +43,14 @@ instructions are not a security sandbox.
 
 `/plan [objective]` and a model-callable entry operation start the same workflow in the current
 conversation. Agent instructions recognize planning intent without requiring a literal phrase.
-Repeated entry preserves and reopens active work, including paused rounds, review, and unanswered
-clarification. Explicit natural-language requests to resume use the same recovery path. Examples
-include “enter plan mode,” “help me plan this change,” “resume the plan,” and “continue planning”;
-these illustrate intent rather than an exact-phrase whitelist. Quoted examples, discussion of the
-feature, and unrelated messages do not authorize entry or resumption. Ambiguous saved-plan
-references require a selection. When multiple unfinished plans are available on the branch, `/plan`
-prompts for a selection. Replacing unfinished work requires an explicit user choice and retains the
-previous plan. The base package registers only `/plan` and `/plan-settings`.
+Repeated entry preserves and reopens active work, including accepted-plan review, paused rounds,
+review, and unanswered clarification. Explicit natural-language requests to resume use the same
+recovery path. Examples include “enter plan mode,” “help me plan this change,” “resume the plan,”
+and “continue planning”; these illustrate intent rather than an exact-phrase whitelist. Quoted
+examples, discussion of the feature, and unrelated messages do not authorize entry or resumption.
+Ambiguous saved-plan references require a selection. When multiple saved plans are available on the
+branch, `/plan` prompts for a selection. Replacing unfinished work requires an explicit user choice
+and retains the previous plan. The base package registers only `/plan` and `/plan-settings`.
 
 ### REQ-composer-mode — Composer mode
 
@@ -231,6 +231,12 @@ pending review. Returning to the latest restores its drafts and reading position
 change the pending approval identity, create a revision, replay feedback, or replace the latest
 revision with an older one.
 
+Reopening accepted review preserves its Markdown revision and restores supplementary notes as
+editable drafts in the normal review interaction. Closing unchanged content preserves approval.
+Unchanged re-approval reuses that approval and opens implementation options without replaying its
+event. Changed notes require approval of their exact contents; only agent-returned Markdown creates
+the next review revision. Historical approvals do not authorize changed content or a later revision.
+
 ## State and recovery
 
 ### REQ-planning-identity — Planning identity
@@ -270,6 +276,17 @@ approval time until explicit retry or cancellation. Round counts survive persist
 archived-plan selection. Only the current planning record and settings formats are supported.
 Unknown settings and incompatible saved records report an error without changing the stored bytes.
 The package does not migrate earlier development formats or infer missing record fields.
+
+When the latest planning record is invalid or unsupported, explicit entry offers the latest valid
+earlier checkpoint on the same disk-confirmed branch. The choice identifies the checkpoint and warns
+that newer drafts may be absent. Dismissal preserves history and does not create a blank plan.
+Recovery appends restored state without changing prior records. Unfinished interactions restore with
+their drafts; recovered approved content requires fresh review and approval. When no valid
+checkpoint exists, the package reports that limitation and supports explicit replacement planning.
+
+When a recorded artifact is missing or changed, review offers to recreate the recorded bytes at a
+new immutable path. Existing files remain unchanged. Recreated content requires fresh approval;
+recovery never infers approval from file existence. Failed recreation remains retryable.
 
 ### REQ-interaction-cancellation — Interaction cancellation
 
@@ -380,23 +397,28 @@ After confirming saved acceptance and agent idleness, the package emits `orbis:p
 through Pi's shared event bus. A single turn-end event does not establish idleness. The version 1
 payload is:
 
-| Field         | Type             | Meaning                              |
-| ------------- | ---------------- | ------------------------------------ |
-| `version`     | `1`              | Event contract version.              |
-| `planId`      | string           | Stable plan identity.                |
-| `revision`    | positive integer | Approved Markdown revision.          |
-| `sessionId`   | string           | Owning Pi session identity.          |
-| `cwd`         | string           | Absolute planning working directory. |
-| `planPath`    | string           | Absolute saved Markdown path.        |
-| `planContent` | string           | Exact approved and saved Markdown.   |
-| `approvedAt`  | string           | UTC ISO 8601 approval timestamp.     |
+| Field         | Type             | Meaning                                            |
+| ------------- | ---------------- | -------------------------------------------------- |
+| `version`     | `1`              | Event contract version.                            |
+| `approvalId`  | optional string  | Exact approval identity; present on new approvals. |
+| `planId`      | string           | Stable plan identity.                              |
+| `revision`    | positive integer | Approved Markdown revision.                        |
+| `sessionId`   | string           | Owning Pi session identity.                        |
+| `cwd`         | string           | Absolute planning working directory.               |
+| `planPath`    | string           | Absolute saved Markdown path.                      |
+| `planContent` | string           | Exact approved and saved Markdown.                 |
+| `approvedAt`  | string           | UTC ISO 8601 approval timestamp.                   |
 
 When approval includes supplementary notes, the payload also contains `notes` with structured block
 annotations and overall text, `notesPath`, and `notesContent`. These fields are present together and
 describe the saved companion Markdown. Without supplementary notes they are omitted.
 
-Subscribers deduplicate by `planId` and `revision` and tolerate additional fields within version 1.
-They can subscribe without importing private source.
+New approvals include an `approvalId` identifying the exact revision and supplementary content.
+Subscribers deduplicate by `approvalId`; older payloads without it use `planId` and `revision`.
+Subscribers tolerate additional fields within version 1. On approval of changed supplementary
+content, the package assigns a new approval identity. When the approved notes are nonblank, it saves
+an immutable companion artifact. Previous approvals remain historical records. Subscribers can
+register without importing private source.
 
 ### REQ-notification-semantics — Notification semantics
 

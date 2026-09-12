@@ -21,6 +21,7 @@ import type {
 import { getKeybindings } from "@earendil-works/pi-tui";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 
+/** Verify public imports and presenter registration without model traffic. */
 export async function packedProbe(order: "base" | "before" | "after" = "after"): Promise<void> {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-packed-"));
   const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;

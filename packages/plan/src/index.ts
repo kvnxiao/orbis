@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import { fencedObjective } from "./domain/objective.ts";
 import { questionGuidance, reviewSchema, roundSchema } from "./domain/state.ts";
 import { installPlanComposer } from "./pi/composer.ts";
-import { planningInstructions } from "./pi/instructions.ts";
+import { planningInstructions, planCommandDescription } from "./pi/instructions.ts";
 import { PlanRuntime } from "./pi/runtime.ts";
 import { showPlanSettings } from "./pi/settings-menu.ts";
 import { toolResult } from "./pi/tool-result.ts";
@@ -50,7 +50,7 @@ export default function extension(pi: ExtensionAPI): void {
     },
   });
   pi.registerCommand("plan", {
-    description: "Start or inspect collaborative planning; optionally supply an objective",
+    description: planCommandDescription,
     handler: async (args, ctx) => {
       if (args.startsWith("__handoff ")) {
         await runtime.dispatchImplementation(args.slice("__handoff ".length), ctx);

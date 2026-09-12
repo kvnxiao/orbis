@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type {
   ExtensionAPI,
@@ -7,20 +9,22 @@ import type {
   MessageEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { Value } from "typebox/value";
 
 import { DocumentAnalysis } from "../document/document-analysis.ts";
 import { fencedObjective } from "../domain/objective.ts";
 import {
   recoverReview,
+  reopenApproval,
+  closeReview,
+  approvalKey,
   presentReview,
   presentRound,
-  snapshotSchema,
-  validSession,
+  validSnapshot,
   transitionInteraction,
 } from "../domain/state.ts";
 import type {
   PlanApproval,
+  PlanningSnapshot,
   PlanningSession,
   ReviewInput,
   RoundInput,
@@ -43,6 +47,21 @@ import {
 } from "./presenters.ts";
 import { terminalReview, terminalRound } from "./terminal.ts";
 import { toolResult } from "./tool-result.ts";
+
+function recoverPlanningCheckpoint(plan: PlanningSession): PlanningSession {
+  const restored = reopenApproval(structuredClone(plan), true);
+  const pending = restored.pendingApproval;
+  if (
+    pending !== undefined &&
+    restored.approvals?.some((approval) => approvalKey(approval) === approvalKey(pending)) === true
+  ) {
+    delete restored.pendingApproval;
+  }
+  return {
+    ...(restored.phase === "saving" ? recoverReview(restored) : restored),
+    approvalRequired: true,
+  };
+}
 
 const unsupportedMode = (): RuntimeResult => ({
   outcome: "unsupported-mode",
@@ -77,6 +96,9 @@ export class PlanRuntime {
     return this.selectedMode;
   }
   private current: PlanningSession | undefined;
+  private recovery:
+    | { entryId: string; checkpoint?: { id: string; data: PlanningSnapshot } }
+    | undefined;
   private readonly archived: PlanningSession[] = [];
 
   get active(): Readonly<PlanningSession> | undefined {
@@ -107,6 +129,10 @@ export class PlanRuntime {
   }
 
   toggleMode(ctx: ExtensionContext): void {
+    if (this.recovery !== undefined) {
+      ctx.ui.notify("Use /plan to select recovery before changing planning mode.", "warning");
+      return;
+    }
     if (!ctx.isIdle() || this.controller !== undefined) {
       ctx.ui.notify("Stop the current turn to switch modes.", "info");
       return;
@@ -124,7 +150,7 @@ export class PlanRuntime {
       return;
     }
     if (this.current !== undefined && this.current.phase !== "accepted") {
-      this.current = { ...this.current, phase: "cancelled" };
+      this.current = closeReview(this.current);
     }
     this.selectedMode = "default";
     this.disposeOperations();
@@ -132,8 +158,11 @@ export class PlanRuntime {
   }
 
   async selectUnfinished(ctx: ExtensionContext, signal?: AbortSignal): Promise<boolean> {
+    if (!(await this.recoverCheckpoint(ctx, signal))) {
+      return false;
+    }
     const plans = [this.current, ...this.archived].filter(
-      (plan): plan is PlanningSession => plan !== undefined && plan.phase !== "accepted",
+      (plan): plan is PlanningSession => plan !== undefined,
     );
     if (plans.length < 2) {
       const plan = plans[0];
@@ -187,12 +216,10 @@ export class PlanRuntime {
     if (this.controller !== undefined) {
       throw new Error("Cancel the current interaction before resuming another plan.");
     }
-    const index = this.archived.findIndex(
-      (plan) => plan.planId === planId && plan.phase !== "accepted",
-    );
+    const index = this.archived.findIndex((plan) => plan.planId === planId);
     const selected = this.archived[index];
     if (selected === undefined) {
-      throw new Error("The selected unfinished plan is unavailable on this branch.");
+      throw new Error("The selected saved plan is unavailable on this branch.");
     }
     this.archived.splice(index, 1);
     if (this.current !== undefined) {
@@ -255,6 +282,7 @@ export class PlanRuntime {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     this.current = undefined;
+    this.recovery = undefined;
     this.selectedMode = "default";
     this.archived.length = 0;
     ctx.ui.setStatus("orbis-plan", undefined);
@@ -267,6 +295,7 @@ export class PlanRuntime {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     this.current = undefined;
+    this.recovery = undefined;
     this.selectedMode = "default";
     ctx.ui.setStatus("orbis-plan", this.statusLine());
     this.archived.length = 0;
@@ -282,14 +311,18 @@ export class PlanRuntime {
       return;
     }
     const record = saved.entry;
-    if (
-      !Value.Check(snapshotSchema, record.data) ||
-      [record.data.active, ...record.data.unfinished].some(
-        (plan) => plan !== undefined && !validSession(plan),
-      )
-    ) {
+    if (!validSnapshot(record.data)) {
+      const checkpoint = saved.records.findLast(
+        (entry) => entry.type === "custom" && validSnapshot(entry.data),
+      );
+      this.recovery = {
+        entryId: record.id,
+        ...(checkpoint?.type === "custom" && validSnapshot(checkpoint.data)
+          ? { checkpoint: { id: checkpoint.id, data: structuredClone(checkpoint.data) } }
+          : {}),
+      };
       ctx.ui.notify(
-        "Cannot restore malformed planning state. The saved record remains unchanged.",
+        "Cannot restore malformed planning state. The saved record remains unchanged. Use /plan or plan_start to select recovery.",
         "error",
       );
       return;
@@ -316,6 +349,54 @@ export class PlanRuntime {
       message: "Restored from the active branch; new changes require disk confirmation.",
     };
     this.present(ctx);
+  }
+
+  private async recoverCheckpoint(ctx: ExtensionContext, signal?: AbortSignal): Promise<boolean> {
+    const recovery = this.recovery;
+    if (recovery === undefined) {
+      return true;
+    }
+    const checkpoint = recovery.checkpoint;
+    if (checkpoint === undefined) {
+      throw new Error(
+        "No valid earlier planning checkpoint exists on this branch. Explicitly start replacement planning to preserve history and begin again.",
+      );
+    }
+    const generation = this.generation;
+    const label = `Recover ${checkpoint.id}: ${checkpoint.data.active?.objective ?? "saved planning"} (${checkpoint.data.active?.phase ?? "default"}); newer drafts may be missing`;
+    const selected = await ctx.ui.select(
+      "Recover planning",
+      [label, "Decide later"],
+      signal === undefined ? undefined : { signal },
+    );
+    if (
+      selected !== label ||
+      signal?.aborted === true ||
+      generation !== this.generation ||
+      this.recovery !== recovery
+    ) {
+      return false;
+    }
+    const saved = readSavedRecord(ctx, this.sessionFile);
+    if (saved.status !== "record" || saved.entry.id !== recovery.entryId) {
+      throw new Error("Planning history changed. Reload before choosing recovery.");
+    }
+    this.current =
+      checkpoint.data.active === undefined
+        ? undefined
+        : recoverPlanningCheckpoint(checkpoint.data.active);
+    this.archived.push(...checkpoint.data.unfinished.map(recoverPlanningCheckpoint));
+    this.selectedMode = this.current === undefined ? checkpoint.data.mode : "plan";
+    this.recovery = undefined;
+    const result = this.save(ctx);
+    if (!result.saved) {
+      this.current = undefined;
+      this.archived.length = 0;
+      this.selectedMode = "default";
+      this.recovery = recovery;
+      throw new Error(result.message);
+    }
+    return true;
   }
 
   private disposeOperations() {
@@ -398,7 +479,23 @@ export class PlanRuntime {
     if (ctx.mode !== "tui") {
       return unsupportedMode();
     }
-    if (this.current !== undefined && this.current.phase !== "accepted" && !replace) {
+    if (this.recovery !== undefined && !replace) {
+      return {
+        outcome: "error",
+        message: "Use /plan or plan_start to select recovery before starting work.",
+      };
+    }
+    if (replace) {
+      this.recovery = undefined;
+    }
+    if (
+      this.current !== undefined &&
+      !replace &&
+      (this.current.phase !== "accepted" ||
+        objective.length === 0 ||
+        objective === this.current.objective)
+    ) {
+      this.current = reopenApproval(this.current);
       this.selectedMode = "plan";
       this.present(ctx);
       return { outcome: "active", plan: structuredClone(this.current) };
@@ -502,7 +599,7 @@ export class PlanRuntime {
             branch.has(entry.id) ||
             entry.type !== "custom" ||
             entry.customType !== "orbis-plan" ||
-            !Value.Check(snapshotSchema, entry.data)
+            !validSnapshot(entry.data)
           ) {
             return false;
           }
@@ -526,6 +623,7 @@ export class PlanRuntime {
         delete latest.path;
       }
       this.current = { ...owned, reviews };
+      delete this.current.approvals;
     }
   }
 
@@ -573,6 +671,60 @@ export class PlanRuntime {
         return { outcome: "cancelled" };
       }
       if (reviewing && this.current !== undefined) {
+        const review = this.current.reviews?.at(-1);
+        const prior = [
+          this.current.pendingApproval,
+          ...(this.current.approvals ?? []).toReversed(),
+        ].find(
+          (approval) =>
+            approval !== undefined &&
+            approval.revision === review?.revision &&
+            approval.planPath === review.path &&
+            approval.planContent === review.markdown,
+        );
+        let damaged = false;
+        if (review?.path !== undefined) {
+          try {
+            damaged =
+              readFileSync(review.path, "utf8") !== review.markdown ||
+              (prior?.notesPath !== undefined &&
+                readFileSync(prior.notesPath, "utf8") !== prior.notesContent);
+          } catch {
+            damaged = true;
+          }
+        }
+        if (damaged) {
+          if (review === undefined) {
+            throw new Error("Recorded review is missing.");
+          }
+          const confirmed = await ctx.ui.confirm(
+            "Recover plan artifact",
+            `Recreate the recorded content from ${review.path ?? "the saved revision"} at a new path? Existing files will be preserved and fresh approval is required.`,
+            { signal: controller.signal },
+          );
+          if (generation !== this.generation || cancelled()) {
+            return { outcome: "cancelled" };
+          }
+          if (!confirmed) {
+            this.pause(ctx);
+            return { outcome: "cancelled" };
+          }
+          this.current = {
+            ...this.current,
+            approvalRequired: true,
+            reviews: [
+              ...(this.current.reviews?.slice(0, -1) ?? []),
+              {
+                ...review,
+                path: join(
+                  settings.planDirectory,
+                  `${this.current.planId}-${String(review.revision)}-recovered-${randomUUID()}.md`,
+                ),
+              },
+            ],
+          };
+          delete this.current.pendingApproval;
+        }
         this.current = prepareReviewArtifact(this.current, settings.planDirectory, (state) => {
           this.current = state;
           return this.save(ctx);
@@ -810,7 +962,10 @@ export class PlanRuntime {
         if (approval.outcome === "approval" && approval.state.accepted !== undefined) {
           this.selectedMode = "default";
           this.save(ctx);
-          this.pendingCompletion = approval.state.accepted;
+          const acceptedKey = approvalKey(approval.state.accepted);
+          if (active.approvals?.some((item) => approvalKey(item) === acceptedKey) !== true) {
+            this.pendingCompletion = approval.state.accepted;
+          }
           this.settled(ctx);
           await this.handoff.request(
             ctx,
@@ -1040,6 +1195,19 @@ export class PlanRuntime {
       return { outcome: "cancelled" };
     }
     if (approval === undefined) {
+      const pending = [this.current, ...this.archived].some(
+        (plan) =>
+          plan !== undefined &&
+          (planId === undefined || plan.planId === planId) &&
+          plan.reviews?.at(-1)?.status === "pending",
+      );
+      if (pending) {
+        return {
+          outcome: "error",
+          message:
+            "The current revision or supplementary notes require approval. Call plan_start with replace: false to reopen review before implementation.",
+        };
+      }
       return {
         outcome: "error",
         message:
@@ -1099,7 +1267,7 @@ export class PlanRuntime {
       return;
     }
     this.pendingCompletion = undefined;
-    const key = `${payload.planId}:${String(payload.revision)}`;
+    const key = approvalKey(payload);
     if (!this.emitted.has(key)) {
       this.emitted.add(key);
       this.pi.events.emit("orbis:plan-approved", structuredClone(payload));

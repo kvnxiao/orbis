@@ -358,3 +358,45 @@ REQ-public-presentation-boundary.
 
 These scenarios define checks to perform during implementation. They are not records of executed
 tests or proof that the current interface implements them.
+
+## Reopening and recovery
+
+Requirements: REQ-planning-entry, REQ-read-only-plan-review, REQ-session-recovery, REQ-plan-save,
+REQ-implementation-handoff, REQ-handoff-recovery.
+
+Reopening an approved plan uses the normal review modal and its existing CTA actions. Overall text
+and block notes restore as editable drafts. Unchanged approval opens implementation options again;
+closing unchanged review preserves acceptance. Changed drafts remain unapproved across dismissal and
+resume. A revision request sends the current feedback to the agent.
+
+When the latest record is incompatible, explicit entry opens a native selector titled
+`Recover planning`. Its first option identifies the latest valid checkpoint, its plan, and phase;
+`Decide later` follows. The selector warns that newer drafts may be missing. Escape equals Decide
+later. A successful selection restores the checkpoint and reopens its pending interaction. Recovered
+accepted content requires fresh approval. Without a valid checkpoint, entry reports the limitation;
+explicit replacement remains available and preserves the existing records.
+
+When an artifact needs recovery, a native confirmation identifies the original path and offers to
+recreate its recorded content at a new path. Dismissal closes the attempted interaction without
+writing a replacement. On confirmation, the package saves the replacement and opens normal review.
+
+```mermaid
+flowchart TD
+  Entry[Explicit entry] --> State{Saved state}
+  State -->|Valid unfinished| Resume[Restore pending interaction]
+  State -->|Accepted| Review[Reopen same revision and notes]
+  State -->|Invalid latest record| Choice[Offer valid branch checkpoint]
+  Choice -->|Recover| Resume
+  Choice -->|Dismiss| Preserve[Preserve history]
+  Review -->|Unchanged approval| Options[Implementation options]
+  Review -->|Changed notes| Approval[Approve exact supplementary content]
+  Review -->|Request revision| Agent[Agent returns next revision]
+```
+
+Recovery scenarios cover accepted review without identity changes, unchanged closure and
+re-approval, changed and cleared notes, fresh Markdown revisions, incompatible latest records,
+divergent branches, dismissed recovery, and missing or modified artifacts. Each recovered approval
+requires fresh review. Scripted provider scenarios distinguish interrupted tool-argument generation
+from an open modal for question frontiers and plan review. Production frontier, answer-confirmation,
+and review components must preserve drafts through interruption and explicit resume and reject late
+callbacks.
