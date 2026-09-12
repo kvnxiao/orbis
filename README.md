@@ -150,8 +150,8 @@ AGENTS.md                 Instructions for coding agents
    automatically.
 6. Update the package README with its behavior, configuration, side effects, and supported Pi
    versions. The scaffold copies the repository license.
-7. Run `just install`, `just format`, and `just check`, then load the extension through Pi and
-   exercise its commands or tools.
+7. Run `just install`, `just fix`, and `just check`, then load the extension through Pi and exercise
+   its commands or tools.
 
 Every extension package uses the `@orbis/*` npm scope. The root package is private; individual
 extension packages publish independently.
@@ -163,7 +163,7 @@ paths or TypeScript path aliases.
 
 ## TypeScript compatibility
 
-`just typecheck` runs `typecheck:*` scripts in the workspace root and every package through pnpm's
+`pnpm typecheck` runs `typecheck:*` scripts in the workspace root and every package through pnpm's
 recursive script runner. The root `typecheck:root` checks repository scripts, the root Vitest
 configuration, and the extension template. Each package's `typecheck:node` checks its source, tests,
 and Vitest configuration.
@@ -212,17 +212,21 @@ Run `just` to list common workspace commands. Use its recipes for root workspace
 `pnpm` directly for package-filtered commands and publication.
 
 ```sh
-just format
+just fix
 just check
 pnpm --filter @orbis/review pack --pack-destination ../../.artifacts
 ```
+
+`just fix` applies safe Oxlint fixes, then formats with Oxfmt. When lint errors remain, the recipe
+stops before formatting; correct them and rerun `just fix`. The public recipes are `install`, `new`,
+`fix`, `check`, and `test`; use root `pnpm` scripts for individual checks or watch mode.
 
 `just check` checks formatting with Oxfmt, lints with Oxlint, checks types, and runs Vitest across
 the workspace scripts, extension template, and extension packages. Local scripts use `.mts` and run
 directly with Node.js native type stripping. Vitest runs `.test.mts` files; test execution does not
 emit files for publication.
 
-Use `just test-watch` for watch mode, or `pnpm --filter @orbis/review test` to run one package's
+Use `pnpm test:watch` for watch mode, or `pnpm --filter @orbis/review test` to run one package's
 tests. Each package also provides `test:watch`. The scaffold and template tests load TypeScript
 source through Pi and check command registration. New extension behavior still needs its own runtime
 tests.

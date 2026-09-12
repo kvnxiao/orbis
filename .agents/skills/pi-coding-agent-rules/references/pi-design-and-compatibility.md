@@ -32,6 +32,21 @@ multiple versions, isolate compatibility code at the Pi adapter and test each cl
 [Package names](https://pi.dev/news/2026/5/7/pi-has-a-new-home),
 [extension imports](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#available-imports).
 
+## Check Pi mappings against exported contracts (Required)
+
+For mappings of Pi action IDs, event names, configuration values, or protocol variants, use the
+corresponding public SDK type. Prefer `satisfies` to check fixed mappings while retaining literal
+inference; a keybinding action map uses `as const satisfies Record<string, Keybinding>` with
+`Keybinding` imported from `@earendil-works/pi-tui`. Use an explicit annotation when the variable
+needs a broader mutable type or defines a public interface. When an exported definition table
+contains the mapping's data, derive the mapping from that table instead of duplicating the data.
+
+Do not widen an available SDK union to `string`, duplicate it locally, or cast a mapping to bypass
+validation. When a named alias is unavailable, derive the type through `keyof`, indexed access, or
+the public API's parameter types. When the SDK does not expose the constraint, validate the boundary
+and test the supported runtime behavior. Type checking detects declared API changes; it does not
+verify runtime behavior or registration.
+
 ## Reserve prose rules for design decisions (Default)
 
 Keep formatting, import syntax, assertion restrictions, promise syntax, exhaustive-switch checks,

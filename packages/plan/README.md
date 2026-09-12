@@ -35,12 +35,13 @@ shows an info notice with a `Planning:` heading, the exact saved objective in a 
 separate paragraph for the save status. If the plan has no objective, the fenced block contains
 `objective not supplied`.
 
-The composer wraps the configured editor through Pi's public editor factory APIs. Before consuming
-the planning shortcut, it checks effective Pi bindings; a conflict preserves Pi's input handling and
-reports the binding to reassign. The package does not edit Pi's keybindings. `/plan-settings` can
-change or disable the planning shortcut. A later extension that replaces the editor without
-composing its previous factory can displace the Plan shortcut. Host-binding checks do not detect
-every shortcut registered by another extension.
+Plan preserves the configured editor factory and registers its planning shortcut through Pi's SDK.
+The registered shortcut appears in `/hotkeys`. Before registration, Plan checks effective Pi
+bindings; a conflict preserves Pi's input handling and reports the binding to reassign. The package
+does not edit Pi's keybindings. `/plan-settings` can change or disable the planning shortcut; saved
+changes require `/reload`. If a replacement editor does not invoke Pi's extension shortcut
+dispatcher, the planning shortcut stops working; `/plan` remains available. Host-binding checks do
+not detect every shortcut registered by another extension.
 
 Run `/plan <objective>` to start planning, or `/plan` to reopen saved work. With no objective and no
 saved plan, `/plan` starts a new plan and asks the agent to develop a plan for the objective in the
@@ -184,6 +185,11 @@ cancellation, failure, or transfer restores Pi's defaults; an older modal's clea
 a newer modal's waiting indicator. Opening a modal while Pi is idle does not add a working
 indicator.
 
+The controls below describe default bindings. Host actions use Pi's effective keybindings for
+selection, cancellation, paging, cursor movement, submission, and newlines. Hints show the bindings
+used for input and omit disabled bindings. Finishing a field does not submit answers or approve the
+plan; use the visible submission controls.
+
 | Context                                 | Control                         | Action                                                                                                                                       |
 | --------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontier                                | Up / Down                       | Move across options and question boundaries without selecting.                                                                               |
@@ -199,7 +205,8 @@ indicator.
 | Plan document                           | Up / Down                       | Select source blocks or the overall feedback field at the document's end.                                                                    |
 | Selected plan block                     | Typing, paste, Backspace, Enter | Open its note and apply the initiating input; Enter opens without inserting text.                                                            |
 | Plan review                             | Tab / Shift+Tab                 | Leave editing and traverse the document and individual CTA buttons. Left/Right select a button; Enter activates it.                          |
-| Block or overall note editor            | Enter / Shift+Enter             | Retain text and leave editing / insert a newline.                                                                                            |
+| Block or overall note editor            | Enter                           | Retain text and leave editing.                                                                                                               |
+| Question, block, or overall note editor | Shift+Enter / Ctrl+J            | Insert a newline.                                                                                                                            |
 | Plan review                             | F2                              | Focus overall feedback.                                                                                                                      |
 | Frontier / plan review                  | F3 / F4                         | Browse previous/next frontiers or plan revisions.                                                                                            |
 | Scrollable content                      | Page Up / Page Down             | Scroll without editing Markdown.                                                                                                             |
@@ -212,10 +219,10 @@ enter the submission preview. Clarification returns to the owning agent with tha
 marked unsubmitted; unfinished custom text, other options' drafts, and unsent clarification text
 stay local. Tool results exclude private drafts before truncation or writing result files.
 
-In question fields, Shift+Enter inserts a newline and Tab/Shift+Tab navigate active questions and
-the CTA. Other and clarification text appear directly after their row labels without brackets or
-answer/question prefixes. Other uses the theme's Markdown code-block color (green in Pi's dark
-theme); clarification uses its link color (blue). Option notes retain their accent-colored
+In question fields, Shift+Enter and Ctrl+J insert newlines, and Tab/Shift+Tab navigate active
+questions and the CTA. Other and clarification text appear directly after their row labels without
+brackets or answer/question prefixes. Other uses the theme's Markdown code-block color (green in
+Pi's dark theme); clarification uses its link color (blue). Option notes retain their accent-colored
 `[notes: …]` suffix. Enter finishes inline editing; for Other, it also selects the nonblank custom
 answer. A nonblank clarification draft changes the list action to `?. Send clarification`. Enter on
 that action sends the request and closes the modal. The owning agent explains in the existing
@@ -225,8 +232,8 @@ recommendation and latest clarification exchange. Requests read `User question N
 1 within each logical question and preserved across revisions and reactivation. Responses appear
 below their requests with a blank line and two-column indentation, including wrapped Markdown. Very
 narrow terminals reduce the indent to retain a content column. Other drafts remain preserved. When a
-terminal cannot distinguish Shift+Enter, multiline paste can supply newlines. Live terminal and SSH
-key behavior still requires verification.
+terminal cannot distinguish Shift+Enter, Ctrl+J or multiline paste can supply newlines. Live
+terminal and SSH key behavior still requires verification.
 
 Plan review renders the full Markdown read-only under `Plan review · revision N · latest`, followed
 by a clickable path to its persisted revision file. The link targets an absolute file URL; its
@@ -239,10 +246,10 @@ duplicating the excerpt in a footer. Each note appears below its target with an 
 source range, and a distinct background; note rows have no line numbers. Block notes retain their
 exact source excerpt and revision. F2 opens overall feedback after the complete plan. Typing on a
 selected block opens its note directly, including printable brackets. Edits are retained
-immediately; Enter or Escape leaves editing, and Shift+Enter inserts a newline. Review-note editors
-also accept Pi's effective `tui.input.newLine` aliases; their hints show the configured newline
-keys. Clearing text removes that note from the outgoing batch. Notes remain visible outside editing
-and never change the plan file.
+immediately; Enter or Escape leaves editing, and Shift+Enter and Ctrl+J insert newlines by default.
+Question and review-note editors use Pi's effective `tui.input.submit` and `tui.input.newLine`
+bindings; configured bindings replace the defaults in input and hints. Clearing text removes that
+note from the outgoing batch. Notes remain visible outside editing and never change the plan file.
 
 Without nonblank notes, the CTA contains Approve. With notes, it contains Approve with notes and
 Request revision. Approve with notes accepts the displayed Markdown together with the current
@@ -407,9 +414,10 @@ The Planning shortcut field accepts a Pi special or modified key, such as `shift
 `ctrl+alt+p`; enter `disabled` in the menu or set `"shortcut": null` in JSON to disable it. Plain
 printable keys and Shift-only printable keys are rejected. The menu reports conflicts with effective
 host bindings separately from the saved setting. After a successful save, shortcut changes apply
-immediately and follow trusted-project precedence. Editing Pi's own keybindings still requires
-`/reload`. Confirming an unchanged shortcut skips the write, including equivalent key aliases and
-modifier order. In a project menu, confirming the inherited shortcut does not create an override.
+after `/reload` and follow trusted-project precedence. Until reload, the previous shortcut remains
+active. Editing Pi's own keybindings also requires `/reload`. Confirming an unchanged shortcut skips
+the write, including equivalent key aliases and modifier order. In a project menu, confirming the
+inherited shortcut does not create an override.
 
 Use Up/Down to select a setting and Enter to change it. The Approved-plan directory row shows the
 value stored in the file being edited; the project menu falls back to the personal value, and both
@@ -497,7 +505,7 @@ loopback fixture traffic is allowed. Tests and benchmarks do not incur model cha
 
 ```sh
 pnpm --filter @orbis/plan test
-just format
+just fix
 just check
 ```
 

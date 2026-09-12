@@ -1,11 +1,6 @@
 import { getMarkdownTheme, getSelectListTheme } from "@earendil-works/pi-coding-agent";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import {
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import type { PlanAppearance } from "./appearance.ts";
 
@@ -71,6 +66,8 @@ export interface ModalActions {
   focus?: number;
   contentFocus?: number;
   hint?: string;
+  hintSuffix?: string;
+  compactHint?: string;
   error?: string;
   theme?: Theme;
 }
@@ -133,14 +130,14 @@ export function modalLines(
     footer = [divider, ...controls];
   }
   if (actions.hint !== undefined && rows >= header.length + footer.length + 3) {
-    const suffix = width < 60 ? " F1 Esc" : " · F1: hints · Esc: back";
+    const suffix = actions.hintSuffix === undefined ? "" : ` · ${actions.hintSuffix}`;
     let hint = actions.hint;
-    if (hint.startsWith("Press Esc")) {
+    if (width < 60 && visibleWidth(hint) > width && actions.compactHint !== undefined) {
+      hint = actions.compactHint;
+    }
+    if (hint.includes("press again to close")) {
       hint = truncateToWidth(hint, width);
     } else if (visibleWidth(hint) > width) {
-      if (width < 60) {
-        hint = actions.focus === undefined ? "Tab" : "Enter";
-      }
       hint = truncateToWidth(hint, Math.max(1, width - visibleWidth(suffix))) + suffix;
     }
     footer = [...footer, divider, hint];
@@ -166,12 +163,4 @@ export function modalLines(
     );
   });
   return [...header, ...body, ...footer].map((line) => truncateToWidth(line, width));
-}
-
-/** Recognize function keys in legacy and enhanced terminal encodings. */
-export function functionKey(data: string, number: 1 | 2 | 3 | 4): boolean {
-  return (
-    matchesKey(data, ({ 1: "f1", 2: "f2", 3: "f3", 4: "f4" } as const)[number]) ||
-    new RegExp(`^\\x1b\\[${String(57363 + number)}(?:;1(?::[123])?)?u$`, "u").test(data)
-  );
 }

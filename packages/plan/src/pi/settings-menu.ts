@@ -2,13 +2,7 @@ import { join } from "node:path";
 
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  Input,
-  matchesKey,
-  SettingsList,
-  truncateToWidth,
-  wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+import { Input, SettingsList, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { SettingItem } from "@earendil-works/pi-tui";
 
 import {
@@ -21,13 +15,13 @@ import {
 } from "../storage/config.ts";
 import type { SettingsFields } from "../storage/config.ts";
 import { borderSchema, symbolsSchema } from "../tui/appearance.ts";
+import { ModalKeybindings } from "../tui/terminal-keys.ts";
 import { shortcutConflict, shortcutWarning } from "./composer.ts";
 
 /** Edit the chosen settings scope until cancellation or session teardown. */
 export async function showPlanSettings(
   ctx: ExtensionContext,
   agentDir: string,
-  saved?: () => Promise<void>,
   signal: AbortSignal | undefined = ctx.signal,
 ): Promise<void> {
   const cancelled = () => signal?.aborted === true;
@@ -75,6 +69,7 @@ export async function showPlanSettings(
   const symbols = symbolsSchema.anyOf.map((item) => item.const);
   let pending = Promise.resolve();
   await ctx.ui.custom<undefined>((tui, theme, keys, done) => {
+    const modalKeys = new ModalKeybindings(keys);
     let closed = false;
     const finish = () => {
       if (!closed) {
@@ -139,8 +134,7 @@ export async function showPlanSettings(
               input.onSubmit = (text) => {
                 const shortcut = text.trim();
                 if (shortcut !== "disabled" && !isPlanShortcut(shortcut)) {
-                  shortcutError =
-                    "Use a Pi special or modified key, such as shift+tab or ctrl+alt+p, or disabled.";
+                  shortcutError = "Use a Pi special or modified key, or disabled.";
                   return;
                 }
                 shortcutError = "";
@@ -167,7 +161,13 @@ export async function showPlanSettings(
         ),
       ),
       8,
-      getSettingsListTheme(),
+      {
+        ...getSettingsListTheme(),
+        hint: () =>
+          [modalKeys.hint("enter", "change"), modalKeys.hint("escape", "cancel")]
+            .filter(Boolean)
+            .join(" · "),
+      },
       (id, value) => {
         if (closed || signal?.aborted === true) {
           return;
@@ -202,11 +202,8 @@ export async function showPlanSettings(
         busy = true;
         pending = writeSettings(path, fields)
           .then(
-            async () => {
+            () => {
               Object.assign(values, fields);
-              if (signal?.aborted !== true) {
-                await saved?.();
-              }
             },
             (error: unknown) => {
               if (signal?.aborted === true) {
@@ -221,11 +218,6 @@ export async function showPlanSettings(
               }
             },
           )
-          .catch((error: unknown) => {
-            if (signal?.aborted !== true) {
-              ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-            }
-          })
           .finally(() => {
             busy = false;
           });
@@ -254,6 +246,10 @@ export async function showPlanSettings(
         return [
           theme.bold(`Plan settings · ${scope}`),
           ...list.render(width),
+          ...wrapTextWithAnsi(
+            "Shortcut changes require /reload. Use /plan when the shortcut is disabled or blocked.",
+            width,
+          ),
           ...(shortcutError.length === 0 ? [] : wrapTextWithAnsi(shortcutError, width)),
           ...(conflict === undefined || shortcut === null
             ? []
@@ -267,12 +263,12 @@ export async function showPlanSettings(
         if (closed) {
           return;
         }
-        if (busy && matchesKey(data, "escape")) {
+        if (busy && keys.matches(data, "tui.select.cancel")) {
           finish();
           return;
         }
         if (!busy) {
-          list.handleInput(data);
+          modalKeys.input(list, data);
         }
         tui.requestRender();
       },

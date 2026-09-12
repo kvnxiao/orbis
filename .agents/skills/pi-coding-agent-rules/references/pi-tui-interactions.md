@@ -17,8 +17,14 @@ hints; hotkeys should accelerate reachable operations. Avoid requiring modified 
 that some terminals cannot distinguish.
 
 In an editor, arrows move the cursor and printable keys enter text. Option letters are labels unless
-explicitly assigned as shortcuts; shortcuts must not consume inline text. In multiline fields,
-preserve Enter for newlines and provide a reachable Send or Confirm action.
+explicitly assigned as shortcuts; shortcuts must not consume inline text. Multiline fields use Pi's
+editor bindings: by default, Enter submits or finishes local editing, and Shift+Enter and Ctrl+J
+insert newlines. Match the effective `tui.input.submit` and `tui.input.newLine` bindings. Finishing
+local editing does not submit the enclosing form; provide visible controls for sending
+clarification, submitting answers, or approving a document. An optional shortcut may activate the
+same submission action as a visible control. Apply the same validation and confirmation boundary,
+preserve ordinary typing and newline input, and derive its hint from the binding. Modified Enter may
+supplement the visible action but must not be required.
 
 Before overriding a host key, inspect installed keybindings and dispatch order. Preserve
 autocomplete dismissal and interruption; extension shortcuts cannot override reserved host bindings.
@@ -26,30 +32,54 @@ Use the public custom-editor contract for editor interception and account for co
 replacements.
 [Custom editor](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#custom-editor).
 
-`pi.registerShortcut` binds a raw key rather than a rebindable id, and dispatches only while the
-composer editor holds focus; a focused `ctx.ui.custom()` component matches its own keys. Give every
-registered shortcut a description, which `/hotkeys` lists in place of the extension path.
-[registerShortcut](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#piregistershortcutshortcut-options).
-
 In Pi v0.85.1, when streaming and Bash handlers do not consume Escape and the composer is empty or
 whitespace-only, a second Escape less than 500 ms after the first runs the configured `tree` or
 `fork` action; `none` disables it. Scope an extension's second-Escape dismissal to a focused
 `ctx.ui.custom()` component that owns input.
 [Host Escape handling](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts).
 
-## Derive key labels from the bound key (Required)
+## Bind hotkeys through the SDK (Required)
 
-Render every key label from the value the handler matches. For a host action, pass the namespaced
-`app.*` or `tui.*` id to `keyHint(id, description)` or `keyText(id)`, which resolve the user's
-`keybindings.json` override. For an extension-owned key, hold one `KeyId` and pass it to both
-`matchesKey` and `rawKeyHint`. Both formatters capitalize key parts and render `alt` as `option` on
-macOS; a label written as literal text states a key that the handler may not match.
+Register extension shortcuts with `pi.registerShortcut(key, { description, handler })`. Give every
+registered shortcut a description for `/hotkeys`. Do not implement composer shortcuts with raw
+terminal listeners or a parallel shortcut dispatcher.
+[registerShortcut](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#piregistershortcutshortcut-options).
+
+`pi.registerShortcut` binds a raw key rather than a rebindable id. While the composer editor has
+focus, Pi dispatches registered shortcuts. Inside a focused `ctx.ui.custom()` component, use the
+injected `KeybindingsManager.matches(data, id)` for host actions and the SDK's `matchesKey(data,
+key)` for extension-owned keys. When an action has a host action id, reuse it; do not replace it
+with its default key or compare raw escape sequences.
+
+When the SDK matcher lacks a supported terminal encoding, isolate its conversion to an encoding the
+SDK accepts, then match through the SDK. Test equivalent encodings and preserve effective binding
+overrides; the adapter must not dispatch actions itself.
+
+## Never hardcode displayed hotkey labels (Required)
+
+Derive every displayed hotkey label from the binding used for registration or input matching. This
+includes footers, help panels, buttons, placeholders, and dismissal prompts. Never embed default key
+labels such as `↑↓`, `Tab`, `F2`, or `Esc` in UI strings, even when they currently match the
+bindings. Keep literal key values in binding definitions only; compose UI text from derived key
+labels and action descriptions. A hint such as `"Tab: focus · F2: overall · Esc: back"` violates
+this rule.
+
+For a host action, pass the namespaced `app.*` or `tui.*` id to `keyHint(id, description)` or
+`keyText(id)`, which resolve the user's `keybindings.json` override. For an extension-owned key,
+define one `KeyId` and pass it to `pi.registerShortcut` or `matchesKey`, and to `rawKeyHint` for
+display. Both formatters render `alt` as `option` on macOS; capitalization depends on the formatter
+and SDK version. A label written as literal text states a key that the handler may not match.
 [Keybinding hints](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#keybinding-hints),
 [Keybinding ids](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/keybindings.md).
 
 Inside `ctx.ui.custom()` and a custom-editor factory, resolve host keys through the injected
 `KeybindingsManager`: `matches(data, id)` for input and `getKeys(id)` for labels. `keyHint` and
 `keyText` read the global manager and are display-only.
+
+When a binding changes, input matching and rendered hints must use the updated binding. Test with a
+non-default binding and assert that the new key invokes the action and appears in the UI, and that
+the action's hint does not show the default label. When a binding is disabled or blocked, do not
+display it as available.
 
 Pi v0.85.1 resolves `keybindings.json` entries against a static definition table and ignores unknown
 ids, so an extension cannot publish a rebindable id; declaration merging on the `Keybindings`

@@ -16,15 +16,16 @@ distinguish sibling branches.
 
 Pi binds Shift+Tab to `app.thinking.cycle` and reserves that action against extension shortcut
 overrides. The public editor factory receives a live `KeybindingsManager` with `getKeys`,
-`getResolvedBindings`, and `matches`. A composer wrapper can inspect effective host bindings before
-consuming its configured shortcut.
+`getResolvedBindings`, and `matches`. Before registering its configured shortcut through
+`pi.registerShortcut`, Plan inspects effective host bindings.
 [Keybindings](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/keybindings.ts),
 [shortcut registration](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/extensions/runner.ts)
 
-During `/reload`, Pi reloads extensions before reloading keybindings. A conflict check cached only
-when the editor is installed can be stale. Input handling must consult the live keybindings. Pi does
-not expose a public registry of other extensions' shortcuts, so host-action checks cannot establish
-complete extension interoperability.
+During `/reload`, Pi reloads extensions before reloading keybindings. Before checking conflicts and
+registering the shortcut, Plan reloads the injected keybindings manager through its public `reload`
+method. When Pi initializes editor handling, it captures registered shortcuts; shortcut setting
+changes require `/reload`. Host-action checks cannot establish complete interoperability with other
+extensions' shortcuts.
 [Interactive reload](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts)
 
 ## Approval completion

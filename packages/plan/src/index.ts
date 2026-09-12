@@ -24,6 +24,7 @@ export default function extension(pi: ExtensionAPI): void {
   let sessionGeneration = 0;
   let settingsController: AbortController | undefined;
   let commandController: AbortController | undefined;
+  let shortcutInitialized = false;
   pi.registerCommand("plan-settings", {
     description: "Configure Plan appearance, shortcut, and saved-plan directory",
     async handler(_args, ctx) {
@@ -35,14 +36,7 @@ export default function extension(pi: ExtensionAPI): void {
           ? controller.signal
           : AbortSignal.any([controller.signal, ctx.signal]);
       try {
-        await showPlanSettings(
-          ctx,
-          agentDir,
-          async () => {
-            await runtime.reloadSettings(ctx, signal);
-          },
-          signal,
-        );
+        await showPlanSettings(ctx, agentDir, signal);
       } catch (error) {
         if (!signal.aborted) {
           ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
@@ -217,7 +211,7 @@ Current plan identity: ${active.planId}. Current phase: ${active.phase}. When a 
     removeComposer = undefined;
     runtime.close(ctx);
   });
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (event, ctx) => {
     const generation = ++sessionGeneration;
     settingsController?.abort();
     commandController?.abort();
@@ -226,14 +220,17 @@ Current plan identity: ${active.planId}. Current phase: ${active.phase}. When a 
     interrupted = false;
     runtime.restore(ctx);
     try {
-      await runtime.reloadSettings(ctx);
+      if (!shortcutInitialized) {
+        await runtime.reloadSettings(ctx);
+        shortcutInitialized = true;
+      }
     } catch (error) {
       if (generation === sessionGeneration) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
     }
     if (generation === sessionGeneration) {
-      removeComposer = installPlanComposer(ctx, runtime);
+      removeComposer = installPlanComposer(pi, ctx, runtime, event.reason === "reload");
     }
   });
   pi.on("session_tree", (_event, ctx) => {

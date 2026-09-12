@@ -83,7 +83,7 @@ test("review hints and editor input use the effective host newline binding", ({
   view.handleInput("two");
   view.handleInput(shiftEnter);
   view.handleInput("three");
-  expect(state.reviews?.[0]?.notes?.[0]?.text).toBe("one\ntwo\nthree");
+  expect(state.reviews?.[0]?.notes?.[0]?.text).toBe("one\ntwothree");
   expect(text(view, 160)).toContain(
     `${process.platform === "darwin" ? "option" : "Alt"}+Enter: newline`,
   );
@@ -144,9 +144,9 @@ test.each([18, 90])(
       { view: review.create(), read: review.state },
     ]) {
       keys(item.view, escape);
-      expect(text(item.view, width)).toContain("Press Esc again");
+      expect(text(item.view, width)).toContain("Escape");
       keys(item.view, "\x1bOP", escape);
-      expect(text(item.view, width)).not.toContain("Press Esc again");
+      expect(text(item.view, width)).not.toContain("Escape");
       expect(item.read().phase).not.toBe("cancelled");
       keys(item.view, escape);
       expect(item.read().phase).toBe("cancelled");
@@ -174,7 +174,7 @@ test("F1 hides frontier hints and divider without losing draft text", () => {
   f.resize(80);
   keys(f.view, "Keep this");
   const visible = text(f.view, 140);
-  expect(visible).toContain("Shift+Enter: newline");
+  expect(visible).toContain("Shift+Enter/Ctrl+J: newline");
   keys(f.view, "\x1bOP");
   expect(text(f.view, 140)).not.toContain("Shift+Enter");
   expect(text(f.view, 140)).toContain("─".repeat(140));
@@ -338,7 +338,7 @@ test("starting inline editing preserves modal height and footer position", () =>
   keys(f.view, "x");
   const after = f.view.render(140);
   expect(after).toHaveLength(before.length);
-  expect(stripTerminalSequences(after.at(-1) ?? "")).toContain("Esc:");
+  expect(stripTerminalSequences(after.at(-1) ?? "")).toContain("Escape");
 });
 
 test("Other and clarification show bare input and Enter finishes local editing", () => {
@@ -400,7 +400,7 @@ test("question rows omit routine answer status and Right does not open notes", (
   keys(f.view, enter);
   expect(text(f.view)).not.toContain("Answered");
   expect(text(f.view)).toContain("✓ A. Local");
-  expect(text(f.view, 200)).toContain("Typing on an option adds notes");
+  expect(text(f.view, 200)).toContain("Type: notes");
 });
 
 test.each(["", "   "])("blank notes %j let arrows leave without confirmation", (blank) => {
@@ -1323,7 +1323,7 @@ test.each([true, false])(
       expect(lines.some((line) => line.includes("F1: hints"))).toBe(hints);
       expect(lines.slice(button + 1)).toEqual(
         hints
-          ? ["", "═".repeat(140), "Tab: focus · Enter: activate · F1: hints · Esc: back"]
+          ? ["", "═".repeat(140), "Tab: focus · Enter: activate · F1: hints · Escape/Ctrl+C: back"]
           : [""],
       );
     }

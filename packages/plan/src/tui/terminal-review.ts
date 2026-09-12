@@ -2,11 +2,10 @@ import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
-import type { KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   decodeKittyPrintable,
-  matchesKey,
   stripTerminalSequences,
   visibleWidth,
   wrapTextWithAnsi,
@@ -21,8 +20,8 @@ import { hasReviewNotes } from "../domain/state.ts";
 import type { ReviewAction, RoundState } from "../domain/state.ts";
 import { defaultAppearance } from "./appearance.ts";
 import type { PlanAppearance } from "./appearance.ts";
-import { modalKeys, modalKeyHint } from "./terminal-keys.ts";
-import { functionKey, modalContentWidth, modalLines } from "./terminal-layout.ts";
+import { ModalKeybindings } from "./terminal-keys.ts";
+import { modalContentWidth, modalLines } from "./terminal-layout.ts";
 import type { TerminalOptions } from "./terminal-options.ts";
 
 const home = homedir();
@@ -71,7 +70,7 @@ export class TerminalReview implements Component {
   private readonly switchView: (() => void) | undefined;
   private readonly appearance: PlanAppearance;
   private readonly theme: Theme | undefined;
-  private readonly keys: Pick<KeybindingsManager, "getKeys"> | undefined;
+  private readonly keys: ModalKeybindings;
 
   constructor(options: TerminalOptions<ReviewAction>) {
     const {
@@ -96,7 +95,10 @@ export class TerminalReview implements Component {
     this.switchView = switchView;
     this.appearance = appearance;
     this.theme = theme;
-    this.keys = options.keys;
+    this.keys = new ModalKeybindings(
+      options.keys,
+      () => this.mode === "note" || this.mode === "overall",
+    );
     this.showHints = appearance.showHints;
     this.viewed = Math.max(0, (read().reviews?.length ?? 1) - 1);
     this.revision = read().reviews?.at(-1)?.revision ?? 0;
@@ -205,12 +207,12 @@ export class TerminalReview implements Component {
       const actions = hasReviewNotes(review) ? feedbackActions : approvalActions;
       this.action = Math.min(this.action, actions.length - 1);
       const blocks = this.layout(this.contentWidth()).blocks;
-      if (functionKey(data, 1)) {
+      if (this.keys.matches(data, "hints")) {
         this.showHints = !this.showHints;
         this.armed = false;
-      } else if (functionKey(data, 3) || functionKey(data, 4)) {
-        this.browse(functionKey(data, 3) ? -1 : 1);
-      } else if (matchesKey(data, modalKeys.escape)) {
+      } else if (this.keys.matches(data, "older") || this.keys.matches(data, "newer")) {
+        this.browse(this.keys.matches(data, "older") ? -1 : 1);
+      } else if (this.keys.matches(data, "escape")) {
         if (this.mode === "note" || this.mode === "overall") {
           this.mode = "document";
           this.armed = false;
@@ -221,13 +223,13 @@ export class TerminalReview implements Component {
         }
       } else {
         this.armed = false;
-        if (matchesKey(data, modalKeys.presenter)) {
+        if (this.keys.matches(data, "presenter")) {
           this.switchView?.();
-        } else if (functionKey(data, 2)) {
+        } else if (this.keys.matches(data, "overall")) {
           this.open(true);
-        } else if (matchesKey(data, modalKeys.tab) || matchesKey(data, modalKeys.previous)) {
+        } else if (this.keys.matches(data, "tab") || this.keys.matches(data, "previous")) {
           const count = actions.length;
-          const direction = matchesKey(data, modalKeys.tab) ? 1 : -1;
+          const direction = this.keys.matches(data, "tab") ? 1 : -1;
           if (this.mode !== "actions") {
             this.mode = "actions";
             this.action = direction > 0 ? 0 : count - 1;
@@ -239,14 +241,10 @@ export class TerminalReview implements Component {
             }
           }
         } else if (this.mode === "note" || this.mode === "overall") {
-          if (matchesKey(data, modalKeys.enter)) {
+          if (this.keys.matches(data, "finish") && !this.keys.matches(data, "newline")) {
             this.mode = "document";
           } else {
-            if (matchesKey(data, modalKeys.newline)) {
-              this.editor.insertTextAtCursor("\n");
-            } else {
-              this.editor.handleInput(data);
-            }
+            this.keys.edit(this.editor, data);
             const block = blocks[this.block];
             if (this.mode === "overall") {
               this.send({ type: "edit-feedback", text: this.editor.getExpandedText() });
@@ -262,38 +260,38 @@ export class TerminalReview implements Component {
           }
         } else if (this.mode === "actions") {
           const count = actions.length;
-          if (matchesKey(data, modalKeys.left) || matchesKey(data, modalKeys.right)) {
+          if (this.keys.matches(data, "left") || this.keys.matches(data, "right")) {
             this.action =
-              (this.action + (matchesKey(data, modalKeys.right) ? 1 : -1) + count) % count;
-          } else if (matchesKey(data, modalKeys.enter)) {
+              (this.action + (this.keys.matches(data, "right") ? 1 : -1) + count) % count;
+          } else if (this.keys.matches(data, "enter")) {
             const action = actions[this.action];
             if (action !== undefined) {
               this.send({ type: action.type });
             }
           }
-        } else if (matchesKey(data, modalKeys.pageUp) || matchesKey(data, modalKeys.pageDown)) {
+        } else if (this.keys.matches(data, "pageUp") || this.keys.matches(data, "pageDown")) {
           this.scroll = Math.max(
             0,
             this.scroll +
-              (matchesKey(data, modalKeys.pageDown) ? 1 : -1) * Math.max(1, this.rows() - 10),
+              (this.keys.matches(data, "pageDown") ? 1 : -1) * Math.max(1, this.rows() - 10),
           );
           this.follow = false;
-        } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down)) {
+        } else if (this.keys.matches(data, "up") || this.keys.matches(data, "down")) {
           this.block = Math.max(
             0,
-            Math.min(blocks.length, this.block + (matchesKey(data, modalKeys.down) ? 1 : -1)),
+            Math.min(blocks.length, this.block + (this.keys.matches(data, "down") ? 1 : -1)),
           );
           this.follow = true;
         } else if (
           this.current() &&
-          (matchesKey(data, modalKeys.enter) ||
-            matchesKey(data, modalKeys.backspace) ||
+          (this.keys.matches(data, "enter") ||
+            this.keys.matches(data, "backspace") ||
             data.startsWith("\x1b[200~") ||
             decodeKittyPrintable(data) !== undefined ||
             /^[^\p{Cc}]+$/u.test(data))
         ) {
           this.open(this.block === blocks.length);
-          if (!matchesKey(data, modalKeys.enter)) {
+          if (!this.keys.matches(data, "enter")) {
             this.handleInput(data);
             return;
           }
@@ -424,19 +422,33 @@ export class TerminalReview implements Component {
             Math.max(width, visibleWidth(displayedPath ?? "") + 4),
           ).join(" ");
     const title = `Plan review · revision ${String(review.revision)} · ${this.current() ? "latest" : "older — read-only"}${link.length > 0 ? ` · ${link}` : ""}`;
-    let hint =
-      "↑↓: block · Type: note · Tab: focus · F2: overall · F3/F4: revisions · F1: hints · Esc: back";
+    const suffix = [this.keys.hint("hints", "hints"), this.keys.hint("escape", "back")]
+      .filter(Boolean)
+      .join(" · ");
+    let hint = [
+      this.keys.hint(["up", "down"], "block"),
+      "Type: note",
+      this.keys.hint("tab", "focus"),
+      this.keys.hint("overall", "overall"),
+      this.keys.hint(["older", "newer"], "revisions"),
+    ]
+      .filter(Boolean)
+      .join(" · ");
     if (this.mode === "note" || this.mode === "overall") {
-      const newline = [
-        ...new Set([modalKeys.newline, ...(this.keys?.getKeys("tui.input.newLine") ?? [])]),
-      ].join("/");
-      hint = `Enter: finish · ${modalKeyHint(newline, "newline")} · Tab: actions · F2: overall · F1: hints · Esc: back`;
+      hint = [
+        this.keys.hint("finish", "finish"),
+        this.keys.hint("newline", "newline"),
+        this.keys.hint("tab", "actions"),
+        this.keys.hint("overall", "overall"),
+      ]
+        .filter(Boolean)
+        .join(" · ");
     }
     if (this.armed) {
-      hint = "Press Esc again to close; drafts retained · F1: hints";
+      hint = this.keys.hint("escape", "press again to close; drafts retained");
     }
     if (this.switchView !== undefined) {
-      hint += ` · ${modalKeyHint(modalKeys.presenter, "presenter")}`;
+      hint += ` · ${this.keys.hint("presenter", "presenter")}`;
     }
     return {
       lines: modalLines(
@@ -454,7 +466,25 @@ export class TerminalReview implements Component {
           ),
           ...(this.mode === "actions" ? { focus: action } : {}),
           ...(this.follow && this.mode !== "actions" ? { contentFocus: focus } : {}),
-          ...(this.showHints ? { hint } : {}),
+          ...(this.showHints
+            ? {
+                hint: `${hint} · ${suffix}`,
+                hintSuffix: suffix,
+                compactHint: this.armed
+                  ? this.keys.hint("escape", "close?", true)
+                  : [
+                      this.keys.hint(
+                        this.mode === "note" || this.mode === "overall" ? "finish" : "tab",
+                        "",
+                        true,
+                      ),
+                      this.keys.hint("hints", "", true),
+                      this.keys.hint("escape", "", true),
+                    ]
+                      .filter(Boolean)
+                      .join(" "),
+              }
+            : {}),
           error: this.error,
           ...(this.theme === undefined ? {} : { theme: this.theme }),
         },

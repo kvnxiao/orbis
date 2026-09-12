@@ -9,9 +9,16 @@ introductions; keep operational documentation concrete.
 ## Commands and skills
 
 Use the root `justfile` for common workspace commands. Run `just` to list the available recipes, and
-prefer `just install`, `just new <name>`, `just format`, `just check`, `just typecheck`, and
-`just test` over their root `pnpm` scripts. Use `pnpm` directly for package-filtered commands,
-dependency-manifest changes, publication, and commands without a `just` recipe.
+prefer `just install`, `just new <name>`, `just fix`, `just check`, and `just test` over their root
+`pnpm` scripts. Use `pnpm` directly for package-filtered commands, dependency-manifest changes,
+publication, and commands without a `just` recipe.
+
+After editing code, run `just fix` before manually repairing formatting or fixable lint errors. It
+applies safe Oxlint fixes and then formats with Oxfmt. Let these tools expand one-line blocks,
+adjust whitespace, and apply supported lint corrections. When lint errors remain, the recipe stops
+before formatting; resolve them and rerun `just fix`. Inspect the resulting diff, then run
+`just check`. Use root `pnpm` scripts for individual formatting, linting, type-checking, or watch
+commands.
 
 Use these skills at their stated triggers. When automatic discovery is unavailable, read the linked
 skill files.
@@ -149,7 +156,7 @@ skill files.
 ### Change review
 
 - After changing dependency manifests, run `just install`. Before completing a change, run
-  `just format` and `just check`. For changed extension behavior, run targeted package tests and Pi
+  `just fix` and `just check`. For changed extension behavior, run targeted package tests and Pi
   loading checks.
 - When available, run `verify-changes` once on the accumulated change set. Otherwise review the
   diff, update affected documentation, audit prose, and run repository checks. Report skipped or

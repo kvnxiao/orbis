@@ -62,8 +62,8 @@ policy.
 
 Users can configure or disable the planning shortcut. Effective host-binding conflicts preserve Pi
 input and report the conflict; the package does not edit host keybindings. After reload, the
-shortcut uses the effective bindings without requiring another extension reload. The interaction
-contract defines the default key, rebinding prerequisite, and modal key behavior.
+shortcut uses the effective bindings. Shortcut configuration changes require `/reload`. The
+interaction contract defines the default key, rebinding prerequisite, and modal key behavior.
 
 Default mode does not inject active planning instructions or automatically resume paused work.
 Explicit planning intent remains supported in either mode. Switching to Default preserves unfinished
@@ -296,7 +296,7 @@ The base package defaults to the TUI and does not require browser configuration.
 edits the approved-plan directory, appearance, hints default, and optional planning shortcut. These
 settings use the same personal and trusted-project precedence. Failed persistence restores the
 previous displayed value and reports the failure. After a successful save, shortcut changes apply
-immediately; appearance changes apply when the next interaction opens. The interaction contract
+after `/reload`; appearance changes apply when the next interaction opens. The interaction contract
 defines settings choices, visual defaults, override notices, and menu behavior.
 
 ## Approval and handoff

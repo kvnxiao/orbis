@@ -5,10 +5,8 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   decodeKittyPrintable,
-  matchesKey,
   sliceByColumn,
   stripTerminalSequences,
-  truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
@@ -18,8 +16,8 @@ import { markdownLines } from "../document/markdown.ts";
 import type { Draft, RoundAction, RoundState, Question } from "../domain/state.ts";
 import { defaultAppearance } from "./appearance.ts";
 import type { PlanAppearance } from "./appearance.ts";
-import { modalKeys, modalKeyHint } from "./terminal-keys.ts";
-import { functionKey, modalContentWidth, modalLines } from "./terminal-layout.ts";
+import { ModalKeybindings } from "./terminal-keys.ts";
+import { modalContentWidth, modalLines } from "./terminal-layout.ts";
 import type { TerminalOptions } from "./terminal-options.ts";
 
 type Row =
@@ -165,6 +163,7 @@ export class TerminalRound implements Component {
   private readonly switchView: (() => void) | undefined;
   private readonly appearance: PlanAppearance;
   private readonly theme: Theme | undefined;
+  private readonly keys: ModalKeybindings;
 
   constructor(options: TerminalOptions<RoundAction>) {
     const {
@@ -190,6 +189,7 @@ export class TerminalRound implements Component {
     this.switchView = switchView;
     this.appearance = appearance;
     this.theme = theme;
+    this.keys = new ModalKeybindings(options.keys, () => this.mode === "edit");
     this.showHints = appearance.showHints;
     const question = read().round?.questions.find((item) => item.id === read().round?.focus);
     if (question !== undefined) {
@@ -310,18 +310,23 @@ export class TerminalRound implements Component {
     this.mode = "list";
   }
 
+  private moveSelection(direction: number): void {
+    this.selected = Math.max(0, Math.min(this.items().length - 1, this.selected + direction));
+    const next = this.items()[this.selected];
+    if (next !== undefined && next.kind !== "review" && next.kind !== "inactive") {
+      this.send({ type: "focus", questionId: next.question.id });
+    }
+    this.followFocus = true;
+  }
+
   private editInput(row: Exclude<Row, { kind: "review" | "inactive" }>, data: string): void {
-    if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down)) {
-      this.moveNoteCursor(matchesKey(data, modalKeys.down) ? 1 : -1);
+    if (this.keys.matches(data, "cursorUp") || this.keys.matches(data, "cursorDown")) {
+      this.moveNoteCursor(this.keys.matches(data, "cursorDown") ? 1 : -1);
       this.followFocus = true;
       return;
     }
     this.noteColumn = undefined;
-    if (matchesKey(data, modalKeys.newline)) {
-      this.editor.insertTextAtCursor("\n");
-    } else {
-      this.editor.handleInput(data);
-    }
+    this.keys.edit(this.editor, data);
     const text = this.editor.getExpandedText();
     if (row.kind === "clarify") {
       this.send({ type: "edit-clarification", questionId: row.question.id, text });
@@ -379,18 +384,18 @@ export class TerminalRound implements Component {
       return;
     }
     this.scroll = this.layout(this.columns()).viewport.scroll;
-    if (functionKey(data, 1)) {
+    if (this.keys.matches(data, "hints")) {
       this.showHints = !this.showHints;
       this.armed = false;
       this.refresh();
       return;
     }
-    if (functionKey(data, 3) || functionKey(data, 4)) {
-      this.browse(functionKey(data, 3) ? -1 : 1);
+    if (this.keys.matches(data, "older") || this.keys.matches(data, "newer")) {
+      this.browse(this.keys.matches(data, "older") ? -1 : 1);
       return;
     }
     if (this.viewed !== undefined) {
-      if (matchesKey(data, modalKeys.escape)) {
+      if (this.keys.matches(data, "escape")) {
         if (this.armed) {
           this.send({ type: "cancel" });
         } else {
@@ -398,12 +403,12 @@ export class TerminalRound implements Component {
         }
       } else {
         this.armed = false;
-        if (matchesKey(data, modalKeys.down) || matchesKey(data, modalKeys.pageDown)) {
-          this.scroll += matchesKey(data, modalKeys.pageDown) ? Math.max(1, this.rows() - 8) : 1;
-        } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.pageUp)) {
+        if (this.keys.matches(data, "down") || this.keys.matches(data, "pageDown")) {
+          this.scroll += this.keys.matches(data, "pageDown") ? Math.max(1, this.rows() - 8) : 1;
+        } else if (this.keys.matches(data, "up") || this.keys.matches(data, "pageUp")) {
           this.scroll = Math.max(
             0,
-            this.scroll - (matchesKey(data, modalKeys.pageUp) ? Math.max(1, this.rows() - 8) : 1),
+            this.scroll - (this.keys.matches(data, "pageUp") ? Math.max(1, this.rows() - 8) : 1),
           );
         }
       }
@@ -425,14 +430,20 @@ export class TerminalRound implements Component {
       }
       if (
         this.mode === "edit" &&
-        (matchesKey(data, modalKeys.tab) ||
-          matchesKey(data, modalKeys.previous) ||
-          (this.editor.getExpandedText().trim().length === 0 &&
-            (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down))))
+        this.editor.getExpandedText().trim().length === 0 &&
+        (this.keys.matches(data, "cursorUp") || this.keys.matches(data, "cursorDown"))
+      ) {
+        this.mode = "list";
+        this.moveSelection(this.keys.matches(data, "cursorDown") ? 1 : -1);
+        return;
+      }
+      if (
+        this.mode === "edit" &&
+        (this.keys.matches(data, "tab") || this.keys.matches(data, "previous"))
       ) {
         this.mode = "list";
       }
-      if (matchesKey(data, modalKeys.escape)) {
+      if (this.keys.matches(data, "escape")) {
         if (this.mode !== "list") {
           this.mode = "list";
           this.armed = false;
@@ -444,13 +455,13 @@ export class TerminalRound implements Component {
         }
       } else {
         this.armed = false;
-        if (matchesKey(data, modalKeys.presenter)) {
+        if (this.keys.matches(data, "presenter")) {
           this.switchView?.();
         } else if (this.mode === "edit") {
           if (row.kind === "review" || row.kind === "inactive") {
             return;
           }
-          if (matchesKey(data, modalKeys.enter)) {
+          if (this.keys.matches(data, "finish") && !this.keys.matches(data, "newline")) {
             this.confirm(row);
           } else {
             this.editInput(row, data);
@@ -459,15 +470,15 @@ export class TerminalRound implements Component {
           const histories = (this.round()?.questions ?? []).filter(
             (q) => this.round()?.clarifications.some((entry) => entry.questionId === q.id) === true,
           );
-          if (matchesKey(data, modalKeys.tab) || matchesKey(data, modalKeys.previous)) {
+          if (this.keys.matches(data, "tab") || this.keys.matches(data, "previous")) {
             this.previewFocus =
               (this.previewFocus +
-                (matchesKey(data, modalKeys.tab) ? 1 : -1) +
+                (this.keys.matches(data, "tab") ? 1 : -1) +
                 histories.length +
                 1) %
               (histories.length + 1);
             this.followFocus = true;
-          } else if (matchesKey(data, modalKeys.enter)) {
+          } else if (this.keys.matches(data, "enter")) {
             const question = histories[this.previewFocus];
             if (question === undefined) {
               this.send({ type: "submit" });
@@ -476,21 +487,21 @@ export class TerminalRound implements Component {
             } else {
               this.expanded.add(question.id);
             }
-          } else if (matchesKey(data, modalKeys.down) || matchesKey(data, modalKeys.pageDown)) {
+          } else if (this.keys.matches(data, "down") || this.keys.matches(data, "pageDown")) {
             this.scroll++;
             this.followFocus = false;
-          } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.pageUp)) {
+          } else if (this.keys.matches(data, "up") || this.keys.matches(data, "pageUp")) {
             this.scroll = Math.max(0, this.scroll - 1);
             this.followFocus = false;
           }
-        } else if (matchesKey(data, modalKeys.tab) || matchesKey(data, modalKeys.previous)) {
+        } else if (this.keys.matches(data, "tab") || this.keys.matches(data, "previous")) {
           const questions = (this.round()?.questions ?? []).filter((q) => q.status === undefined);
           const index =
             row.kind === "review"
               ? questions.length
               : questions.findIndex((q) => q.id === row.question.id);
           const nextIndex =
-            (index + (matchesKey(data, modalKeys.tab) ? 1 : -1) + questions.length + 1) %
+            (index + (this.keys.matches(data, "tab") ? 1 : -1) + questions.length + 1) %
             (questions.length + 1);
           const next = questions[nextIndex];
           if (next === undefined) {
@@ -500,31 +511,20 @@ export class TerminalRound implements Component {
             this.jump(next);
             this.send({ type: "focus", questionId: next.id });
           }
-        } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down)) {
-          this.selected = Math.max(
-            0,
-            Math.min(
-              this.items().length - 1,
-              this.selected + (matchesKey(data, modalKeys.down) ? 1 : -1),
-            ),
-          );
-          const next = this.items()[this.selected];
-          if (next !== undefined && next.kind !== "review" && next.kind !== "inactive") {
-            this.send({ type: "focus", questionId: next.question.id });
-          }
-          this.followFocus = true;
-        } else if (matchesKey(data, modalKeys.pageDown) || matchesKey(data, modalKeys.pageUp)) {
+        } else if (this.keys.matches(data, "up") || this.keys.matches(data, "down")) {
+          this.moveSelection(this.keys.matches(data, "down") ? 1 : -1);
+        } else if (this.keys.matches(data, "pageDown") || this.keys.matches(data, "pageUp")) {
           const viewport = this.layout(this.columns()).viewport;
           this.scroll = Math.max(
             0,
             Math.min(
               viewport.length - 1,
               viewport.scroll +
-                (matchesKey(data, modalKeys.pageDown) ? 1 : -1) * Math.max(1, this.rows() - 8),
+                (this.keys.matches(data, "pageDown") ? 1 : -1) * Math.max(1, this.rows() - 8),
             ),
           );
           this.followFocus = false;
-        } else if (matchesKey(data, modalKeys.enter)) {
+        } else if (this.keys.matches(data, "enter")) {
           if (row.kind === "inactive") {
             return;
           }
@@ -581,7 +581,7 @@ export class TerminalRound implements Component {
           row.kind !== "review" &&
           row.kind !== "inactive" &&
           (data.startsWith("\x1b[200~") ||
-            matchesKey(data, modalKeys.backspace) ||
+            this.keys.matches(data, "backspace") ||
             decodeKittyPrintable(data) !== undefined ||
             /^[^\p{Cc}]+$/u.test(data))
         ) {
@@ -702,7 +702,25 @@ export class TerminalRound implements Component {
         buttons: [{ label: "Submit round" }],
         ...(this.previewFocus === histories.length ? { focus: 0 } : {}),
         ...(this.followFocus && focusedHistory >= 0 ? { contentFocus: focusedHistory } : {}),
-        ...(this.showHints ? { hint: "Tab: focus · Enter: activate · F1: hints · Esc: back" } : {}),
+        ...(this.showHints
+          ? {
+              hint: [
+                this.keys.hint("tab", "focus"),
+                this.keys.hint("enter", "activate"),
+                this.keys.hint("hints", "hints"),
+                this.keys.hint("escape", "back"),
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              compactHint: [
+                this.keys.hint("enter", "", true),
+                this.keys.hint("hints", "", true),
+                this.keys.hint("escape", "", true),
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : {}),
         error: this.error,
         ...(this.theme === undefined ? {} : { theme: this.theme }),
       };
@@ -888,21 +906,38 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
         }
       }
     }
-    let help =
-      "↑↓: move · Enter: toggle/open · Tab/Shift+Tab: question · Typing on an option adds notes · F3/F4: frontiers · PgUp/PgDn: scroll";
-    let escapeHelp = " · F1: hints · Esc: close";
+    let help = [
+      this.keys.hint(["up", "down"], "move"),
+      this.keys.hint("enter", "toggle/open"),
+      this.keys.hint(["tab", "previous"], "question"),
+      "Type: notes",
+      this.keys.hint(["older", "newer"], "frontiers"),
+      this.keys.hint(["pageUp", "pageDown"], "scroll"),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const escapeHelp = [
+      this.keys.hint("hints", "hints"),
+      this.keys.hint("escape", editing ? "back" : "close"),
+    ]
+      .filter(Boolean)
+      .join(" · ");
     if (editing) {
-      help = `${modalKeyHint(modalKeys.enter, "set")} · ${modalKeyHint(modalKeys.newline, "newline")} · ${modalKeyHint(`${modalKeys.tab}/${modalKeys.previous}`, "question")}`;
-      escapeHelp = " · F1: hints · Esc: back";
+      help = [
+        this.keys.hint("finish", "set"),
+        this.keys.hint("newline", "newline"),
+        this.keys.hint(["tab", "previous"], "question"),
+      ]
+        .filter(Boolean)
+        .join(" · ");
     } else if (this.armed) {
-      help = "Press Esc again to close; drafts retained";
+      help = this.keys.hint("escape", "press again to close; drafts retained");
     }
     if (this.switchView !== undefined) {
-      help += ` · ${modalKeyHint(modalKeys.presenter, "presenter")}`;
+      help += ` · ${this.keys.hint("presenter", "presenter")}`;
     }
     if (outerWidth < 40 && !this.armed) {
-      help = editing ? "Enter:set" : "↑↓ Enter Tab";
-      escapeHelp = " F1 Esc";
+      help = this.keys.hint(editing ? "finish" : "tab", editing ? "set" : "focus");
     }
     if (this.error.length > 0) {
       help = this.error + " · " + help;
@@ -932,10 +967,17 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
       ...(this.theme === undefined ? {} : { theme: this.theme }),
       ...(this.showHints
         ? {
-            hint: this.armed
-              ? help
-              : truncateToWidth(help, Math.max(1, outerWidth - visibleWidth(escapeHelp))) +
-                escapeHelp,
+            hint: this.armed ? help : `${help} · ${escapeHelp}`,
+            hintSuffix: escapeHelp,
+            compactHint: this.armed
+              ? this.keys.hint("escape", "close?", true)
+              : [
+                  this.keys.hint(editing ? "finish" : "tab", "", true),
+                  this.keys.hint("hints", "", true),
+                  this.keys.hint("escape", "", true),
+                ]
+                  .filter(Boolean)
+                  .join(" "),
           }
         : {}),
     };

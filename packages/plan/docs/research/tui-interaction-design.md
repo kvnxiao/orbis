@@ -29,18 +29,17 @@ child. Focus must propagate to the text component for cursor and IME behavior. E
 on terminal geometry, so the parent must budget space for notes and document content.
 [Component documentation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/tui.md#built-in-components)
 
-Pi's multiline editor defaults to Enter for submission and modified Enter for newlines. Modified
-Enter is not distinguishable in every terminal; the local macOS modifier fallback does not operate
-over SSH. A package can define its own key routing with Enter for review-note newlines and Tab to
-visible feedback controls.
+Pi's multiline editor defaults to Enter for submission and Shift+Enter or Ctrl+J for newlines.
+Modified Enter is not distinguishable in every terminal; the local macOS modifier fallback does not
+operate over SSH. Ctrl+J and multiline paste provide alternate newline input.
 [Terminal setup](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/terminal-setup.md)
 
-Plan question fields use Enter to finish local editing and Shift+Enter for newlines. A clarification
-draft requires a subsequent Enter on the list's Send clarification action. Pi's key matcher
-recognizes CSI `13;2u` and xterm modifyOtherKeys sequences for Shift+Enter; recognition of legacy
-sequences depends on Kitty keyboard-protocol state. Multiline paste supplies newlines when a
-terminal does not distinguish Shift+Enter. Source inspection does not establish live terminal or SSH
-behavior.
+Plan question and review-note fields use the effective host bindings: by default, Enter finishes
+local editing, and Shift+Enter and Ctrl+J insert newlines. A clarification draft requires a
+subsequent Enter on the list's Send clarification action. Pi's key matcher recognizes CSI `13;2u`
+and xterm modifyOtherKeys sequences for Shift+Enter; recognition of legacy sequences depends on
+Kitty keyboard-protocol state. When a terminal does not distinguish Shift+Enter, Ctrl+J or multiline
+paste supplies newlines. Source inspection does not establish live terminal or SSH behavior.
 [Key matching source](https://github.com/earendil-works/pi/blob/v0.85.1/packages/tui/src/keys.ts)
 
 **Design implication:** The plan stays read-only. Only note fields accept text. Key help identifies

@@ -18,6 +18,7 @@ import type {
   KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
+import { getKeybindings } from "@earendil-works/pi-tui";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 
 export async function packedProbe(order: "base" | "before" | "after" = "after"): Promise<void> {
@@ -130,7 +131,7 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
             fg: (_color: string, text: string) => text,
             bg: (_color: string, text: string) => text,
           },
-          { getKeys: () => ["shift+enter"] },
+          getKeybindings(),
           completed.resolve,
         ]);
         assert.ok(

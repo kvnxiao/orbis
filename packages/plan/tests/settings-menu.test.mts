@@ -2,8 +2,12 @@ import { join } from "node:path";
 
 import type { ExtensionContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { initTheme } from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
-import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import type { Component, KeybindingsConfig, TUI } from "@earendil-works/pi-tui";
+import {
+  KeybindingsManager as TuiKeybindingsManager,
+  TUI_KEYBINDINGS,
+  stripTerminalSequences,
+} from "@earendil-works/pi-tui";
 import { expect, test, vi } from "vitest";
 
 import { showPlanSettings } from "../src/pi/settings-menu.ts";
@@ -21,7 +25,7 @@ function menuContext(
   f: RuntimeFixture,
   notify: ExtensionContext["ui"]["notify"],
   drive: (menu: MenuDriver) => Promise<void>,
-  bindings: Record<string, string> = {},
+  bindings: KeybindingsConfig = {},
 ): ExtensionContext {
   return {
     ...f.ctx,
@@ -48,7 +52,9 @@ function menuContext(
             },
           },
           { bold: (text: string) => text },
-          { getResolvedBindings: () => bindings },
+          Object.assign(new TuiKeybindingsManager(TUI_KEYBINDINGS, bindings), {
+            getResolvedBindings: () => bindings,
+          }),
           completed.resolve,
         ]);
         if (
@@ -155,7 +161,7 @@ test("settings menu keeps successful writes quiet and restores the displayed val
     press("\r");
     const changed = rendered();
     expect(changed).not.toContain("Saving");
-    expect(changed).toContain("Enter/Space to change · Esc to cancel");
+    expect(changed).toContain("Enter: change · Escape/Ctrl+C: cancel");
     saving.resolve(undefined);
     await saving.promise;
     await new Promise<void>((resolve) => {
@@ -196,6 +202,32 @@ test("settings menu keeps successful writes quiet and restores the displayed val
   });
   await showPlanSettings(ctx, join(f.ctx.cwd, "agent"));
   expect(write).toHaveBeenCalledTimes(5);
+});
+
+test("settings input and hints honor injected host bindings", async ({ onTestFinished }) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  initTheme("dark", false);
+  const ctx = menuContext(
+    f,
+    () => undefined,
+    async ({ press, rendered }) => {
+      expect(rendered()).toContain("Ctrl+S: change");
+      expect(rendered()).toContain("Ctrl+X: cancel");
+      expect(rendered()).not.toContain("Enter/Space");
+      expect(rendered()).not.toContain("Esc");
+      press("\x0e");
+      press("\x13");
+      await vi.waitFor(async () => {
+        expect(
+          (await config.readSettingsFile(join(f.ctx.cwd, "agent", "orbis-plan.json"))).symbols,
+        ).toBe("emoji");
+      });
+      press("\x18");
+    },
+    { "tui.select.down": "ctrl+n", "tui.select.confirm": "ctrl+s", "tui.select.cancel": "ctrl+x" },
+  );
+  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"));
 });
 
 test("personal settings identify the trusted project value and file that mask a choice", async ({
@@ -249,8 +281,10 @@ test("shortcut menu rejects invalid keys, applies saves and preserves the active
       press("\x0b");
       press("ctrl+alt+p");
       press("\r");
-      await vi.waitFor(() => {
-        expect(f.runtime.shortcut).toBe("ctrl+alt+p");
+      await vi.waitFor(async () => {
+        expect(
+          (await config.readSettingsFile(join(f.ctx.cwd, "agent", "orbis-plan.json"))).shortcut,
+        ).toBe("ctrl+alt+p");
       });
       vi.spyOn(config, "writeSettings").mockRejectedValueOnce(new Error("Cannot save shortcut"));
       press("\r");
@@ -261,15 +295,13 @@ test("shortcut menu rejects invalid keys, applies saves and preserves the active
       await vi.waitFor(() => {
         expect(notify).toHaveBeenCalledWith("Cannot save shortcut", "error");
       });
-      expect(f.runtime.shortcut).toBe("ctrl+alt+p");
+      expect(f.runtime.shortcut).toBe("shift+tab");
       expect(rendered()).toMatch(/Planning shortcut\s+ctrl\+alt\+p/u);
       await finish();
     },
     { "app.thinking.cycle": "shift+tab" },
   );
-  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"), async () => {
-    await f.runtime.reloadSettings(ctx);
-  });
+  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"));
 });
 
 test.for(["rpc", "json", "print"] as const)(
@@ -308,7 +340,6 @@ test("Escape closes settings before a queued write finishes and preserves its co
     await committed.promise;
     await original(path, fields);
   });
-  const saved = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const ctx = menuContext(
     f,
     () => undefined,
@@ -317,12 +348,13 @@ test("Escape closes settings before a queued write finishes and preserves its co
       menu.press("\r");
       await started.promise;
       await menu.finish();
-      expect(saved).not.toHaveBeenCalled();
+      expect(await config.readSettingsFile(join(f.ctx.cwd, "agent", "orbis-plan.json"))).toEqual(
+        {},
+      );
       committed.resolve(undefined);
     },
   );
-  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"), saved);
-  expect(saved).toHaveBeenCalledOnce();
+  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"));
   expect(await config.readSettingsFile(join(f.ctx.cwd, "agent", "orbis-plan.json"))).toEqual({
     symbols: "emoji",
   });

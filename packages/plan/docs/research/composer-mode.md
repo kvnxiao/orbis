@@ -12,12 +12,12 @@ remains active.
 [shortcut resolver](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/extensions/runner.ts)
 
 The public `getEditorComponent` and `setEditorComponent` APIs support wrapping the configured
-composer. The editor factory receives Pi's live keybindings manager. Before consuming the planning
-shortcut, the wrapper checks effective host bindings and forwards conflicting input to Pi. Using the
-default Shift+Tab shortcut requires rebinding `app.thinking.cycle` and reloading Pi. Focused modals
-receive their own input. A later editor replacement must compose with the installed factory to
-retain the wrapper. A global terminal input listener lacks focused-component metadata and is
-unsuitable for consuming this key unconditionally.
+composer. The editor factory receives Pi's live keybindings manager. Before registering the planning
+shortcut through `pi.registerShortcut`, Plan checks effective host bindings and rejects conflicts.
+Using the default Shift+Tab shortcut requires rebinding `app.thinking.cycle` and reloading Pi. While
+the composer has focus, Pi dispatches registered shortcuts; focused modals receive their own input.
+When Pi initializes editor handling, it captures registered shortcuts. Shortcut setting changes
+therefore require `/reload`.
 [Custom editors](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#custom-editor)
 
 The `input` event distinguishes interactive input from extension and RPC messages. An extension can

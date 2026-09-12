@@ -7,6 +7,13 @@ system contract. Examples illustrate the required interactions without defining 
 
 Requirements: REQ-terminal-interaction-boundary.
 
+Key names below describe defaults. Host actions use their effective Pi bindings for input and
+displayed hints, including selection, cancellation, paging, editor movement, submission, and
+newlines. Disabled bindings do not appear as available. Extension-owned keys derive their hints from
+the keys matched by the modal. While a field owns focus, Enter finishes local editing; Shift+Enter
+and Ctrl+J insert newlines by default. Finishing a field does not submit the round or approve the
+plan.
+
 The modal uses the configured border and occupies 96% of terminal width. Title, action bar, and
 optional hints remain fixed while content scrolls. A divider immediately follows the title, with a
 blank row below it before content. The right-edge scrollbar identifies the content position.
@@ -67,7 +74,7 @@ agent must explain a withdrawal or deferral in its update, and stored drafts rem
 | Generated option or Other           | Enter                       | Toggle an existing selection; otherwise select the option or nonblank Other draft. Empty Other opens editing. |
 | Option, Other, or clarification row | Typing, paste, Backspace    | Start inline editing and apply the initiating input.                                                          |
 | Inline field                        | Enter                       | Retain text and return to its row. Generated/Other fields select the answer; clarification remains unsent.    |
-| Inline field                        | Shift+Enter                 | Insert a newline. Multiline paste remains available.                                                          |
+| Inline field                        | Shift+Enter / Ctrl+J        | Insert a newline. Multiline paste remains available.                                                          |
 | Inline field                        | Escape                      | Retain text and return to the row without arming outer closure.                                               |
 | Empty inline field                  | Up/Down                     | Return to list navigation and move to the adjacent row.                                                       |
 | Clarification row with text         | Enter on Send clarification | Send the request and close the modal for the owning agent's response.                                         |
@@ -132,10 +139,11 @@ visible outside editing and are never inserted into the immutable plan file.
 
 Up/Down select document blocks; PgUp/PgDn scroll. Typing, paste, or Backspace on a selected block
 opens its note and applies the input. Enter opens an empty note; while editing, Enter retains text
-and returns to document navigation, and Shift+Enter inserts a newline. Escape leaves editing with
-text retained. F2 focuses overall feedback, which is also reachable at the document's end. Tab/
-Shift+Tab leave fields and traverse content and individual CTA buttons. No Confirm note control or
-separate feedback preview exists. Printable brackets enter note text like other characters.
+and returns to document navigation, and Shift+Enter and Ctrl+J insert newlines. Escape leaves
+editing with text retained. F2 focuses overall feedback, which is also reachable at the document's
+end. Tab/ Shift+Tab leave fields and traverse content and individual CTA buttons. No Confirm note
+control or separate feedback preview exists. Printable brackets enter note text like other
+characters.
 
 Without nonblank notes the CTA is `Approve`. With notes it contains `Approve with notes` and
 `Request revision`. Approve with notes accepts the displayed Markdown and supplementary notes;
@@ -203,7 +211,9 @@ directory's `keybindings.json` and run `/reload`. The default path is
 name the actual path. Until the conflict clears, Shift+Tab retains its Pi action and Plan reports
 the required correction. `/plan` remains available. In `/plan-settings`, choose another shortcut or
 disable it. The menu shows any trusted project override and any host binding that blocks the
-selected shortcut. After a successful save, shortcut changes apply immediately.
+selected shortcut. After a successful save, shortcut changes require `/reload`. Until reload, the
+previous shortcut remains active. The shortcut registers through Pi's SDK with a description in
+`/hotkeys`; focused modals retain their own input routing.
 
 ```mermaid
 flowchart TD
@@ -248,10 +258,12 @@ it to Off and open a modal: hints and their divider are hidden, while errors and
 remain visible. Press F1 to show hints for that modal, then reopen it: the saved Off default applies
 again. The first outer Escape arms closing even when the reminder is hidden.
 
-| Scenario                                                                                       | Expected result                                                                                                                 | Requirements                 |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Switch composer modes while idle, then attempt a switch during work                            | Idle switching preserves typed text without sending input. During work, switching is rejected and does not queue a mode change. | REQ-composer-mode            |
-| Update a personal setting with a trusted project override, then force a settings write failure | The menu identifies the overriding value and file. A failed write restores the previous displayed value and reports the error.  | REQ-configuration-precedence |
+| Scenario                                                                                       | Expected result                                                                                                                 | Requirements                                    |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Switch composer modes while idle, then attempt a switch during work                            | Idle switching preserves typed text without sending input. During work, switching is rejected and does not queue a mode change. | REQ-composer-mode                               |
+| Save another planning shortcut or disable it, then run `/reload`                               | Before reload, the previous shortcut remains active. After reload, the saved shortcut registers unless disabled or blocked.     | REQ-composer-mode, REQ-configuration-precedence |
+| Rebind the host action that blocks the planning shortcut, then run `/reload`                   | The conflict check uses the reloaded host bindings; an unblocked planning shortcut registers and appears in `/hotkeys`.         | REQ-composer-mode                               |
+| Update a personal setting with a trusted project override, then force a settings write failure | The menu identifies the overriding value and file. A failed write restores the previous displayed value and reports the error.  | REQ-configuration-precedence                    |
 
 ## Terminal and integration scenarios
 
@@ -259,16 +271,17 @@ Requirements: REQ-complete-terminal-package, REQ-revision-validation, REQ-exclus
 REQ-terminal-interaction-boundary, REQ-session-recovery, REQ-recoverable-failures,
 REQ-public-presentation-boundary.
 
-| Situation                                                    | Observable outcome                                                                                                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontier or plan exceeds terminal height.                    | Content scrolls with a proportional right-edge scrollbar; title and footer stay fixed. Actions and every content line remain reachable. |
-| Terminal narrows or resizes while a note is open.            | Content adapts, actions remain visible, and focus, target identity, text, and confirmed selections survive.                             |
-| Unicode, wide characters, or an input method is used.        | Text is preserved, lines fit display width, and the active field receives cursor/input focus.                                           |
-| Terminal cannot distinguish Shift+Enter.                     | Multiline paste supplies newlines in question and review-note fields; Enter retains text and leaves editing.                            |
-| Optional presenter returns input for an old revision.        | Validation rejects it without changing current answers, note targets, or approval.                                                      |
-| Terminal is selected or the presenter selector is cancelled. | The TUI reopens with drafts preserved and the saved hints default.                                                                      |
-| An active presenter fails or unregisters.                    | The TUI restores the pending interaction with drafts preserved. Cancellation closes without reopening.                                  |
-| Persistence fails or a session is restored.                  | The UI reports the save state and restores only the applicable saved branch; it does not infer submission or replay approval.           |
+| Situation                                                             | Observable outcome                                                                                                                      |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontier or plan exceeds terminal height.                             | Content scrolls with a proportional right-edge scrollbar; title and footer stay fixed. Actions and every content line remain reachable. |
+| Terminal narrows or resizes while a note is open.                     | Content adapts, actions remain visible, and focus, target identity, text, and confirmed selections survive.                             |
+| Unicode, wide characters, or an input method is used.                 | Text is preserved, lines fit display width, and the active field receives cursor/input focus.                                           |
+| Terminal cannot distinguish Shift+Enter.                              | Ctrl+J or multiline paste supplies newlines in question and review-note fields; Enter retains text and leaves editing.                  |
+| Host selection, cancellation, submission, or newline bindings change. | Input and hints use the effective bindings. Disabled bindings are omitted from hints and do not invoke their former actions.            |
+| Optional presenter returns input for an old revision.                 | Validation rejects it without changing current answers, note targets, or approval.                                                      |
+| Terminal is selected or the presenter selector is cancelled.          | The TUI reopens with drafts preserved and the saved hints default.                                                                      |
+| An active presenter fails or unregisters.                             | The TUI restores the pending interaction with drafts preserved. Cancellation closes without reopening.                                  |
+| Persistence fails or a session is restored.                           | The UI reports the save state and restores only the applicable saved branch; it does not infer submission or replay approval.           |
 
 These scenarios define checks to perform during implementation. They are not records of executed
 tests or proof that the current interface implements them.

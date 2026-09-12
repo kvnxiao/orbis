@@ -52,7 +52,7 @@ export class PlanRuntime {
   private readonly sessionFile = new SessionFile();
   private selectedMode: "plan" | "default" = "default";
   private configuredShortcut: PlanSettings["shortcut"] = defaultShortcut;
-  private shortcutLabel: string | undefined = "Shift+Tab";
+  private shortcutLabel: string | undefined;
   get shortcut(): PlanSettings["shortcut"] {
     return this.configuredShortcut;
   }
@@ -62,7 +62,6 @@ export class PlanRuntime {
     const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted(), signal);
     if (generation === this.generation && signal?.aborted !== true) {
       this.configuredShortcut = settings.shortcut;
-      this.setShortcutStatus(ctx, settings.shortcut ?? undefined);
     }
   }
 
@@ -873,7 +872,7 @@ export class PlanRuntime {
         this.pause(ctx);
         return { outcome: "cancelled" };
       }
-      const message = `${error instanceof Error ? error.message : String(error)} Use /plan to retry the current interaction, or Escape to pause planning.`;
+      const message = `${error instanceof Error ? error.message : String(error)} Use /plan to retry the current interaction, or close the planning interaction to pause.`;
       return { outcome: "error", message };
     } finally {
       if (this.controller === controller) {

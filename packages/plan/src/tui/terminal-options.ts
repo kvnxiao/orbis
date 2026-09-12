@@ -1,5 +1,5 @@
-import type { KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
-import type { Editor } from "@earendil-works/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { Editor, KeybindingsManager } from "@earendil-works/pi-tui";
 
 import type { RoundState } from "../domain/state.ts";
 import type { PlanAppearance } from "./appearance.ts";
@@ -16,5 +16,5 @@ export interface TerminalOptions<Action> {
   switchView?: (() => void) | undefined;
   appearance?: PlanAppearance;
   theme?: Theme;
-  keys?: Pick<KeybindingsManager, "getKeys">;
+  keys?: KeybindingsManager;
 }

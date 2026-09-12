@@ -86,7 +86,7 @@ export function saveApproval(
     return {
       state: recoverReview(pending),
       outcome: "error",
-      message: `${error instanceof Error ? error.message : String(error)} Use /plan to retry approval or Escape to pause.`,
+      message: `${error instanceof Error ? error.message : String(error)} Use /plan to retry approval or close the planning interaction to pause.`,
     };
   }
 }
