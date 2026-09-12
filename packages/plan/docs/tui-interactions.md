@@ -50,8 +50,9 @@ current selection. Earlier selections and question-version history are not displ
 
 Questions show the current context, prompt, generated options, Other, and Ask for clarification. The
 recommendation and reason follow the options. Option letters and labels are bold; selected options
-have a selection marker distinct from keyboard focus. Generated-option notes follow the option in an
-accent-colored `[notes: …]` suffix. Other text appears directly after its label in the theme's
+have a selection marker distinct from keyboard focus. Focused Unicode answer rows use `●`, emoji
+answer rows use `🔹`, and unfocused answer rows use `·`. Generated-option notes follow the option in
+an accent-colored `[notes: …]` suffix. Other text appears directly after its label in the theme's
 Markdown code-block color; clarification text uses its link color. Neither has an answer/question
 wrapper. Input and cursor positions wrap with the row.
 

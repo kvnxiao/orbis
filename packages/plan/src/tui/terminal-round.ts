@@ -75,7 +75,7 @@ function rowMarker(
     return symbols === "emoji" ? "✅" : "✓";
   }
   if (focused) {
-    return symbols === "emoji" ? "🔹" : "›";
+    return symbols === "emoji" ? "🔹" : "●";
   }
   return "·";
 }

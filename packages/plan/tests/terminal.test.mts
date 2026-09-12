@@ -696,10 +696,10 @@ test("option explanations wrap around the label and preserve separate Markdown p
   option.explanation =
     "Keep small files safely on disk with a plain format.\n\nUse `JSON` for export.";
   const lines = f.view.render(40).map((line) => stripTerminalSequences(line).trimEnd());
-  const start = lines.indexOf("› A. Local storage — Keep small files");
+  const start = lines.indexOf("● A. Local storage — Keep small files");
   expect(start).toBeGreaterThan(-1);
   expect(lines.slice(start, start + 4)).toEqual([
-    "› A. Local storage — Keep small files",
+    "● A. Local storage — Keep small files",
     "safely on disk with a plain format.",
     "",
     "Use JSON for export.",
@@ -793,10 +793,10 @@ test.each(["", "   "])("blank notes %j let arrows leave without confirmation", (
   const f = roundFixture();
   f.resize(60);
   keys(f.view, "x", "\x7f", blank, down);
-  expect(text(f.view)).toContain("› B. Remote");
+  expect(text(f.view)).toContain("● B. Remote");
   expect(f.state().round?.drafts.scope?.answer).toBeUndefined();
   keys(f.view, "x", "\x7f", blank, "\x1b[A");
-  expect(text(f.view)).toContain("› A. Local");
+  expect(text(f.view)).toContain("● A. Local");
   expect(f.state().round?.drafts.scope?.answer).toBeUndefined();
 });
 
@@ -872,9 +872,9 @@ test("a revised round that drops the selected option keeps the frontier navigabl
     refresh: () => undefined,
     editor: testEditor(),
   });
-  expect(text(view)).toContain("› A. Local");
+  expect(text(view)).toContain("● A. Local");
   keys(view, down);
-  expect(text(view)).toContain("› B. Hosted");
+  expect(text(view)).toContain("● B. Hosted");
   keys(view, enter);
   expect(state.round?.drafts.scope?.answer).toEqual({ optionId: "hosted" });
   keys(view, escape, escape);
@@ -1011,6 +1011,8 @@ test.each(["unicode", "emoji"] as const)(
   "selected %s markers persist when the cursor moves",
   (symbols) => {
     const f = roundFixture({ symbols, border: "rounded", showHints: true });
+    const focused = symbols === "emoji" ? "🔹" : "●";
+    expect(text(f.view)).toContain(`${focused} A. Local`);
     keys(f.view, enter);
     const check = symbols === "emoji" ? "✅" : "✓";
     expect(text(f.view)).toContain(`${check} A. Local`);
