@@ -20,10 +20,21 @@ pi -e ./packages/plan
 ```
 
 Before using the default Shift+Tab planning shortcut, rebind Pi's `app.thinking.cycle` action to
-another key in its agent directory's `keybindings.json`, then run `/reload`. The default path is
-`~/.pi/agent/keybindings.json`; `PI_CODING_AGENT_DIR` changes the agent directory. Conflict warnings
-name the actual path. Until the conflict clears, Shift+Tab retains Pi's thinking-level action and
-`/plan` remains available.
+another key in its agent directory's `keybindings.json`, then run `/reload`. Alt+T is unclaimed
+across Pi's editor, input, selection, and application bindings:
+
+```json
+{
+  "app.thinking.cycle": "alt+t"
+}
+```
+
+On terminals that draw a menu bar, Alt+T opens the Terminal menu; on macOS, Option+T emits `†`
+unless the Option key sends Meta. Choose another unclaimed key on those hosts.
+
+The default keybindings path is `~/.pi/agent/keybindings.json`; `PI_CODING_AGENT_DIR` changes the
+agent directory. Conflict warnings name the actual path. Until the conflict clears, Shift+Tab
+retains Pi's thinking-level action and `/plan` remains available.
 
 While Pi is idle, use the enabled planning shortcut to select Plan mode, then submit an ordinary
 objective. The `orbis-plan` status entry shows Plan or Default mode and the configured shortcut,
