@@ -15,6 +15,11 @@ Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TU
 
 ## Rule References
 
+For specifications, design explanations, and public API documentation, apply the
+[forward-reference checks](../../../docs/specifications.md#avoid-forward-references). Introduce
+package-specific terms and interfaces before describing dependent behavior. Review reading order
+as well as sentence-level prerequisites; links to later details cannot supply missing context.
+
 - [Pi design and compatibility](references/pi-design-and-compatibility.md): Read when choosing a Pi customization mechanism, importing Pi APIs, or deciding which guidance belongs in code, skills, or lint configuration.
 - [Pi trust and authorization](references/pi-trust-and-authorization.md): Read when implementing approval flows, project trust, execution permissions, credential access, or unattended work.
 - [Pi delegation](references/pi-delegation.md): Read when spawning child agents, assigning shared workspace ownership, integrating delegated results, or propagating permissions and cancellation.

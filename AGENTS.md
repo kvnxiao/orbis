@@ -197,6 +197,20 @@ skill files.
 
 ## Writing
 
+- Avoid forward references in documentation, skills, and design discussions. Before using a
+  package-specific term, acronym, state, interface, or named approach, introduce its meaning and
+  role. Before comparing approaches or asking the user to choose, explain each approach and the
+  context needed to assess it.
+- Order sections and paragraphs by knowledge prerequisites: purpose and scope, shared concepts,
+  behavior, then dependent details and verification. Adapt headings to the artifact; a short
+  document can introduce a term in its first sentence of use instead of adding a glossary.
+- Links to later sections may supply optional detail, but must not supply context needed to
+  understand the current passage. When concepts depend on each other, introduce their shared model
+  before describing their separate rules. Preserve requirement IDs and obligations when moving text.
+- Before delivery, read changed documents from top to bottom without following forward links. Move
+  or introduce missing prerequisites at the earliest dependent passage. Apply the
+  [specification reading-order checks](docs/specifications.md#avoid-forward-references) to SPECs and
+  their linked interaction contracts.
 - Follow [README guidance](docs/readme-guidelines.md) for repository and package READMEs. Before
   advanced reference or contributor material, state the purpose, required setup, installation, and a
   realistic first use with its expected result. Keep npm installation commands without temporary

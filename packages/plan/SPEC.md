@@ -1,14 +1,48 @@
 # @orbis/plan specification
 
-Status: Package contract. The implementation provides the modal frontier, option details, block
-annotations, revision browsing, implementation selection, and an optional presentation hook.
-Complete real-host, SSH, IME, and model-quality verification remains pending. The
-[README](README.md) describes first use; the [development guide](docs/development.md) describes
-compatibility checks and verification limits.
-
 `@orbis/plan` develops a researched, user-approved Markdown plan in the user's existing Pi
-conversation. Installing the package supplies the complete terminal workflow. This specification is
-for independent Pi extension implementers.
+conversation. Pi is the coding-agent host that loads the extension. Installing the package supplies
+the complete terminal workflow. This specification is for independent Pi extension implementers.
+
+Status: Package contract with a reference implementation. Implementation availability and
+verification limits are stated separately from the requirements.
+
+## Concepts and workflow
+
+A plan records the objective and decisions for one planning effort. The owning agent is the Pi agent
+in the conversation where planning occurs. A Pi session stores conversation history; branches
+represent different continuations of that history. Planning records belong to their session and
+branch.
+
+The planning vocabulary distinguishes user input from submitted decisions and approved artifacts:
+
+| Term                   | Meaning                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontier               | All unresolved decisions whose prerequisites are settled and the user can answer now.                                                     |
+| Round                  | A structured set of questions presenting a frontier for the user to answer together.                                                      |
+| Option details         | Optional notes attached to a generated answer option; custom answers contain user-written text.                                           |
+| Clarification          | A user's question about a round item and the owning agent's response before round submission.                                             |
+| Draft                  | Input retained for editing that has not been submitted, including answers, notes, and clarification text.                                 |
+| Revision               | A particular version of a question, round, or plan Markdown; stable identities distinguish the item from its version or display position. |
+| Review                 | Inspection of a complete Markdown revision for feedback or approval.                                                                      |
+| Block annotation       | A note attached to an identified Markdown block, such as a paragraph or list item. Overall feedback applies to the plan as a whole.       |
+| Supplementary notes    | Block annotations and overall text approved alongside unchanged plan Markdown.                                                            |
+| Acceptance             | The persisted record of approval bound to the exact reviewed artifacts.                                                                   |
+| Approval event         | Notification of saved acceptance through Pi's shared event bus.                                                                           |
+| Implementation handoff | An explicitly authorized request to start implementing an approved plan in the current or a fresh Pi session.                             |
+| Launch                 | The recorded implementation attempt, including its approval, destination, and delivery state.                                             |
+
+The terminal user interface (TUI) presents questions and review in a modal, a focused view over the
+conversation. A presenter displays a pending interaction and returns the user's input. The TUI is
+the default presenter; the optional presentation hook lets another extension supply a presenter. The
+composer is Pi's message editor. Its Plan and Default modes select whether ordinary messages enter
+planning automatically or retain normal routing.
+
+The ordinary workflow proceeds from entry and research to question rounds, Markdown review, and
+approval. Clarification returns to the current round; submitted answers prompt further research, and
+revision feedback prompts another review. After approval, the user can select an implementation
+destination. Approval and implementation authorization are separate decisions. The requirements
+define validation, persistence, cancellation, and recovery at these boundaries.
 
 ## Scope
 
@@ -22,8 +56,8 @@ implementation-defined and must be documented where they affect usage or compati
 
 The package supplies planning instructions, explicit and model-initiated entry, structured question
 rounds, clarification, draft recovery, Markdown review, and approval through Pi's public extension
-API. The entire workflow works in local and SSH terminals without another package, application,
-service, or graphical desktop.
+API. The entire workflow works in local and Secure Shell (SSH) terminals without another package,
+application, service, or graphical desktop.
 
 ### REQ-planning-responsibility — Planning responsibility
 
@@ -59,31 +93,6 @@ implementation. Calls with `replace: true` require a stable, nonblank `requestId
 a completed replacement reuses its result without another confirmation or plan. Ordinary entry
 remains an explicit reopening action. The package does not register the former entry-tool name as an
 alias.
-
-### REQ-tool-idempotency — Tool idempotency
-
-Question-round and Markdown-review calls identify their operation by the plan, interaction, and
-expected predecessor revision. Replacement entry uses its explicit request identity. Each accepted
-operation binds that identity to its exact input and records its outcome on the owning branch.
-Object member ordering does not change request meaning; ordered questions and options retain their
-order. Exact retries of completed operations return their recorded typed result without opening UI,
-creating revisions, submitting decisions, emitting approval events, or dispatching implementation.
-Different input under an existing identity fails without mutation.
-
-Replay requires the same current planning state. When newer state supersedes an operation, replay
-fails without restoring an older approval, revision, or drafts. A recorded cancellation remains
-cancelled. An unfinished or uncertain operation reports its state and requires explicit opening for
-recovery; a retry does not resume it automatically. Unsubmitted drafts remain unsubmitted and retain
-the normal agent-result privacy boundary. Records survive reload and restoration on their saved
-branch. Persistence failures remain visible; a missing terminal result does not authorize
-repetition. When a recorded result includes an implementation launch, replay also requires that
-launch's identity, status, and owning session to remain current for the exact approval. When the
-launch changes, Plan reports an error and directs the agent to inspect its current state through
-`plan_implement`.
-
-Explicit `plan_open` and `/plan` continue to reopen saved input and approved review. New revisions
-and new replacement requests use new operation identities. Implementation launches retain
-REQ-launch-idempotency and its explicit restart behavior.
 
 ### REQ-composer-mode — Composer mode
 
@@ -480,6 +489,33 @@ subscribers, retry their work, or revoke approval on subscriber failure. Resume,
 an accepted plan do not replay the event. A crash can leave saved acceptance without notification;
 subscriber recovery must not be implemented as automatic plan execution by this package.
 
+## Operation retries
+
+### REQ-tool-idempotency — Tool idempotency
+
+Question-round and Markdown-review calls identify their operation by the plan, interaction, and
+expected predecessor revision. Replacement entry uses its explicit request identity. Each accepted
+operation binds that identity to its exact input and records its outcome on the owning branch.
+Object member ordering does not change request meaning; ordered questions and options retain their
+order. Exact retries of completed operations return their recorded typed result without opening UI,
+creating revisions, submitting decisions, emitting approval events, or dispatching implementation.
+Different input under an existing identity fails without mutation.
+
+Replay requires the same current planning state. When newer state supersedes an operation, replay
+fails without restoring an older approval, revision, or drafts. A recorded cancellation remains
+cancelled. An unfinished or uncertain operation reports its state and requires explicit opening for
+recovery; a retry does not resume it automatically. Unsubmitted drafts remain unsubmitted and retain
+the normal agent-result privacy boundary. Records survive reload and restoration on their saved
+branch. Persistence failures remain visible; a missing terminal result does not authorize
+repetition. When a recorded result includes an implementation launch, replay also requires that
+launch's identity, status, and owning session to remain current for the exact approval. When the
+launch changes, Plan reports an error and directs the agent to inspect its current state through
+`plan_implement`.
+
+Explicit `plan_open` and `/plan` continue to reopen saved input and approved review. New revisions
+and new replacement requests use new operation identities. Implementation launches retain
+REQ-launch-idempotency and its explicit restart behavior.
+
 ## Optional presentation hook
 
 ### REQ-public-presentation-boundary — Public presentation boundary
@@ -525,9 +561,9 @@ and unsupported-mode outcomes are distinct from errors and decisions.
 
 Invalid input, unavailable presentation, configuration errors, and save failures preserve unrelated
 drafts and accepted plans. Errors identify the failed action and available retry, TUI fallback, or
-cancellation. Timeouts never become answers. Unsupported noninteractive or RPC execution returns an
-explicit outcome instead of waiting for unavailable custom terminal components. Cleanup affects only
-the originating interaction's resources.
+cancellation. Timeouts never become answers. Unsupported noninteractive or remote procedure call
+(RPC) execution returns an explicit outcome instead of waiting for unavailable custom terminal
+components. Cleanup affects only the originating interaction's resources.
 
 ### REQ-bounded-agent-results — Bounded agent results
 
@@ -566,6 +602,14 @@ quality also requires representative planning tasks.
 Required interaction checks are defined in
 [the interaction contract](docs/tui-interactions.md#interaction-scenarios), including keyboard
 routing, appearance, resizing, and draft preservation.
+
+## Implementation availability
+
+The reference implementation provides the modal frontier, option details, block annotations,
+revision browsing, implementation selection, and an optional presentation hook. Complete real-host,
+SSH, input method editor (IME), and model-quality verification remains pending. The
+[README](README.md) describes first use; the [development guide](docs/development.md) describes
+compatibility checks and verification limits.
 
 ## References
 

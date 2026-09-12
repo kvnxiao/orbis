@@ -51,6 +51,14 @@ check. An ordinal identifier, a duplicate slug, a dangling reference left by a r
 and a requirement with no check are each review findings. Cross-package references name their
 package.
 
+Check documentation order with the
+[forward-reference checks](../../../docs/specifications.md#avoid-forward-references).
+Read the affected contract in order without following forward links. For an unexplained term,
+approach, state, or interface, report the earliest dependent passage and the missing or later
+introduction. Classify a reading-order defect separately from an implementation deviation; moving
+an unchanged requirement does not amend its behavior. Check that reordered text preserves IDs,
+obligations, exceptions, and linked heading anchors.
+
 ## Compare the contract and implementation
 
 Derive expected behavior from the SPEC's system requirements and its linked normative
