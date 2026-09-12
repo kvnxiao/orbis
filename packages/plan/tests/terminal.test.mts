@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { Theme } from "@earendil-works/pi-coding-agent";
+import { initTheme, Theme } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   getKeybindings,
@@ -23,6 +23,7 @@ import type { PlanAppearance } from "../src/tui/appearance.ts";
 import { framedModalLines, modalLines } from "../src/tui/terminal-layout.ts";
 import { TerminalReview } from "../src/tui/terminal-review.ts";
 import { TerminalRound } from "../src/tui/terminal-round.ts";
+import { runtimeFixture } from "./runtime-fixture.mts";
 import { testEditor } from "./terminal-fixture.mts";
 
 const down = "\x1b[B";
@@ -83,6 +84,37 @@ test.for([24, 90])(
       excerpt: paragraph,
       text: "Attached note\nSecond note line",
     });
+  },
+);
+
+test.for(["dark", "light"])(
+  "%s theme colors retained review notes without recoloring editors",
+  async (name, { onTestFinished }) => {
+    const runtime = await runtimeFixture();
+    onTestFinished(runtime.dispose);
+    const theme = runtime.ctx.ui.theme;
+    const f = reviewFixture("# Heading\n\nBody.", undefined, theme);
+    f.resize(80);
+    const view = f.create();
+    initTheme(name, false);
+    expect(theme.name).toBe(name);
+    view.render(90);
+    keys(view, down, "Retained note");
+    expect(view.render(90).find((line) => line.includes("Retained note"))).not.toContain(
+      theme.getFgAnsi("warning"),
+    );
+    keys(view, escape);
+    expect(view.render(90).find((line) => line.includes("↑ Note"))).toContain(
+      theme.getFgAnsi("warning"),
+    );
+    expect(view.render(90).find((line) => line.includes("Retained note"))).toContain(
+      theme.getFgAnsi("warning"),
+    );
+    keys(view, "\x1bOQ", "Optional feedback", enter);
+    expect(view.render(90).find((line) => line.includes("Optional feedback"))).toContain(
+      theme.getFgAnsi("warning"),
+    );
+    expect(theme.getFgAnsi("warning")).not.toBe(theme.getFgAnsi("accent"));
   },
 );
 
@@ -236,6 +268,7 @@ test.each(["rounded", "double", "ascii", "none"] as const)(
     const indentation = content?.indexOf("Body.");
     expect(indentation).toBeDefined();
     expect(screen[heading]?.indexOf("Overall feedback")).toBe(indentation);
+    expect(screen[heading]?.trim()).toBe("Overall feedback (optional)");
     const dividers = { rounded: /^─+$/u, double: /^═+$/u, ascii: /^-+$/u, none: /^─+$/u };
     expect(screen[heading - 2]?.trim()).toMatch(dividers[border]);
     expect(screen[heading - 1]?.trim()).toBe("");
@@ -1100,6 +1133,7 @@ function roundFixture(appearance?: PlanAppearance) {
 function reviewFixture(
   markdown = "# Plan\n\nKeep these bytes.\n\nKeep these bytes.\n",
   appearance?: PlanAppearance,
+  theme?: Theme,
 ) {
   let state: RoundState = presentReview(
     { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
@@ -1122,6 +1156,7 @@ function reviewFixture(
       editor: testEditor(),
       rows: () => rows,
       ...(appearance === undefined ? {} : { appearance }),
+      ...(theme === undefined ? {} : { theme }),
       columns: () => columns,
     });
     const render = view.render.bind(view);

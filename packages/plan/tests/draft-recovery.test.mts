@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-import { expect, test } from "vitest";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { expect, test, vi } from "vitest";
 
 import { documentBlocks } from "../src/document/blocks.ts";
 import {
@@ -10,8 +12,76 @@ import {
   transitionRound,
 } from "../src/domain/state.ts";
 import type { PlanningSession } from "../src/domain/state.ts";
+import { PlanRuntime } from "../src/pi/runtime.ts";
+import * as terminal from "../src/pi/terminal.ts";
 import { toolResult } from "../src/pi/tool-result.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
+
+test("closed review reopens from a new runtime and disk session with exact Markdown and drafts", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  onTestFinished(() => {
+    vi.restoreAllMocks();
+  });
+  f.runtime.start(f.ctx, "Resume review");
+  const planId = f.runtime.active?.planId ?? "";
+  const markdown = "# Saved plan\r\n\r\nExact review.\r\n";
+  const review = vi
+    .spyOn(terminal, "terminalReview")
+    .mockImplementationOnce(async (_ctx, _read, dispatch) => {
+      dispatch({ type: "edit-feedback", text: "Unsubmitted feedback" });
+      dispatch({ type: "cancel" });
+      await Promise.resolve();
+    });
+  expect(await f.runtime.review(f.ctx, { planId, expectedRevision: 0, markdown })).toEqual({
+    outcome: "cancelled",
+    planId,
+  });
+  const savedReview = f.runtime.active?.reviews?.at(-1);
+  expect(savedReview).toMatchObject({
+    revision: 1,
+    status: "pending",
+    markdown,
+    feedbackDraft: "Unsubmitted feedback",
+  });
+  const sessionPath = f.manager.getSessionFile();
+  if (sessionPath === undefined || savedReview?.path === undefined) {
+    throw new Error("Missing persisted review");
+  }
+  f.runtime.close(f.ctx);
+  const manager = SessionManager.open(sessionPath);
+  const ctx = { ...f.ctx, sessionManager: manager };
+  const runtime = new PlanRuntime(
+    {
+      ...f.api,
+      appendEntry: (type, data) => {
+        manager.appendCustomEntry(type, data);
+      },
+    },
+    join(f.ctx.cwd, "agent"),
+  );
+  onTestFinished(() => {
+    runtime.close(ctx);
+  });
+  runtime.restore(ctx);
+  expect(runtime.mode).toBe("default");
+  expect(runtime.active).toMatchObject({ planId, phase: "cancelled", reviews: [savedReview] });
+  review.mockImplementationOnce(async (_ctx, read, dispatch) => {
+    expect(read()).toMatchObject({ planId, phase: "review", reviews: [savedReview] });
+    dispatch({ type: "cancel" });
+    await Promise.resolve();
+  });
+  expect(await runtime.requestStart(ctx, "Resume plan review", false)).toEqual({
+    outcome: "cancelled",
+    planId,
+  });
+  expect(review).toHaveBeenCalledTimes(2);
+  expect(runtime.active?.reviews).toEqual([savedReview]);
+  expect(runtime.active?.accepted).toBeUndefined();
+  expect(await readFile(savedReview.path, "utf8")).toBe(markdown);
+});
 
 test("branch restoration preserves the selected composer mode before an objective exists", async ({
   onTestFinished,

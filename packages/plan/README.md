@@ -253,11 +253,13 @@ order. Wrapped rows do not add stops. Selecting a parent item highlights and ann
 subtree; selecting a child narrows the target to that child.
 
 Each note appears below its target with the label `↑ Note` and a distinct background; note rows have
-no line numbers. Block notes retain their exact source excerpt and revision. When the selected block
-owns a note, its label and retained text are also bold. Moving to another block removes that note's
-bold highlight and preserves its background. Overall feedback follows the complete plan beneath a
-divider and blank padding row. Its nonselectable title and persistent bordered input align with the
-document content. On the latest revision, an empty unfocused field displays muted
+no line numbers. Note labels, retained note text, and retained overall feedback use Pi's `warning`
+foreground, yellow in the bundled themes. Active editors retain native input styling. Block notes
+retain their exact source excerpt and revision. When the selected block owns a note, its label and
+retained text are also bold. Moving to another block removes that note's bold highlight and
+preserves its background. Overall feedback follows the complete plan beneath a divider and blank
+padding row. Its nonselectable `Overall feedback (optional)` title and persistent bordered input
+align with the document content. On the latest revision, an empty unfocused field displays muted
 `Add overall feedback` placeholder text. Down from the final block or F2 immediately focuses the
 editor, displays its cursor, and hides the placeholder. Leaving an empty field restores the
 placeholder. The F2 hint reads `overall feedback`. Within the editor, arrows move the cursor. When

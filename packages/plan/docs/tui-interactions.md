@@ -135,12 +135,15 @@ retain their source identities, including repeated and nested text. Markdown ref
 lists, and code content remain intact.
 
 Each nonblank annotation appears directly below its target block with the label `↑ Note` and a
-distinct theme background. The label omits source-line numbers; annotations retain their source
-identities and exact excerpts. Nested notes are ordered by their source position and target range.
-When the selected block owns a note, its label and retained text are also bold. Selecting a
-different block removes that note's bold highlight. The note background remains visible. Overall
-feedback appears after the complete plan, beneath a divider matching the configured border style and
-a blank padding row. Its title is a nonselectable label above a persistent input with horizontal
+distinct theme background. Note labels, retained note text, and retained overall feedback use Pi's
+built-in `warning` foreground, which the bundled themes define as yellow. Without a supplied theme,
+note text is uncolored. Active editors retain native input styling. The label omits source-line
+numbers; annotations retain their source identities and exact excerpts. Nested notes are ordered by
+their source position and target range. When the selected block owns a note, its label and retained
+text are also bold. Selecting a different block removes that note's bold highlight. The note
+background remains visible. Overall feedback appears after the complete plan, beneath a divider
+matching the configured border style and a blank padding row. Its title,
+`Overall feedback (optional)`, is a nonselectable label above a persistent input with horizontal
 borders. The title, field, and retained text align with the document content. On the latest
 revision, an empty unfocused field displays muted `Add overall feedback` placeholder text. Focusing
 the field immediately displays the input cursor and hides the placeholder. Leaving an empty field

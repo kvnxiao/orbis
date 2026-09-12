@@ -2,7 +2,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { expect, test, vi } from "vitest";
 
 import extension from "../src/index.ts";
@@ -77,4 +82,20 @@ test("loads the TypeScript source and registers the package command", async ({
     "plan",
     "plan-settings",
   ]);
+  const { session } = await createAgentSession({
+    cwd: fixture,
+    agentDir: join(fixture, "agent"),
+    resourceLoader: loader,
+    sessionManager: SessionManager.inMemory(fixture),
+    settingsManager: SettingsManager.inMemory(),
+  });
+  onTestFinished(() => {
+    session.dispose();
+  });
+  await session.bindExtensions({});
+  expect(session.systemPrompt).toContain(
+    "call plan_start with replace: false before claiming saved work is unavailable",
+  );
+  expect(session.systemPrompt).toContain("Do not resume for unrelated messages");
+  expect(session.systemPrompt).not.toContain("Planning is active");
 });

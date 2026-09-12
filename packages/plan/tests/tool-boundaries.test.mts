@@ -7,6 +7,8 @@ import { Value } from "typebox/value";
 import { expect, test } from "vitest";
 
 import extension from "../src/index.ts";
+import { planningInstructions } from "../src/pi/instructions.ts";
+import { toolResult } from "../src/pi/tool-result.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 async function fixture() {
@@ -29,6 +31,26 @@ async function fixture() {
     },
   };
 }
+
+test.each([false, true])(
+  "cancelled tools explain explicit resume without active planning instructions: %s",
+  async (includeInstructions) => {
+    const result = await toolResult(
+      { outcome: "cancelled", planId: "saved-plan" },
+      includeInstructions ? planningInstructions : undefined,
+    );
+    const text = result.content
+      .filter((item) => item.type === "text")
+      .map((item) => item.text)
+      .join("\n");
+    expect(text).not.toContain("Planning is active");
+    expect(text).toContain("saved unfinished work remains resumable");
+    expect(text).toContain("plan_start");
+    expect(text).toContain("replace: false");
+    expect(text).toContain("explicitly asks to resume");
+    expect(result.details).toEqual({ outcome: "cancelled", planId: "saved-plan" });
+  },
+);
 
 test("registered retirement values use a provider string enum", async ({ onTestFinished }) => {
   const f = await fixture();

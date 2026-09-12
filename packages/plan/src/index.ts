@@ -127,6 +127,9 @@ export default function extension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "plan_start",
     label: "Start planning",
+    promptGuidelines: [
+      "When the user explicitly asks to resume planning or plan review, call plan_start with replace: false before claiming saved work is unavailable. A previous cancelled result ends that interaction and preserves saved unfinished work. Do not resume for unrelated messages or replace modal approval with chat approval.",
+    ],
     description:
       "Start or resume collaborative planning on explicit user intent: enter plan mode, help me plan, resume the plan, or continue planning. These are examples, not exact phrases. Do not activate for quoted examples, questions about this feature, or unrelated conversation. Reopen pending input through this tool; preserve existing drafts. Ambiguous saved plans require user selection. Replacement requires confirmation.",
     parameters: startSchema,

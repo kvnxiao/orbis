@@ -79,8 +79,12 @@ export async function toolResult(
       break;
   }
   const details = structuredClone(projected);
+  const guidance =
+    result.outcome === "cancelled"
+      ? "The operation was cancelled without submission or approval; saved unfinished work remains resumable. Stop planning for this turn. When the user explicitly asks to resume, call plan_start with replace: false to reopen saved work. Cancellation does not establish that a plan is missing or unrecoverable. Do not replace it or request approval in chat."
+      : instructions;
   const serialized = JSON.stringify(
-    instructions === undefined ? details : { ...details, instructions },
+    guidance === undefined ? details : { ...details, instructions: guidance },
     null,
     2,
   );

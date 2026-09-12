@@ -364,6 +364,7 @@ export class TerminalReview implements Component {
     const markdown = getMarkdownTheme();
     const noteBackground = (text: string) =>
       this.theme?.bg("customMessageBg", text) ?? `\x1b[48;5;236m${text}\x1b[49m`;
+    const noteForeground = (text: string) => this.theme?.fg("warning", text) ?? text;
     const lines: string[] = [];
     let selectedPosition = 0;
     const insertions = new Map<number, typeof layout.blocks>();
@@ -390,8 +391,9 @@ export class TerminalReview implements Component {
         const annotation = active
           ? this.editor.render(contentWidth)
           : wrapTextWithAnsi(stripTerminalSequences(note?.text ?? ""), contentWidth);
-        for (const text of ["↑ Note", ...annotation]) {
-          const styled = target?.id === block.id && !active ? markdown.bold(text) : text;
+        for (const [index, text] of ["↑ Note", ...annotation].entries()) {
+          const colored = index === 0 || !active ? noteForeground(text) : text;
+          const styled = target?.id === block.id && !active ? markdown.bold(colored) : colored;
           lines.push(
             " ".repeat(gutter) +
               noteBackground(styled + " ".repeat(Math.max(0, contentWidth - visibleWidth(text)))),
@@ -419,7 +421,7 @@ export class TerminalReview implements Component {
       "",
       indent + markdown.hr(dividerGlyphs[this.appearance.border].repeat(contentWidth)),
       "",
-      ...wrapTextWithAnsi("Overall feedback", contentWidth).map((line) => indent + line),
+      ...wrapTextWithAnsi("Overall feedback (optional)", contentWidth).map((line) => indent + line),
     );
     if (this.mode === "overall") {
       lines.push(...this.editor.render(contentWidth).map((line) => indent + line));
@@ -429,7 +431,7 @@ export class TerminalReview implements Component {
         : "No overall feedback · read-only";
       const value =
         review.feedbackDraft.length > 0
-          ? stripTerminalSequences(review.feedbackDraft)
+          ? noteForeground(stripTerminalSequences(review.feedbackDraft))
           : (this.theme?.fg("dim", placeholder) ?? `\x1b[2m${placeholder}\x1b[22m`);
       const border =
         this.theme?.fg("border", "─".repeat(contentWidth)) ?? markdown.hr("─".repeat(contentWidth));
