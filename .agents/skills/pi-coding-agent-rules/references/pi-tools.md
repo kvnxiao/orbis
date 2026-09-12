@@ -6,6 +6,10 @@ Give each tool a name and description that identify the operation, required inpu
 and output limits. Keep unrelated operations separate; group actions only when they share a resource
 and a coherent contract.
 
+Name the complete operation, including supported reopening or recovery. Distinguish opening or
+reviewing a resource from authorizing its execution; a name limited to initial creation can conceal
+the tool's supported use on existing work.
+
 Use the TypeBox version supplied by the supported Pi release for parameter schemas. Use `StringEnum`
 from `@earendil-works/pi-ai` for string enums; Google providers reject the `Type.Union` of
 `Type.Literal` representation. For path arguments, normalize a leading `@` before resolving the
@@ -33,6 +37,27 @@ reproducing its path handling and output behavior. Only `renderCall` and `render
 inherited per renderer slot; explicitly preserve `promptSnippet` and `promptGuidelines` when their
 guidance still applies. Test the override's result and prompt contracts.
 [Tool definitions and overrides](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#custom-tools).
+
+## Define repeated invocation for stateful tools (Conditional)
+
+For retryable stateful tools, document whether an exact repeated request returns its prior outcome,
+reports pending or unknown completion, or requires explicit recovery. A revision guard rejects stale
+writes; it does not recover a successful response that the caller never received. Use the
+[operation identity contract](typescript-workflows.md#bind-retries-to-an-operation-and-accepted-input-conditional)
+to distinguish retries from new work. Do not assume a model-generated tool-call ID remains stable
+across repeated requests.
+
+Keep retry, reopening, and restart distinct. Replaying an accepted operation must not implicitly
+reopen UI, resubmit a decision, create a revision, or launch a session. Explicit reopening may
+restore unfinished input; an authorized restart creates a new attempt. Read and open operations may
+intentionally refresh state or reopen UI on each call; define their contract separately from
+mutation deduplication.
+
+Before returning a cached result, apply the same validation, privacy projection, output limits, and
+failure signaling as for the original result. Keep private drafts out of model-facing results and
+preserve the distinction between unsubmitted selections and submitted decisions. Recheck
+[current dependencies](typescript-workflows.md#track-the-inputs-that-determine-derived-output-validity-default)
+before presenting a historical result as usable now.
 
 ## Complete successfully without aborting the agent (Required)
 

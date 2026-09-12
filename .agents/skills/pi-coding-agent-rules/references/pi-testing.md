@@ -34,6 +34,17 @@ and verify that retry does not duplicate the mutation. When the operation suppor
 owns resources, test the corresponding cancellation or cleanup behavior on failure as well as on
 success.
 
+For deduplicated operations, exercise an exact retry after discarding a successful response,
+conflicting input under the same identity, and invalid input followed by corrected input. Assert the
+returned outcome and that mutations and UI submission occur only as the contract permits. Cover
+repeated cancellation separately from explicit reopening and authorized restart.
+
+For durable retry records, inject persistence failure before mutation and after mutation but before
+recording completion. Verify that pending or unknown outcomes remain recoverable without automatic
+repetition. After reload or a related job's restart, failure, or destination change, check whether a
+cached result remains usable. Pass replayed results through the tool adapter and assert preserved
+draft privacy, submission state, output bounds, and failure status.
+
 ## Exercise the lifecycle transitions the extension uses (Required)
 
 For session-owned resources, test repeated startup and shutdown, reload, and failed initialization.
@@ -96,9 +107,12 @@ Use temporary working directories and explicit resource loading for integration 
 `SessionManager.inMemory` and in-memory settings when persistence is irrelevant. In-memory sessions
 do not disable extension discovery or model network access; configure those separately.
 
-Use deterministic model or transport doubles for orchestration contracts; these doubles do not
-establish real-model behavior. Reserve live-provider tests for behavior that requires the provider.
-Do not require a paid model request to test local state transitions.
+For SDK orchestration tests, use scripted in-process providers and block external model traffic;
+allow local fixture traffic only when needed. Drive the prompting entry paths the extension uses,
+including custom-message startup, and inspect provider-bound context across later-turn mode
+transitions. Directly invoking a hook does not verify SDK routing. Report source inspection,
+scripted runtime tests, and real-model behavior separately. Reserve live-provider tests for behavior
+that requires the provider. Do not require a paid model request to test local state transitions.
 [SDK configuration and in-memory managers](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/sdk.md).
 
 ## Verify the distributed artifact (Conditional)

@@ -15,6 +15,22 @@ lifetime or deduplication rule and test repeated turns for unintended growth.
 [Context hooks](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#before_agent_start),
 [skills](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/skills.md).
 
+## Verify instruction lifetime across prompting paths (Required)
+
+Before relying on a hook to replace or expire instructions, verify which hooks each supported entry
+path executes. In Pi v0.85.1, when the agent is idle and delivery is not `nextTurn`, a custom
+message with `triggerTurn: true` starts a run without `before_agent_start`; a preceding
+system-prompt override can remain active. `display: false` controls transcript visibility, not
+instruction lifetime.
+
+When guidance must reflect current workflow state on each provider call, derive it in the `context`
+hook and keep the temporary guidance out of persisted history. Do not also leave expiring guidance
+in a system-prompt override that the entry path does not reset. Test a mode transition on a later
+turn through the actual prompting APIs, and inspect the system prompt as well as the messages sent
+to the provider.
+[Custom-message startup](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/agent-session.ts),
+[SDK context transformation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/sdk.ts).
+
 ## Preserve authority through retrieval and compaction (Required)
 
 Keep harness policy, user instructions, retrieved content, and tool output distinguishable during
@@ -60,6 +76,11 @@ During an active run, choose steering when new input should affect the current w
 delivery when it should wait for that work to finish. Do not call a prompting API recursively from a
 hook that must return before the active run can complete. Keep user messages, extension
 instructions, and retrieved external data distinct in their purpose and representation.
+
+Hidden startup instructions can request a real tool call, but the receiving model chooses whether to
+make it. Do not fabricate assistant tool-call history to represent a handoff as executed. Keep
+delivery records distinct from evidence of tool execution and apply the
+[authorization contract](pi-trust-and-authorization.md) at the receiving tool.
 [Message delivery](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#pisendmessagemessage-options),
 [SDK prompting](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/sdk.md).
 

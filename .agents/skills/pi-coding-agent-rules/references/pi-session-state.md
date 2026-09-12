@@ -31,6 +31,17 @@ to distinguish intended work, dispatched work, and a confirmed outcome. Keep app
 execution status. A crash after dispatch but before recording success leaves an unknown outcome;
 neither a missing result nor a saved approval establishes whether the mutation occurred.
 
+When retry protection must survive process loss, confirm persisted intent before dependent mutations
+and confirm the outcome record before reporting a durable result. Define the storage guarantee
+needed for the failure model; an in-memory append or a successful read does not establish crash-safe
+disk flush. Use the storage API's persistence contract rather than requiring every tool to maintain
+a separate receipt framework.
+
+In Pi v0.85.1, the session manager appends entries to in-memory state before persisting them and
+defers a fresh session file's initial write until an assistant message exists. An entry visible
+through the session manager therefore does not prove it was written to disk.
+[Session persistence implementation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/session-manager.ts).
+
 On recovery, query the external operation or use its idempotency contract before repeating it. When
 the outcome cannot be established, preserve the pending record and report the uncertainty for
 recovery. A local record and a remote write are not atomic unless the storage protocol provides that

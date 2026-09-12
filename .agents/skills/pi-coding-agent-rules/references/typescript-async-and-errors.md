@@ -35,6 +35,11 @@ deduplicates an idempotency key. Bound attempts and elapsed time, apply backoff 
 stop on cancellation. After an ambiguous timeout on a mutation, query its outcome or use its
 idempotency contract before repeating it.
 
+For stateful tools, define
+[repeated invocation](pi-tools.md#define-repeated-invocation-for-stateful-tools-conditional)
+separately from automatic transport retries. When completion remains unknown, retain the recovery
+state and report how to reconcile it; absence of a terminal result does not authorize repetition.
+
 Choose one layer to own retries for a request. Account for SDK or provider retries before adding an
 outer loop. Do not retry validation failures, unsupported operations, or user cancellation.
 [Retry and idempotency guidance](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html).
