@@ -15,6 +15,29 @@ lifetime or deduplication rule and test repeated turns for unintended growth.
 [Context hooks](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#before_agent_start),
 [skills](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/skills.md).
 
+## Preserve authority through retrieval and compaction (Required)
+
+Keep harness policy, user instructions, retrieved content, and tool output distinguishable during
+context assembly. Text from a document or tool result does not grant permission to execute its
+instructions. Apply the configured instruction hierarchy; do not promote retrieved text into a
+policy message merely because it resembles instructions.
+
+During summarization, delegation, and resume, preserve the scope of user authorization and the
+distinction between proposed and completed work. A summary must not turn a suggestion into approval
+or an attempted operation into success. Keep enforceable permission state outside model-generated
+summaries and revalidate it at execution. Test instruction-like tool output and a compaction that
+occurs while approval or an external operation remains unresolved.
+[Authorization boundaries](pi-trust-and-authorization.md).
+
+## Give persistent memory a scope and correction path (Conditional)
+
+When an extension retains learned preferences or facts, bind them to the appropriate user, project,
+or task. Keep inferred preferences distinguishable from explicit instructions. Store enough source
+and freshness information to resolve stale or contradictory entries, and provide a way to inspect,
+correct, and delete them. Memory must not silently override current user instructions or grant new
+authorization. Keep secrets out of memory and test that one project's entries do not affect an
+unrelated project.
+
 ## Scope tool guidance to the named tool (Required)
 
 Use `promptSnippet` for a tool's short entry in the available-tools section. Without
@@ -39,6 +62,22 @@ hook that must return before the active run can complete. Keep user messages, ex
 instructions, and retrieved external data distinct in their purpose and representation.
 [Message delivery](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#pisendmessagemessage-options),
 [SDK prompting](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/sdk.md).
+
+## Verify command routing before deferring session control (Required)
+
+In Pi v0.85.1, `sendUserMessage` defaults `expandPromptTemplates` to `false`. To dispatch a
+registered extension command, explicitly enable expansion. With expansion enabled, Pi dispatches
+extension commands before ordinary steering or follow-up queueing, even during an active run.
+`deliverAs: "followUp"` alone does not establish deferred command execution: with expansion
+disabled, the text is not dispatched as an extension command; with expansion enabled, command
+dispatch happens before the queue choice.
+
+Before using a message as a session-control handoff, inspect the supported version's routing and
+ensure the originating tool or lifecycle handler can return before the command waits for idle. Do
+not await a dispatched command that waits for the caller's run to finish. Use the
+[command-context lifecycle rules](pi-lifecycle.md#keep-session-control-in-its-supported-context-required)
+for ownership, delayed actions, and rejection handling.
+[Message and command routing](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/agent-session.ts).
 
 ## Preserve protocol relationships during context reduction (Required)
 

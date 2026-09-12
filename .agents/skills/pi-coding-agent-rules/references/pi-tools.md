@@ -34,6 +34,25 @@ inherited per renderer slot; explicitly preserve `promptSnippet` and `promptGuid
 guidance still applies. Test the override's result and prompt contracts.
 [Tool definitions and overrides](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#custom-tools).
 
+## Complete successfully without aborting the agent (Required)
+
+When a workflow succeeds, return a successful tool result. When it should end automatic
+continuation, use the supported `AgentToolResult` field `terminate: true`. Do not call `ctx.abort()`
+merely to stop after success and then suppress the resulting error. For explicit interruption, apply
+the [cancellation contract](pi-lifecycle.md#use-cancellation-from-the-operations-context-required).
+[Result type](https://github.com/earendil-works/pi/blob/v0.85.1/packages/agent/src/types.ts).
+
+In Pi v0.85.1, termination skips the automatic follow-up model call only when every finalized result
+in the current tool batch has `terminate: true`. A sibling result without that flag prevents batch
+termination. Sequential execution changes execution order; it does not isolate a tool into its own
+batch. Steering and follow-up queues can still continue the agent after a terminating batch.
+
+Instructions to call a tool alone or acknowledge and stop express model guidance, not execution
+guarantees. Do not promise unconditional immediate idleness from `terminate: true` or use the flag
+as proof that session replacement is safe. For handoff, apply the
+[session-control contract](pi-lifecycle.md#keep-session-control-in-its-supported-context-required).
+[Batch termination and continuation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/agent/src/agent-loop.ts).
+
 ## Coordinate the entire file mutation (Required)
 
 Pi can execute sibling tool calls concurrently. For a custom file mutation, resolve the target

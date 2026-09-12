@@ -40,6 +40,21 @@ context; resolve packaged assets from the package location. Avoid changing the p
 directory to implement per-session behavior.
 [SDK resource and tool configuration](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/sdk.md).
 
+## Revalidate capabilities when replacing integrations (Conditional)
+
+When a harness switches models or providers, verify that the target supports the workflow's input
+modalities, tool schemas, context size, and reasoning options. Before submitting work, finish or
+explicitly cancel active work according to the switch's contract. Do not silently drop unsupported
+inputs or describe a fallback as equivalent without verifying the workflow's contract.
+
+When remote tools reconnect or change endpoints, revalidate tool definitions and bind pending
+requests to the intended server and account. A transport reconnect does not prove that an earlier
+mutation failed. Before resubmitting it, apply the
+[recovery contract](pi-session-state.md#reconcile-external-work-after-process-interruption-conditional).
+Before sending data, apply the
+[credential rules](pi-trust-and-authorization.md#keep-credentials-within-the-integration-that-owns-them-conditional).
+Test unavailable capabilities, changed schemas, and ambiguous disconnects.
+
 ## Dispose of the resources the embedding owns (Required)
 
 Keep ownership of sessions, subscriptions, model runtimes, and transports explicit. Before disposal,

@@ -39,6 +39,18 @@ success.
 For session-owned resources, test repeated startup and shutdown, reload, and failed initialization.
 Verify that cleanup is idempotent and that an old callback cannot modify the replacement session.
 
+For UI workflows, test successful completion, dismissal, explicit interruption, and UI-owned cleanup
+separately. Verify that success does not abort the agent or hide provider errors or unrelated
+interruptions. After approval is saved, dismiss the next selector and assert preserved approval and
+no further action. Exercise a selector while its tool still awaits input.
+
+For terminating tools, cover a batch whose finalized results all terminate, a mixed batch,
+sequential execution, and queued steering or follow-up messages. For command handoffs, exercise
+expansion enabled and disabled during active work, cancelled replacement, rejected prompt
+submission, and a session change before delayed work runs. Assert preserved approval, prompt
+delivery only through the intended replacement context, observed task rejection, and no automatic
+retry after ambiguous completion. Report source inspection separately from runtime validation.
+
 For persisted branch state, test resume and tree navigation with divergent branches. Verify that
 reconstruction selects the active branch and does not repeat external effects. For mutable
 snapshots, mutate the current state and assert that an earlier snapshot is preserved.

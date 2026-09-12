@@ -24,6 +24,28 @@ restores recorded state; it does not undo external effects.
 [Branch reconstruction example](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/examples/extensions/todo.ts),
 [session tree](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/session-format.md).
 
+## Reconcile external work after process interruption (Conditional)
+
+When a workflow must recover external mutations across process restarts, persist enough information
+to distinguish intended work, dispatched work, and a confirmed outcome. Keep approval separate from
+execution status. A crash after dispatch but before recording success leaves an unknown outcome;
+neither a missing result nor a saved approval establishes whether the mutation occurred.
+
+On recovery, query the external operation or use its idempotency contract before repeating it. When
+the outcome cannot be established, preserve the pending record and report the uncertainty for
+recovery. A local record and a remote write are not atomic unless the storage protocol provides that
+guarantee. Test process interruption before dispatch and after the external commit but before the
+local result is saved.
+[Retry and reconciliation](typescript-async-and-errors.md#retry-only-within-the-operations-safety-contract-conditional).
+
+## State the scope of rewind (Conditional)
+
+When a harness offers checkpoints or undo, state whether restoration covers conversation history,
+extension state, files, or external effects. Restore only resources the checkpoint owns and detect
+intervening user changes before overwriting them. Report partial restoration and effects that remain
+committed. Do not re-execute mutations to reconstruct a checkpoint. Test restoration with unrelated
+edits and with a mutation outside the checkpoint's coverage.
+
 ## Preserve historical snapshots (Required)
 
 When recording a snapshot, detach mutable nested data that later operations can change. Copying an

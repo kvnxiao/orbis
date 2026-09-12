@@ -34,8 +34,8 @@ replacements.
 
 In Pi v0.85.1, when streaming and Bash handlers do not consume Escape and the composer is empty or
 whitespace-only, a second Escape less than 500 ms after the first runs the configured `tree` or
-`fork` action; `none` disables it. Scope an extension's second-Escape dismissal to a focused
-`ctx.ui.custom()` component that owns input.
+`fork` action; `none` disables it. When an extension uses second-Escape dismissal, scope it to a
+focused `ctx.ui.custom()` component that owns input.
 [Host Escape handling](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts).
 
 ## Bind hotkeys through the SDK (Required)
@@ -98,6 +98,12 @@ submission or approval.
 Define field dismissal, outer closure, and cancellation of the owning agent's work separately. A
 closed modal does not establish that the agent stopped. When recovery is supported, preserve drafts
 across reopening and report persistence failures before claiming that work is saved.
+
+After an irreversible approval has been saved, dismissing a subsequent action selector preserves the
+approval and means "take no further action." Keep approval persistence separate from the optional
+action and its session handoff. Menu structure and single- or double-Escape dismissal are
+interaction choices, not universal extension requirements. Apply the
+[UI completion rules](pi-ui-and-rpc.md#resolve-the-ui-independently-of-agent-completion-required).
 
 ## Scope behavior to the extension's workflow (Conditional)
 

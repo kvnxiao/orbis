@@ -16,14 +16,16 @@ Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TU
 ## Rule References
 
 - [Pi design and compatibility](references/pi-design-and-compatibility.md): Read when choosing a Pi customization mechanism, importing Pi APIs, or deciding which guidance belongs in code, skills, or lint configuration.
-- [Pi lifecycle](references/pi-lifecycle.md): Read when registering extensions, starting background resources, choosing cancellation signals, reloading, replacing sessions, or reporting agent completion.
-- [Pi tools](references/pi-tools.md): Read when designing tool schemas, returning results, overriding built-in tools, bounding output, or mutating files from concurrent tools.
-- [Pi session state](references/pi-session-state.md): Read when persisting extension state, reconstructing branches, caching session data, or evolving saved data and tool argument formats.
-- [Pi context](references/pi-context.md): Read when injecting instructions, transforming messages, queuing agent input, or customizing compaction.
+- [Pi trust and authorization](references/pi-trust-and-authorization.md): Read when implementing approval flows, project trust, execution permissions, credential access, or unattended work.
+- [Pi delegation](references/pi-delegation.md): Read when spawning child agents, assigning shared workspace ownership, integrating delegated results, or propagating permissions and cancellation.
+- [Pi lifecycle](references/pi-lifecycle.md): Read when registering extensions, owning cancellation or background tasks, bounding automatic continuation, reloading, handing work to a replacement session, or reporting agent completion.
+- [Pi tools](references/pi-tools.md): Read when designing tool schemas, returning results, terminating automatic continuation, overriding built-in tools, bounding output, or mutating files from concurrent tools.
+- [Pi session state](references/pi-session-state.md): Read when persisting extension state, recovering interrupted mutations, defining rewind, reconstructing branches, caching session data, or evolving saved data and tool argument formats.
+- [Pi context](references/pi-context.md): Read when injecting instructions, transforming context, preserving authority through compaction, retaining learned memory, queuing agent input, or dispatching extension commands.
 - [Pi settings and commands](references/pi-settings-and-commands.md): Read when adding extension settings, choosing configuration scopes, registering commands, or evaluating native settings integration.
-- [Pi UI and RPC](references/pi-ui-and-rpc.md): Read when prompting users, rendering terminal components, supporting noninteractive modes, or implementing an RPC client.
+- [Pi UI and RPC](references/pi-ui-and-rpc.md): Read when prompting users, completing or dismissing UI, sequencing selectors, rendering terminal components, supporting noninteractive modes, or implementing an RPC client.
 - [Pi TUI interactions](references/pi-tui-interactions.md): Read when designing keyboard navigation, inline editing, question or review flows, modal dismissal, composer modes, or terminal layout.
-- [Pi packages and SDK](references/pi-packages-and-sdk.md): Read when distributing Pi resources, declaring package dependencies, embedding sessions, or configuring resource discovery and working directories.
+- [Pi packages and SDK](references/pi-packages-and-sdk.md): Read when distributing Pi resources, declaring package dependencies, embedding sessions, switching model or remote-tool integrations, or configuring resource discovery and working directories.
 - [TypeScript architecture](references/typescript-architecture.md): Read when separating domain logic from adapters, defining ownership and copy semantics, transforming derived data, deriving schema or registry metadata, or introducing an abstraction.
 - [TypeScript code organization](references/typescript-code-organization.md): Read when placing or naming a module, deciding what a module exports, documenting an exported symbol, colocating a type with its validator, promoting a helper to shared code, or defining a package entry point.
 - [TypeScript domain boundaries](references/typescript-domain-boundaries.md): Read when modeling workflow states, validating external data, comparing structured input by meaning, distinguishing identifiers or units, or designing public data contracts.

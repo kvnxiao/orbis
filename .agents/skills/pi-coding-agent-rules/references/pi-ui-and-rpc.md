@@ -19,6 +19,20 @@ resolution. The built-in timeout alone returns the dismissal value: `false` for 
 `undefined` for `select` and `input`. Test expiry and explicit dismissal separately.
 [Dialog timeouts and signals](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#manual-dismissal-with-abortsignal).
 
+## Resolve the UI independently of agent completion (Required)
+
+On completion or dismissal, resolve the interaction's result and release its owned resources. For
+`ctx.ui.custom()`, use the supplied completion callback. Distinguish a submitted result, dismissal,
+and explicit interruption according to the interaction's contract; closing a UI does not inherently
+require aborting the agent. Apply the
+[cancellation ownership rules](pi-lifecycle.md#use-cancellation-from-the-operations-context-required).
+
+After the preceding UI closes and releases its input resources, a tool can immediately open a
+follow-on selector and await its result. The tool can remain pending while the selector is visible;
+displaying it does not require agent idleness. Before replacing a session, separately apply the
+[handoff rules](pi-lifecycle.md#reestablish-state-after-session-replacement-required).
+[Custom UI completion](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts).
+
 ## Render within terminal constraints (Required)
 
 Use Pi TUI components, theme tokens, and key-matching helpers. Measure display width with
