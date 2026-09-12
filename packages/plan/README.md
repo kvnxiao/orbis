@@ -241,11 +241,21 @@ display path may use `~`. Terminals without hyperlink support retain readable pa
 and session record must be saved before review opens; a write failure blocks display and reports
 retry or cancellation guidance.
 
-Blocks display source-line ranges in a gutter. Selection makes the block and its range bold without
-duplicating the excerpt in a footer. Each note appears below its target with an upward arrow, its
-source range, and a distinct background; note rows have no line numbers. Block notes retain their
-exact source excerpt and revision. F2 opens overall feedback after the complete plan. Typing on a
-selected block opens its note directly, including printable brackets. Edits are retained
+Blocks display source-line ranges in a gutter. Every actual blank source line has its own numbered
+row, including consecutive blank lines. Wrapped rows and renderer-added spacing remain unnumbered.
+Selection makes the block and its range bold without duplicating the excerpt in a footer. Unless a
+simple list item's paragraph has its own annotation, Up/Down skip the duplicate paragraph stop.
+Separate paragraphs and nested blocks remain reachable, and source targets stay unchanged.
+
+Each note appears below its target with an upward arrow, its source range, and a distinct
+background; note rows have no line numbers. Block notes retain their exact source excerpt and
+revision. Overall feedback follows the complete plan beneath a divider. Its heading, field, and
+retained text align with the document content after the gutter. On the latest revision, an empty
+field displays `Add overall feedback` with the effective edit key. F2 opens the field and moves
+document focus to it; leaving editing retains focus at the document's end. Empty feedback on earlier
+revisions displays `No overall feedback · read-only`.
+
+Typing on a selected block opens its note directly, including printable brackets. Edits are retained
 immediately; Enter or Escape leaves editing, and Shift+Enter and Ctrl+J insert newlines by default.
 Question and review-note editors use Pi's effective `tui.input.submit` and `tui.input.newLine`
 bindings; configured bindings replace the defaults in input and hints. Clearing text removes that

@@ -125,8 +125,9 @@ path may be shortened for display; its link targets the absolute file URL. Unsup
 retain readable path text. Before the modal opens, the immutable Markdown file and its recorded path
 must be persisted. Failed persistence blocks display with retry/cancellation guidance.
 
-The full Markdown remains read-only and scrollable. Blocks display source-line ranges in a gutter;
-wrapping does not invent source line numbers. The selected block and its range are bold. Selection
+The full Markdown remains read-only and scrollable. Blocks display source-line ranges in a gutter.
+Each actual blank source line has its own numbered row, including consecutive blank lines; wrapping
+and renderer-added spacing remain unnumbered. The selected block and its range are bold. Selection
 is rendered in the document without a duplicated `Block N: excerpt` footer. Paragraphs, headings,
 list items, code blocks, and other block structures retain their source identities, including
 repeated and nested text. Markdown references, tables, lists, and code content remain intact.
@@ -134,16 +135,23 @@ repeated and nested text. Markdown references, tables, lists, and code content r
 Each nonblank annotation appears directly below its target block. Its gutter has no line number; an
 upward arrow identifies the annotated source range, and a distinct theme background separates the
 note from plan content. Nested notes are ordered by their source position and target range. Overall
-feedback appears after the complete plan. Clearing a field removes its outgoing note. Notes remain
-visible outside editing and are never inserted into the immutable plan file.
+feedback appears after the complete plan, beneath a divider matching the configured border style.
+Its heading, field, and retained text align with the document content after the gutter. On the
+latest revision, an empty field displays `Add overall feedback` and the effective edit key. When
+overall feedback is empty, earlier revisions display a read-only empty state without an editing
+invitation. Clearing a field removes its outgoing note. Notes remain visible outside editing and are
+never inserted into the immutable plan file.
 
-Up/Down select document blocks; PgUp/PgDn scroll. Typing, paste, or Backspace on a selected block
-opens its note and applies the input. Enter opens an empty note; while editing, Enter retains text
-and returns to document navigation, and Shift+Enter and Ctrl+J insert newlines. Escape leaves
-editing with text retained. F2 focuses overall feedback, which is also reachable at the document's
-end. Tab/ Shift+Tab leave fields and traverse content and individual CTA buttons. No Confirm note
-control or separate feedback preview exists. Printable brackets enter note text like other
-characters.
+Up/Down select document blocks; PgUp/PgDn scroll. A simple list item has one navigation stop; its
+text does not create a duplicate paragraph stop. Separate paragraphs and nested blocks inside list
+items remain distinct targets. A separately annotated paragraph remains reachable for editing.
+Typing, paste, or Backspace on a selected block opens its note and applies the input. Enter opens an
+empty note; while editing, Enter retains text and returns to document navigation, and Shift+Enter
+and Ctrl+J insert newlines. Escape leaves editing with text retained. F2 opens overall feedback and
+moves document focus to the field at the document's end; leaving editing retains that focus. Up/Down
+can also reach the field. Tab/ Shift+Tab leave fields and traverse content and individual CTA
+buttons. No Confirm note control or separate feedback preview exists. Printable brackets enter note
+text like other characters.
 
 Without nonblank notes the CTA is `Approve`. With notes it contains `Approve with notes` and
 `Request revision`. Approve with notes accepts the displayed Markdown and supplementary notes;
@@ -180,6 +188,9 @@ work requires explicit resume. Late callbacks cannot modify a replacement sessio
 | Browse an earlier frontier and return                          | Historical input is rejected; current drafts, focus, and scroll remain intact.                                                                                                   | REQ-session-recovery, REQ-frontier-browsing                                                               |
 | Expand history in answer review                                | Sent exchanges appear; submission includes them and excludes unsent drafts.                                                                                                      | REQ-same-agent-clarification, REQ-bounded-agent-results, REQ-option-details                               |
 | Type notes on repeated or nested blocks                        | Each note remains bound to the selected source range through resize and appears beneath that target.                                                                             | REQ-terminal-interaction-boundary, REQ-inline-block-annotations                                           |
+| Navigate ordered and unordered lists in both directions        | Each arrow press selects the next distinct target; separate nested paragraphs remain reachable.                                                                                  | REQ-inline-block-annotations                                                                              |
+| Review consecutive blank source lines and resize               | Every actual blank source line retains its number and row; wrapping and synthetic spacing stay unnumbered.                                                                       | REQ-inline-block-annotations                                                                              |
+| Reach empty overall feedback, edit it, and leave editing       | The aligned field remains separated by a divider, invites editing with the effective key, and retains entered text. Earlier revisions remain read-only.                          | REQ-read-only-plan-review, REQ-inline-block-annotations, REQ-revision-browsing                            |
 | Request revision                                               | All current nonblank notes are submitted once; the next revision requires fresh review.                                                                                          | REQ-read-only-plan-review, REQ-inline-block-annotations                                                   |
 | Approve with supplementary notes                               | Both immutable artifacts and session acceptance are confirmed before the idle approval event.                                                                                    | REQ-session-recovery, REQ-plan-save, REQ-approval-event                                                   |
 | File creation or session save fails before display             | Review does not open; exact content remains recoverable for retry.                                                                                                               | REQ-read-only-plan-review, REQ-recoverable-failures                                                       |

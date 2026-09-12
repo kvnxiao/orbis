@@ -6,6 +6,53 @@ import { markdownLines } from "../src/document/markdown.ts";
 import * as rendering from "../src/document/markdown.ts";
 import { testEditor } from "./terminal-fixture.mts";
 
+test.each(["\n", "\r\n", "\r"])(
+  "blank source rows retain individual numbers with %j line endings",
+  (newline) => {
+    testEditor();
+    const source = ["", "# Title", "", "", "   ", "Paragraph.", "", ""].join(newline);
+    const layout = documentLayout(source, 40);
+    expect([...layout.blankLines.values()]).toEqual([1, 3, 4, 5, 7]);
+    for (const row of layout.blankLines.keys()) {
+      expect(stripTerminalSequences(layout.lines[row] ?? "missing").trim()).toBe("");
+    }
+    const paragraph = layout.blocks.find((block) => block.excerpt.trim() === "Paragraph.");
+    const span = layout.spans.get(paragraph?.id ?? "");
+    expect(span?.range).toBe("6");
+    expect(stripTerminalSequences(layout.lines[span?.start ?? -1] ?? "")).toContain("Paragraph.");
+  },
+);
+
+test("code blank rows keep their content and source numbers", () => {
+  testEditor();
+  const source = "```text\nalpha\n\n\nbeta\n```\n";
+  const layout = documentLayout(source, 40);
+  expect(layout.lines).toEqual(markdownLines(source, 40));
+  expect([...layout.blankLines.values()]).toEqual([3, 4]);
+  const first = [...layout.blankLines.keys()][0] ?? -1;
+  expect(stripTerminalSequences(layout.lines[first - 1] ?? "")).toContain("alpha");
+  expect(stripTerminalSequences(layout.lines[first + 2] ?? "")).toContain("beta");
+});
+
+test.each([
+  ["```text\nalpha\n\n```\n", [3]],
+  ["```text\n\nalpha\n```\n", [2]],
+  ["```text\n\n```\n", [2]],
+  ["    alpha\n\n    beta\n", [2]],
+  ["- Item\n\n  ```text\n  alpha\n\n  ```\n", [2, 5]],
+] as const)(
+  "blank rows in fenced, indented, and nested code preserve Markdown rendering: %s",
+  (source, numbers) => {
+    testEditor();
+    const layout = documentLayout(source, 40);
+    expect(layout.lines).toEqual(markdownLines(source, 40));
+    expect([...layout.blankLines.values()]).toEqual(numbers);
+    for (const row of layout.blankLines.keys()) {
+      expect(stripTerminalSequences(layout.lines[row] ?? "missing").trim()).toBe("");
+    }
+  },
+);
+
 test.each([24, 90])(
   "source ranges identify repeated and nested rendered blocks at width %i",
   (width) => {
@@ -123,4 +170,22 @@ test("flat documents render the complete source once without growing prefix rend
   } finally {
     render.mockRestore();
   }
+});
+
+test("long blank runs preserve every line without additional prefix renders", ({
+  onTestFinished,
+}) => {
+  testEditor();
+  const render = vi.spyOn(rendering, "markdownLines");
+  onTestFinished(() => {
+    render.mockRestore();
+  });
+  documentLayout("```text\nalpha\n\nbeta\n```\n", 40);
+  const shortRunCalls = render.mock.calls.length;
+  render.mockClear();
+  const blanks = Array.from({ length: 300 }, () => "");
+  const source = ["```text", "alpha", ...blanks, "beta", "```", ""].join("\n");
+  const layout = documentLayout(source, 40);
+  expect(render.mock.calls).toHaveLength(shortRunCalls);
+  expect(layout.blankLines.size).toBe(blanks.length);
 });

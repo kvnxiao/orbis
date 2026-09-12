@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { Theme } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
@@ -30,6 +32,121 @@ const enter = "\r";
 const tab = "\t";
 const shiftEnter = "\x1b[13;2u";
 
+test.each([24, 90])("review numbers actual blank corpus lines at width %i", (width) => {
+  const source = readFileSync(new URL("./fixtures/review-document.md", import.meta.url), "utf8");
+  const f = reviewFixture(source);
+  f.resize(200);
+  const screen = text(f.create(), width);
+  const sourceLines = source.trimEnd().split("\n");
+  const blanks = sourceLines.flatMap((line, index) => (line.length === 0 ? [index + 1] : []));
+  for (const number of blanks) {
+    expect(screen).toMatch(new RegExp(`^ +${String(number)} +$`, "mu"));
+  }
+});
+
+test.each([24, 90])(
+  "review arrows visit each corpus target once in both directions at width %i",
+  (width) => {
+    const source = readFileSync(new URL("./fixtures/review-document.md", import.meta.url), "utf8");
+    const expected = [
+      "# Sample document",
+      "## Overview",
+      "A sample paragraph with **emphasis** and a [reference][sample].",
+      "## Unordered entries",
+      "- Alpha entry.",
+      "- Beta entry with enough descriptive text to wrap across multiple rows in a narrow terminal.",
+      "## Ordered entries",
+      "1. Gamma entry.",
+      "2. Delta entry.",
+      "## Details",
+      "A final paragraph.",
+    ];
+    const f = reviewFixture(source);
+    const view = f.create();
+    view.render(width);
+    for (const excerpt of expected) {
+      keys(view, "forward", enter);
+      expect(f.state().reviews?.[0]?.notes?.at(-1)?.excerpt.trim()).toBe(excerpt);
+      keys(view, down);
+    }
+    keys(view, "overall", enter);
+    expect(f.state().reviews?.[0]?.feedbackDraft).toBe("overall");
+    for (const excerpt of expected.toReversed()) {
+      keys(view, "\x1b[A", enter, " backward", enter);
+      expect(
+        f.state().reviews?.[0]?.notes?.find((note) => note.excerpt.trim() === excerpt)?.text,
+      ).toBe("forward backward");
+    }
+    expect(f.state().reviews?.[0]?.markdown).toBe(source);
+  },
+);
+
+test.each(["rounded", "double", "ascii", "none"] as const)(
+  "empty overall feedback aligns its field and divider with document content using %s borders",
+  (border) => {
+    const f = reviewFixture("# Sample\n\nBody.", { border, symbols: "unicode", showHints: false });
+    f.resize(60);
+    const view = f.create();
+    const screen = text(view, 90).split("\n");
+    const content = screen.find((line) => line.includes("Body."));
+    const heading = screen.findIndex((line) => line.includes("Overall feedback"));
+    const indentation = content?.indexOf("Body.");
+    expect(indentation).toBeDefined();
+    expect(screen[heading]?.indexOf("Overall feedback")).toBe(indentation);
+    const dividers = { rounded: /^─+$/u, double: /^═+$/u, ascii: /^-+$/u, none: /^─+$/u };
+    expect(screen[heading - 1]?.trim()).toMatch(dividers[border]);
+    expect(screen[heading + 1]?.indexOf("Add overall feedback")).toBe(indentation);
+    expect(screen[heading + 1]).toContain("F2: edit");
+    keys(view, "\x1bOQ", "Overall draft", enter);
+    const retained = text(view, 90)
+      .split("\n")
+      .find((line) => line.includes("Overall draft"));
+    expect(retained?.indexOf("Overall draft")).toBe(indentation);
+    expect(f.state().reviews?.[0]?.feedbackDraft).toBe("Overall draft");
+    expect(f.state().phase).toBe("review");
+  },
+);
+
+test.each([
+  ["unordered", "- Alpha\n- Beta", "- Alpha", "- Beta"],
+  ["ordered", "123456789. Alpha\n123456790. Beta", "123456789. Alpha", "123456790. Beta"],
+  ["task", "- [x] Alpha\n- [ ] Beta", "- [x] Alpha", "- [ ] Beta"],
+  ["continued", "- Alpha\n  continuation\n- Beta", "- Alpha\n  continuation", "- Beta"],
+])(
+  "resizing %s lists preserves one arrow press per item across marker wrapping",
+  (_, source, first, second) => {
+    const f = reviewFixture(source);
+    const view = f.create();
+    for (const width of [7, 16, 90]) {
+      view.render(width);
+      keys(view, down, "x", enter);
+      expect(
+        f.state().reviews?.[0]?.notes?.find((note) => note.excerpt.trim() === second),
+      ).toBeDefined();
+      view.render(width === 90 ? 7 : 90);
+      keys(view, "\x1b[A", "x", enter);
+      expect(
+        f.state().reviews?.[0]?.notes?.find((note) => note.excerpt.trim() === first),
+      ).toBeDefined();
+      expect(f.state().reviews?.[0]?.notes).toHaveLength(2);
+    }
+    expect(f.state().reviews?.[0]?.notes?.map((note) => note.text)).toEqual(["xxx", "xxx"]);
+  },
+);
+
+test("nested list navigation retains the parent item, its paragraph, and the child item", () => {
+  const f = reviewFixture("- Parent\n  - Child\n- Next");
+  const view = f.create();
+  view.render(7);
+  for (const excerpt of ["- Parent\n  - Child", "Parent", "- Child", "- Next"]) {
+    keys(view, "note", enter);
+    expect(f.state().reviews?.[0]?.notes?.at(-1)?.excerpt.trim()).toBe(excerpt);
+    keys(view, down);
+  }
+  keys(view, "Overall", enter);
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe("Overall");
+});
+
 test("warm review navigation and note edits reuse Markdown until width or theme invalidation", ({
   onTestFinished,
 }) => {
@@ -51,6 +168,97 @@ test("warm review navigation and note edits reuse Markdown until width or theme 
   expect(render.mock.calls.filter(([source]) => source === markdown)).toHaveLength(2);
   view.render(100);
   expect(render.mock.calls.filter(([source]) => source === markdown)).toHaveLength(3);
+});
+
+test("overall feedback uses the rebound confirmation key at the document end", ({
+  onTestFinished,
+}) => {
+  const bindings = getKeybindings();
+  const previous = bindings.getUserBindings();
+  bindings.setUserBindings({ ...previous, "tui.select.confirm": "ctrl+g" });
+  onTestFinished(() => {
+    bindings.setUserBindings(previous);
+  });
+  const f = reviewFixture("# Sample");
+  f.resize(60);
+  const view = f.create();
+  keys(view, down);
+  const placeholder = text(view, 90)
+    .split("\n")
+    .find((line) => line.includes("Add overall feedback"));
+  expect(placeholder).toContain("Ctrl+G: edit");
+  expect(placeholder).not.toContain("Enter");
+  keys(view, "\x07", "Retained", escape);
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe("Retained");
+  expect(f.state().phase).toBe("review");
+});
+
+test("empty historical feedback has no edit invitation and preserves the latest draft", () => {
+  const f = reviewFixture("# Earlier");
+  f.resize(60);
+  f.set(
+    presentReview(transitionReview(f.state(), 1, { type: "feedback", text: "Revise" }), {
+      planId: "plan",
+      expectedRevision: 1,
+      markdown: "# Latest",
+    }),
+  );
+  const view = f.create();
+  keys(view, "\x1bOQ", "Latest draft", escape, "\x1bOR");
+  const screen = text(view, 90);
+  expect(screen).toContain("No overall feedback · read-only");
+  expect(screen).not.toContain("Add overall feedback");
+  keys(view, "\x1bOQ", "discarded");
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe("");
+  keys(view, "\x1bOS");
+  expect(text(view, 90)).toContain("Latest draft");
+  expect(f.state().reviews?.at(-1)?.feedbackDraft).toBe("Latest draft");
+});
+
+test("overall editing preserves cursor focus and text across narrow and short layouts", () => {
+  const f = reviewFixture("# Sample\n\nBody.");
+  const view = f.create();
+  keys(view, "\x1bOQ", "Draft 界🙂", shiftEnter, "Next line");
+  f.resize(10);
+  const narrow = view.render(24);
+  expect(narrow.some((line) => line.includes(CURSOR_MARKER))).toBe(true);
+  expect(narrow.every((line) => visibleWidth(line) <= 24)).toBe(true);
+  expect(stripTerminalSequences(narrow.join("\n"))).toContain("Next line");
+  f.resize(60);
+  keys(view, escape);
+  const wide = text(view, 90);
+  expect(wide).toContain("Draft 界🙂");
+  expect(wide).toContain("Next line");
+  keys(view, "\x1bOQ", "\x01", "\x0b", "\x08", "\x01", "\x0b", escape);
+  expect(f.state().reviews?.[0]?.feedbackDraft).toBe("");
+  expect(text(view, 90)).toContain("Add overall feedback");
+  expect(f.state().phase).toBe("review");
+});
+
+test("list navigation retains separate paragraphs and independently annotated targets", () => {
+  const source = "- First\n- Second\n\n  Separate paragraph\n\n- Last";
+  const f = reviewFixture(source);
+  const paragraph = documentBlocks(source).find(
+    (block) => block.kind === "paragraph" && block.excerpt.trim() === "First",
+  );
+  if (paragraph === undefined) {
+    throw new Error("Missing paragraph fixture");
+  }
+  f.set(
+    transitionReview(f.state(), 1, {
+      type: "edit-note",
+      blockId: paragraph.id,
+      excerpt: paragraph.excerpt,
+      text: "Existing",
+    }),
+  );
+  const view = f.create();
+  keys(view, down, enter, " retained", enter);
+  expect(f.state().reviews?.[0]?.notes?.[0]?.text).toBe("Existing retained");
+  keys(view, down, down, down, "Separate note", enter);
+  expect(f.state().reviews?.[0]?.notes?.at(-1)?.excerpt.trim()).toBe("Separate paragraph");
+  keys(view, down, "Last note", enter);
+  expect(f.state().reviews?.[0]?.notes?.at(-1)?.excerpt.trim()).toBe("- Last");
 });
 
 test("review hints and editor input use the effective host newline binding", ({

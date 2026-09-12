@@ -21,7 +21,7 @@ import type { ReviewAction, RoundState } from "../domain/state.ts";
 import { defaultAppearance } from "./appearance.ts";
 import type { PlanAppearance } from "./appearance.ts";
 import { ModalKeybindings } from "./terminal-keys.ts";
-import { modalContentWidth, modalLines } from "./terminal-layout.ts";
+import { dividerGlyphs, modalContentWidth, modalLines } from "./terminal-layout.ts";
 import type { TerminalOptions } from "./terminal-options.ts";
 
 const home = homedir();
@@ -147,7 +147,11 @@ export class TerminalReview implements Component {
       throw new Error("Earlier revisions are read-only.");
     }
     const review = this.read().reviews?.[this.viewed];
-    const block = this.layout(this.contentWidth()).blocks[this.block];
+    const blocks = this.layout(this.contentWidth()).blocks;
+    const block = blocks[this.block];
+    if (overall) {
+      this.block = blocks.length;
+    }
     this.mode = overall ? "overall" : "note";
     this.editor.setText(
       overall
@@ -206,7 +210,8 @@ export class TerminalReview implements Component {
       }
       const actions = hasReviewNotes(review) ? feedbackActions : approvalActions;
       this.action = Math.min(this.action, actions.length - 1);
-      const blocks = this.layout(this.contentWidth()).blocks;
+      const layout = this.layout(this.contentWidth());
+      const blocks = layout.blocks;
       if (this.keys.matches(data, "hints")) {
         this.showHints = !this.showHints;
         this.armed = false;
@@ -277,10 +282,27 @@ export class TerminalReview implements Component {
           );
           this.follow = false;
         } else if (this.keys.matches(data, "up") || this.keys.matches(data, "down")) {
-          this.block = Math.max(
-            0,
-            Math.min(blocks.length, this.block + (this.keys.matches(data, "down") ? 1 : -1)),
-          );
+          const direction = this.keys.matches(data, "down") ? 1 : -1;
+          do {
+            this.block = Math.max(0, Math.min(blocks.length, this.block + direction));
+            const block = blocks[this.block];
+            const parent = blocks[this.block - 1];
+            const span = block === undefined ? undefined : layout.spans.get(block.id);
+            const parentSpan = parent === undefined ? undefined : layout.spans.get(parent.id);
+            if (
+              block?.kind !== "paragraph" ||
+              parent?.kind !== "list_item" ||
+              block.start < parent.start ||
+              block.end > parent.end ||
+              span === undefined ||
+              span.range !== parentSpan?.range ||
+              review.notes?.some(
+                (note) => note.blockId === block.id && note.text.trim().length > 0,
+              ) === true
+            ) {
+              break;
+            }
+          } while (this.block > 0 && this.block < blocks.length);
           this.follow = true;
         } else if (
           this.current() &&
@@ -375,7 +397,11 @@ export class TerminalReview implements Component {
       if (row === selected?.start) {
         selectedPosition = lines.length;
       }
-      const label = row === selected?.start ? selected.range : (ranges.get(row) ?? "");
+      const blank = layout.blankLines.get(row);
+      let label = row === selected?.start ? selected.range : (ranges.get(row) ?? "");
+      if (blank !== undefined) {
+        label = String(blank);
+      }
       const text = (gutter > 0 ? label.padStart(gutter - 1) + " " : "") + content;
       lines.push(
         selected !== undefined && row >= selected.start && row < selected.end
@@ -384,17 +410,37 @@ export class TerminalReview implements Component {
       );
     }
     const overallPosition = lines.length;
+    const indent = " ".repeat(gutter);
     lines.push(
       "",
-      this.block === layout.blocks.length ? markdown.bold("Overall feedback") : "Overall feedback",
+      indent + markdown.hr(dividerGlyphs[this.appearance.border].repeat(contentWidth)),
+      ...wrapTextWithAnsi(
+        this.block === layout.blocks.length
+          ? markdown.bold("Overall feedback")
+          : "Overall feedback",
+        contentWidth,
+      ).map((line) => indent + line),
     );
     if (this.mode === "overall") {
-      lines.push(...this.editor.render(width));
-    } else if (review.feedbackDraft.length > 0) {
+      lines.push(...this.editor.render(contentWidth).map((line) => indent + line));
+    } else if (review.feedbackDraft.trim().length > 0) {
       lines.push(
-        ...wrapTextWithAnsi(stripTerminalSequences(review.feedbackDraft), width).map(
-          noteBackground,
+        ...wrapTextWithAnsi(stripTerminalSequences(review.feedbackDraft), contentWidth).map(
+          (line) =>
+            indent +
+            noteBackground(line + " ".repeat(Math.max(0, contentWidth - visibleWidth(line)))),
         ),
+      );
+    } else {
+      const edit = this.keys.hint(
+        this.block === layout.blocks.length ? "enter" : "overall",
+        "edit",
+      );
+      const placeholder = this.current()
+        ? `Add overall feedback${edit.length > 0 ? ` · ${edit}` : ""}`
+        : "No overall feedback · read-only";
+      lines.push(
+        ...wrapTextWithAnsi(placeholder, contentWidth).map((line) => indent + noteBackground(line)),
       );
     }
     const cursor = lines.findIndex((line) => line.includes(CURSOR_MARKER));

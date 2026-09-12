@@ -9,6 +9,7 @@ export interface DocumentLayout {
   lines: string[];
   blocks: DocumentBlock[];
   spans: Map<string, { start: number; end: number; range: string }>;
+  blankLines: Map<number, number>;
 }
 
 /** Render the complete Markdown before mapping annotation ranges to preserve document references. */
@@ -58,8 +59,8 @@ export function documentLayout(
     boundaries.set(root.end, next);
     rootRow = next;
   }
-  const boundary = (offset: number) => {
-    const cached = boundaries.get(offset);
+  const boundary = (offset: number, openCode = false) => {
+    const cached = openCode ? undefined : boundaries.get(offset);
     if (cached !== undefined) {
       return cached;
     }
@@ -73,8 +74,7 @@ export function documentLayout(
         high = middle;
       }
     }
-    const candidate = roots[low - 1];
-    const root = candidate !== undefined && offset <= candidate.end ? candidate : undefined;
+    const root = roots[low - 1];
     const prefix = markdownLines(
       `${markdown.slice(root?.start ?? 0, offset)}\n\n${definitions}`,
       width,
@@ -82,20 +82,30 @@ export function documentLayout(
     while (prefix.at(-1) === "") {
       prefix.pop();
     }
+    if (openCode) {
+      // Pi closes unfinished code fences in prefix renders.
+      prefix.pop();
+      while (prefix.at(-1) === "") {
+        prefix.pop();
+      }
+    }
     let index = root?.row ?? 0;
     for (const row of prefix) {
       if (row.trim().length === 0) {
         continue;
       }
-      while (index < plain.length && (plain[index] ?? "").trim().length === 0) {
-        index++;
+      let next = index;
+      while (next < plain.length && (plain[next] ?? "").trim().length === 0) {
+        next++;
       }
-      if (row.trim() !== plain[index]?.trim()) {
+      if (row.trim() !== plain[next]?.trim()) {
         break;
       }
-      index++;
+      index = next + 1;
     }
-    boundaries.set(offset, index);
+    if (!openCode) {
+      boundaries.set(offset, index);
+    }
     return index;
   };
   const spans = new Map<string, { start: number; end: number; range: string }>();
@@ -130,5 +140,55 @@ export function documentLayout(
       range: first === last ? String(first) : `${String(first)}–${String(last)}`,
     });
   }
-  return { lines, blocks, spans };
+  const blanks = new Map<number, number[]>();
+  const codeBlocks = blocks.filter((block) => block.kind === "code");
+  let codeIndex = 0;
+  let previousBlank: { next: number; row: number; code: DocumentBlock | undefined } | undefined;
+  for (const [index, offset] of analysis.lineStarts.entries()) {
+    const next = analysis.lineStarts[index + 1] ?? markdown.length;
+    if (offset === markdown.length || markdown.slice(offset, next).trim().length > 0) {
+      continue;
+    }
+    while ((codeBlocks[codeIndex]?.end ?? Number.POSITIVE_INFINITY) <= offset) {
+      codeIndex++;
+    }
+    const candidate = codeBlocks[codeIndex];
+    const code = candidate !== undefined && candidate.start < offset ? candidate : undefined;
+    const row =
+      previousBlank?.next === offset && previousBlank.code === code
+        ? previousBlank.row
+        : boundary(offset, code !== undefined);
+    previousBlank = { next, row, code };
+    const numbers = blanks.get(row) ?? [];
+    numbers.push(index + 1);
+    blanks.set(row, numbers);
+  }
+  const blankLines = new Map<number, number>();
+  const expanded: string[] = [];
+  const starts = new Map<number, number>();
+  const ends = new Map<number, number>();
+  for (let row = 0; row <= lines.length; row++) {
+    ends.set(row, expanded.length);
+    const numbers = blanks.get(row) ?? [];
+    let existing = 0;
+    while (existing < numbers.length && plain[row + existing] === "") {
+      existing++;
+    }
+    for (const [index, number] of numbers.entries()) {
+      blankLines.set(expanded.length + index, number);
+    }
+    for (let added = existing; added < numbers.length; added++) {
+      expanded.push("");
+    }
+    starts.set(row, expanded.length);
+    const line = lines[row];
+    if (line !== undefined) {
+      expanded.push(line);
+    }
+  }
+  for (const span of spans.values()) {
+    span.start = starts.get(span.start) ?? expanded.length;
+    span.end = ends.get(span.end) ?? expanded.length;
+  }
+  return { lines: expanded, blocks, spans, blankLines };
 }
