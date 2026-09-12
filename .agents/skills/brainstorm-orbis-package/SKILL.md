@@ -66,6 +66,11 @@ Map decisions and their prerequisites. Keep user decisions, proposals, and open 
 The frontier is the set of unresolved decisions the user can answer now without guessing an answer
 to another open question.
 
+Before comparing approaches or presenting a decision, introduce the terminology, each approach,
+and the constraints needed to assess it. Do not rely on an explanation in a later question or
+SPEC section. Apply the [forward-reference checks](../../../docs/specifications.md#avoid-forward-references)
+to the research synthesis, design discussion, and specification.
+
 Present the whole frontier in one numbered round. Explain the trade-offs, offer two to four
 meaningful options when alternatives exist, and put the recommended option first with its reason.
 Consider an unconventional option when it serves the problem; do not manufacture choices to fill a
@@ -130,8 +135,8 @@ names remain separate. Link every requirement to a conformance check with observ
 results.
 
 Because slugs have no position, section headings and document order define the reading path, and
-the requirement headings index the package. Group requirements by responsibility rather
-than by minting order. Apply the specification guide's distinctions between mandatory text,
+the requirement headings index the package. Order requirements by prerequisite knowledge and group
+related responsibilities within that order. Apply the specification guide's distinctions between mandatory text,
 examples, permitted choices, and unresolved decisions. Readers must be able to implement the package
 without reading the reference source.
 

@@ -13,6 +13,11 @@ mechanical verification. Read its implementation only when a command fails or th
 contract changes. Reserve agent judgment for compatibility, package migrations, new correctness
 checks, and code fixes.
 
+In compatibility proposals and documentation, introduce runtime targets, package roles, and
+migration approaches before comparing or selecting them. Avoid forward references; explain each
+prerequisite before the command or decision that depends on it. Before delivery, check the
+changed prose in reading order under the repository's writing rules.
+
 ## Capture the baseline
 
 ```sh

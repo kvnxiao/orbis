@@ -102,6 +102,11 @@ completed slice from full package conformance. In a full implementation plan, ac
 required interface and conformance obligation; do not make required behavior optional to simplify
 scheduling.
 
+Apply the [forward-reference checks](../../../docs/specifications.md#avoid-forward-references)
+to the plan's explanations as well as its task order. Introduce shared terms, proposed interfaces,
+and implementation approaches before tasks use or compare them. Before delivery, read the plan
+without following forward links and repair missing prerequisite context.
+
 Assign verification of interactions across slices, such as cancellation during persistence or
 interface switching with unfinished input, to concrete tasks. Passing isolated component checks does
 not establish the complete workflow. For delayed operations and persistence, include checks at the

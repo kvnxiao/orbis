@@ -2,8 +2,10 @@
 
 Status: Defined contract.
 
-This document specifies a Pi extension for users who want `/exit` to quit Pi. An independent
-implementation must satisfy the requirements below through Pi's public extension API.
+`@orbis/exit` adds `/exit` to quit Pi, the coding-agent host that loads the extension. This
+specification is for independent implementers using Pi's public extension API. Graceful shutdown
+means requesting that Pi end the session through its own shutdown lifecycle; Pi owns the timing and
+cleanup.
 
 ## Command contract
 
@@ -21,6 +23,8 @@ process directly. When Pi is busy, Pi determines when shutdown proceeds.
 
 The command ignores additional arguments and has no configuration or package-owned persistent state.
 
+Internal organization and command description wording are implementation choices.
+
 ## Conformance
 
 Conformance requires all requirements. These checks define expected outcomes; their presence does
@@ -34,5 +38,3 @@ not establish that an implementation has passed them.
 - **REQ-command-boundaries:** Supplying command arguments preserves the same shutdown behavior. Code
   inspection confirms that the extension does not require configuration or write package-owned
   persistent state.
-
-Internal organization and command description wording are implementation choices.

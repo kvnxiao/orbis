@@ -11,6 +11,18 @@ reference source. Choose headings that fit the package; the headings below are a
 Describe the user problem, intended audience, Pi integration, and scope. State exclusions that
 define the package's responsibility.
 
+## Concepts and workflow
+
+Introduce package-specific terms, actors, states, artifacts, and interfaces before requirements use
+them. Explain how they relate in the ordinary workflow. Before comparing named approaches, describe
+each approach and the constraints relevant to the choice. For a small package, put these
+introductions in the purpose or first use instead of retaining a separate section.
+
+Avoid forward references: readers must understand each passage without searching later sections.
+Order the requirements by prerequisite knowledge and group related responsibilities within that
+order. Forward links may supply optional detail, but cannot replace a prerequisite explanation. Keep
+detailed obligations in the requirements rather than repeating them in this introduction.
+
 ## Required behavior
 
 Define observable behavior and any commands, tools, events, configuration, persistent artifacts,
@@ -57,3 +69,8 @@ appropriate to the package.
 Derive expected results from the contract independently of implementation details. Passing scenarios
 supplies evidence of conformance; it does not prove correctness for every possible input. Record
 actual test results and verification gaps in implementation documentation or reports.
+
+Before delivering the specification, read it from top to bottom without following forward links.
+Check first uses of terminology, prerequisites for comparisons and procedures, and explanations
+before requirement references. Move or introduce missing context without changing requirement IDs,
+obligations, or linked heading anchors.

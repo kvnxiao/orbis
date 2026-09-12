@@ -15,6 +15,11 @@ guide's reading order and scale detail to the package. Keep prerequisites and ma
 visible. Use the [extension template](../../../templates/extension/README.md) as an example, not a
 mandatory list of sections.
 
+Avoid forward references. Introduce package-specific terminology and each named approach before
+using them in instructions or comparisons. Read the install-to-first-use path without following
+forward links; explain missing prerequisites before the step that needs them. Advanced links may
+add detail but must not supply context required to complete that path.
+
 When shortening an existing README, move useful advanced usage, integration, and contributor
 material to the guide's destinations. Preserve technical meaning, update incoming links, and check
 instructions in other repository skills that name the former destination. Do not convert the

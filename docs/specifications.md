@@ -5,6 +5,41 @@ behavior. The specification is written for developers and coding agents building
 extension without reading the reference implementation. Orbis specifications and reference
 implementations are distributed under the repository's [MIT license](../LICENSE).
 
+## Avoid forward references
+
+A specification must be understandable in document order without reading later sections, research,
+or implementation source to decode the current passage. Its opening states the package's purpose,
+audience, and scope in terms the audience already knows.
+
+Before using a package-specific term, acronym, actor, state, artifact, interface, or named approach,
+introduce its meaning and role. Define a local term at first use; put concepts shared by several
+sections in a short opening explanation. Introduce each approach and its relevant constraints before
+comparing trade-offs, recommending it, or asking the user to choose. Do not add a glossary of
+ordinary technical vocabulary or duplicate detailed requirements in an overview.
+
+Order sections by their knowledge prerequisites. Establish the shared concepts before describing the
+workflow, define inputs and states before their transitions, and state behavior before its
+exceptions and conformance scenarios. Group related responsibilities within that order. When
+concepts depend on each other, explain their relationship together before their separate rules. Use
+package-specific headings; this is a reading-order rule, not a mandatory outline.
+
+A forward link may offer optional detail. It must not replace an explanation needed to understand
+the current passage. Before linking to another contract document, identify its subject and explain
+the shared concepts locally. Keep detailed rules in their authoritative document.
+
+Before delivery, read the SPEC and each changed interaction section from top to bottom without
+following forward links. Check that:
+
+- Every specialized term has a definition before or at its first substantive use.
+- Every comparison introduces its alternatives and decision criteria before evaluating them.
+- Every procedure, table, and scenario follows the concepts, inputs, and states it assumes.
+- Every requirement reference follows the explanation needed to understand the reference.
+- Reordering preserves requirement IDs, obligations, exceptions, and linked heading anchors.
+
+For a failed check, name the earliest dependent passage and move its prerequisite earlier or add the
+missing introduction. A terminology search helps locate uses; it does not establish that a reader
+can understand them.
+
 ## Specify a package
 
 When research informs a package design, persist its synthesis in `packages/<name>/docs/research/`
@@ -48,9 +83,10 @@ separate siblings, as in `REQ-review-cancellation` beside `REQ-round-cancellatio
 local to a package; cross-package references include the package name. Keep requirement identifiers
 distinct from implementation task names.
 
-Order requirements by responsibility. Descriptive identifiers name the behavior; requirement text
-defines its conditions and outcomes. Document order, section headings, and the conformance table
-define the reading path. Identifiers do not establish sequence or completeness.
+Order requirements by prerequisite knowledge, grouping related responsibilities within that order.
+Descriptive identifiers name the behavior; requirement text defines its conditions and outcomes.
+Document order, section headings, and the conformance table define the reading path. Identifiers do
+not establish sequence or completeness.
 
 Keep each requirement focused on a behavior and its related conditions. State the trigger or
 precondition, required result, and applicable failure behavior. Define exact values and formats when

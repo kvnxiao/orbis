@@ -29,6 +29,12 @@ Map the request to affected requirement IDs, conformance scenarios, and interact
 behavior. State the required behavior, observed implementation, requested outcome, and checks that
 would distinguish success from a plausible violation. Keep unverified behavior explicit.
 
+For documentation reordering, preserve requirement IDs, behavior, and linked heading anchors.
+Apply the [forward-reference checks](../../../docs/specifications.md#avoid-forward-references):
+introduce shared concepts before their dependent requirements and check the earliest use of every
+moved or added term. A forward link cannot replace prerequisite context. Presentation-only edits
+do not require a behavioral amendment or implementation plan.
+
 Classify each affected behavior:
 
 | Situation                                                             | Action                                                                                   |
