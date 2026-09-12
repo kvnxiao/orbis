@@ -1,11 +1,15 @@
 import { DEFAULT_MAX_BYTES } from "@earendil-works/pi-coding-agent";
 import { expect, test, vi } from "vitest";
 
+import {
+  availablePresenters,
+  presentationAction,
+  presentersChanged,
+} from "../src/pi/presenters.ts";
+import * as terminal from "../src/pi/terminal.ts";
+import * as results from "../src/pi/tool-result.ts";
 import { registerPlanPresenter } from "../src/presentation.ts";
 import type { PlanPresentationRequest } from "../src/presentation.ts";
-import { availablePresenters, presentationAction } from "../src/presenters.ts";
-import * as terminal from "../src/terminal.ts";
-import * as results from "../src/tool-result.ts";
 import { selectPresenter } from "./presenter-fixture.mts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
@@ -140,6 +144,50 @@ test("registration is local to the Pi bus and rejects duplicate IDs", async ({
   remove();
   expect(availablePresenters(f.api.events)).toEqual([]);
   expect(() => registerPlanPresenter(f.api, { ...definition, id: "terminal" })).toThrow("requires");
+});
+
+test("presenter registration owns bounded lifecycle hooks and unregister stays permanent", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  const on = vi.spyOn(f.api, "on");
+  const changed = vi.fn<() => void>();
+  onTestFinished(f.api.events.on(presentersChanged, changed));
+  for (let index = 0; index < 20; index++) {
+    const remove = registerPlanPresenter(f.api, {
+      version: 1,
+      id: "temporary",
+      label: "Temporary",
+      async present() {
+        await Promise.resolve(undefined);
+      },
+    });
+    remove();
+    remove();
+  }
+  expect(on).toHaveBeenCalledTimes(2);
+  changed.mockClear();
+  await f.shutdown();
+  expect(changed).not.toHaveBeenCalled();
+  const remove = registerPlanPresenter(f.api, {
+    version: 1,
+    id: "retained",
+    label: "Retained",
+    async present() {
+      await Promise.resolve(undefined);
+    },
+  });
+  expect(on).toHaveBeenCalledTimes(2);
+  await f.shutdown();
+  expect(availablePresenters(f.api.events)).toEqual([]);
+  await f.startup();
+  expect(availablePresenters(f.api.events).map((item) => item.id)).toEqual(["retained"]);
+  remove();
+  await f.shutdown();
+  await f.startup();
+  expect(availablePresenters(f.api.events)).toEqual([]);
+  on.mockRestore();
 });
 
 test("presenter snapshots are detached and draft callbacks expire after submission", async ({

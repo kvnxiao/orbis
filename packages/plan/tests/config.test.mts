@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 
 import { expect, test } from "vitest";
 
-import { readSettings, readSettingsFile, writeSettings } from "../src/config.ts";
+import { readSettings, readSettingsFile, writeSettings } from "../src/storage/config.ts";
 
 test("concurrent settings updates preserve both fields", async ({ onTestFinished }) => {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-config-"));

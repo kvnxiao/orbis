@@ -12,12 +12,18 @@ import {
 } from "@earendil-works/pi-tui";
 import type { Terminal } from "@earendil-works/pi-tui";
 
-import type { PlanAppearance } from "../src/config.ts";
-import { defaultAppearance } from "../src/config.ts";
-import { presentRound, presentReview, transitionRound, transitionReview } from "../src/state.ts";
-import type { QuestionInput, RoundState } from "../src/state.ts";
-import { framedModalLines } from "../src/terminal-layout.ts";
-import { TerminalRound, TerminalReview } from "../src/terminal.ts";
+import {
+  presentRound,
+  presentReview,
+  transitionRound,
+  transitionReview,
+} from "../src/domain/state.ts";
+import type { QuestionInput, RoundState } from "../src/domain/state.ts";
+import type { PlanAppearance } from "../src/tui/appearance.ts";
+import { defaultAppearance } from "../src/tui/appearance.ts";
+import { framedModalLines } from "../src/tui/terminal-layout.ts";
+import { TerminalReview } from "../src/tui/terminal-review.ts";
+import { TerminalRound } from "../src/tui/terminal-round.ts";
 
 const output = new URL("../implementation/evidence/tui-recordings/", import.meta.url);
 const key = {
@@ -131,32 +137,30 @@ function capture(
     const rows = () => height - 2;
     if (kind === "round") {
       const revision = state.round?.revision ?? 0;
-      return new TerminalRound(
-        () => state,
-        (action) => {
+      return new TerminalRound({
+        read: () => state,
+        dispatch: (action) => {
           state = transitionRound(state, "frontier", revision, action);
         },
-        done,
-        noop,
-        editor,
-        rows,
-        undefined,
-        appearance,
-      );
+        done: done,
+        refresh: noop,
+        editor: editor,
+        rows: rows,
+        appearance: appearance,
+      });
     }
     const revision = state.reviews?.at(-1)?.revision ?? 0;
-    return new TerminalReview(
-      () => state,
-      (action) => {
+    return new TerminalReview({
+      read: () => state,
+      dispatch: (action) => {
         state = transitionReview(state, revision, action);
       },
-      done,
-      noop,
-      editor,
-      rows,
-      undefined,
-      appearance,
-    );
+      done: done,
+      refresh: noop,
+      editor: editor,
+      rows: rows,
+      appearance: appearance,
+    });
   };
   let view = create();
   const recording: Recording = { id, title, width, height, frames: [] };
@@ -409,7 +413,7 @@ for (const border of ["rounded", "square", "double", "ascii", "none"] as const) 
     "round",
     100,
     42,
-    { border, symbols: "emoji" },
+    { border, symbols: "emoji", showHints: true },
   );
   appearance.type("Keep this choice simple.");
   appearance.press("enter");

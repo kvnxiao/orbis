@@ -6,8 +6,8 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { expect, test, vi } from "vitest";
 
-import * as config from "../src/config.ts";
-import { showPlanSettings } from "../src/settings-menu.ts";
+import { showPlanSettings } from "../src/pi/settings-menu.ts";
+import * as config from "../src/storage/config.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 import type { RuntimeFixture } from "./runtime-fixture.mts";
 
@@ -290,3 +290,96 @@ test.for(["rpc", "json", "print"] as const)(
     expect(select).not.toHaveBeenCalled();
   },
 );
+
+test("Escape closes settings before a queued write finishes and preserves its committed value", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  onTestFinished(() => {
+    vi.restoreAllMocks();
+  });
+  initTheme("dark", false);
+  const committed = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  const original = config.writeSettings;
+  vi.spyOn(config, "writeSettings").mockImplementation(async (path, fields) => {
+    started.resolve(undefined);
+    await committed.promise;
+    await original(path, fields);
+  });
+  const saved = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const ctx = menuContext(
+    f,
+    () => undefined,
+    async (menu) => {
+      menu.press("\x1b[B");
+      menu.press("\r");
+      await started.promise;
+      await menu.finish();
+      expect(saved).not.toHaveBeenCalled();
+      committed.resolve(undefined);
+    },
+  );
+  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"), saved);
+  expect(saved).toHaveBeenCalledOnce();
+  expect(await config.readSettingsFile(join(f.ctx.cwd, "agent", "orbis-plan.json"))).toEqual({
+    symbols: "emoji",
+  });
+});
+
+test("confirming an inherited shortcut does not create a project override", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  initTheme("dark", false);
+  const agent = join(f.ctx.cwd, "agent");
+  await config.writeSettings(join(agent, "orbis-plan.json"), { shortcut: "ctrl+alt+p" });
+  const write = vi.spyOn(config, "writeSettings");
+  onTestFinished(() => {
+    write.mockRestore();
+  });
+  const ctx = menuContext(
+    f,
+    () => undefined,
+    async (menu) => {
+      for (let index = 0; index < 4; index++) {
+        menu.press("\x1b[B");
+      }
+      menu.press("\r");
+      menu.press("\r");
+      expect(write).not.toHaveBeenCalled();
+      await menu.finish();
+    },
+  );
+  ctx.ui.select = async () => await Promise.resolve("Project overrides");
+  await showPlanSettings({ ...ctx, isProjectTrusted: () => true }, agent);
+  expect(await config.readSettingsFile(join(f.ctx.cwd, ".pi", "plan.json"))).toEqual({});
+});
+
+test("a rejected queued write reports its error after Escape closes settings", async ({
+  onTestFinished,
+}) => {
+  const f = await runtimeFixture();
+  onTestFinished(f.dispose);
+  onTestFinished(() => {
+    vi.restoreAllMocks();
+  });
+  const pending = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  vi.spyOn(config, "writeSettings").mockImplementation(async () => {
+    started.resolve(undefined);
+    await pending.promise;
+  });
+  const notify = vi.fn<ExtensionContext["ui"]["notify"]>();
+  const ctx = menuContext(f, notify, async (menu) => {
+    menu.press("\x1b[B");
+    menu.press("\r");
+    await started.promise;
+    await menu.finish();
+    pending.reject(new Error("Queued write failed"));
+  });
+  await showPlanSettings(ctx, join(f.ctx.cwd, "agent"));
+  expect(notify).toHaveBeenCalledWith("Queued write failed", "error");
+});

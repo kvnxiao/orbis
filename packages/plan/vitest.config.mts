@@ -7,5 +7,6 @@ export default defineProject({
     environment: "node",
     setupFiles: ["./tests/setup.mts"],
     include: ["tests/**/*.test.mts"],
+    benchmark: { include: ["tests/**/*.bench.mts"] },
   },
 });

@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { expect, test, vi } from "vitest";
 
-import { terminalRound } from "../src/terminal.ts";
+import { terminalRound } from "../src/pi/terminal.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 test("a closed or failed modal restores working defaults and stale cleanup preserves the newer wait", async ({

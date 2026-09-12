@@ -1,6 +1,7 @@
 import { Marked } from "@earendil-works/pi-tui";
 import type { Token, Tokens } from "@earendil-works/pi-tui";
 
+/** Bind an annotation to exact UTF-16 source offsets and its unchanged excerpt. */
 export interface DocumentBlock {
   id: string;
   kind: string;
@@ -86,6 +87,7 @@ function childSource(source: MappedText, text: string): MappedText {
   return { text, offsets };
 }
 
+/** Derive stable annotation targets from original Markdown source offsets. */
 export function documentBlocks(markdown: string): DocumentBlock[] {
   const offsets: number[] = [];
   for (let index = 0; index < markdown.length; index++) {
@@ -115,7 +117,7 @@ export function documentBlocks(markdown: string): DocumentBlock[] {
   const visit = (tokens: Token[], mapped: MappedText) => {
     let cursor = 0;
     for (const token of tokens) {
-      if (token.type === "checkbox") {
+      if (token.type === "checkbox" || token.type === "space") {
         continue;
       }
       const start = mapped.text.indexOf(token.raw, cursor);
@@ -125,9 +127,6 @@ export function documentBlocks(markdown: string): DocumentBlock[] {
       const end = start + token.raw.length;
       cursor = end;
       const part = { text: token.raw, offsets: mapped.offsets.slice(start, end + 1) };
-      if (token.type === "space") {
-        continue;
-      }
       if (list(token)) {
         visit(token.items, part);
       } else if (listItem(token)) {

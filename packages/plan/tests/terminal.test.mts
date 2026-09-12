@@ -1,13 +1,26 @@
 import { Theme } from "@earendil-works/pi-coding-agent";
-import { CURSOR_MARKER, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  CURSOR_MARKER,
+  getKeybindings,
+  stripTerminalSequences,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { expect, test, vi } from "vitest";
 
-import { documentBlocks } from "../src/blocks.ts";
-import type { PlanAppearance } from "../src/config.ts";
-import { presentRound, presentReview, transitionRound, transitionReview } from "../src/state.ts";
-import type { RoundState } from "../src/state.ts";
-import { framedModalLines, markdownLines, modalLines } from "../src/terminal-layout.ts";
-import { TerminalRound, TerminalReview } from "../src/terminal.ts";
+import { documentBlocks } from "../src/document/blocks.ts";
+import { markdownLines } from "../src/document/markdown.ts";
+import * as rendering from "../src/document/markdown.ts";
+import {
+  presentRound,
+  presentReview,
+  transitionRound,
+  transitionReview,
+} from "../src/domain/state.ts";
+import type { RoundState } from "../src/domain/state.ts";
+import type { PlanAppearance } from "../src/tui/appearance.ts";
+import { framedModalLines, modalLines } from "../src/tui/terminal-layout.ts";
+import { TerminalReview } from "../src/tui/terminal-review.ts";
+import { TerminalRound } from "../src/tui/terminal-round.ts";
 import { testEditor } from "./terminal-fixture.mts";
 
 const down = "\x1b[B";
@@ -16,6 +29,93 @@ const escape = "\x1b";
 const enter = "\r";
 const tab = "\t";
 const shiftEnter = "\x1b[13;2u";
+
+test("warm review navigation and note edits reuse Markdown until width or theme invalidation", ({
+  onTestFinished,
+}) => {
+  const markdown = "# Plan\n\nBody with **emphasis**.\n\nAnother paragraph.";
+  const f = reviewFixture(markdown);
+  const view = f.create();
+  const render = vi.spyOn(rendering, "markdownLines");
+  onTestFinished(() => {
+    render.mockRestore();
+  });
+  view.render(90);
+  for (const key of [down, enter, "notes", escape]) {
+    view.handleInput(key);
+    view.render(90);
+  }
+  expect(render.mock.calls.filter(([source]) => source === markdown)).toHaveLength(1);
+  view.invalidate();
+  view.render(90);
+  expect(render.mock.calls.filter(([source]) => source === markdown)).toHaveLength(2);
+  view.render(100);
+  expect(render.mock.calls.filter(([source]) => source === markdown)).toHaveLength(3);
+});
+
+test("review hints and editor input use the effective host newline binding", ({
+  onTestFinished,
+}) => {
+  const bindings = getKeybindings();
+  const previous = bindings.getUserBindings();
+  bindings.setUserBindings({ ...previous, "tui.input.newLine": "alt+enter" });
+  onTestFinished(() => {
+    bindings.setUserBindings(previous);
+  });
+  let state = presentReview(
+    { phase: "research", roundNumber: 0, questionNumbers: {}, decisions: {} },
+    { planId: "plan", expectedRevision: 0, markdown: "# Plan" },
+  );
+  const view = new TerminalReview({
+    read: () => state,
+    dispatch: (action) => {
+      state = transitionReview(state, 1, action);
+    },
+    done: () => undefined,
+    refresh: () => undefined,
+    editor: testEditor(),
+    keys: bindings,
+    columns: () => 160,
+  });
+  view.handleInput(enter);
+  view.handleInput("one");
+  view.handleInput("\x1b[13;3u");
+  view.handleInput("two");
+  view.handleInput(shiftEnter);
+  view.handleInput("three");
+  expect(state.reviews?.[0]?.notes?.[0]?.text).toBe("one\ntwo\nthree");
+  expect(text(view, 160)).toContain(
+    `${process.platform === "darwin" ? "option" : "Alt"}+Enter: newline`,
+  );
+});
+
+test("round input produces the same state across repeated and deferred render schedules", () => {
+  const eager = roundFixture();
+  const deferred = roundFixture();
+  for (const key of [enter, "界🙂", shiftEnter, "notes", escape, tab, down, enter]) {
+    eager.view.render(90);
+    eager.view.render(90);
+    eager.view.handleInput(key);
+    deferred.view.handleInput(key);
+  }
+  expect(eager.state()).toEqual(deferred.state());
+  expect(eager.view.render(90)).toEqual(deferred.view.render(90));
+});
+
+test("review input produces the same notes across repeated and deferred render schedules", () => {
+  const eager = reviewFixture("# Plan\n\nBody\n\nMore");
+  const deferred = reviewFixture("# Plan\n\nBody\n\nMore");
+  const a = eager.create();
+  const b = deferred.create();
+  for (const key of [down, enter, "界🙂", shiftEnter, "notes", escape, down, "\x1b[6~", tab]) {
+    a.render(90);
+    a.render(90);
+    a.handleInput(key);
+    b.handleInput(key);
+  }
+  expect(eager.state()).toEqual(deferred.state());
+  expect(a.render(90)).toEqual(b.render(90));
+});
 
 test("F1 overrides configured hints only for the current modal", () => {
   const appearance: PlanAppearance = { symbols: "unicode", border: "rounded", showHints: false };
@@ -84,7 +184,7 @@ test("F1 hides frontier hints and divider without losing draft text", () => {
 });
 
 test("brainstorm symbols and input colors distinguish the field roles", () => {
-  const f = roundFixture({ symbols: "emoji", border: "rounded" });
+  const f = roundFixture({ symbols: "emoji", border: "rounded", showHints: true });
   f.resize(80);
   expect(text(f.view, 140)).toContain("❓ 1. Choose scope");
   expect(text(f.view, 140)).toContain("➡️ Recommendation:");
@@ -107,7 +207,7 @@ test.for([
 ] as const)(
   "$border header and CTA dividers preserve spacing independently of hints",
   ({ border, glyph }) => {
-    const f = roundFixture({ symbols: "unicode", border });
+    const f = roundFixture({ symbols: "unicode", border, showHints: true });
     f.resize(80);
     const lines = f.view.render(80);
     const plain = lines.map((line) => stripTerminalSequences(line).trimEnd());
@@ -377,15 +477,15 @@ test("a revised round that drops the selected option keeps the frontier navigabl
     ],
   });
   expect(state.round?.drafts.scope?.answer).toEqual({ optionId: "remote" });
-  const view = new TerminalRound(
-    () => state,
-    (action) => {
+  const view = new TerminalRound({
+    read: () => state,
+    dispatch: (action) => {
       state = transitionRound(state, "round", state.round?.revision ?? 0, action);
     },
-    () => undefined,
-    () => undefined,
-    testEditor(),
-  );
+    done: () => undefined,
+    refresh: () => undefined,
+    editor: testEditor(),
+  });
   expect(text(view)).toContain("› A. Local");
   keys(view, down);
   expect(text(view)).toContain("› B. Hosted");
@@ -524,7 +624,7 @@ test("Other and clarification follow generated choices and precede the recommend
 test.each(["unicode", "emoji"] as const)(
   "selected %s markers persist when the cursor moves",
   (symbols) => {
-    const f = roundFixture({ symbols, border: "rounded" });
+    const f = roundFixture({ symbols, border: "rounded", showHints: true });
     keys(f.view, enter);
     const check = symbols === "emoji" ? "✅" : "✓";
     expect(text(f.view)).toContain(`${check} A. Local`);
@@ -615,21 +715,20 @@ function roundFixture(appearance?: PlanAppearance) {
   let closed = false;
   let rows = 24;
   let columns = 90;
-  const view = new TerminalRound(
-    () => state,
-    (action) => {
+  const view = new TerminalRound({
+    read: () => state,
+    dispatch: (action) => {
       state = transitionRound(state, "round", state.round?.revision ?? 0, action);
     },
-    () => {
+    done: () => {
       closed = true;
     },
-    () => undefined,
-    testEditor(),
-    () => rows,
-    undefined,
-    appearance,
-    () => columns,
-  );
+    refresh: () => undefined,
+    editor: testEditor(),
+    rows: () => rows,
+    ...(appearance === undefined ? {} : { appearance }),
+    columns: () => columns,
+  });
   const render = view.render.bind(view);
   view.render = (width) => {
     columns = width;
@@ -658,21 +757,20 @@ function reviewFixture(
   let columns = 90;
   const create = () => {
     const revision = state.reviews?.at(-1)?.revision ?? 0;
-    const view = new TerminalReview(
-      () => state,
-      (action) => {
+    const view = new TerminalReview({
+      read: () => state,
+      dispatch: (action) => {
         state = transitionReview(state, revision, action);
       },
-      () => {
+      done: () => {
         closed = true;
       },
-      () => undefined,
-      testEditor(),
-      () => rows,
-      undefined,
-      appearance,
-      () => columns,
-    );
+      refresh: () => undefined,
+      editor: testEditor(),
+      rows: () => rows,
+      ...(appearance === undefined ? {} : { appearance }),
+      columns: () => columns,
+    });
     const render = view.render.bind(view);
     view.render = (width) => {
       columns = width;
@@ -721,16 +819,16 @@ test("F3 and F4 browse completed frontiers without changing current drafts or fo
       { id: "next", prompt: "Next choice", context: "Current", prerequisites: [], options: [] },
     ],
   });
-  const view = new TerminalRound(
-    () => state,
-    (action) => {
+  const view = new TerminalRound({
+    read: () => state,
+    dispatch: (action) => {
       state = transitionRound(state, "next", 1, action);
     },
-    () => undefined,
-    () => undefined,
-    testEditor(),
-    () => 40,
-  );
+    done: () => undefined,
+    refresh: () => undefined,
+    editor: testEditor(),
+    rows: () => 40,
+  });
   keys(view, "Current []");
   const before = structuredClone(state);
   const active = text(view, 120);
@@ -756,16 +854,16 @@ test("withdrawn questions retain only their heading and explicit continuation", 
       { id: "storage", status: "deferred", reason: "Wait" },
     ],
   });
-  const view = new TerminalRound(
-    () => state,
-    (action) => {
+  const view = new TerminalRound({
+    read: () => state,
+    dispatch: (action) => {
       state = transitionRound(state, "round", 2, action);
     },
-    () => undefined,
-    () => undefined,
-    testEditor(),
-    () => 40,
-  );
+    done: () => undefined,
+    refresh: () => undefined,
+    editor: testEditor(),
+    rows: () => 40,
+  });
   const rendered = view.render(120).join("\n");
   expect(stripTerminalSequences(rendered)).toContain("1. Choose scope");
   expect(stripTerminalSequences(rendered)).not.toContain("Local");
@@ -1012,15 +1110,15 @@ test("focus propagates before rendering and repeated renders preserve subsequent
   );
   let current = state;
   const editor = testEditor();
-  const view = new TerminalRound(
-    () => current,
-    (action) => {
+  const view = new TerminalRound({
+    read: () => current,
+    dispatch: (action) => {
       current = transitionRound(current, "round", 1, action);
     },
-    () => undefined,
-    () => undefined,
-    editor,
-  );
+    done: () => undefined,
+    refresh: () => undefined,
+    editor: editor,
+  });
   view.handleInput("Draft");
   expect(editor.focused).toBe(true);
   view.render(20);
@@ -1111,16 +1209,16 @@ test("a restored clarification keeps its number and allows clearing the previous
     ),
     clarification: { id: "request", response: "Local stores data on this device." },
   });
-  const view = new TerminalRound(
-    () => restored,
-    (action) => {
+  const view = new TerminalRound({
+    read: () => restored,
+    dispatch: (action) => {
       restored = transitionRound(restored, "round", restored.round?.revision ?? 0, action);
     },
-    () => undefined,
-    () => undefined,
-    testEditor(),
-    () => 80,
-  );
+    done: () => undefined,
+    refresh: () => undefined,
+    editor: testEditor(),
+    rows: () => 80,
+  });
   const rendered = text(view, 100);
   expect(rendered).toContain("User question 1: What does local mean?");
   expect(rendered).toContain("Local stores data on this device.");

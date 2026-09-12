@@ -1,8 +1,8 @@
 import { Value } from "typebox/value";
 import { expect, test } from "vitest";
 
-import { presentRound, roundStateSchema, transitionRound } from "../src/state.ts";
-import type { QuestionInput, RoundState } from "../src/state.ts";
+import { presentRound, roundStateSchema, transitionRound } from "../src/domain/state.ts";
+import type { QuestionInput, RoundState } from "../src/domain/state.ts";
 
 const question: QuestionInput = {
   id: "scope",

@@ -1,15 +1,15 @@
 import { getMarkdownTheme, getSelectListTheme } from "@earendil-works/pi-coding-agent";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  Markdown,
   matchesKey,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 
-import type { PlanAppearance } from "./config.ts";
+import type { PlanAppearance } from "./appearance.ts";
 
+/** Select separators from the resolved border style. */
 export const dividerGlyphs: Record<PlanAppearance["border"], string> = {
   rounded: "─",
   square: "─",
@@ -18,6 +18,7 @@ export const dividerGlyphs: Record<PlanAppearance["border"], string> = {
   none: "─",
 };
 
+/** Deduct frame cells only when the available geometry displays a frame. */
 export function frameContentWidth(
   width: number,
   rows: number,
@@ -28,6 +29,7 @@ export function frameContentWidth(
     : width - 2 - (width >= 6 ? 2 : 0);
 }
 
+/** Bound framed rows to the outer terminal width. */
 export function framedModalLines(
   render: (width: number) => string[],
   width: number,
@@ -58,14 +60,12 @@ export function framedModalLines(
   ];
 }
 
-export function markdownLines(text: string, width: number): string[] {
-  return new Markdown(text, 0, 0, getMarkdownTheme()).render(Math.max(1, width));
-}
-
+/** Reserve horizontal padding only when the modal is wide enough. */
 export function modalContentWidth(width: number): number {
   return width >= 12 ? width - 2 : width;
 }
 
+/** Describe action availability, focus, hints, and the viewport’s selected content row. */
 export interface ModalActions {
   buttons: { label: string; disabled?: boolean; reason?: string }[];
   focus?: number;

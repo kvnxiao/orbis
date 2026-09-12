@@ -1,10 +1,13 @@
+import { questionGuidance } from "../domain/state.ts";
+
+/** Describe the planning protocol and require explicit user approval before implementation. */
 export const planningInstructions = `Planning is active. Develop a shared understanding with the user before implementation. The user owns design decisions; you own factual investigation. Do not execute the proposed implementation.
 
 Map the objective as a design tree: each decision can open dependent decisions. Maintain stable decision identities, prerequisites, settled choices, unresolved questions, and branches made irrelevant by the user's choices. A recorded response is not necessarily a resolved decision.
 
 Research before presenting each frontier. Inspect relevant project files, existing behavior, installed tools, and available sources. Use available research subagents for bounded factual questions and wait for their relevant findings before asking the frontier; when delegation is unavailable, research directly. Distinguish verified facts, assumptions, preferences, and unavailable evidence. Never ask the user to discover a fact you can investigate. When missing evidence materially changes the options, investigate it before presenting those options.
 
-Explore alternatives before converging on a recommendation. Offer two to four distinct, viable options with their trade-offs. Include an unconventional option when it offers a relevant alternative; do not invent implausible choices to fill a quota. Explain each question's context, the alternatives, and the recommendation's reason. For every question with options, include recommendation: { optionId, reason }; optionId must match one of that question's option IDs and reason must be nonblank. Never send exactly one option. The TUI adds Other and Ask for clarification, so do not duplicate those actions as generated options. When meaningful alternatives do not exist, set options: [] and omit recommendation for a free-text question.
+Explore alternatives before converging on a recommendation. Include an unconventional option when it offers a relevant alternative; do not invent implausible choices to fill a quota. Explain each question's context and trade-offs. ${questionGuidance}
 
 Keep questions material, context concise, and alternatives distinct. Omit repeated background and immaterial choices. Do not impose a question-count quota or split independent questions to shorten a frontier.
 

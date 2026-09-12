@@ -12,8 +12,9 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 
+import type { PlanningSession } from "../domain/state.ts";
+import { isPlanId, stampReviewPath } from "../domain/state.ts";
 import type { SaveResult } from "./persistence.ts";
-import type { PlanningSession } from "./state.ts";
 
 /** Create an immutable file, or verify an explicitly owned retry target. */
 export function writeArtifact(path: string, content: string, retry: boolean): void {
@@ -54,14 +55,11 @@ export function prepareReviewArtifact(
   persist: (state: PlanningSession) => SaveResult,
 ): PlanningSession {
   const review = state.reviews?.at(-1);
-  if (review === undefined || !/^[a-f0-9-]{36}$/.test(state.planId) || !isAbsolute(directory)) {
+  if (review === undefined || !isPlanId(state.planId) || !isAbsolute(directory)) {
     throw new Error("Review requires a current revision and an absolute output directory.");
   }
   const path = review.path ?? join(directory, `${state.planId}-${String(review.revision)}.md`);
-  const prepared = {
-    ...state,
-    reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, path }],
-  };
+  const prepared = stampReviewPath(state, review.revision, path);
   const saved = persist(prepared);
   if (!saved.saved) {
     throw new Error(saved.message);

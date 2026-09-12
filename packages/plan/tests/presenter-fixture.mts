@@ -1,8 +1,8 @@
 import { vi } from "vitest";
 
+import * as terminal from "../src/pi/terminal.ts";
 import { registerPlanPresenter } from "../src/presentation.ts";
 import type { PlanPresenter } from "../src/presentation.ts";
-import * as terminal from "../src/terminal.ts";
 import type { RuntimeFixture } from "./runtime-fixture.mts";
 
 async function requestPresenterSelection(

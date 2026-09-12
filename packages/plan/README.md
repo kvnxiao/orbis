@@ -239,9 +239,10 @@ duplicating the excerpt in a footer. Each note appears below its target with an 
 source range, and a distinct background; note rows have no line numbers. Block notes retain their
 exact source excerpt and revision. F2 opens overall feedback after the complete plan. Typing on a
 selected block opens its note directly, including printable brackets. Edits are retained
-immediately; Enter or Escape leaves editing, and Shift+Enter inserts a newline. Clearing text
-removes that note from the outgoing batch. Notes remain visible outside editing and never change the
-plan file.
+immediately; Enter or Escape leaves editing, and Shift+Enter inserts a newline. Review-note editors
+also accept Pi's effective `tui.input.newLine` aliases; their hints show the configured newline
+keys. Clearing text removes that note from the outgoing batch. Notes remain visible outside editing
+and never change the plan file.
 
 Without nonblank notes, the CTA contains Approve. With notes, it contains Approve with notes and
 Request revision. Approve with notes accepts the displayed Markdown together with the current
@@ -265,15 +266,39 @@ cancel planning. Selection is not persisted.
 ## Optional presenters
 
 A separate Pi extension imports `registerPlanPresenter` and the public types from
-`@orbis/plan/presentation`. The helper accepts the extension's `pi` API and a presenter with
-`version: 1`, a unique `id`, a nonempty `label`, and an asynchronous `present(request)` function.
-IDs contain letters, digits, underscores, or hyphens; `terminal` is reserved. Duplicate active IDs
-and unsupported versions are rejected. Registration returns an idempotent unregister function.
-Definitions reattach on session startup and detach on shutdown; explicit unregister is permanent for
-that registration. Registration does not select or invoke a presenter. `registerPlanPresenter` is
-the only supported registration entry point. The package discovers registered presenters over
-internal event-bus channels; those channels are not a public protocol, and definitions that fail the
-version, ID, label, or `present` checks are ignored.
+`@orbis/plan/presentation`. The package exports TypeScript source. In the consuming extension,
+install TypeScript and `@types/node` as development dependencies and use this checker configuration:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+Set `"type": "module"` in the consuming package's manifest, or use `.mts` for its source files. Pi
+loads the extension source directly; the checker does not emit JavaScript.
+
+The helper accepts the extension's `pi` API and a presenter with `version: 1`, a unique `id`, a
+nonempty `label`, and an asynchronous `present(request)` function. IDs contain letters, digits,
+underscores, or hyphens; `terminal` is reserved. Duplicate active IDs and unsupported versions are
+rejected. Registration returns an idempotent unregister function. Definitions reattach on session
+startup and detach on shutdown; explicit unregister is permanent for that registration. Registration
+does not select or invoke a presenter. `registerPlanPresenter` is the only supported registration
+entry point. The package discovers registered presenters over internal event-bus channels; those
+channels are not a public protocol, and definitions that fail the version, ID, label, or `present`
+checks are ignored.
+
+Snapshots are detached copies of planning state. Their recursive `readonly` types prevent writes
+during TypeScript checking; the objects are not frozen at runtime. Mutating a received snapshot does
+not change the plan. Use `updateDraft` to apply draft changes.
 
 | Value                                       | Contract                                                                                                                                                                                                   |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -383,7 +408,8 @@ The Planning shortcut field accepts a Pi special or modified key, such as `shift
 printable keys and Shift-only printable keys are rejected. The menu reports conflicts with effective
 host bindings separately from the saved setting. After a successful save, shortcut changes apply
 immediately and follow trusted-project precedence. Editing Pi's own keybindings still requires
-`/reload`.
+`/reload`. Confirming an unchanged shortcut skips the write, including equivalent key aliases and
+modifier order. In a project menu, confirming the inherited shortcut does not create an override.
 
 Use Up/Down to select a setting and Enter to change it. The Approved-plan directory row shows the
 value stored in the file being edited; the project menu falls back to the personal value, and both
@@ -391,8 +417,9 @@ fall back to the unresolved default `.pi/plans/`. The row never shows the resolv
 Directory changes open a text field; Enter saves and Escape returns without changing it. Confirming
 the field without changing its text writes nothing. The menu displays each change immediately and
 saves without progress or success messages; the key hints remain unchanged. A failed write restores
-the previous value and reports the error. Escape closes the menu. When a planning interaction next
-opens, it uses the updated appearance settings.
+the previous value and reports the error. Escape closes the menu immediately, including while a
+write is pending; the pending write finishes independently. When a planning interaction next opens,
+it uses the updated appearance settings.
 
 Show hints by default controls the initial hints in each question or review modal. Its default is
 On. F1 toggles hints within an open modal without changing this setting. Only `planDirectory`,
@@ -463,16 +490,27 @@ package stops model continuation.
 
 ## Verification
 
-The Vitest suite runs local unit and integration fixtures. It does not launch the Pi CLI or call
-real models. Persistence checks use disposable Pi SDK sessions; agent-turn checks use an in-process
+The Vitest tests and benchmarks run local fixtures without live models. The tests do not launch the
+Pi CLI. Persistence checks use disposable Pi SDK sessions; agent-turn checks use an in-process
 scripted provider. The Vitest process blocks external fetch and TCP connections and fetch redirects;
-loopback fixture traffic is allowed. These tests do not incur model charges.
+loopback fixture traffic is allowed. Tests and benchmarks do not incur model charges.
 
 ```sh
 pnpm --filter @orbis/plan test
 just format
 just check
 ```
+
+To measure document layout, modal rendering, draft transitions, and session saves, run the offline
+benchmarks separately:
+
+```sh
+pnpm --filter @orbis/plan exec vitest bench --run
+```
+
+Benchmark results are written under the package's ignored `implementation/performance/` directory.
+Rendering and save timings depend on the fixture, terminal width, runtime, and machine; these
+measurements do not establish real-terminal responsiveness or model quality.
 
 To exercise source exports, terminal input, and presenter load order without a model, run
 `node packages/plan/tests/packed-probe.mts` from the repository root. The standalone probe blocks

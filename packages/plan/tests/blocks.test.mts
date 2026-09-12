@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { documentBlocks } from "../src/blocks.ts";
+import { documentBlocks } from "../src/document/blocks.ts";
 
 test("source blocks distinguish repeated Unicode paragraphs and preserve CRLF offsets", () => {
   const markdown = "# Plan\r\n\r\né repeated.\r\n\r\né repeated.\r\n\r\n```ts\r\n- code\r\n```\r\n";

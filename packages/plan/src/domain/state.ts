@@ -1,8 +1,13 @@
+import { isAbsolute } from "node:path";
+
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
-import { documentBlocks } from "./blocks.ts";
+import { documentBlocks } from "../document/blocks.ts";
+import { DocumentAnalysis } from "../document/document-analysis.ts";
+import { sameRecord } from "./record-equality.ts";
 
 const identity = Type.String({
   minLength: 1,
@@ -10,6 +15,9 @@ const identity = Type.String({
   pattern: "^(?!__proto__$|prototype$|constructor$)[a-zA-Z0-9_-]+$",
 });
 const prose = Type.String({ minLength: 1, pattern: "\\S" });
+/** State the option/recommendation rule at every model-facing question boundary. */
+export const questionGuidance =
+  "Use 2–4 distinct options with recommendation: { optionId, reason }; optionId must match one of this question's option IDs and reason must be nonblank. For free text, use options: [] and omit recommendation. Exactly one option is invalid. The UI adds Other and Ask for clarification automatically.";
 const questionSchema = Type.Object(
   {
     id: identity,
@@ -23,8 +31,7 @@ const questionSchema = Type.Object(
       ),
       {
         maxItems: 4,
-        description:
-          "Use 2–4 distinct options and supply recommendation, or use [] for free text and omit recommendation. Never supply exactly one option. The UI adds Other and Ask for clarification automatically.",
+        description: questionGuidance,
       },
     ),
     recommendation: Type.Optional(
@@ -32,8 +39,7 @@ const questionSchema = Type.Object(
         { optionId: identity, reason: prose },
         {
           additionalProperties: false,
-          description:
-            "When options is nonempty, this field is required. Set optionId to one of this question's options[].id values and provide a nonblank reason. When options is [], omit this field entirely.",
+          description: questionGuidance,
         },
       ),
     ),
@@ -48,6 +54,7 @@ const storedQuestionSchema = Type.Object({
   reason: Type.Optional(prose),
 });
 
+/** Validate model-facing frontier input before applying domain prerequisites. */
 export const roundSchema = Type.Object(
   {
     planId: identity,
@@ -59,7 +66,7 @@ export const roundSchema = Type.Object(
         Type.Object(
           {
             id: identity,
-            status: Type.Union([Type.Literal("withdrawn"), Type.Literal("deferred")]),
+            status: StringEnum(["withdrawn", "deferred"] as const),
             reason: prose,
           },
           { additionalProperties: false },
@@ -72,20 +79,14 @@ export const roundSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+/** Describe model-authored questions without local drafts or display numbering. */
 export type QuestionInput = Static<typeof questionSchema>;
+/** Bind a frontier update to its expected plan and round revision. */
 export type RoundInput = Static<typeof roundSchema>;
 /** Preserve one logical decision's display number across content revisions. */
 export type Question = Static<typeof storedQuestionSchema>;
-type Answer =
-  | { optionId: string; details?: string; custom?: never }
-  | { custom: string; optionId?: never };
-export interface Draft {
-  revision: number;
-  unfinished: string;
-  answer?: Answer;
-  options?: Record<string, string>;
-  clarificationDraft?: string;
-}
+/** Keep unfinished input separate from explicitly selected answers. */
+export type Draft = Static<typeof storedRoundSchema>["drafts"][string];
 const clarificationSchema = Type.Object({
   id: identity,
   questionId: identity,
@@ -94,32 +95,10 @@ const clarificationSchema = Type.Object({
   question: Type.Optional(storedQuestionSchema),
 });
 type Clarification = Static<typeof clarificationSchema>;
-export interface Round {
-  id: string;
-  revision: number;
-  questions: Question[];
-  drafts: Record<string, Draft>;
-  focus: string;
-  clarifications: Clarification[];
-  submitted: boolean;
-}
-interface Decision {
-  questionId: string;
-  questionRevision: number;
-  question: Question;
-  roundId: string;
-  answer: Answer;
-  selectedOption?: QuestionInput["options"][number];
-}
-export interface RoundState {
-  roundNumber: number;
-  phase: "research" | "round" | "clarification" | "review" | "saving" | "accepted" | "cancelled";
-  round?: Round;
-  decisions: Record<string, Decision>;
-  reviews?: PlanRevision[];
-  questionNumbers: Record<string, number>;
-  history?: { number: number; round: Round }[];
-}
+/** Retain versioned questions, drafts, and sent clarification exchanges. */
+export type Round = Static<typeof storedRoundSchema>;
+/** Describe workflow state independently of session persistence. */
+export type RoundState = Static<typeof roundStateSchema>;
 const noteSchema = Type.Object(
   {
     blockId: Type.String(),
@@ -143,6 +122,7 @@ const planRevisionSchema = Type.Object({
   feedback: Type.Optional(prose),
   notes: Type.Optional(Type.Array(noteSchema)),
 });
+/** Bind review notes and feedback to an immutable Markdown revision. */
 export type PlanRevision = Static<typeof planRevisionSchema>;
 
 const approvedNotesSchema = Type.Object({ overall: Type.String(), blocks: Type.Array(noteSchema) });
@@ -160,17 +140,12 @@ export const approvalSchema = Type.Object({
   notesPath: Type.Optional(Type.String()),
   notesContent: Type.Optional(Type.String()),
 });
+/** Record the exact approved artifacts and owning session. */
 export type PlanApproval = Static<typeof approvalSchema>;
 
-export interface PlanningSession extends RoundState {
-  planId: string;
-  sessionId: string;
-  branchId: string | null;
-  cwd: string;
-  objective: string;
-  accepted?: PlanApproval;
-  pendingApproval?: PlanApproval;
-}
+/** Bind domain state to its plan, working directory, and session identity. */
+export type PlanningSession = Static<typeof sessionSchema>;
+/** Return detached planning outcomes to tool and command adapters. */
 export type RuntimeResult =
   | { outcome: "error"; message: string }
   | { outcome: "unsupported-mode"; message: string }
@@ -187,41 +162,26 @@ export type RuntimeResult =
     }
   | { outcome: "clarification"; round: NonNullable<RoundState["round"]>; draftsSubmitted: false };
 
-export type ReviewAction =
-  | { type: "approve" }
-  | { type: "approve-with-notes" }
-  | { type: "edit-note"; blockId: string; excerpt: string; text: string }
-  | { type: "remove-note"; blockId: string }
-  | { type: "submit-feedback" }
-  | { type: "feedback"; text: string }
-  | { type: "edit-feedback"; text: string }
-  | { type: "cancel" };
+/** Validate the expected revision and exact Markdown submitted for review. */
 export const reviewSchema = Type.Object(
   { planId: identity, expectedRevision: Type.Integer({ minimum: 0 }), markdown: prose },
   { additionalProperties: false },
 );
+/** Bind Markdown to the plan’s expected review revision. */
 export type ReviewInput = Static<typeof reviewSchema>;
-export type RoundAction =
-  | { type: "focus"; questionId: string }
-  | { type: "edit"; questionId: string; unfinished: string }
-  | { type: "edit-option"; questionId: string; optionId: string; text: string }
-  | { type: "edit-clarification"; questionId: string; text: string }
-  | { type: "clear-answer"; questionId: string }
-  | {
-      type: "answer";
-      questionId: string;
-      answer: { optionId: string; custom?: never } | { custom: string; optionId?: never };
-    }
-  | { type: "clarify"; questionId: string; request: string; id: string }
-  | { type: "submit" }
-  | { type: "cancel" };
-
 const storedAnswerSchema = Type.Union([
   Type.Object(
-    { optionId: identity, details: Type.Optional(Type.String()) },
+    {
+      optionId: identity,
+      details: Type.Optional(Type.String()),
+      custom: Type.Optional(Type.Never()),
+    },
     { additionalProperties: false },
   ),
-  Type.Object({ custom: prose }, { additionalProperties: false }),
+  Type.Object(
+    { custom: prose, optionId: Type.Optional(Type.Never()) },
+    { additionalProperties: false },
+  ),
 ]);
 
 const storedRoundSchema = Type.Object({
@@ -243,6 +203,7 @@ const storedRoundSchema = Type.Object({
   clarifications: Type.Array(clarificationSchema),
 });
 
+/** Validate stored workflow fields before checking cross-field invariants. */
 export const roundStateSchema = Type.Object({
   roundNumber: Type.Integer({ minimum: 0 }),
   questionNumbers: Type.Record(identity, Type.Integer({ minimum: 1 })),
@@ -273,6 +234,227 @@ export const roundStateSchema = Type.Object({
   ),
 });
 
+/** Describe the current stored session format; domain validation establishes cross-field invariants. */
+export const sessionSchema = Type.Object({
+  ...roundStateSchema.properties,
+  planId: Type.String(),
+  sessionId: Type.String({ minLength: 1 }),
+  branchId: Type.Union([Type.String(), Type.Null()]),
+  cwd: Type.String(),
+  objective: Type.String(),
+  accepted: Type.Optional(approvalSchema),
+  pendingApproval: Type.Optional(approvalSchema),
+});
+
+/** Describe branch snapshots without accepting unsupported stored versions. */
+export const snapshotSchema = Type.Object({
+  version: Type.Literal(1),
+  mode: Type.Union([Type.Literal("plan"), Type.Literal("default")]),
+  active: Type.Optional(sessionSchema),
+  unfinished: Type.Array(sessionSchema),
+});
+
+/** Accept canonical UUID identities used in artifact filenames. */
+export function isPlanId(value: string): boolean {
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(value);
+}
+
+function validPath(value: string): boolean {
+  return isAbsolute(value) && !value.includes("\0");
+}
+
+function validQuestion(question: Question, numbers: Record<string, number>): boolean {
+  const ids = new Set(question.options.map((option) => option.id));
+  return (
+    numbers[question.id] === question.number &&
+    ids.size === question.options.length &&
+    question.options.length !== 1 &&
+    (question.options.length === 0
+      ? question.recommendation === undefined
+      : question.recommendation !== undefined && ids.has(question.recommendation.optionId)) &&
+    (question.status === undefined) === (question.reason === undefined)
+  );
+}
+
+function validRound(round: Round, numbers: Record<string, number>): boolean {
+  const ids = new Set(round.questions.map((question) => question.id));
+  return (
+    ids.size === round.questions.length &&
+    ids.has(round.focus) &&
+    Object.keys(round.drafts).every((id) => ids.has(id)) &&
+    round.questions.every((question) => {
+      const draft = round.drafts[question.id];
+      const answer = draft?.answer;
+      return (
+        validQuestion(question, numbers) &&
+        draft !== undefined &&
+        draft.revision <= question.revision &&
+        (draft.revision !== question.revision ||
+          answer?.optionId === undefined ||
+          question.options.some((option) => option.id === answer.optionId)) &&
+        (!round.submitted ||
+          question.status !== undefined ||
+          (answer !== undefined && draft.revision === question.revision))
+      );
+    }) &&
+    new Set(round.clarifications.map((entry) => JSON.stringify([entry.questionId, entry.id])))
+      .size === round.clarifications.length &&
+    round.clarifications.every(
+      (entry) =>
+        ids.has(entry.questionId) &&
+        (entry.question === undefined ||
+          (entry.question.id === entry.questionId && validQuestion(entry.question, numbers))),
+    )
+  );
+}
+
+function validReview(review: PlanRevision): boolean {
+  if (review.path !== undefined && !validPath(review.path)) {
+    return false;
+  }
+  const notes = review.notes ?? [];
+  if (new Set(notes.map((note) => note.blockId)).size !== notes.length) {
+    return false;
+  }
+  if (notes.length === 0) {
+    return true;
+  }
+  const blocks = new Map(documentBlocks(review.markdown).map((block) => [block.id, block]));
+  return notes.every(
+    (note) =>
+      note.revision === review.revision && blocks.get(note.blockId)?.excerpt === note.excerpt,
+  );
+}
+
+function validApproval(
+  approval: PlanApproval,
+  plan: PlanningSession,
+  review: PlanRevision | undefined,
+): boolean {
+  if (review === undefined) {
+    return false;
+  }
+  const timestamp = Date.parse(approval.approvedAt);
+  const supplementary = supplementaryNotes(plan.planId, review);
+  const notes = supplementary?.notes;
+  const notesContent = supplementary?.content;
+  return (
+    approval.planId === plan.planId &&
+    approval.sessionId === plan.sessionId &&
+    approval.cwd === plan.cwd &&
+    approval.revision === review.revision &&
+    approval.planContent === review.markdown &&
+    approval.planPath === review.path &&
+    validPath(approval.planPath) &&
+    Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString() === approval.approvedAt &&
+    sameRecord(approval.notes, notes) &&
+    approval.notesContent === notesContent &&
+    (notes === undefined
+      ? approval.notesPath === undefined
+      : approval.notesPath === `${approval.planPath.slice(0, -3)}.notes.md`)
+  );
+}
+
+/** Validate recorded ownership, revisions, histories, and artifact bindings before restoration. */
+export function validSession(plan: PlanningSession): boolean {
+  if (!isPlanId(plan.planId) || !validPath(plan.cwd)) {
+    return false;
+  }
+  const numbers = Object.values(plan.questionNumbers);
+  if (
+    new Set(numbers).size !== numbers.length ||
+    numbers.some((number) => number < 1 || number > numbers.length)
+  ) {
+    return false;
+  }
+  const round = plan.round;
+  const reviews = plan.reviews ?? [];
+  const review = reviews.at(-1);
+  const history = plan.history ?? [];
+  if (round !== undefined && !validRound(round, plan.questionNumbers)) {
+    return false;
+  }
+  if (
+    history.some(
+      (entry, index) =>
+        entry.number !== index + 1 ||
+        !entry.round.submitted ||
+        !validRound(entry.round, plan.questionNumbers),
+    )
+  ) {
+    return false;
+  }
+  if (
+    new Set([...history.map((entry) => entry.round.id), ...(round === undefined ? [] : [round.id])])
+      .size !==
+    history.length + Number(round !== undefined)
+  ) {
+    return false;
+  }
+  if (plan.roundNumber !== history.length + Number(round !== undefined)) {
+    return false;
+  }
+  if (reviews.some((item, index) => item.revision !== index + 1 || !validReview(item))) {
+    return false;
+  }
+  if (
+    Object.entries(plan.decisions).some(
+      ([id, decision]) =>
+        id !== decision.questionId ||
+        id !== decision.question.id ||
+        decision.questionRevision !== decision.question.revision ||
+        !validQuestion(decision.question, plan.questionNumbers) ||
+        (decision.answer.optionId === undefined
+          ? decision.selectedOption !== undefined
+          : !decision.question.options.some((option) => option.id === decision.answer.optionId) ||
+            !sameRecord(
+              decision.selectedOption,
+              decision.question.options.find((option) => option.id === decision.answer.optionId),
+            )),
+    )
+  ) {
+    return false;
+  }
+  if (
+    plan.accepted !== undefined &&
+    (plan.phase !== "accepted" || !validApproval(plan.accepted, plan, review))
+  ) {
+    return false;
+  }
+  if (
+    plan.pendingApproval !== undefined &&
+    (plan.phase === "accepted" || !validApproval(plan.pendingApproval, plan, review))
+  ) {
+    return false;
+  }
+  switch (plan.phase) {
+    case "round":
+      return (
+        round !== undefined &&
+        !round.submitted &&
+        round.clarifications.every((entry) => entry.response !== undefined)
+      );
+    case "clarification":
+      return (
+        round !== undefined &&
+        !round.submitted &&
+        round.clarifications.some((entry) => entry.response === undefined)
+      );
+    case "review":
+    case "saving":
+      return review?.status === "pending" && (round === undefined || round.submitted);
+    case "accepted":
+      return plan.accepted !== undefined && review?.status === "approved";
+    case "research":
+      return round === undefined || round.submitted;
+    case "cancelled":
+      return true;
+  }
+  throw new Error("Unknown planning phase.");
+}
+
+/** Validate the expected predecessor and append a pending revision. */
 export function presentReview(state: RoundState, input: ReviewInput): RoundState {
   if (state.phase === "cancelled") {
     throw new Error("Use /plan to explicitly resume cancelled planning before requesting review.");
@@ -305,10 +487,12 @@ export function presentReview(state: RoundState, input: ReviewInput): RoundState
   };
 }
 
+/** Apply a revision-bound review action without mutating prior state. */
 export function transitionReview(
   state: RoundState,
   revision: number,
   action: ReviewAction,
+  analysis?: DocumentAnalysis,
 ): RoundState {
   const current = state.reviews?.at(-1);
   if (
@@ -348,56 +532,129 @@ export function transitionReview(
       reviews: [...(state.reviews?.slice(0, -1) ?? []), updated],
     };
   }
-  const review = structuredClone(current);
+  let review = current;
   if (action.type === "edit-note") {
-    const block = documentBlocks(current.markdown).find((item) => item.id === action.blockId);
+    const source =
+      analysis?.markdown === current.markdown ? analysis : new DocumentAnalysis(current.markdown);
+    const block = source.byId.get(action.blockId);
     if (block === undefined || block.excerpt !== action.excerpt) {
       throw new Error("Unknown source block or changed excerpt.");
     }
-    review.notes ??= [];
-    const note = review.notes.find((item) => item.blockId === block.id);
-    if (note === undefined) {
-      review.notes.push({
-        blockId: block.id,
-        excerpt: block.excerpt,
-        revision,
-        text: action.text,
-      });
-    } else {
-      note.text = action.text;
-    }
+    const note = {
+      blockId: block.id,
+      excerpt: block.excerpt,
+      revision,
+      text: action.text,
+    };
+    const exists = current.notes?.some((item) => item.blockId === block.id) === true;
+    review = {
+      ...current,
+      notes: exists
+        ? (current.notes?.map((item) => (item.blockId === block.id ? note : item)) ?? [])
+        : [...(current.notes ?? []), note],
+    };
   }
   if (action.type === "remove-note") {
     if (review.notes?.some((note) => note.blockId === action.blockId) !== true) {
       throw new Error("Unknown annotation.");
     }
-    review.notes = review.notes.filter((note) => note.blockId !== action.blockId);
+    review = { ...current, notes: review.notes.filter((note) => note.blockId !== action.blockId) };
   }
   return { ...state, reviews: [...(state.reviews?.slice(0, -1) ?? []), review] };
 }
 
+/** Dispatch every supported action through its round or review identity guard. */
 export function transitionInteraction(
   state: RoundState,
   id: string,
   revision: number,
   action: RoundAction | ReviewAction,
+  analysis?: DocumentAnalysis,
 ): RoundState {
-  if (
-    action.type === "approve-with-notes" ||
-    action.type === "edit-note" ||
-    action.type === "remove-note" ||
-    action.type === "submit-feedback" ||
-    action.type === "approve" ||
-    action.type === "feedback" ||
-    action.type === "edit-feedback" ||
-    (action.type === "cancel" && state.phase === "review")
-  ) {
-    if (id !== "review") {
-      throw new Error("This action requires the current plan review.");
-    }
-    return transitionReview(state, revision, action);
+  switch (action.type) {
+    case "cancel":
+      if (state.phase !== "review") {
+        return transitionRound(state, id, revision, action);
+      }
+      if (id !== "review") {
+        throw new Error("This action requires the current plan review.");
+      }
+      return transitionReview(state, revision, action, analysis);
+    case "approve-with-notes":
+    case "edit-note":
+    case "remove-note":
+    case "submit-feedback":
+    case "approve":
+    case "feedback":
+    case "edit-feedback":
+      if (id !== "review") {
+        throw new Error("This action requires the current plan review.");
+      }
+      return transitionReview(state, revision, action, analysis);
+    case "edit":
+    case "answer":
+    case "clear-answer":
+    case "edit-option":
+    case "edit-clarification":
+    case "focus":
+    case "clarify":
+    case "submit":
+      return transitionRound(state, id, revision, action);
   }
-  return transitionRound(state, id, revision, action);
+  action satisfies never;
+  throw new Error("Unknown planning action.");
+}
+
+/** Bind a pending revision to an absolute artifact path without changing its content. */
+export function stampReviewPath(
+  state: PlanningSession,
+  revision: number,
+  path: string,
+): PlanningSession {
+  const review = state.reviews?.at(-1);
+  if (
+    state.phase !== "review" ||
+    review?.status !== "pending" ||
+    review.revision !== revision ||
+    !validPath(path) ||
+    (review.path !== undefined && review.path !== path)
+  ) {
+    throw new Error("Artifact path requires the current pending review.");
+  }
+  return { ...state, reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, path }] };
+}
+
+/** Restore an interrupted save to its pending review without discarding approval intent. */
+export function recoverReview(state: PlanningSession): PlanningSession {
+  if (
+    state.reviews?.at(-1)?.status !== "pending" ||
+    (state.phase !== "saving" && state.phase !== "review")
+  ) {
+    throw new Error("Save recovery requires a pending review.");
+  }
+  return { ...state, phase: "review" };
+}
+
+/** Accept the pending approval; the caller must verify its artifacts first. */
+export function acceptApproval(state: PlanningSession): PlanningSession {
+  const review = state.reviews?.at(-1);
+  const approval = state.pendingApproval;
+  if (
+    state.phase !== "saving" ||
+    review?.status !== "pending" ||
+    approval === undefined ||
+    !validApproval(approval, state, review)
+  ) {
+    throw new Error("Acceptance requires the current approval intent.");
+  }
+  const accepted: PlanningSession = {
+    ...state,
+    phase: "accepted",
+    accepted: approval,
+    reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, status: "approved" }],
+  };
+  delete accepted.pendingApproval;
+  return accepted;
 }
 
 function normalizeQuestion(item: QuestionInput) {
@@ -423,6 +680,7 @@ function normalizeQuestion(item: QuestionInput) {
   });
 }
 
+/** Validate frontier dependencies and preserve stable question numbers and detached history. */
 export function presentRound(state: RoundState, input: RoundInput): RoundState {
   if (state.phase === "cancelled") {
     throw new Error(
@@ -454,6 +712,7 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   }
   const ids = new Set<string>();
   const questionNumbers = { ...state.questionNumbers };
+  let nextQuestionNumber = Math.max(0, ...Object.values(questionNumbers)) + 1;
   const drafts: Record<string, Draft> = {};
   const questions: Question[] = input.questions.map((question) => {
     if (ids.has(question.id)) {
@@ -474,9 +733,7 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
       question.options.length === 1 ||
       (question.options.length > 0 && question.recommendation === undefined)
     ) {
-      throw new Error(
-        "Offer meaningful alternatives with a recommendation and reason, or use free text.",
-      );
+      throw new Error(questionGuidance);
     }
     if (question.recommendation !== undefined && !optionIds.has(question.recommendation.optionId)) {
       throw new Error("Recommendation references an unknown option.");
@@ -484,9 +741,8 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
     const old =
       previous?.questions.find((item) => item.id === question.id) ??
       state.history
-        ?.toReversed()
-        .flatMap((entry) => entry.round.questions)
-        .find((item) => item.id === question.id) ??
+        ?.findLast((entry) => entry.round.questions.some((item) => item.id === question.id))
+        ?.round.questions.find((item) => item.id === question.id) ??
       state.decisions[question.id]?.question;
     const unchanged =
       old !== undefined &&
@@ -501,11 +757,11 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
           entry.round.questions.some((item) => item.id === question.id),
         )?.round.drafts[question.id];
     }
-    drafts[question.id] = draft === undefined ? { revision, unfinished: "" } : { ...draft };
-    const number =
-      questionNumbers[question.id] ?? Math.max(0, ...Object.values(questionNumbers)) + 1;
+    drafts[question.id] =
+      draft === undefined ? { revision, unfinished: "" } : structuredClone(draft);
+    const number = questionNumbers[question.id] ?? nextQuestionNumber++;
     questionNumbers[question.id] = number;
-    return { ...question, revision, number };
+    return { ...structuredClone(question), revision, number };
   });
   const retiredIds = new Set<string>();
   for (const retirement of input.retire ?? []) {
@@ -602,6 +858,7 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   };
 }
 
+/** Apply a round-bound action and retain unfinished input until explicit submission. */
 export function transitionRound(
   state: RoundState,
   roundId: string,
@@ -624,7 +881,14 @@ export function transitionRound(
   ) {
     throw new Error("This round is not accepting input.");
   }
-  const round = structuredClone(current);
+  const round =
+    action.type === "submit"
+      ? structuredClone(current)
+      : {
+          ...current,
+          drafts: { ...current.drafts },
+          clarifications: [...current.clarifications],
+        };
   const next = { ...state, round };
   if (action.type === "cancel") {
     return { ...next, phase: "cancelled" };
@@ -653,13 +917,14 @@ export function transitionRound(
     return { ...next, decisions, phase: "research" };
   }
   const question = round.questions.find((item) => item.id === action.questionId);
-  const draft = round.drafts[action.questionId];
+  const draft = structuredClone(round.drafts[action.questionId]);
   if (question === undefined || draft === undefined) {
     throw new Error("Unknown question identity.");
   }
   if (question.status !== undefined) {
     throw new Error("This question is inactive.");
   }
+  round.drafts[action.questionId] = draft;
   if (action.type === "focus") {
     round.focus = question.id;
   }
@@ -706,7 +971,7 @@ export function transitionRound(
     draft.answer =
       answer.optionId !== undefined && notes !== undefined && notes.trim().length > 0
         ? { ...answer, details: notes }
-        : answer;
+        : { ...answer };
     draft.revision = question.revision;
   }
   if (action.type === "clarify") {
@@ -730,6 +995,7 @@ export function transitionRound(
   return next;
 }
 
+/** Detect nonblank annotations or overall feedback for approval choices. */
 export function hasReviewNotes(review: PlanRevision): boolean {
   return (
     review.feedbackDraft.trim().length > 0 ||
@@ -737,6 +1003,7 @@ export function hasReviewNotes(review: PlanRevision): boolean {
   );
 }
 
+/** Project nonblank notes and overall feedback into submitted review text. */
 export function reviewFeedback(review: PlanRevision): string {
   return [
     review.feedbackDraft,
@@ -750,3 +1017,101 @@ export function reviewFeedback(review: PlanRevision): string {
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
 }
+
+/** Project supplementary notes and their exact companion bytes without modifying the revision. */
+export function supplementaryNotes(
+  planId: string,
+  review: PlanRevision,
+): { notes: NonNullable<PlanApproval["notes"]>; content: string } | undefined {
+  if (!hasReviewNotes(review)) {
+    return undefined;
+  }
+  return {
+    notes: {
+      overall: review.feedbackDraft,
+      blocks: (review.notes ?? []).filter((note) => note.text.trim().length > 0),
+    },
+    content: `# Supplementary notes\n\nPlan: ${planId}\nRevision: ${String(review.revision)}\n\n${reviewFeedback(review)}\n`,
+  };
+}
+
+const actionIdentity = Type.String({ minLength: 1 });
+const actionText = Type.String();
+const object = { additionalProperties: false } as const;
+/** Validate local draft edits without permitting submission. */
+export const draftActionSchema = Type.Union([
+  Type.Object(
+    {
+      type: Type.Literal("edit-option"),
+      questionId: actionIdentity,
+      optionId: actionIdentity,
+      text: actionText,
+    },
+    object,
+  ),
+  Type.Object(
+    { type: Type.Literal("edit-clarification"), questionId: actionIdentity, text: actionText },
+    object,
+  ),
+  Type.Object({ type: Type.Literal("clear-answer"), questionId: actionIdentity }, object),
+  Type.Object(
+    {
+      type: Type.Literal("edit-note"),
+      blockId: actionIdentity,
+      excerpt: actionText,
+      text: actionText,
+    },
+    object,
+  ),
+  Type.Object({ type: Type.Literal("remove-note"), blockId: actionIdentity }, object),
+  Type.Object({ type: Type.Literal("focus"), questionId: actionIdentity }, object),
+  Type.Object(
+    { type: Type.Literal("edit"), questionId: actionIdentity, unfinished: actionText },
+    object,
+  ),
+  Type.Object(
+    {
+      type: Type.Literal("answer"),
+      questionId: actionIdentity,
+      answer: Type.Union([
+        Type.Object({ optionId: actionIdentity, custom: Type.Optional(Type.Never()) }, object),
+        Type.Object({ custom: actionIdentity, optionId: Type.Optional(Type.Never()) }, object),
+      ]),
+    },
+    object,
+  ),
+  Type.Object({ type: Type.Literal("edit-feedback"), text: actionText }, object),
+]);
+/** Validate explicit interaction completion. */
+export const resultActionSchema = Type.Union([
+  Type.Object({ type: Type.Literal("approve-with-notes") }, object),
+  Type.Object({ type: Type.Literal("submit-feedback") }, object),
+  Type.Object({ type: Type.Literal("submit") }, object),
+  Type.Object(
+    {
+      type: Type.Literal("clarify"),
+      questionId: actionIdentity,
+      id: actionIdentity,
+      request: actionIdentity,
+    },
+    object,
+  ),
+  Type.Object({ type: Type.Literal("feedback"), text: actionIdentity }, object),
+  Type.Object({ type: Type.Literal("approve") }, object),
+  Type.Object({ type: Type.Literal("cancel") }, object),
+]);
+
+/** Describe edits that retain unsubmitted input. */
+export type DraftAction = Static<typeof draftActionSchema>;
+/** Describe explicit submission or cancellation. */
+export type ResultAction = Static<typeof resultActionSchema>;
+/** Bind question actions to the owning round. */
+export type RoundAction = Extract<
+  DraftAction | ResultAction,
+  { questionId: string } | { type: "submit" | "cancel" }
+>;
+/** Bind document actions to the current review. */
+export type ReviewAction = Exclude<
+  DraftAction | ResultAction,
+  Exclude<RoundAction, { type: "cancel" }>
+>;

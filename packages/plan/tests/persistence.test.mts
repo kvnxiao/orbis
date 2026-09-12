@@ -2,7 +2,12 @@ import { mkdir, readFile, rename, rm } from "node:fs/promises";
 
 import { expect, test, vi } from "vitest";
 
-import { presentReview, presentRound, transitionReview, transitionRound } from "../src/state.ts";
+import {
+  presentReview,
+  presentRound,
+  transitionReview,
+  transitionRound,
+} from "../src/domain/state.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 test("entry preserves active work and replacement archives the unfinished plan", async ({

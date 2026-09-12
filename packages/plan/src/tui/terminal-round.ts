@@ -14,13 +14,18 @@ import {
 } from "@earendil-works/pi-tui";
 import type { Component, Editor } from "@earendil-works/pi-tui";
 
-import { defaultAppearance } from "./config.ts";
-import type { PlanAppearance } from "./config.ts";
-import type { Draft, RoundAction, RoundState, Question } from "./state.ts";
-import { functionKey, markdownLines, modalContentWidth, modalLines } from "./terminal-layout.ts";
+import { markdownLines } from "../document/markdown.ts";
+import type { Draft, RoundAction, RoundState, Question } from "../domain/state.ts";
+import { defaultAppearance } from "./appearance.ts";
+import type { PlanAppearance } from "./appearance.ts";
+import { modalKeys, modalKeyHint } from "./terminal-keys.ts";
+import { functionKey, modalContentWidth, modalLines } from "./terminal-layout.ts";
+import type { TerminalOptions } from "./terminal-options.ts";
 
 type Row =
-  | { question: Question; optionId?: string; kind: "option" | "other" | "clarify" }
+  | { question: Question; optionId: string; kind: "option" }
+  | { question: Question; kind: "other" }
+  | { question: Question; kind: "clarify" }
   | { kind: "inactive"; question: Question }
   | { kind: "review" };
 
@@ -83,7 +88,7 @@ function fieldText(
 ): string {
   switch (row.kind) {
     case "option":
-      return draft?.options?.[row.optionId ?? ""] ?? "";
+      return draft?.options?.[row.optionId] ?? "";
     case "other":
       return draft?.unfinished ?? "";
     case "clarify":
@@ -92,7 +97,39 @@ function fieldText(
   throw new Error("Unknown planning field.");
 }
 
+/** Own round navigation and editing while dispatching explicit domain actions. */
 export class TerminalRound implements Component {
+  private readonly markdownCache = new Map<string, string[]>();
+  private markdownBytes = 0;
+
+  private markdown(text: string, width: number): string[] {
+    const key = JSON.stringify([width, text]);
+    const cached = this.markdownCache.get(key);
+    if (cached !== undefined) {
+      return [...cached];
+    }
+    const lines = markdownLines(text, width);
+    const bytes = 2 * (key.length + lines.reduce((total, line) => total + line.length, 0));
+    const maximumBytes = 1024 * 1024;
+    const maximumEntries = 512;
+    if (bytes <= maximumBytes) {
+      while (
+        this.markdownCache.size >= maximumEntries ||
+        this.markdownBytes + bytes > maximumBytes
+      ) {
+        const oldest = this.markdownCache.entries().next().value;
+        if (oldest === undefined) {
+          break;
+        }
+        this.markdownBytes -=
+          2 * (oldest[0].length + oldest[1].reduce((total, line) => total + line.length, 0));
+        this.markdownCache.delete(oldest[0]);
+      }
+      this.markdownCache.set(key, [...lines]);
+      this.markdownBytes += bytes;
+    }
+    return lines;
+  }
   private hasFocus = true;
   get focused(): boolean {
     return this.hasFocus;
@@ -129,18 +166,19 @@ export class TerminalRound implements Component {
   private readonly appearance: PlanAppearance;
   private readonly theme: Theme | undefined;
 
-  constructor(
-    read: () => RoundState,
-    dispatch: (action: RoundAction) => void,
-    done: () => void,
-    refresh: () => void,
-    editor: Editor,
-    rows: () => number = () => 24,
-    switchView?: () => void,
-    appearance: PlanAppearance = defaultAppearance,
-    columns: () => number = () => 80,
-    theme?: Theme,
-  ) {
+  constructor(options: TerminalOptions<RoundAction>) {
+    const {
+      read,
+      dispatch,
+      done,
+      refresh,
+      editor,
+      rows = () => 24,
+      switchView,
+      appearance = defaultAppearance,
+      columns = () => 80,
+      theme,
+    } = options;
     this.read = read;
     this.dispatch = dispatch;
     this.done = done;
@@ -152,7 +190,7 @@ export class TerminalRound implements Component {
     this.switchView = switchView;
     this.appearance = appearance;
     this.theme = theme;
-    this.showHints = appearance.showHints ?? defaultAppearance.showHints;
+    this.showHints = appearance.showHints;
     const question = read().round?.questions.find((item) => item.id === read().round?.focus);
     if (question !== undefined) {
       this.jump(question);
@@ -160,6 +198,8 @@ export class TerminalRound implements Component {
   }
 
   invalidate(): void {
+    this.markdownCache.clear();
+    this.markdownBytes = 0;
     this.editor.invalidate();
   }
   close(): void {
@@ -236,8 +276,8 @@ export class TerminalRound implements Component {
         row.question.id === question.id &&
         (answer?.custom !== undefined
           ? row.kind === "other"
-          : row.optionId === (answer?.optionId ?? question.options[0]?.id) &&
-            row.kind !== "clarify"),
+          : row.kind === "option" &&
+            row.optionId === (answer?.optionId ?? question.options[0]?.id)),
     );
     this.selected =
       preferred === -1
@@ -253,7 +293,7 @@ export class TerminalRound implements Component {
   }
   private confirm(row: Exclude<Row, { kind: "review" | "inactive" }>): void {
     if (row.kind !== "clarify") {
-      if (row.optionId === undefined) {
+      if (row.kind === "other") {
         this.send({
           type: "answer",
           questionId: row.question.id,
@@ -271,13 +311,13 @@ export class TerminalRound implements Component {
   }
 
   private editInput(row: Exclude<Row, { kind: "review" | "inactive" }>, data: string): void {
-    if (matchesKey(data, "up") || matchesKey(data, "down")) {
-      this.moveNoteCursor(matchesKey(data, "down") ? 1 : -1);
+    if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down)) {
+      this.moveNoteCursor(matchesKey(data, modalKeys.down) ? 1 : -1);
       this.followFocus = true;
       return;
     }
     this.noteColumn = undefined;
-    if (matchesKey(data, "shift+enter")) {
+    if (matchesKey(data, modalKeys.newline)) {
       this.editor.insertTextAtCursor("\n");
     } else {
       this.editor.handleInput(data);
@@ -285,7 +325,7 @@ export class TerminalRound implements Component {
     const text = this.editor.getExpandedText();
     if (row.kind === "clarify") {
       this.send({ type: "edit-clarification", questionId: row.question.id, text });
-    } else if (row.optionId === undefined) {
+    } else if (row.kind === "other") {
       this.send({ type: "edit", questionId: row.question.id, unfinished: text });
     } else {
       this.send({ type: "edit-option", questionId: row.question.id, optionId: row.optionId, text });
@@ -338,6 +378,7 @@ export class TerminalRound implements Component {
     if (this.closed) {
       return;
     }
+    this.scroll = this.layout(this.columns()).viewport.scroll;
     if (functionKey(data, 1)) {
       this.showHints = !this.showHints;
       this.armed = false;
@@ -349,7 +390,7 @@ export class TerminalRound implements Component {
       return;
     }
     if (this.viewed !== undefined) {
-      if (matchesKey(data, "escape")) {
+      if (matchesKey(data, modalKeys.escape)) {
         if (this.armed) {
           this.send({ type: "cancel" });
         } else {
@@ -357,12 +398,12 @@ export class TerminalRound implements Component {
         }
       } else {
         this.armed = false;
-        if (matchesKey(data, "down") || matchesKey(data, "pageDown")) {
-          this.scroll += matchesKey(data, "pageDown") ? Math.max(1, this.rows() - 8) : 1;
-        } else if (matchesKey(data, "up") || matchesKey(data, "pageUp")) {
+        if (matchesKey(data, modalKeys.down) || matchesKey(data, modalKeys.pageDown)) {
+          this.scroll += matchesKey(data, modalKeys.pageDown) ? Math.max(1, this.rows() - 8) : 1;
+        } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.pageUp)) {
           this.scroll = Math.max(
             0,
-            this.scroll - (matchesKey(data, "pageUp") ? Math.max(1, this.rows() - 8) : 1),
+            this.scroll - (matchesKey(data, modalKeys.pageUp) ? Math.max(1, this.rows() - 8) : 1),
           );
         }
       }
@@ -384,14 +425,14 @@ export class TerminalRound implements Component {
       }
       if (
         this.mode === "edit" &&
-        (matchesKey(data, "tab") ||
-          matchesKey(data, "shift+tab") ||
+        (matchesKey(data, modalKeys.tab) ||
+          matchesKey(data, modalKeys.previous) ||
           (this.editor.getExpandedText().trim().length === 0 &&
-            (matchesKey(data, "up") || matchesKey(data, "down"))))
+            (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down))))
       ) {
         this.mode = "list";
       }
-      if (matchesKey(data, "escape")) {
+      if (matchesKey(data, modalKeys.escape)) {
         if (this.mode !== "list") {
           this.mode = "list";
           this.armed = false;
@@ -403,13 +444,13 @@ export class TerminalRound implements Component {
         }
       } else {
         this.armed = false;
-        if (matchesKey(data, "ctrl+p")) {
+        if (matchesKey(data, modalKeys.presenter)) {
           this.switchView?.();
         } else if (this.mode === "edit") {
           if (row.kind === "review" || row.kind === "inactive") {
             return;
           }
-          if (matchesKey(data, "enter")) {
+          if (matchesKey(data, modalKeys.enter)) {
             this.confirm(row);
           } else {
             this.editInput(row, data);
@@ -418,12 +459,15 @@ export class TerminalRound implements Component {
           const histories = (this.round()?.questions ?? []).filter(
             (q) => this.round()?.clarifications.some((entry) => entry.questionId === q.id) === true,
           );
-          if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) {
+          if (matchesKey(data, modalKeys.tab) || matchesKey(data, modalKeys.previous)) {
             this.previewFocus =
-              (this.previewFocus + (matchesKey(data, "tab") ? 1 : -1) + histories.length + 1) %
+              (this.previewFocus +
+                (matchesKey(data, modalKeys.tab) ? 1 : -1) +
+                histories.length +
+                1) %
               (histories.length + 1);
             this.followFocus = true;
-          } else if (matchesKey(data, "enter")) {
+          } else if (matchesKey(data, modalKeys.enter)) {
             const question = histories[this.previewFocus];
             if (question === undefined) {
               this.send({ type: "submit" });
@@ -432,21 +476,21 @@ export class TerminalRound implements Component {
             } else {
               this.expanded.add(question.id);
             }
-          } else if (matchesKey(data, "down") || matchesKey(data, "pageDown")) {
+          } else if (matchesKey(data, modalKeys.down) || matchesKey(data, modalKeys.pageDown)) {
             this.scroll++;
             this.followFocus = false;
-          } else if (matchesKey(data, "up") || matchesKey(data, "pageUp")) {
+          } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.pageUp)) {
             this.scroll = Math.max(0, this.scroll - 1);
             this.followFocus = false;
           }
-        } else if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) {
+        } else if (matchesKey(data, modalKeys.tab) || matchesKey(data, modalKeys.previous)) {
           const questions = (this.round()?.questions ?? []).filter((q) => q.status === undefined);
           const index =
             row.kind === "review"
               ? questions.length
               : questions.findIndex((q) => q.id === row.question.id);
           const nextIndex =
-            (index + (matchesKey(data, "tab") ? 1 : -1) + questions.length + 1) %
+            (index + (matchesKey(data, modalKeys.tab) ? 1 : -1) + questions.length + 1) %
             (questions.length + 1);
           const next = questions[nextIndex];
           if (next === undefined) {
@@ -456,28 +500,31 @@ export class TerminalRound implements Component {
             this.jump(next);
             this.send({ type: "focus", questionId: next.id });
           }
-        } else if (matchesKey(data, "up") || matchesKey(data, "down")) {
+        } else if (matchesKey(data, modalKeys.up) || matchesKey(data, modalKeys.down)) {
           this.selected = Math.max(
             0,
-            Math.min(this.items().length - 1, this.selected + (matchesKey(data, "down") ? 1 : -1)),
+            Math.min(
+              this.items().length - 1,
+              this.selected + (matchesKey(data, modalKeys.down) ? 1 : -1),
+            ),
           );
           const next = this.items()[this.selected];
           if (next !== undefined && next.kind !== "review" && next.kind !== "inactive") {
             this.send({ type: "focus", questionId: next.question.id });
           }
           this.followFocus = true;
-        } else if (matchesKey(data, "pageDown") || matchesKey(data, "pageUp")) {
+        } else if (matchesKey(data, modalKeys.pageDown) || matchesKey(data, modalKeys.pageUp)) {
           const viewport = this.layout(this.columns()).viewport;
           this.scroll = Math.max(
             0,
             Math.min(
               viewport.length - 1,
               viewport.scroll +
-                (matchesKey(data, "pageDown") ? 1 : -1) * Math.max(1, this.rows() - 8),
+                (matchesKey(data, modalKeys.pageDown) ? 1 : -1) * Math.max(1, this.rows() - 8),
             ),
           );
           this.followFocus = false;
-        } else if (matchesKey(data, "enter")) {
+        } else if (matchesKey(data, modalKeys.enter)) {
           if (row.kind === "inactive") {
             return;
           }
@@ -494,7 +541,7 @@ export class TerminalRound implements Component {
               this.mode = "preview";
               this.scroll = 0;
             }
-          } else if (row.kind === "option" && row.optionId !== undefined) {
+          } else if (row.kind === "option") {
             this.send(
               this.round()?.drafts[row.question.id]?.revision === row.question.revision &&
                 this.round()?.drafts[row.question.id]?.answer?.optionId === row.optionId
@@ -519,7 +566,6 @@ export class TerminalRound implements Component {
               this.edit(row);
             }
           } else if (
-            row.kind === "clarify" &&
             (this.round()?.drafts[row.question.id]?.clarificationDraft?.trim().length ?? 0) > 0
           ) {
             this.send({
@@ -535,7 +581,7 @@ export class TerminalRound implements Component {
           row.kind !== "review" &&
           row.kind !== "inactive" &&
           (data.startsWith("\x1b[200~") ||
-            matchesKey(data, "backspace") ||
+            matchesKey(data, modalKeys.backspace) ||
             decodeKittyPrintable(data) !== undefined ||
             /^[^\p{Cc}]+$/u.test(data))
         ) {
@@ -594,11 +640,11 @@ export class TerminalRound implements Component {
             );
           }
         }
-        const body = markdownLines(response, width).map((line) => line.trimEnd());
+        const body = this.markdown(response, width).map((line) => line.trimEnd());
         const last = body.pop() ?? "";
         return [
           ...(index === 0 ? [] : [""]),
-          ...markdownLines(
+          ...this.markdown(
             `## ${this.appearance.symbols === "emoji" ? "❓" : "?"} ${String(question.number)}. ${question.prompt}`,
             width,
           ),
@@ -617,7 +663,7 @@ export class TerminalRound implements Component {
                         [""].concat(
                           entry.question === undefined
                             ? []
-                            : markdownLines(
+                            : this.markdown(
                                 [
                                   `Question ${String(entry.question.number)} · revision ${String(entry.question.revision)}: ${entry.question.prompt}`,
                                   entry.question.context,
@@ -634,12 +680,12 @@ export class TerminalRound implements Component {
                                 width,
                               ),
                           [""],
-                          markdownLines(
+                          this.markdown(
                             `User question ${String(number + 1)}: ${entry.request}`,
                             width,
                           ),
                           [""],
-                          markdownLines(entry.response ?? "Awaiting response", width),
+                          this.markdown(entry.response ?? "Awaiting response", width),
                         ),
                       )
                   : []),
@@ -648,9 +694,10 @@ export class TerminalRound implements Component {
         ];
       });
       const focusedHistory = preview.findIndex((line) => line.startsWith("›"));
-      if (this.followFocus && focusedHistory >= 0) {
-        this.scroll = Math.max(0, focusedHistory - Math.floor(Math.max(1, this.rows() - 10) / 2));
-      }
+      const scroll =
+        this.followFocus && focusedHistory >= 0
+          ? Math.max(0, focusedHistory - Math.floor(Math.max(1, this.rows() - 10) / 2))
+          : this.scroll;
       const controls = {
         buttons: [{ label: "Submit round" }],
         ...(this.previewFocus === histories.length ? { focus: 0 } : {}),
@@ -666,10 +713,10 @@ export class TerminalRound implements Component {
           controls,
           outerWidth,
           this.rows(),
-          this.scroll,
+          scroll,
           this.appearance.border,
         ),
-        viewport: { scroll: this.scroll, length: preview.length },
+        viewport: { scroll, length: preview.length },
         notePositions,
       };
     }
@@ -680,7 +727,7 @@ export class TerminalRound implements Component {
       if (row.kind === "inactive") {
         positions.push(lines.length);
         lines.push(
-          ...markdownLines(
+          ...this.markdown(
             row.question.status === "withdrawn"
               ? `~~${String(row.question.number)}. ${row.question.prompt}~~`
               : `${String(row.question.number)}. ${row.question.prompt} — deferred`,
@@ -697,7 +744,7 @@ export class TerminalRound implements Component {
         previousQuestion = row.question.id;
         const draft = round.drafts[row.question.id];
         lines.push(
-          ...markdownLines(
+          ...this.markdown(
             `## ${this.appearance.symbols === "emoji" ? "❓" : "?"} ${String(row.question.number)}. ${row.question.prompt}
 
 ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
@@ -730,7 +777,7 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
       const prefix = `${marker} `;
       const content = `${prefix}${letter === undefined ? "" : `${letter}. `}${label}`;
       const activeField = editing && index === this.selected;
-      const rendered = markdownLines(content, width).map((line, lineIndex) =>
+      const rendered = this.markdown(content, width).map((line, lineIndex) =>
         lineIndex === 0
           ? prefix +
             getMarkdownTheme().bold(sliceByColumn(line.trimEnd(), visibleWidth(prefix), width))
@@ -740,7 +787,7 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
         const labelEnd = rendered.pop() ?? "";
         const occupied = visibleWidth(labelEnd);
         // Reserve the label's columns before Pi wraps the explanation's first line.
-        const explanation = markdownLines(
+        const explanation = this.markdown(
           `${"x".repeat(occupied)} — ${option.explanation}`,
           width,
         ).map((line) => line.trimEnd());
@@ -814,7 +861,7 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
           );
           lines.push(
             "",
-            ...markdownLines(
+            ...this.markdown(
               `${this.appearance.symbols === "emoji" ? "➡️ " : "→ "}Recommendation: ${String.fromCharCode(65 + recommended)}. ${row.question.options[recommended]?.label ?? ""} — ${recommendation.reason}`,
               width,
             ),
@@ -828,12 +875,12 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
           const indent = " ".repeat(Math.min(2, Math.max(0, width - 1)));
           lines.push(
             "",
-            ...markdownLines(
+            ...this.markdown(
               `User question ${String(exchanges.length)}: ${clarification.request}`,
               width,
             ),
             "",
-            ...markdownLines(
+            ...this.markdown(
               clarification.response ?? "Awaiting response",
               width - indent.length,
             ).map((line) => indent + line),
@@ -845,13 +892,13 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
       "↑↓: move · Enter: toggle/open · Tab/Shift+Tab: question · Typing on an option adds notes · F3/F4: frontiers · PgUp/PgDn: scroll";
     let escapeHelp = " · F1: hints · Esc: close";
     if (editing) {
-      help = "Enter: set · Shift+Enter: newline · Tab/Shift+Tab: question";
+      help = `${modalKeyHint(modalKeys.enter, "set")} · ${modalKeyHint(modalKeys.newline, "newline")} · ${modalKeyHint(`${modalKeys.tab}/${modalKeys.previous}`, "question")}`;
       escapeHelp = " · F1: hints · Esc: back";
     } else if (this.armed) {
       help = "Press Esc again to close; drafts retained";
     }
     if (this.switchView !== undefined) {
-      help += " · Ctrl+P: presenter";
+      help += ` · ${modalKeyHint(modalKeys.presenter, "presenter")}`;
     }
     if (outerWidth < 40 && !this.armed) {
       help = editing ? "Enter:set" : "↑↓ Enter Tab";

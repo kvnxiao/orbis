@@ -1,9 +1,9 @@
 import { Value } from "typebox/value";
 import { expect, test } from "vitest";
 
-import { presentRound, roundStateSchema, transitionRound } from "../src/state.ts";
-import type { QuestionInput, RoundState } from "../src/state.ts";
-import { TerminalRound } from "../src/terminal.ts";
+import { presentRound, roundStateSchema, transitionRound } from "../src/domain/state.ts";
+import type { QuestionInput, RoundState } from "../src/domain/state.ts";
+import { TerminalRound } from "../src/tui/terminal-round.ts";
 import { testEditor } from "./terminal-fixture.mts";
 
 test.each(["roundNumber", "questionNumbers", "number", "options"])(
@@ -254,10 +254,10 @@ test("duplicate identities, unknown prerequisites and invalid recommendations ar
   expect(() => round([invalid])).toThrow("unknown option");
   const lonely = question("storage");
   lonely.options = lonely.options.slice(0, 1);
-  expect(() => round([lonely])).toThrow("meaningful alternatives");
+  expect(() => round([lonely])).toThrow("Exactly one option is invalid");
   const unrecommended = question("storage");
   delete unrecommended.recommendation;
-  expect(() => round([unrecommended])).toThrow("meaningful alternatives");
+  expect(() => round([unrecommended])).toThrow("recommendation");
   expect(() => round([question("__proto__")])).toThrow("Invalid round");
 });
 
@@ -292,17 +292,17 @@ test("prerequisite errors identify missing decisions and drafts become eligible 
 test("terminal Tab wraps with unfinished text and submission requires review", () => {
   let state = round();
   let done = false;
-  const component = new TerminalRound(
-    () => state,
-    (input) => {
+  const component = new TerminalRound({
+    read: () => state,
+    dispatch: (input) => {
       state = action(state, input);
     },
-    () => {
+    done: () => {
       done = true;
     },
-    () => undefined,
-    testEditor(),
-  );
+    refresh: () => undefined,
+    editor: testEditor(),
+  });
   component.handleInput("\x1b[B");
   component.handleInput("\x1b[B");
   component.handleInput("\r");

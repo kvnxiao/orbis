@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
+import { sameRecord } from "../domain/record-equality.ts";
+import { acceptApproval, isPlanId, recoverReview, supplementaryNotes } from "../domain/state.ts";
+import type { PlanApproval, PlanningSession } from "../domain/state.ts";
 import { writeArtifact } from "./artifacts.ts";
 import type { SaveResult } from "./persistence.ts";
-import { hasReviewNotes, reviewFeedback } from "./state.ts";
-import type { PlanApproval, PlanningSession } from "./state.ts";
 
 /** Verify the displayed revision and supplementary artifacts before recording acceptance. */
 export function saveApproval(
@@ -17,7 +18,7 @@ export function saveApproval(
     state.phase !== "saving" ||
     review?.status !== "pending" ||
     review.path === undefined ||
-    !/^[a-f0-9-]{36}$/.test(state.planId) ||
+    !isPlanId(state.planId) ||
     !isAbsolute(directory)
   ) {
     return {
@@ -26,16 +27,9 @@ export function saveApproval(
       message: "Approval requires the current persisted review artifact.",
     };
   }
-  const notes = hasReviewNotes(review)
-    ? {
-        overall: review.feedbackDraft,
-        blocks: structuredClone((review.notes ?? []).filter((note) => note.text.trim().length > 0)),
-      }
-    : undefined;
-  const notesContent =
-    notes === undefined
-      ? undefined
-      : `# Supplementary notes\n\nPlan: ${state.planId}\nRevision: ${String(review.revision)}\n\n${reviewFeedback(review)}\n`;
+  const supplementary = structuredClone(supplementaryNotes(state.planId, review));
+  const notes = supplementary?.notes;
+  const notesContent = supplementary?.content;
   const prior = state.pendingApproval;
   const intent: PlanApproval = prior ?? {
     version: 1,
@@ -62,7 +56,7 @@ export function saveApproval(
       intent.planPath !== review.path ||
       intent.planContent !== review.markdown ||
       !isAbsolute(intent.planPath) ||
-      JSON.stringify(intent.notes) !== JSON.stringify(notes) ||
+      !sameRecord(intent.notes, notes) ||
       intent.notesContent !== notesContent ||
       (intent.notes === undefined) !== (intent.notesPath === undefined)
     ) {
@@ -82,13 +76,7 @@ export function saveApproval(
     if (intent.notesPath !== undefined && intent.notesContent !== undefined) {
       writeArtifact(intent.notesPath, intent.notesContent, prior !== undefined);
     }
-    const accepted: PlanningSession = {
-      ...pending,
-      phase: "accepted",
-      accepted: intent,
-      reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, status: "approved" }],
-    };
-    delete accepted.pendingApproval;
+    const accepted = acceptApproval(pending);
     const saved = persist(accepted);
     if (!saved.saved) {
       throw new Error(saved.message);
@@ -96,7 +84,7 @@ export function saveApproval(
     return { state: accepted, outcome: "approval", message: `Plan approved: ${intent.planPath}` };
   } catch (error) {
     return {
-      state: { ...pending, phase: "review" },
+      state: recoverReview(pending),
       outcome: "error",
       message: `${error instanceof Error ? error.message : String(error)} Use /plan to retry approval or Escape to pause.`,
     };

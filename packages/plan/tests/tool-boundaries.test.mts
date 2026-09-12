@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Value } from "typebox/value";
 import { expect, test } from "vitest";
 
 import extension from "../src/index.ts";
@@ -10,7 +11,7 @@ import { runtimeFixture } from "./runtime-fixture.mts";
 
 async function fixture() {
   const f = await runtimeFixture();
-  const registered = new Map<string, Pick<ToolDefinition, "execute">>();
+  const registered = new Map<string, Pick<ToolDefinition, "execute" | "parameters">>();
   extension({
     ...f.api,
     registerTool(tool) {
@@ -28,6 +29,48 @@ async function fixture() {
     },
   };
 }
+
+test("registered retirement values use a provider string enum", async ({ onTestFinished }) => {
+  const f = await fixture();
+  onTestFinished(f.dispose);
+  const schema = f.tool("plan_round").parameters;
+  expect(schema).toMatchObject({
+    properties: {
+      retire: {
+        items: {
+          properties: {
+            status: { type: "string", enum: ["withdrawn", "deferred"] },
+          },
+        },
+      },
+    },
+  });
+  expect(
+    Value.Check(schema, {
+      planId: "plan",
+      roundId: "round",
+      expectedRevision: 0,
+      questions: [],
+      retire: [{ id: "question", status: "unknown", reason: "Invalid" }],
+    }),
+  ).toBe(false);
+});
+
+test.for(["rpc", "json", "print"] as const)(
+  "registered tools reject interactive work in %s mode",
+  async (mode, { onTestFinished }) => {
+    const f = await fixture();
+    onTestFinished(f.dispose);
+    await Promise.all(
+      ["plan_start", "plan_round", "plan_review"].map(async (name) => {
+        const result = await f
+          .tool(name)
+          .execute("unsupported", {}, undefined, undefined, { ...f.ctx, mode });
+        expect(result.details).toMatchObject({ outcome: "unsupported-mode" });
+      }),
+    );
+  },
+);
 
 test("cancelled replacement confirmation preserves the active objective", async ({
   onTestFinished,

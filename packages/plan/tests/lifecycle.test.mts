@@ -1,11 +1,11 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { expect, test, vi } from "vitest";
 
-import * as config from "../src/config.ts";
-import * as persistence from "../src/persistence.ts";
-import { presentRound } from "../src/state.ts";
-import * as terminal from "../src/terminal.ts";
-import * as results from "../src/tool-result.ts";
+import { presentRound } from "../src/domain/state.ts";
+import * as terminal from "../src/pi/terminal.ts";
+import * as results from "../src/pi/tool-result.ts";
+import * as config from "../src/storage/config.ts";
+import * as persistence from "../src/storage/persistence.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 test.for([

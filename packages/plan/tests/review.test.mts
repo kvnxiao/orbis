@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
-import { documentBlocks } from "../src/blocks.ts";
-import { presentReview, transitionReview } from "../src/state.ts";
+import { documentBlocks } from "../src/document/blocks.ts";
+import { presentReview, transitionReview } from "../src/domain/state.ts";
 
 test("feedback requires another exact revision and stale approval preserves current Markdown", () => {
   let state = presentReview(

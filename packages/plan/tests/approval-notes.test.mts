@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
-import { documentBlocks } from "../src/blocks.ts";
-import { presentReview, transitionReview } from "../src/state.ts";
+import { documentBlocks } from "../src/document/blocks.ts";
+import { presentReview, transitionReview } from "../src/domain/state.ts";
 
 test("current annotation and overall text submit directly or approve as supplementary notes", () => {
   let state = presentReview(

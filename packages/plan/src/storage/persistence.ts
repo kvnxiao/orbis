@@ -3,25 +3,31 @@ import { readFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
 
+import { sameRecord } from "../domain/record-equality.ts";
+import type { SessionFile } from "./session-file.ts";
+
+/** Distinguish durable writes from unsaved and deferred first-assistant snapshots. */
 export interface SaveResult {
   saved: boolean;
   deferred?: true;
   message: string;
 }
 
+/** Report the last branch-compatible planning entry without modifying the session. */
 export type SavedRecord =
   | { status: "none" }
   | { status: "record"; entry: SessionEntry }
   | { status: "unreadable"; message: string };
 
-export function readSavedRecord(ctx: ExtensionContext): SavedRecord {
+/** Read the last planning record in the matching disk and memory branch prefix. */
+export function readSavedRecord(ctx: ExtensionContext, file?: SessionFile): SavedRecord {
   const path = ctx.sessionManager.getSessionFile();
   if (path === undefined) {
     return { status: "none" };
   }
   let disk: ReturnType<typeof parseSessionEntries>;
   try {
-    disk = parseSessionEntries(readFileSync(path, "utf8"));
+    disk = file?.read(path) ?? parseSessionEntries(readFileSync(path, "utf8"));
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return { status: "none" };
@@ -35,9 +41,7 @@ export function readSavedRecord(ctx: ExtensionContext): SavedRecord {
     disk.filter((entry) => entry.type !== "session").map((entry) => [entry.id, entry]),
   );
   const branch = ctx.sessionManager.getBranch();
-  const mismatch = branch.findIndex(
-    (entry) => JSON.stringify(entries.get(entry.id)) !== JSON.stringify(entry),
-  );
+  const mismatch = branch.findIndex((entry) => !sameRecord(entries.get(entry.id), entry));
   const prefix = branch.slice(0, mismatch === -1 ? branch.length : mismatch);
   const entry = prefix.findLast(
     (item) => item.type === "custom" && item.customType === "orbis-plan",
@@ -45,7 +49,13 @@ export function readSavedRecord(ctx: ExtensionContext): SavedRecord {
   return entry === undefined ? { status: "none" } : { status: "record", entry };
 }
 
-export function saveRecord(pi: ExtensionAPI, ctx: ExtensionContext, data: unknown): SaveResult {
+/** Compare branch records before append and confirm the appended record on disk. */
+export function saveRecord(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  data: unknown,
+  file?: SessionFile,
+): SaveResult {
   const path = ctx.sessionManager.getSessionFile();
   if (path === undefined) {
     return {
@@ -56,7 +66,7 @@ export function saveRecord(pi: ExtensionAPI, ctx: ExtensionContext, data: unknow
   const branch = ctx.sessionManager.getBranch();
   let persisted;
   try {
-    persisted = parseSessionEntries(readFileSync(path, "utf8"));
+    persisted = file?.read(path) ?? parseSessionEntries(readFileSync(path, "utf8"));
   } catch (error) {
     if (
       error instanceof Error &&
@@ -77,10 +87,10 @@ export function saveRecord(pi: ExtensionAPI, ctx: ExtensionContext, data: unknow
       message: `Cannot read the Pi session file. Correct the storage error and reload Pi before retrying: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-  const ids = new Set(
-    persisted.filter((entry) => entry.type !== "session").map((entry) => entry.id),
+  const entries = new Map(
+    persisted.filter((entry) => entry.type !== "session").map((entry) => [entry.id, entry]),
   );
-  if (branch.some((entry) => !ids.has(entry.id))) {
+  if (branch.some((entry) => !sameRecord(entries.get(entry.id), entry))) {
     return {
       saved: false,
       message:
@@ -90,12 +100,18 @@ export function saveRecord(pi: ExtensionAPI, ctx: ExtensionContext, data: unknow
   try {
     pi.appendEntry("orbis-plan", data);
     const leaf = ctx.sessionManager.getLeafId();
-    const disk = parseSessionEntries(readFileSync(path, "utf8"));
-    const entry = disk.find((item) => item.type !== "session" && item.id === leaf);
+    const disk = file?.read(path) ?? parseSessionEntries(readFileSync(path, "utf8"));
+    const confirmed = new Map(
+      disk.filter((item) => item.type !== "session").map((item) => [item.id, item]),
+    );
+    if (ctx.sessionManager.getBranch().some((item) => !sameRecord(confirmed.get(item.id), item))) {
+      throw new Error("Pi memory differs from its session file after append");
+    }
+    const entry = leaf === null ? undefined : confirmed.get(leaf);
     if (
       entry?.type !== "custom" ||
       entry.customType !== "orbis-plan" ||
-      JSON.stringify(entry.data) !== JSON.stringify(data)
+      !sameRecord(entry.data, data)
     ) {
       throw new Error("Appended planning record was not found on disk");
     }

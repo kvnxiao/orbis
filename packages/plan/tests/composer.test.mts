@@ -6,14 +6,14 @@ import type {
   ExtensionEvent,
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { getKeybindings, ProcessTerminal, TuiMainScreen } from "@earendil-works/pi-tui";
+import { getKeybindings, matchesKey, ProcessTerminal, TuiMainScreen } from "@earendil-works/pi-tui";
 import { expect, test, vi } from "vitest";
 
-import { installPlanComposer, shortcutConflict, shortcutWarning } from "../src/composer.ts";
-import { writeSettings } from "../src/config.ts";
+import { presentRound } from "../src/domain/state.ts";
 import extension from "../src/index.ts";
-import { presentRound } from "../src/state.ts";
-import * as terminal from "../src/terminal.ts";
+import { installPlanComposer, shortcutConflict, shortcutWarning } from "../src/pi/composer.ts";
+import * as terminal from "../src/pi/terminal.ts";
+import { writeSettings } from "../src/storage/config.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Pi exports the nominal keybindings type without its constructor; this fixture supplies matching and resolved bindings.
 const keybindings = {
@@ -24,6 +24,24 @@ const editorTheme = () => ({
   borderColor: (text: string) => text,
   selectList: getSelectListTheme(),
 });
+
+test.for([
+  { key: "esc", alias: "escape", input: "\x1b" },
+  { key: "return", alias: "enter", input: "\r" },
+] as const)(
+  "$key conflicts with its alias and matches actual input",
+  ({ key, alias, input }, { onTestFinished }) => {
+    const binding = vi
+      .spyOn(keybindings, "getResolvedBindings")
+      .mockReturnValue({ "tui.select.cancel": key });
+    onTestFinished(() => {
+      binding.mockRestore();
+    });
+    expect(shortcutConflict(keybindings, alias)).toBe("tui.select.cancel");
+    expect(matchesKey(input, key)).toBe(true);
+    expect(matchesKey(input, alias)).toBe(true);
+  },
+);
 
 test("autocomplete bindings block colliding planning shortcuts", ({ onTestFinished }) => {
   const bindings = vi.spyOn(keybindings, "getResolvedBindings").mockReturnValue({

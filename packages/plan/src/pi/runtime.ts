@@ -6,63 +6,50 @@ import type {
   MessageEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { Value } from "typebox/value";
 
-import { saveApproval } from "./approval.ts";
-import { prepareReviewArtifact } from "./artifacts.ts";
-import { defaultShortcut, readSettings } from "./config.ts";
-import type { PlanSettings } from "./config.ts";
-import { fencedObjective } from "./objective.ts";
-import { readSavedRecord, saveRecord } from "./persistence.ts";
-import type { SaveResult } from "./persistence.ts";
-import type { PlanInteractionIdentity } from "./presentation.ts";
+import { DocumentAnalysis } from "../document/document-analysis.ts";
+import { fencedObjective } from "../domain/objective.ts";
 import {
-  availablePresenters,
-  presentationAction,
-  presentationSnapshot,
-  presentersChanged,
-} from "./presenters.ts";
-import {
-  approvalSchema,
+  recoverReview,
   presentReview,
   presentRound,
-  roundStateSchema,
+  snapshotSchema,
+  validSession,
   transitionInteraction,
-} from "./state.ts";
+} from "../domain/state.ts";
 import type {
   PlanApproval,
   PlanningSession,
   ReviewInput,
   RoundInput,
   RuntimeResult,
-} from "./state.ts";
+} from "../domain/state.ts";
+import type { PlanInteractionIdentity } from "../presentation.ts";
+import { saveApproval } from "../storage/approval.ts";
+import { prepareReviewArtifact } from "../storage/artifacts.ts";
+import { defaultShortcut, readSettings } from "../storage/config.ts";
+import type { PlanSettings } from "../storage/config.ts";
+import { readSavedRecord, saveRecord } from "../storage/persistence.ts";
+import type { SaveResult } from "../storage/persistence.ts";
+import { SessionFile } from "../storage/session-file.ts";
+import {
+  availablePresenters,
+  presentationAction,
+  presentationSnapshot,
+  presentersChanged,
+} from "./presenters.ts";
 import { terminalReview, terminalRound } from "./terminal.ts";
 import { toolResult } from "./tool-result.ts";
-
-const sessionSchema = Type.Object({
-  ...roundStateSchema.properties,
-  planId: Type.String(),
-  sessionId: Type.String(),
-  branchId: Type.Union([Type.String(), Type.Null()]),
-  cwd: Type.String(),
-  objective: Type.String(),
-  accepted: Type.Optional(approvalSchema),
-  pendingApproval: Type.Optional(approvalSchema),
-});
-const snapshotSchema = Type.Object({
-  version: Type.Literal(1),
-  mode: Type.Union([Type.Literal("plan"), Type.Literal("default")]),
-  active: Type.Optional(sessionSchema),
-  unfinished: Type.Array(sessionSchema),
-});
 
 const unsupportedMode = (): RuntimeResult => ({
   outcome: "unsupported-mode",
   message: "Planning requires interactive Pi in TUI mode.",
 });
 
+/** Own one planning session, its interactions, and durable branch snapshots. */
 export class PlanRuntime {
+  private readonly sessionFile = new SessionFile();
   private selectedMode: "plan" | "default" = "default";
   private configuredShortcut: PlanSettings["shortcut"] = defaultShortcut;
   private shortcutLabel: string | undefined = "Shift+Tab";
@@ -70,10 +57,10 @@ export class PlanRuntime {
     return this.configuredShortcut;
   }
 
-  async reloadSettings(ctx: ExtensionContext): Promise<void> {
+  async reloadSettings(ctx: ExtensionContext, signal?: AbortSignal): Promise<void> {
     const generation = this.generation;
-    const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
-    if (generation === this.generation) {
+    const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted(), signal);
+    if (generation === this.generation && signal?.aborted !== true) {
       this.configuredShortcut = settings.shortcut;
       this.setShortcutStatus(ctx, settings.shortcut ?? undefined);
     }
@@ -92,11 +79,11 @@ export class PlanRuntime {
   private readonly archived: PlanningSession[] = [];
 
   get active(): Readonly<PlanningSession> | undefined {
-    return this.current;
+    return structuredClone(this.current);
   }
 
   get unfinished(): readonly Readonly<PlanningSession>[] {
-    return this.archived;
+    return structuredClone(this.archived);
   }
   private readonly pi: ExtensionAPI;
   private readonly agentDir: string;
@@ -236,6 +223,7 @@ export class PlanRuntime {
         ...(this.current === undefined ? {} : { active: this.current }),
         unfinished: this.archived,
       }),
+      this.sessionFile,
     );
     ctx.ui.setStatus("orbis-plan", this.statusLine());
     if (!this.saveStatus.saved && this.saveStatus.deferred !== true) {
@@ -276,7 +264,7 @@ export class PlanRuntime {
     this.selectedMode = "default";
     ctx.ui.setStatus("orbis-plan", this.statusLine());
     this.archived.length = 0;
-    const saved = readSavedRecord(ctx);
+    const saved = readSavedRecord(ctx, this.sessionFile);
     if (saved.status === "unreadable") {
       ctx.ui.notify(
         `Cannot read the Pi session file, so planning state was not restored: ${saved.message}. Correct the storage error and reload Pi.`,
@@ -290,48 +278,9 @@ export class PlanRuntime {
     const record = saved.entry;
     if (
       !Value.Check(snapshotSchema, record.data) ||
-      [record.data.active, ...record.data.unfinished].some((plan) => {
-        if (plan === undefined) {
-          return false;
-        }
-        const round = plan.round;
-        const review = plan.reviews?.at(-1);
-        switch (plan.phase) {
-          case "round":
-          case "clarification":
-            if (round === undefined || round.submitted) {
-              return true;
-            }
-            break;
-          case "review":
-          case "saving":
-            if (review?.status !== "pending") {
-              return true;
-            }
-            break;
-          case "accepted":
-            if (plan.accepted === undefined || review?.status !== "approved") {
-              return true;
-            }
-            break;
-          case "research":
-          case "cancelled":
-            break;
-        }
-        return (
-          round?.questions.some((question) => {
-            const draft = round.drafts[question.id];
-            const answer = draft?.answer;
-            return (
-              draft === undefined ||
-              (draft.revision === question.revision &&
-                answer !== undefined &&
-                "optionId" in answer &&
-                !question.options.some((option) => option.id === answer.optionId))
-            );
-          }) ?? false
-        );
-      })
+      [record.data.active, ...record.data.unfinished].some(
+        (plan) => plan !== undefined && !validSession(plan),
+      )
     ) {
       ctx.ui.notify(
         "Cannot restore malformed planning state. The saved record remains unchanged.",
@@ -348,7 +297,7 @@ export class PlanRuntime {
     }
     ctx.ui.setStatus("orbis-plan", this.statusLine());
     if (this.current?.phase === "saving") {
-      this.current.phase = "review";
+      this.current = recoverReview(this.current);
     }
     if (this.current?.pendingApproval !== undefined) {
       ctx.ui.notify(
@@ -364,6 +313,7 @@ export class PlanRuntime {
   }
 
   private disposeOperations() {
+    this.sessionFile.clear();
     this.generation += 1;
     this.pendingCompletion = undefined;
     this.dismissedReviewSignal = undefined;
@@ -416,10 +366,14 @@ export class PlanRuntime {
         return await this.interact(ctx, combined);
       }
       if (this.current?.phase === "clarification" && this.current.round !== undefined) {
-        return { outcome: "clarification", round: this.current.round, draftsSubmitted: false };
+        return {
+          outcome: "clarification",
+          round: structuredClone(this.current.round),
+          draftsSubmitted: false,
+        };
       }
       return entry.outcome === "active" && this.current !== undefined
-        ? { outcome: "active", plan: this.current }
+        ? { outcome: "active", plan: structuredClone(this.current) }
         : entry;
     } catch (error) {
       if (!current()) {
@@ -440,7 +394,7 @@ export class PlanRuntime {
     if (this.current !== undefined && this.current.phase !== "accepted" && !replace) {
       this.selectedMode = "plan";
       this.present(ctx);
-      return { outcome: "active", plan: this.current };
+      return { outcome: "active", plan: structuredClone(this.current) };
     }
     if (this.controller !== undefined) {
       return {
@@ -466,7 +420,7 @@ export class PlanRuntime {
 
     this.present(ctx);
     this.save(ctx);
-    return { outcome: "started", plan: this.current };
+    return { outcome: "started", plan: structuredClone(this.current) };
   }
 
   async reopen(ctx: ExtensionContext, signal?: AbortSignal): Promise<void> {
@@ -476,6 +430,10 @@ export class PlanRuntime {
       generation === this.generation && this.current?.planId === planId && signal?.aborted !== true;
     const result = await this.interact(ctx, signal);
     if (!current()) {
+      return;
+    }
+    if (result.outcome === "error" || result.outcome === "unsupported-mode") {
+      ctx.ui.notify(result.message, "error");
       return;
     }
     if (
@@ -565,6 +523,9 @@ export class PlanRuntime {
   }
 
   async interact(ctx: ExtensionContext, signal?: AbortSignal): Promise<RuntimeResult> {
+    if (signal?.aborted === true) {
+      return { outcome: "cancelled" };
+    }
     const read = () => this.current;
     if (this.controller !== undefined) {
       return { outcome: "error", message: "A planning interaction is already waiting." };
@@ -581,6 +542,7 @@ export class PlanRuntime {
     const generation = this.generation;
     const controller = new AbortController();
     const reviewClosure = { requested: false };
+    const cancelled = () => controller.signal.aborted;
     this.controller = controller;
     const abort = () => {
       controller.abort();
@@ -589,12 +551,18 @@ export class PlanRuntime {
       }
     };
     signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted === true) {
-      controller.abort();
-    }
     try {
-      const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
+      const settings = await readSettings(
+        this.agentDir,
+        ctx.cwd,
+        ctx.isProjectTrusted(),
+        controller.signal,
+      );
       if (generation !== this.generation) {
+        return { outcome: "cancelled" };
+      }
+      if (controller.signal.aborted) {
+        this.pause(ctx);
         return { outcome: "cancelled" };
       }
       if (reviewing && this.current !== undefined) {
@@ -604,6 +572,8 @@ export class PlanRuntime {
         });
       }
       this.selectedInterface = "terminal";
+      const analysis =
+        reviewing && "markdown" in record ? new DocumentAnalysis(record.markdown) : undefined;
       const apply = (
         id: string,
         expectedRevision: number,
@@ -615,7 +585,7 @@ export class PlanRuntime {
         }
         this.current = {
           ...active,
-          ...transitionInteraction(active, id, expectedRevision, action),
+          ...transitionInteraction(active, id, expectedRevision, action, analysis),
         };
 
         this.scheduleSave(ctx);
@@ -806,12 +776,18 @@ export class PlanRuntime {
         return { outcome: "cancelled" };
       }
       if (active.phase === "saving") {
-        const approvalSettings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted());
+        const approvalSettings = await readSettings(
+          this.agentDir,
+          ctx.cwd,
+          ctx.isProjectTrusted(),
+          controller.signal,
+        );
         if (generation !== this.generation) {
           return { outcome: "cancelled" };
         }
-        if (controller.signal.aborted) {
-          this.current = { ...active, phase: "review" };
+        if (cancelled()) {
+          this.current = recoverReview(active);
+          this.pause(ctx);
           return { outcome: "cancelled" };
         }
         const approval = saveApproval(active, approvalSettings.planDirectory, (state) => {
@@ -821,7 +797,9 @@ export class PlanRuntime {
         this.current = approval.state;
 
         ctx.ui.setStatus("orbis-plan", this.statusLine());
-        ctx.ui.notify(approval.message, approval.outcome === "approval" ? "info" : "error");
+        if (approval.outcome === "approval") {
+          ctx.ui.notify(approval.message, "info");
+        }
         if (approval.outcome === "approval" && approval.state.accepted !== undefined) {
           this.selectedMode = "default";
           this.save(ctx);
@@ -838,7 +816,7 @@ export class PlanRuntime {
         return {
           outcome: "approval",
           message: approval.message,
-          approval: approval.state.accepted,
+          approval: structuredClone(approval.state.accepted),
         };
       }
       if (active.phase === "round" || active.phase === "review") {
@@ -861,7 +839,7 @@ export class PlanRuntime {
           outcome: "answers",
           roundId: active.round.id,
           revision: active.round.revision,
-          decisions: active.decisions,
+          decisions: structuredClone(active.decisions),
           clarifications: structuredClone(active.round.clarifications),
         };
       }
@@ -869,7 +847,11 @@ export class PlanRuntime {
         if (active.round === undefined) {
           throw new Error("Clarification ended without its round.");
         }
-        return { outcome: "clarification", round: active.round, draftsSubmitted: false };
+        return {
+          outcome: "clarification",
+          round: structuredClone(active.round),
+          draftsSubmitted: false,
+        };
       }
       this.pause(ctx);
       if (reviewClosure.requested) {
@@ -883,12 +865,15 @@ export class PlanRuntime {
         return { outcome: "cancelled" };
       }
       if (this.current?.phase === "saving") {
-        this.current = { ...this.current, phase: "review" };
+        this.current = recoverReview(this.current);
 
         this.save(ctx);
       }
+      if (controller.signal.aborted) {
+        this.pause(ctx);
+        return { outcome: "cancelled" };
+      }
       const message = `${error instanceof Error ? error.message : String(error)} Use /plan to retry the current interaction, or Escape to pause planning.`;
-      ctx.ui.notify(message, "error");
       return { outcome: "error", message };
     } finally {
       if (this.controller === controller) {
@@ -903,6 +888,9 @@ export class PlanRuntime {
     input: RoundInput,
     signal?: AbortSignal,
   ): Promise<RuntimeResult> {
+    if (signal?.aborted === true) {
+      return { outcome: "cancelled" };
+    }
     if (ctx.mode !== "tui") {
       return unsupportedMode();
     }
@@ -940,6 +928,9 @@ export class PlanRuntime {
     input: ReviewInput,
     signal?: AbortSignal,
   ): Promise<RuntimeResult> {
+    if (signal?.aborted === true) {
+      return { outcome: "cancelled" };
+    }
     if (ctx.mode !== "tui") {
       return unsupportedMode();
     }
@@ -1036,7 +1027,7 @@ export class PlanRuntime {
     const key = `${payload.planId}:${String(payload.revision)}`;
     if (!this.emitted.has(key)) {
       this.emitted.add(key);
-      this.pi.events.emit("orbis:plan-approved", payload);
+      this.pi.events.emit("orbis:plan-approved", structuredClone(payload));
     }
   }
 }

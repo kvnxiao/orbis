@@ -1,36 +1,56 @@
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { Value } from "typebox/value";
 
-import { installPlanComposer } from "./composer.ts";
-import { planningInstructions } from "./instructions.ts";
-import { fencedObjective } from "./objective.ts";
-import { PlanRuntime } from "./runtime.ts";
-import { showPlanSettings } from "./settings-menu.ts";
-import { reviewSchema, roundSchema } from "./state.ts";
-import { toolResult } from "./tool-result.ts";
+import { fencedObjective } from "./domain/objective.ts";
+import { questionGuidance, reviewSchema, roundSchema } from "./domain/state.ts";
+import { installPlanComposer } from "./pi/composer.ts";
+import { planningInstructions } from "./pi/instructions.ts";
+import { PlanRuntime } from "./pi/runtime.ts";
+import { showPlanSettings } from "./pi/settings-menu.ts";
+import { toolResult } from "./pi/tool-result.ts";
 
 const startSchema = Type.Object(
   { objective: Type.Optional(Type.String()), replace: Type.Optional(Type.Boolean()) },
   { additionalProperties: false },
 );
 
+/** Register planning tools, commands, presenter lifecycle, and session-owned cleanup. */
 export default function extension(pi: ExtensionAPI): void {
   const agentDir = getAgentDir();
   const runtime = new PlanRuntime(pi, agentDir);
   let removeComposer: (() => void) | undefined;
   let interrupted = false;
   let sessionGeneration = 0;
+  let settingsController: AbortController | undefined;
+  let commandController: AbortController | undefined;
   pi.registerCommand("plan-settings", {
     description: "Configure Plan appearance, shortcut, and saved-plan directory",
     async handler(_args, ctx) {
+      settingsController?.abort();
+      const controller = new AbortController();
+      settingsController = controller;
+      const signal =
+        ctx.signal === undefined
+          ? controller.signal
+          : AbortSignal.any([controller.signal, ctx.signal]);
       try {
-        await showPlanSettings(ctx, agentDir, async () => {
-          await runtime.reloadSettings(ctx);
-        });
+        await showPlanSettings(
+          ctx,
+          agentDir,
+          async () => {
+            await runtime.reloadSettings(ctx, signal);
+          },
+          signal,
+        );
       } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        if (!signal.aborted) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+      } finally {
+        if (settingsController === controller) {
+          settingsController = undefined;
+        }
       }
     },
   });
@@ -41,40 +61,60 @@ export default function extension(pi: ExtensionAPI): void {
         ctx.ui.notify("Stop the current turn before entering planning.", "info");
         return;
       }
-      if (ctx.mode === "tui" && !(await runtime.selectUnfinished(ctx, ctx.signal))) {
-        return;
-      }
-      const entry = runtime.start(ctx, args.trim());
-      if (entry.outcome === "unsupported-mode" || entry.outcome === "error") {
-        ctx.ui.notify(entry.message, "error");
-        return;
-      }
-      const resumed = runtime.resumeCurrent(ctx);
-      const active = runtime.active;
-      const objective = active?.objective ?? "";
-      const objectiveText =
-        objective.length === 0
-          ? " the objective in this conversation."
-          : `:\n${fencedObjective(objective)}`;
-      if (entry.outcome === "started") {
-        pi.sendUserMessage(
-          `Develop a collaborative plan for${objectiveText}\n\nPlanning identity: ${active?.planId ?? ""}. Research before presenting a plan_round.`,
-        );
-      }
-      if (active?.phase === "clarification" && ctx.isIdle()) {
-        await runtime.resumeClarification(ctx.signal);
-      }
-      if (active !== undefined && resumed && active.phase === "research") {
-        pi.sendUserMessage(
-          `Resume collaborative planning for${objectiveText}\n\nPlan identity: ${active.planId}. Continue research and compute the next answerable frontier.`,
-        );
-      }
-      if (
-        ctx.mode === "tui" &&
-        active !== undefined &&
-        (active.phase === "round" || active.phase === "review")
-      ) {
-        await runtime.reopen(ctx, ctx.signal);
+      commandController?.abort();
+      const controller = new AbortController();
+      commandController = controller;
+      const signal =
+        ctx.signal === undefined
+          ? controller.signal
+          : AbortSignal.any([controller.signal, ctx.signal]);
+      try {
+        if (ctx.mode === "tui" && !(await runtime.selectUnfinished(ctx, signal))) {
+          return;
+        }
+        if (signal.aborted) {
+          return;
+        }
+        const entry = runtime.start(ctx, args.trim());
+        if (entry.outcome === "unsupported-mode" || entry.outcome === "error") {
+          ctx.ui.notify(entry.message, "error");
+          return;
+        }
+        const resumed = runtime.resumeCurrent(ctx);
+        const active = runtime.active;
+        const objective = active?.objective ?? "";
+        const objectiveText =
+          objective.length === 0
+            ? " the objective in this conversation."
+            : `:\n${fencedObjective(objective)}`;
+        if (entry.outcome === "started") {
+          pi.sendUserMessage(
+            `Develop a collaborative plan for${objectiveText}\n\nPlanning identity: ${active?.planId ?? ""}. Research before presenting a plan_round.`,
+          );
+        }
+        if (active?.phase === "clarification" && ctx.isIdle()) {
+          await runtime.resumeClarification(signal);
+        }
+        if (active !== undefined && resumed && active.phase === "research") {
+          pi.sendUserMessage(
+            `Resume collaborative planning for${objectiveText}\n\nPlan identity: ${active.planId}. Continue research and compute the next answerable frontier.`,
+          );
+        }
+        if (
+          ctx.mode === "tui" &&
+          active !== undefined &&
+          (active.phase === "round" || active.phase === "review")
+        ) {
+          await runtime.reopen(ctx, signal);
+        }
+      } catch (error) {
+        if (!signal.aborted) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+      } finally {
+        if (commandController === controller) {
+          commandController = undefined;
+        }
       }
     },
   });
@@ -98,9 +138,6 @@ export default function extension(pi: ExtensionAPI): void {
     parameters: startSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
-      if (!Value.Check(startSchema, params)) {
-        throw new Error("Invalid planning entry input.");
-      }
       const result = await runtime.requestStart(
         ctx,
         params.objective?.trim() ?? "",
@@ -113,8 +150,7 @@ export default function extension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "plan_round",
     label: "Planning questions",
-    description:
-      "Present the researched, answerable frontier. Before calling, check every question: use 2–4 distinct options with recommendation: { optionId, reason }, where optionId matches one of this question's option IDs and reason is nonblank; or use options: [] and omit recommendation for free text. Exactly one option is invalid. Every question with options requires the recommendation field; naming a preferred option in context or explanation does not replace it. Each option needs id, label, and explanation. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates, include clarification: { id, response } for the pending request, and send the complete active questions. Clarification can steer options, recommendations, and membership. Preserve the question ID for the same decision; use a new ID for a different decision. Explicitly retire omitted active questions with retire: [{ id, status: 'withdrawn' | 'deferred', reason }]. To retire every active question, send questions: [] with retire entries. Deferred questions keep their IDs when they return. The UI adds Other and Ask for clarification; do not duplicate them in generated options. Drafts remain unsubmitted until explicit whole-round submission.",
+    description: `Present the researched, answerable frontier. ${questionGuidance} Each option needs id, label, and explanation. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates, include clarification: { id, response } for the pending request, and send the complete active questions. Clarification can steer options, recommendations, and membership. Preserve the question ID for the same decision; use a new ID for a different decision. Explicitly retire omitted active questions with retire: [{ id, status: 'withdrawn' | 'deferred', reason }]. To retire every active question, send questions: [] with retire entries. Deferred questions keep their IDs when they return. Drafts remain unsubmitted until explicit whole-round submission.`,
     parameters: roundSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -123,15 +159,16 @@ export default function extension(pi: ExtensionAPI): void {
     },
   });
   pi.on("before_agent_start", (event) => {
+    const active = runtime.active;
     if (
       runtime.mode === "plan" &&
-      runtime.active !== undefined &&
-      runtime.active.phase !== "accepted" &&
-      runtime.active.phase !== "cancelled"
+      active !== undefined &&
+      active.phase !== "accepted" &&
+      active.phase !== "cancelled"
     ) {
       return {
         systemPrompt: `${event.systemPrompt}\n\n${planningInstructions}
-Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active.phase}. When a question round or review is pending, call plan_start to reopen it before replacing its content.`,
+Current plan identity: ${active.planId}. Current phase: ${active.phase}. When a question round or review is pending, call plan_start to reopen it before replacing its content.`,
       };
     }
     return undefined;
@@ -173,6 +210,8 @@ Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active
   });
   pi.on("session_shutdown", (_event, ctx) => {
     sessionGeneration++;
+    settingsController?.abort();
+    commandController?.abort();
     interrupted = false;
     removeComposer?.();
     removeComposer = undefined;
@@ -180,6 +219,8 @@ Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active
   });
   pi.on("session_start", async (_event, ctx) => {
     const generation = ++sessionGeneration;
+    settingsController?.abort();
+    commandController?.abort();
     removeComposer?.();
     removeComposer = undefined;
     interrupted = false;
@@ -187,13 +228,18 @@ Current plan identity: ${runtime.active.planId}. Current phase: ${runtime.active
     try {
       await runtime.reloadSettings(ctx);
     } catch (error) {
-      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      if (generation === sessionGeneration) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      }
     }
     if (generation === sessionGeneration) {
       removeComposer = installPlanComposer(ctx, runtime);
     }
   });
   pi.on("session_tree", (_event, ctx) => {
+    sessionGeneration++;
+    settingsController?.abort();
+    commandController?.abort();
     interrupted = false;
     runtime.restore(ctx);
   });

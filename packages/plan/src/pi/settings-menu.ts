@@ -2,45 +2,62 @@ import { join } from "node:path";
 
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Input, SettingsList, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import {
+  Input,
+  matchesKey,
+  SettingsList,
+  truncateToWidth,
+  wrapTextWithAnsi,
+} from "@earendil-works/pi-tui";
 import type { SettingItem } from "@earendil-works/pi-tui";
 
-import { shortcutConflict, shortcutWarning } from "./composer.ts";
 import {
-  borderSchema,
   defaultPlanDirectory,
   isPlanShortcut,
-  symbolsSchema,
+  normalizePlanKey,
   readSettings,
   readSettingsFile,
   writeSettings,
-} from "./config.ts";
-import type { SettingsFields } from "./config.ts";
+} from "../storage/config.ts";
+import type { SettingsFields } from "../storage/config.ts";
+import { borderSchema, symbolsSchema } from "../tui/appearance.ts";
+import { shortcutConflict, shortcutWarning } from "./composer.ts";
 
+/** Edit the chosen settings scope until cancellation or session teardown. */
 export async function showPlanSettings(
   ctx: ExtensionContext,
   agentDir: string,
   saved?: () => Promise<void>,
+  signal: AbortSignal | undefined = ctx.signal,
 ): Promise<void> {
+  const cancelled = () => signal?.aborted === true;
+  if (cancelled()) {
+    return;
+  }
   if (ctx.mode !== "tui") {
     ctx.ui.notify("Planning settings require interactive Pi in TUI mode.", "error");
     return;
   }
-  const scope = await ctx.ui.select("Plan settings", [
-    "Personal defaults",
-    ...(ctx.isProjectTrusted() ? ["Project overrides"] : []),
-  ]);
-  if (scope === undefined) {
+  const scope = await ctx.ui.select(
+    "Plan settings",
+    ["Personal defaults", ...(ctx.isProjectTrusted() ? ["Project overrides"] : [])],
+    signal === undefined ? undefined : { signal },
+  );
+  if (scope === undefined || cancelled()) {
     return;
   }
   const project = scope === "Project overrides";
   const personalPath = join(agentDir, "orbis-plan.json");
   const path = project ? join(ctx.cwd, ".pi", "plan.json") : personalPath;
-  const effective = await readSettings(agentDir, ctx.cwd, project);
-  const stored = await readSettingsFile(path);
-  const inherited = project ? await readSettingsFile(personalPath) : {};
+  const effective = await readSettings(agentDir, ctx.cwd, project, signal);
+  const stored = await readSettingsFile(path, signal);
+  const inherited = project ? await readSettingsFile(personalPath, signal) : {};
   const projectPath = join(ctx.cwd, ".pi", "plan.json");
-  const overrides = !project && ctx.isProjectTrusted() ? await readSettingsFile(projectPath) : {};
+  const overrides =
+    !project && ctx.isProjectTrusted() ? await readSettingsFile(projectPath, signal) : {};
+  if (cancelled()) {
+    return;
+  }
   const masking = new Map(Object.entries(overrides));
   const values = {
     ...effective,
@@ -58,6 +75,15 @@ export async function showPlanSettings(
   const symbols = symbolsSchema.anyOf.map((item) => item.const);
   let pending = Promise.resolve();
   await ctx.ui.custom<undefined>((tui, theme, keys, done) => {
+    let closed = false;
+    const finish = () => {
+      if (!closed) {
+        closed = true;
+        signal?.removeEventListener("abort", finish);
+        done(undefined);
+      }
+    };
+    signal?.addEventListener("abort", finish, { once: true });
     let busy = false;
     let input: Input | undefined;
     let focused = true;
@@ -143,6 +169,9 @@ export async function showPlanSettings(
       8,
       getSettingsListTheme(),
       (id, value) => {
+        if (closed || signal?.aborted === true) {
+          return;
+        }
         const fields: SettingsFields = {};
         const border = borders.find((item) => item === value);
         const symbol = symbols.find((item) => item === value);
@@ -159,6 +188,14 @@ export async function showPlanSettings(
           fields.showHints = value === "on";
         } else if (id === "shortcut" && (value === "disabled" || isPlanShortcut(value))) {
           fields.shortcut = value === "disabled" ? null : value;
+          if (
+            fields.shortcut === values.shortcut ||
+            (fields.shortcut !== null &&
+              values.shortcut !== null &&
+              normalizePlanKey(fields.shortcut) === normalizePlanKey(values.shortcut))
+          ) {
+            return;
+          }
         } else {
           return;
         }
@@ -167,27 +204,37 @@ export async function showPlanSettings(
           .then(
             async () => {
               Object.assign(values, fields);
-              await saved?.();
+              if (signal?.aborted !== true) {
+                await saved?.();
+              }
             },
             (error: unknown) => {
-              if (isField(id)) {
+              if (signal?.aborted === true) {
+                return;
+              }
+              if (!closed && isField(id)) {
                 list.updateValue(id, displayed[id]());
               }
               ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-              tui.requestRender();
+              if (!closed) {
+                tui.requestRender();
+              }
             },
           )
           .catch((error: unknown) => {
-            ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+            if (signal?.aborted !== true) {
+              ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+            }
           })
           .finally(() => {
             busy = false;
           });
       },
-      () => {
-        done(undefined);
-      },
+      finish,
     );
+    if (signal?.aborted === true) {
+      finish();
+    }
     return {
       get focused() {
         return focused;
@@ -217,10 +264,21 @@ export async function showPlanSettings(
         list.invalidate();
       },
       handleInput(data) {
+        if (closed) {
+          return;
+        }
+        if (busy && matchesKey(data, "escape")) {
+          finish();
+          return;
+        }
         if (!busy) {
           list.handleInput(data);
         }
         tui.requestRender();
+      },
+      dispose() {
+        closed = true;
+        signal?.removeEventListener("abort", finish);
       },
     };
   });

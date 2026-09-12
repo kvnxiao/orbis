@@ -22,41 +22,52 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 
 export async function packedProbe(order: "base" | "before" | "after" = "after"): Promise<void> {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-packed-"));
-  const manager = SessionManager.create(cwd, join(cwd, "sessions"));
-  const packagePath = fileURLToPath(import.meta.resolve("@orbis/plan"));
-  const presenterPath = fileURLToPath(new URL("./presenter-probe.mts", import.meta.url));
-  let paths = [packagePath];
-  switch (order) {
-    case "base":
-      break;
-    case "before":
-      paths = [presenterPath, packagePath];
-      break;
-    case "after":
-      paths = [packagePath, presenterPath];
-      break;
-  }
-  const loader = new DefaultResourceLoader({
-    cwd,
-    agentDir: join(cwd, "agent"),
-    settingsManager: SettingsManager.inMemory(),
-    additionalExtensionPaths: paths,
-    noExtensions: true,
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
-    noContextFiles: true,
-  });
-  await loader.reload();
-  assert.deepEqual(loader.getExtensions().errors, []);
-  const { session } = await createAgentSession({
-    cwd,
-    agentDir: join(cwd, "agent"),
-    resourceLoader: loader,
-    sessionManager: manager,
-    settingsManager: SettingsManager.inMemory(),
-  });
+  const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = join(cwd, "agent");
+  let cleanupSession: (() => Promise<void>) | undefined;
   try {
+    const manager = SessionManager.create(cwd, join(cwd, "sessions"));
+    const packagePath = fileURLToPath(import.meta.resolve("@orbis/plan"));
+    const presenterPath = fileURLToPath(new URL("./presenter-probe.mts", import.meta.url));
+    let paths = [packagePath];
+    switch (order) {
+      case "base":
+        break;
+      case "before":
+        paths = [presenterPath, packagePath];
+        break;
+      case "after":
+        paths = [packagePath, presenterPath];
+        break;
+    }
+    const loader = new DefaultResourceLoader({
+      cwd,
+      agentDir: join(cwd, "agent"),
+      settingsManager: SettingsManager.inMemory(),
+      additionalExtensionPaths: paths,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
+    await loader.reload();
+    assert.deepEqual(loader.getExtensions().errors, []);
+    const { session } = await createAgentSession({
+      cwd,
+      agentDir: join(cwd, "agent"),
+      resourceLoader: loader,
+      sessionManager: manager,
+      settingsManager: SettingsManager.inMemory(),
+    });
+    cleanupSession = async () => {
+      try {
+        await session.abort();
+        await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+      } finally {
+        session.dispose();
+      }
+    };
     await session.bindExtensions({});
     initTheme("dark", false);
     manager.appendMessage({
@@ -110,13 +121,16 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
         const completed = Promise.withResolvers<T>();
         const component: unknown = await Reflect.apply(factory, undefined, [
           {
-            terminal: { rows: 30 },
+            terminal: { rows: 30, columns: 100 },
             requestRender() {
               return undefined;
             },
           },
-          undefined,
-          undefined,
+          {
+            fg: (_color: string, text: string) => text,
+            bg: (_color: string, text: string) => text,
+          },
+          { getKeys: () => ["shift+enter"] },
           completed.resolve,
         ]);
         assert.ok(
@@ -208,10 +222,16 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
     assert.match(JSON.stringify(accepted.details), /"outcome":"approval"/);
     assert.equal(await readFile(join(cwd, ".pi", "plans", planId + "-1.md"), "utf8"), markdown);
   } finally {
-    await session.abort();
-    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-    session.dispose();
-    await rm(cwd, { recursive: true, force: true });
+    try {
+      await cleanupSession?.();
+    } finally {
+      if (previousAgentDirectory === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+      }
+      await rm(cwd, { recursive: true, force: true });
+    }
   }
 }
 

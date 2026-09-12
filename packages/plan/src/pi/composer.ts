@@ -1,15 +1,14 @@
 import { join } from "node:path";
 
-import { CustomEditor, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, getAgentDir, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import type { ExtensionContext, KeybindingsManager } from "@earendil-works/pi-coding-agent";
-import { matchesKey } from "@earendil-works/pi-tui";
+import { matchesKey, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { KeyId } from "@earendil-works/pi-tui";
 
-import { isPlanShortcut } from "./config.ts";
+import { isPlanShortcut, normalizePlanKey } from "../storage/config.ts";
 import type { PlanRuntime } from "./runtime.ts";
 
-const normalize = (key: string) => key.toLowerCase().split("+").toSorted().join("+");
-
+/** Find a host composer binding that owns the configured shortcut or encoded input. */
 export function shortcutConflict(
   keys: KeybindingsManager,
   shortcut: KeyId,
@@ -29,17 +28,19 @@ export function shortcutConflict(
       bindings.some(
         (key) =>
           typeof key === "string" &&
-          (normalize(key) === normalize(shortcut) ||
+          (normalizePlanKey(key) === normalizePlanKey(shortcut) ||
             (data !== undefined && isPlanShortcut(key) && matchesKey(data, key))),
       )
     );
   })?.[0];
 }
 
+/** Include the conflicting host action and its keybindings file in the warning. */
 export function shortcutWarning(shortcut: string, conflict: string): string {
   return `Planning shortcut ${shortcut} is blocked by Pi's ${conflict}. Rebind ${conflict} in ${join(getAgentDir(), "keybindings.json")}, then run /reload. Use /plan until the conflict is cleared.`;
 }
 
+/** Wrap current and replacement editors; return idempotent restoration of owned handlers. */
 export function installPlanComposer(ctx: ExtensionContext, runtime: PlanRuntime): () => void {
   if (ctx.mode !== "tui") {
     return () => undefined;
@@ -63,7 +64,9 @@ export function installPlanComposer(ctx: ExtensionContext, runtime: PlanRuntime)
         shortcut === null ? undefined : shortcutConflict(keybindings, shortcut, data);
       let label: string | undefined;
       if (shortcut !== null) {
-        label = conflict === undefined ? shortcut : `${shortcut} blocked`;
+        label = stripTerminalSequences(
+          rawKeyHint(shortcut, conflict === undefined ? "" : "blocked"),
+        ).trim();
       }
       runtime.setShortcutStatus(ctx, label);
       const warning =

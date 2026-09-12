@@ -1,8 +1,9 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
-import { documentLayout } from "../src/document-layout.ts";
-import { markdownLines } from "../src/terminal-layout.ts";
+import { documentLayout } from "../src/document/document-layout.ts";
+import { markdownLines } from "../src/document/markdown.ts";
+import * as rendering from "../src/document/markdown.ts";
 import { testEditor } from "./terminal-fixture.mts";
 
 test.each([24, 90])(
@@ -87,4 +88,39 @@ test("literal vertical bars inside a quote remain content", () => {
     { start: 0, end: 1, range: "1" },
     { start: 2, end: 3, range: "3" },
   ]);
+});
+
+test("duplicate reference definitions preserve following source targets", () => {
+  testEditor();
+  expect(() =>
+    documentLayout(
+      "[link][ref]\n\n[ref]: https://example.com\n\n[link][ref]\n\n[ref]: https://example.com\n",
+      80,
+    ),
+  ).not.toThrow();
+  const source =
+    "[link][ref]\n\n[ref]: https://example.com\n\n[link][ref]\n\n[ref]: https://example.com\n\nAfter\n";
+  const layout = documentLayout(source, 80);
+  const after = layout.blocks.find((block) => block.excerpt.trim() === "After");
+  expect(after).toBeDefined();
+  expect(layout.spans.get(after?.id ?? "")?.range).toBe("9");
+  expect(layout.lines).toEqual(markdownLines(source, 80));
+});
+
+test("flat documents render the complete source once without growing prefix renders", () => {
+  testEditor();
+  const source = Array.from({ length: 80 }, (_, index) => `Paragraph ${String(index)}.`).join(
+    "\n\n",
+  );
+  const render = vi.spyOn(rendering, "markdownLines");
+  try {
+    const layout = documentLayout(source, 80);
+    expect(layout.blocks).toHaveLength(80);
+    expect(render.mock.calls.filter(([text]) => text.length > 100)).toEqual([[source, 80]]);
+    expect([...layout.spans.values()].map((span) => [span.start, span.end])).toEqual(
+      Array.from({ length: 80 }, (_, index) => [index * 2, index * 2 + 1]),
+    );
+  } finally {
+    render.mockRestore();
+  }
 });

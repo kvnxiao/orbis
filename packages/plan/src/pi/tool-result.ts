@@ -9,12 +9,29 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
-import type { RuntimeResult } from "./state.ts";
+import type { Round, RuntimeResult } from "../domain/state.ts";
+
+function submittedRound(round: Round): Round {
+  return {
+    ...round,
+    drafts: Object.fromEntries(
+      Object.entries(round.drafts).map(([id, draft]) => [
+        id,
+        {
+          revision: draft.revision,
+          unfinished: "",
+          ...(draft.answer === undefined ? {} : { answer: draft.answer }),
+        },
+      ]),
+    ),
+  };
+}
 
 type ResultDetails =
   | Exclude<RuntimeResult, { outcome: "error" }>
   | { outcome: RuntimeResult["outcome"]; truncated: true; resultPath: string };
 
+/** Project submitted state and spill oversized JSON without exposing local-only drafts. */
 export async function toolResult(
   result: RuntimeResult,
   instructions?: string,
@@ -22,15 +39,37 @@ export async function toolResult(
   if (result.outcome === "error") {
     throw new Error(result.message);
   }
-  const projected = structuredClone(result);
-  let round;
-  switch (projected.outcome) {
+  let projected = result;
+  switch (result.outcome) {
     case "clarification":
-      round = projected.round;
+      projected = { ...result, round: submittedRound(result.round) };
       break;
     case "active":
     case "started":
-      round = projected.plan.round;
+      projected = {
+        ...result,
+        plan: {
+          ...result.plan,
+          ...(result.plan.round === undefined ? {} : { round: submittedRound(result.plan.round) }),
+          ...(result.plan.history === undefined
+            ? {}
+            : {
+                history: result.plan.history.map((entry) => ({
+                  ...entry,
+                  round: submittedRound(entry.round),
+                })),
+              }),
+          ...(result.plan.reviews === undefined
+            ? {}
+            : {
+                reviews: result.plan.reviews.map((review) => {
+                  const submitted = { ...review, feedbackDraft: "" };
+                  delete submitted.notes;
+                  return submitted;
+                }),
+              }),
+        },
+      };
       break;
     case "answers":
     case "approval":
@@ -39,30 +78,12 @@ export async function toolResult(
     case "unsupported-mode":
       break;
   }
-  const rounds = [
-    round,
-    ...(projected.outcome === "active" || projected.outcome === "started"
-      ? (projected.plan.history ?? []).map((entry) => entry.round)
-      : []),
-  ];
-  for (const item of rounds) {
-    if (item === undefined) {
-      continue;
-    }
-    for (const draft of Object.values(item.drafts)) {
-      draft.unfinished = "";
-      delete draft.options;
-      delete draft.clarificationDraft;
-    }
-  }
-  if (projected.outcome === "active" || projected.outcome === "started") {
-    for (const review of projected.plan.reviews ?? []) {
-      review.feedbackDraft = "";
-      delete review.notes;
-    }
-  }
-  const details = instructions === undefined ? projected : { ...projected, instructions };
-  const serialized = JSON.stringify(details, null, 2);
+  const details = structuredClone(projected);
+  const serialized = JSON.stringify(
+    instructions === undefined ? details : { ...details, instructions },
+    null,
+    2,
+  );
   const truncated = truncateHead(serialized);
   if (!truncated.truncated) {
     return { content: [{ type: "text", text: serialized }], details };

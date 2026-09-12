@@ -14,11 +14,11 @@ import type { ExtensionAPI, ExtensionUIContext } from "@earendil-works/pi-coding
 import { Value } from "typebox/value";
 import { expect, test, vi } from "vitest";
 
+import { approvalSchema } from "../src/domain/state.ts";
+import type { PlanApproval } from "../src/domain/state.ts";
 import extension from "../src/index.ts";
-import { saveRecord } from "../src/persistence.ts";
-import { approvalSchema } from "../src/state.ts";
-import type { PlanApproval } from "../src/state.ts";
-import * as terminal from "../src/terminal.ts";
+import * as terminal from "../src/pi/terminal.ts";
+import { saveRecord } from "../src/storage/persistence.ts";
 import { appendAssistantFixture } from "./runtime-fixture.mts";
 
 const fixtureModel = {
@@ -36,50 +36,68 @@ const fixtureModel = {
 
 async function fixture(persist = true, setup?: (pi: ExtensionAPI, cwd: string) => void) {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-host-"));
-  const manager = persist
-    ? SessionManager.create(cwd, join(cwd, "sessions"))
-    : SessionManager.inMemory(cwd);
-  let api: ExtensionAPI | undefined;
-  const loader = new DefaultResourceLoader({
-    cwd,
-    agentDir: join(cwd, "agent"),
-    settingsManager: SettingsManager.inMemory(),
-    noExtensions: true,
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
-    noContextFiles: true,
-    extensionFactories: [
-      (pi) => {
-        api = pi;
-        setup?.(pi, cwd);
-      },
-    ],
-  });
-  await loader.reload();
-  const { session } = await createAgentSession({
-    cwd,
-    agentDir: join(cwd, "agent"),
-    sessionManager: manager,
-    resourceLoader: loader,
-    settingsManager: SettingsManager.inMemory(),
-  });
-  await session.bindExtensions({});
-  if (api === undefined) {
-    throw new Error("Probe extension was not loaded");
-  }
-  return {
-    cwd,
-    manager,
-    api,
-    session,
-    ctx: session.extensionRunner.createContext(),
-    async dispose() {
-      await session.abort();
-      session.dispose();
-      await rm(cwd, { recursive: true, force: true });
-    },
+  let cleanup = async () => {
+    await rm(cwd, { recursive: true, force: true });
   };
+  try {
+    const manager = persist
+      ? SessionManager.create(cwd, join(cwd, "sessions"))
+      : SessionManager.inMemory(cwd);
+    let api: ExtensionAPI | undefined;
+    const loader = new DefaultResourceLoader({
+      cwd,
+      agentDir: join(cwd, "agent"),
+      settingsManager: SettingsManager.inMemory(),
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      extensionFactories: [
+        (pi) => {
+          api = pi;
+          setup?.(pi, cwd);
+        },
+      ],
+    });
+    await loader.reload();
+    const { session } = await createAgentSession({
+      cwd,
+      agentDir: join(cwd, "agent"),
+      sessionManager: manager,
+      resourceLoader: loader,
+      settingsManager: SettingsManager.inMemory(),
+    });
+    cleanup = async () => {
+      try {
+        await session.abort();
+        await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+      } finally {
+        session.dispose();
+        await rm(cwd, { recursive: true, force: true });
+      }
+    };
+    await session.bindExtensions({});
+    if (api === undefined) {
+      throw new Error("Probe extension was not loaded");
+    }
+    return {
+      cwd,
+      manager,
+      api,
+      session,
+      ctx: session.extensionRunner.createContext(),
+      async dispose() {
+        await session.abort();
+        await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+        session.dispose();
+        await rm(cwd, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 }
 
 test("disabled persistence returns normally and retains only memory", async ({
@@ -359,96 +377,106 @@ test("closing plan review warns without an error response or model continuation"
   });
 });
 
-test("Pi records rejected planning execution as an error tool result", async ({
-  onTestFinished,
-}) => {
-  const f = await fixture(true, (pi) => {
-    extension({
-      ...pi,
-      registerTool(tool) {
-        pi.registerTool({
-          ...tool,
-          async execute(id, params, signal, update, ctx) {
-            return await tool.execute(id, params, signal, update, { ...ctx, mode: "tui" });
-          },
-        });
-      },
+test.for([false, true])(
+  "Pi records rejected planning input once (malformed=%s)",
+  async (malformed, { onTestFinished }) => {
+    const execute = vi.fn<() => void>();
+    const f = await fixture(true, (pi) => {
+      extension({
+        ...pi,
+        registerTool(tool) {
+          pi.registerTool({
+            ...tool,
+            async execute(id, params, signal, update, ctx) {
+              execute();
+              return await tool.execute(id, params, signal, update, { ...ctx, mode: "tui" });
+            },
+          });
+        },
+      });
     });
-  });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  f.api.registerProvider("fixture", {
-    api: fixtureModel.api,
-    baseUrl: fixtureModel.baseUrl,
-    apiKey: "fixture",
-    models: [fixtureModel],
-  });
-  await f.session.setModel(fixtureModel, { persist: false });
-  let calls = 0;
-  f.session.agent.streamFunction = () => {
-    calls += 1;
-    if (calls > 2) {
-      throw new Error("Unexpected fixture continuation");
-    }
-    const stream = createAssistantMessageEventStream();
-    const message: AssistantMessage = {
-      role: "assistant",
-      content:
-        calls === 1
-          ? [
-              {
-                type: "toolCall",
-                id: "invalid-plan",
-                name: "plan_round",
-                arguments: {
-                  planId: "missing",
-                  roundId: "round",
-                  expectedRevision: 0,
-                  questions: [
-                    {
-                      id: "scope",
-                      prerequisites: [],
-                      context: "Known context",
-                      prompt: "Scope?",
-                      options: [],
-                    },
-                  ],
-                },
-              },
-            ]
-          : [{ type: "text", text: "Observed the planning failure." }],
+    onTestFinished(async () => {
+      await f.dispose();
+    });
+    f.api.registerProvider("fixture", {
       api: fixtureModel.api,
-      provider: fixtureModel.provider,
-      model: fixtureModel.id,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: calls === 1 ? "toolUse" : "stop",
-      timestamp: Date.now(),
-    };
-    stream.push({
-      type: "done",
-      reason: message.stopReason === "toolUse" ? "toolUse" : "stop",
-      message,
+      baseUrl: fixtureModel.baseUrl,
+      apiKey: "fixture",
+      models: [fixtureModel],
     });
-    return stream;
-  };
-  await f.session.prompt("Present the round for the missing plan.");
-  expect(
-    f.manager
-      .getBranch()
-      .filter((entry) => entry.type === "message")
-      .map((entry) => entry.message),
-  ).toContainEqual(
-    expect.objectContaining({ role: "toolResult", toolName: "plan_round", isError: true }),
-  );
-});
+    await f.session.setModel(fixtureModel, { persist: false });
+    let calls = 0;
+    f.session.agent.streamFunction = () => {
+      calls += 1;
+      if (calls > 2) {
+        throw new Error("Unexpected fixture continuation");
+      }
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: "assistant",
+        content:
+          calls === 1
+            ? [
+                {
+                  type: "toolCall",
+                  id: "invalid-plan",
+                  name: malformed ? "plan_start" : "plan_round",
+                  arguments: malformed
+                    ? { objective: {} }
+                    : {
+                        planId: "missing",
+                        roundId: "round",
+                        expectedRevision: 0,
+                        questions: [
+                          {
+                            id: "scope",
+                            prerequisites: [],
+                            context: "Known context",
+                            prompt: "Scope?",
+                            options: [],
+                          },
+                        ],
+                      },
+                },
+              ]
+            : [{ type: "text", text: "Observed the planning failure." }],
+        api: fixtureModel.api,
+        provider: fixtureModel.provider,
+        model: fixtureModel.id,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: calls === 1 ? "toolUse" : "stop",
+        timestamp: Date.now(),
+      };
+      stream.push({
+        type: "done",
+        reason: message.stopReason === "toolUse" ? "toolUse" : "stop",
+        message,
+      });
+      return stream;
+    };
+    await f.session.prompt("Present the round for the missing plan.");
+    expect(execute).toHaveBeenCalledTimes(malformed ? 0 : 1);
+    expect(
+      f.manager
+        .getBranch()
+        .filter((entry) => entry.type === "message")
+        .map((entry) => entry.message),
+    ).toContainEqual(
+      expect.objectContaining({
+        role: "toolResult",
+        toolName: malformed ? "plan_start" : "plan_round",
+        isError: true,
+      }),
+    );
+  },
+);
 
 test("disk confirmation distinguishes deferred, saved, and divergent branch records", async ({
   onTestFinished,

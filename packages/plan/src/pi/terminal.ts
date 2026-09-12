@@ -1,18 +1,15 @@
-import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { Editor } from "@earendil-works/pi-tui";
 
-import { defaultAppearance } from "./config.ts";
-import type { PlanAppearance } from "./config.ts";
-import type { RoundState, RoundAction, ReviewAction } from "./state.ts";
-import { frameContentWidth, framedModalLines } from "./terminal-layout.ts";
-import { TerminalReview } from "./terminal-review.ts";
-import { TerminalRound } from "./terminal-round.ts";
-
-export { TerminalRound } from "./terminal-round.ts";
+import type { RoundState, RoundAction, ReviewAction } from "../domain/state.ts";
+import { defaultAppearance } from "../tui/appearance.ts";
+import type { PlanAppearance } from "../tui/appearance.ts";
+import { frameContentWidth, framedModalLines } from "../tui/terminal-layout.ts";
+import { TerminalReview } from "../tui/terminal-review.ts";
+import { TerminalRound } from "../tui/terminal-round.ts";
 
 const waitingIndicators = new WeakMap<ExtensionContext["ui"], symbol>();
 const modalWidth = "96%";
-export { TerminalReview } from "./terminal-review.ts";
 
 async function show(
   ctx: ExtensionContext,
@@ -23,6 +20,7 @@ async function show(
     rows: () => number,
     columns: () => number,
     theme: Theme,
+    keys: KeybindingsManager,
   ) => TerminalRound | TerminalReview,
   signal?: AbortSignal,
   appearance: PlanAppearance = defaultAppearance,
@@ -44,7 +42,7 @@ async function show(
   signal?.addEventListener("abort", restore, { once: true });
   try {
     await ctx.ui.custom<undefined>(
-      (tui, theme, _keys, done) => {
+      (tui, theme, keys, done) => {
         const muted = (text: string) => theme.fg("muted", text);
         const editor = new Editor(tui, {
           borderColor: (text) => theme.fg("border", text),
@@ -72,6 +70,7 @@ async function show(
               appearance.border,
             ),
           theme,
+          keys,
         );
         const abort = () => {
           component.close();
@@ -121,6 +120,7 @@ async function show(
   }
 }
 
+/** Await an abortable question modal and restore the owned working indicator. */
 export async function terminalRound(
   ctx: ExtensionContext,
   read: () => RoundState,
@@ -131,24 +131,26 @@ export async function terminalRound(
 ): Promise<void> {
   await show(
     ctx,
-    (editor, done, refresh, rows, columns, theme) =>
-      new TerminalRound(
-        read,
-        dispatch,
-        done,
-        refresh,
-        editor,
-        rows,
-        switchView,
-        appearance,
-        columns,
-        theme,
-      ),
+    (editor, done, refresh, rows, columns, theme, keys) =>
+      new TerminalRound({
+        read: read,
+        dispatch: dispatch,
+        done: done,
+        refresh: refresh,
+        editor: editor,
+        rows: rows,
+        switchView: switchView,
+        appearance: appearance,
+        columns: columns,
+        theme: theme,
+        keys,
+      }),
     signal,
     appearance,
   );
 }
 
+/** Await an abortable document modal and restore the owned working indicator. */
 export async function terminalReview(
   ctx: ExtensionContext,
   read: () => RoundState,
@@ -159,19 +161,20 @@ export async function terminalReview(
 ): Promise<void> {
   await show(
     ctx,
-    (editor, done, refresh, rows, columns, theme) =>
-      new TerminalReview(
-        read,
-        dispatch,
-        done,
-        refresh,
-        editor,
-        rows,
-        switchView,
-        appearance,
-        columns,
-        theme,
-      ),
+    (editor, done, refresh, rows, columns, theme, keys) =>
+      new TerminalReview({
+        read: read,
+        dispatch: dispatch,
+        done: done,
+        refresh: refresh,
+        editor: editor,
+        rows: rows,
+        switchView: switchView,
+        appearance: appearance,
+        columns: columns,
+        theme: theme,
+        keys,
+      }),
     signal,
     appearance,
   );

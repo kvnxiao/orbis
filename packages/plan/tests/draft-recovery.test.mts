@@ -2,10 +2,15 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "vitest";
 
-import { documentBlocks } from "../src/blocks.ts";
-import { presentReview, presentRound, transitionReview, transitionRound } from "../src/state.ts";
-import type { PlanningSession } from "../src/state.ts";
-import { toolResult } from "../src/tool-result.ts";
+import { documentBlocks } from "../src/document/blocks.ts";
+import {
+  presentReview,
+  presentRound,
+  transitionReview,
+  transitionRound,
+} from "../src/domain/state.ts";
+import type { PlanningSession } from "../src/domain/state.ts";
+import { toolResult } from "../src/pi/tool-result.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 test("branch restoration preserves the selected composer mode before an objective exists", async ({

@@ -1,3 +1,4 @@
+/** Fence user text without allowing embedded fences to terminate the objective block. */
 export function fencedObjective(objective: string): string {
   let fenceLength = 3;
   for (const match of objective.matchAll(/`+/gu)) {

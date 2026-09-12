@@ -1,6 +1,13 @@
+import { mkdtemp, rm } from "node:fs/promises";
 import { Socket } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { afterAll } from "vitest";
+
+const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+const agentDirectory = await mkdtemp(join(tmpdir(), "orbis-plan-test-agent-"));
+process.env.PI_CODING_AGENT_DIR = agentDirectory;
 
 const loopback = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const message = "External network connections are disabled in Vitest; use local fixtures.";
@@ -41,7 +48,13 @@ Socket.prototype.connect = function (this: Socket, ...args: unknown[]): Socket {
   return result;
 };
 
-afterAll(() => {
+afterAll(async () => {
   Socket.prototype.connect = connect;
   globalThis.fetch = originalFetch;
+  if (previousAgentDirectory === undefined) {
+    delete process.env.PI_CODING_AGENT_DIR;
+  } else {
+    process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+  }
+  await rm(agentDirectory, { recursive: true, force: true });
 });

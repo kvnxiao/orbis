@@ -9,17 +9,31 @@ import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
-export const symbolsSchema = Type.Union([Type.Literal("unicode"), Type.Literal("emoji")]);
-export const borderSchema = Type.Union([
-  Type.Literal("rounded"),
-  Type.Literal("square"),
-  Type.Literal("double"),
-  Type.Literal("ascii"),
-  Type.Literal("none"),
-]);
+import { appearanceSchema, defaultAppearance } from "../tui/appearance.ts";
+import type { PlanAppearance } from "../tui/appearance.ts";
 
+/** Use Shift+Tab until personal or trusted project settings override it. */
 export const defaultShortcut = "shift+tab";
 
+/** Normalize key aliases, case, and modifier order. */
+export function normalizePlanKey(value: string): string {
+  return value
+    .toLowerCase()
+    .split("+")
+    .map((part) => {
+      if (part === "esc") {
+        return "escape";
+      }
+      if (part === "return") {
+        return "enter";
+      }
+      return part;
+    })
+    .toSorted()
+    .join("+");
+}
+
+/** Accept Pi special keys and modified characters that do not consume ordinary typing. */
 export function isPlanShortcut(value: string): value is KeyId {
   const parts = /^(?<modifiers>(?:(?:ctrl|alt|shift|super)\+)*)(?<key>.+)$/u.exec(value)?.groups;
   const key = parts?.key;
@@ -48,41 +62,30 @@ export function isPlanShortcut(value: string): value is KeyId {
 const settingsSchema = Type.Object(
   {
     planDirectory: Type.Optional(Type.String({ minLength: 1, pattern: "\\S" })),
-    symbols: Type.Optional(symbolsSchema),
-    border: Type.Optional(borderSchema),
-    showHints: Type.Optional(Type.Boolean()),
+    ...Type.Partial(appearanceSchema).properties,
     shortcut: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   },
   { additionalProperties: false },
 );
+/** Represent file overrides; omitted fields inherit the lower settings scope. */
 export type SettingsFields = Static<typeof settingsSchema>;
-export type PlanAppearance = Required<Pick<SettingsFields, "symbols" | "border">> &
-  Pick<SettingsFields, "showHints">;
-export const defaultAppearance = {
-  symbols: "unicode",
-  border: "rounded",
-  showHints: true,
-} satisfies PlanAppearance;
+/** Resolve the default artifact directory against the session working directory. */
 export const defaultPlanDirectory = ".pi/plans/";
+/** Expose resolved settings with an absolute artifact directory. */
 export interface PlanSettings extends PlanAppearance {
   planDirectory: string;
   showHints: boolean;
   shortcut: KeyId | null;
 }
 
-export async function readSettingsFile(path: string): Promise<SettingsFields> {
+/** Return absent files as empty overrides; reject malformed fields with their file path. */
+export async function readSettingsFile(
+  path: string,
+  signal?: AbortSignal,
+): Promise<SettingsFields> {
+  let text: string;
   try {
-    const value: unknown = JSON.parse(await readFile(path, "utf8"));
-    if (
-      !Value.Check(settingsSchema, value) ||
-      value.planDirectory?.includes("\0") === true ||
-      (typeof value.shortcut === "string" && !isPlanShortcut(value.shortcut))
-    ) {
-      throw new Error(
-        "planDirectory must be a nonempty path; symbols must be unicode or emoji; border must be rounded, square, double, ascii, or none; showHints must be boolean; shortcut must be a Pi special or modified key, or null to disable; unknown fields are rejected",
-      );
-    }
-    return value;
+    text = await readFile(path, { encoding: "utf8", ...(signal === undefined ? {} : { signal }) });
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return {};
@@ -92,15 +95,42 @@ export async function readSettingsFile(path: string): Promise<SettingsFields> {
       { cause: error },
     );
   }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (cause) {
+    throw new Error(`Cannot parse planning settings ${path}. Correct this file and retry.`, {
+      cause,
+    });
+  }
+  if (!Value.Check(settingsSchema, value)) {
+    const errors = Value.Errors(settingsSchema, value);
+    throw new Error(
+      `Invalid planning settings ${path}: ${errors.map((error) => `${error.instancePath.length === 0 ? "/" : error.instancePath}: ${error.message}`).join("; ")}. Correct this file and retry.`,
+    );
+  }
+  if (value.planDirectory?.includes("\0") === true) {
+    throw new Error(
+      `Invalid planning settings ${path}: planDirectory contains a null character. Correct this file and retry.`,
+    );
+  }
+  if (typeof value.shortcut === "string" && !isPlanShortcut(value.shortcut)) {
+    throw new Error(
+      `Invalid planning settings ${path}: shortcut must be a Pi special or modified key, or null to disable. Correct this file and retry.`,
+    );
+  }
+  return value;
 }
 
+/** Merge personal and trusted project overrides onto defaults. */
 export async function readSettings(
   agentDir: string,
   cwd: string,
   trusted: boolean,
+  signal?: AbortSignal,
 ): Promise<PlanSettings> {
-  const personal = await readSettingsFile(join(agentDir, "orbis-plan.json"));
-  const project = trusted ? await readSettingsFile(join(cwd, ".pi", "plan.json")) : {};
+  const personal = await readSettingsFile(join(agentDir, "orbis-plan.json"), signal);
+  const project = trusted ? await readSettingsFile(join(cwd, ".pi", "plan.json"), signal) : {};
   const settings = {
     planDirectory: defaultPlanDirectory,
     ...defaultAppearance,
@@ -120,6 +150,7 @@ export async function readSettings(
   };
 }
 
+/** Serialize atomic file replacement with Pi’s mutation queue and preserve untouched fields. */
 export async function writeSettings(path: string, fields: SettingsFields): Promise<void> {
   if (
     !Value.Check(settingsSchema, fields) ||

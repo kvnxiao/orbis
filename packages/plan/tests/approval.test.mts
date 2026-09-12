@@ -5,11 +5,11 @@ import { join } from "node:path";
 
 import { expect, test, vi } from "vitest";
 
-import { saveApproval } from "../src/approval.ts";
-import { prepareReviewArtifact } from "../src/artifacts.ts";
-import { presentReview, transitionReview } from "../src/state.ts";
-import type { PlanningSession } from "../src/state.ts";
-import * as terminal from "../src/terminal.ts";
+import { presentReview, transitionReview } from "../src/domain/state.ts";
+import type { PlanningSession } from "../src/domain/state.ts";
+import * as terminal from "../src/pi/terminal.ts";
+import { saveApproval } from "../src/storage/approval.ts";
+import { prepareReviewArtifact } from "../src/storage/artifacts.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 async function fixture(withNotes = false) {

@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test, vi } from "vitest";
 
-import type { PlanApproval } from "../src/state.ts";
-import * as terminal from "../src/terminal.ts";
+import type { PlanApproval } from "../src/domain/state.ts";
+import * as terminal from "../src/pi/terminal.ts";
 import { selectPresenter } from "./presenter-fixture.mts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
