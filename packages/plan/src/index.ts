@@ -121,20 +121,24 @@ export default function extension(pi: ExtensionAPI): void {
     name: "plan_implement",
     label: "Implement approved plan",
     description:
-      "On explicit user intent, implement an approved plan here, implement it in a fresh session, or show the implementation options again. Use action here, new, or options respectively. These are intent examples, not exact phrases. Do not invoke for quoted examples or feature questions. When the reference is unambiguous, supply planId; otherwise omit it for explicit saved-plan selection. The implementation action authorizes execution without another confirmation. Fresh-session requests replace the Pi session. Approval alone does not authorize execution.",
+      "On explicit user intent, implement an approved plan here, implement it in a fresh session, or show the implementation options again. Use action here, new, or options respectively. These are intent examples, not exact phrases. Do not invoke for quoted examples or feature questions. When the reference is unambiguous, supply planId; otherwise omit it for explicit saved-plan selection. The implementation action authorizes execution without another confirmation. A new launch with action new replaces the Pi session. Ordinary repeats reuse the recorded launch, including requests for another destination. Only an explicit user restart request permits restart: true. Approval alone does not authorize execution.",
     promptGuidelines: [
       "When the user asks to implement a saved approved plan or reopen implementation options, use plan_implement. For a fresh-session request, use action new; do not simulate an empty context. Resolve ambiguous plan references explicitly.",
+      "When a hidden startup instruction identifies an existing implementation launch, call plan_implement with action here to receive its approved plan and execution instructions. Ordinary repeats reuse that launch. Set restart: true only when the user explicitly requests another launch; a changed destination alone is not a restart. After receiving execution instructions, implement the plan with ordinary tools.",
     ],
     parameters: Type.Object(
       {
         action: StringEnum(["here", "new", "options"] as const),
         planId: Type.Optional(Type.String({ minLength: 1 })),
+        restart: Type.Optional(Type.Boolean()),
       },
       { additionalProperties: false },
     ),
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
-      return await toolResult(await runtime.implement(ctx, params.action, params.planId, signal));
+      return await toolResult(
+        await runtime.implement(ctx, params.action, params.planId, signal, params.restart === true),
+      );
     },
   });
   pi.registerTool({
@@ -180,7 +184,7 @@ export default function extension(pi: ExtensionAPI): void {
       return await toolResult(result);
     },
   });
-  pi.on("before_agent_start", (event) => {
+  pi.on("context", (event) => {
     const active = runtime.active;
     if (
       runtime.mode === "plan" &&
@@ -189,8 +193,16 @@ export default function extension(pi: ExtensionAPI): void {
       active.phase !== "cancelled"
     ) {
       return {
-        systemPrompt: `${event.systemPrompt}\n\n${planningInstructions}
-Current plan identity: ${active.planId}. Current phase: ${active.phase}. When a question round or review is pending, call plan_start to reopen it before replacing its content.`,
+        messages: [
+          ...event.messages,
+          {
+            role: "custom" as const,
+            customType: "orbis-plan-mode",
+            content: `${planningInstructions}\nCurrent plan identity: ${active.planId}. Current phase: ${active.phase}. When a question round or review is pending, call plan_start to reopen it before replacing its content.`,
+            display: false,
+            timestamp: Date.now(),
+          },
+        ],
       };
     }
     return undefined;

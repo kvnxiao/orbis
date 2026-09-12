@@ -40,6 +40,8 @@ const unused = () => {
 };
 
 interface Options {
+  splitPlanningTurns?: boolean;
+  rejectStartup?: boolean;
   commandCollision?: boolean;
   selection?: string;
   queue?: "steer" | "followUp";
@@ -155,7 +157,21 @@ async function fixture(options: Options = {}) {
                 let content: AssistantMessage["content"] = [
                   { type: "text", text: "Approval acknowledged. Finished." },
                 ];
-                if (
+                if (userText === "Try launch again") {
+                  content = context.messages.some(
+                    (message) =>
+                      message.role === "toolResult" && message.toolName === "plan_implement",
+                  )
+                    ? [{ type: "text", text: "Failure reported." }]
+                    : [
+                        {
+                          type: "toolCall",
+                          id: "retry",
+                          name: "plan_implement",
+                          arguments: { action: "here" },
+                        },
+                      ];
+                } else if (
                   options.implementArguments !== undefined &&
                   !context.messages.some(
                     (message) =>
@@ -172,9 +188,25 @@ async function fixture(options: Options = {}) {
                   ];
                 } else if (options.implementArguments !== undefined) {
                   content = [{ type: "text", text: "Rejected request acknowledged." }];
-                } else if (userText.startsWith("Implement the approved plan")) {
-                  launches.push(args.sessionManager.getSessionId());
-                  finished.resolve(undefined);
+                } else if (userText.startsWith("Continue authorized implementation launch")) {
+                  const received = context.messages.some(
+                    (message) =>
+                      message.role === "toolResult" && message.toolName === "plan_implement",
+                  );
+                  if (received) {
+                    launches.push(args.sessionManager.getSessionId());
+                    finished.resolve(undefined);
+                  } else {
+                    const planId = /planId "([^"]+)"/u.exec(userText)?.[1];
+                    content = [
+                      {
+                        type: "toolCall",
+                        id: "receive",
+                        name: "plan_implement",
+                        arguments: { action: "here", planId },
+                      },
+                    ];
+                  }
                 } else if (start === undefined) {
                   content = [
                     {
@@ -184,6 +216,13 @@ async function fixture(options: Options = {}) {
                       arguments: { objective: "Completion fixture" },
                     },
                   ];
+                } else if (
+                  options.splitPlanningTurns === true &&
+                  !users.some((message) =>
+                    JSON.stringify(message.content).includes("Approve saved plan"),
+                  )
+                ) {
+                  content = [{ type: "text", text: "Planning ready." }];
                 } else if (!reviewed) {
                   const text =
                     start.role === "toolResult"
@@ -237,7 +276,7 @@ async function fixture(options: Options = {}) {
                 if (
                   options.pauseContinuation === true &&
                   stopReason === "stop" &&
-                  !userText.startsWith("Implement the approved plan")
+                  !userText.startsWith("Continue authorized implementation launch")
                 ) {
                   continued.resolve(undefined);
                   const abort = () => {
@@ -288,6 +327,17 @@ async function fixture(options: Options = {}) {
         : { sessionStartEvent: args.sessionStartEvent }),
     });
     sessions.push(created.session);
+    if (options.rejectStartup === true && args.sessionStartEvent?.reason === "new") {
+      const send = created.session.sendCustomMessage.bind(created.session);
+      vi.spyOn(created.session, "sendCustomMessage").mockImplementation(
+        async (message, delivery) => {
+          if (delivery?.triggerTurn === true) {
+            throw new Error("Injected startup rejection");
+          }
+          await send(message, delivery);
+        },
+      );
+    }
     return { ...created, services, diagnostics: [] };
   };
   const runtime = await createAgentSessionRuntime(factory, {
@@ -405,6 +455,7 @@ test.for([
   { action: "invalid" },
   { action: "here", planId: "" },
   { action: "here", extra: true },
+  { action: "here", restart: "yes" },
   { action: "new", planId: "unapproved" },
 ])(
   "plan_implement rejects $action arguments through Pi's failed-tool boundary",
@@ -480,6 +531,39 @@ test.for(["Implement in this session", "Implement in a new session"])(
     const launch = f.contexts.at(-1);
     const prompt = JSON.stringify(launch?.context.messages);
     expect(prompt).toContain("authorizes execution now");
+    expect(prompt).toContain("is already in this session");
+    expect(prompt).toContain("Read the Markdown file at the path above");
+    expect(prompt).toContain("Continue this launch without calling the launcher again");
+    expect(launch?.context.systemPrompt).toContain("hidden startup instruction");
+    const branch = f.runtime.session.sessionManager.getBranch();
+    expect(
+      branch.some(
+        (entry) =>
+          entry.type === "custom_message" &&
+          entry.customType === "orbis-plan-implementation" &&
+          !entry.display,
+      ),
+    ).toBe(true);
+    expect(
+      branch.some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.content.some(
+            (part) => part.type === "toolCall" && part.name === "plan_implement",
+          ),
+      ),
+    ).toBe(true);
+    expect(
+      branch.some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "user" &&
+          JSON.stringify(entry.message.content).includes(
+            "Continue authorized implementation launch",
+          ),
+      ),
+    ).toBe(false);
     expect(prompt).toContain("Supplementary SDK notes");
     const fresh = selection === "Implement in a new session";
     expect(launch?.sessionId === origin).toBe(!fresh);
@@ -592,4 +676,56 @@ test("implementation handoff resolves Pi command collision suffixes", async ({
   await f.idle();
   expect(f.errors).toEqual([]);
   expect(f.launches).toHaveLength(1);
+});
+
+test("current-session launch removes planning guidance from a later approval turn", async ({
+  onTestFinished,
+}) => {
+  const view = approve();
+  onTestFinished(() => {
+    view.mockRestore();
+  });
+  const f = await fixture({ selection: "Implement in this session", splitPlanningTurns: true });
+  onTestFinished(f.dispose);
+  await f.runtime.session.prompt("Original planning context");
+  expect(JSON.stringify(f.contexts.at(-1)?.context.messages)).toContain("Current plan identity:");
+  await f.runtime.session.prompt("Approve saved plan");
+  await f.finished;
+  await f.idle();
+  expect(f.errors).toEqual([]);
+  expect(f.launches).toHaveLength(1);
+  expect(f.contexts.at(-1)?.context.systemPrompt).not.toContain(
+    "Do not execute the proposed implementation",
+  );
+  expect(JSON.stringify(f.contexts.at(-1)?.context.messages)).not.toContain(
+    "Current plan identity:",
+  );
+});
+
+test("rejected fresh startup records failure and ordinary repeats do not launch again", async ({
+  onTestFinished,
+}) => {
+  const view = approve();
+  onTestFinished(() => {
+    view.mockRestore();
+  });
+  const f = await fixture({ selection: "Implement in a new session", rejectStartup: true });
+  onTestFinished(f.dispose);
+  const origin = f.runtime.session.sessionId;
+  await f.runtime.session.prompt("Original planning context");
+  await f.finished;
+  await f.idle();
+  expect(f.errors.join(" ")).toContain("Injected startup rejection");
+  const receiver = f.runtime.session.sessionId;
+  expect(receiver).not.toBe(origin);
+  await f.runtime.session.prompt("Try launch again");
+  await f.idle();
+  expect(f.runtime.session.sessionId).toBe(receiver);
+  expect(f.launches).toEqual([]);
+  expect(
+    f.runtime.session.messages.find(
+      (message) => message.role === "toolResult" && message.toolName === "plan_implement",
+    ),
+  ).toMatchObject({ role: "toolResult", isError: true });
+  expect(JSON.stringify(f.runtime.session.messages)).toContain("Injected startup rejection");
 });

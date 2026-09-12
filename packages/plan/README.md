@@ -495,7 +495,7 @@ saved branch; new sessions start in Default. Native Escape retains Pi's contextu
 including closing autocomplete. After Pi finishes automatic recovery for an interrupted or failed
 planning turn, Plan returns to Default.
 
-When outer double Escape closes plan review, Plan displays
+When outer double Escape closes review without a matching approval, Plan displays
 `Plan review closed without approval. Use /plan to resume.` Draft text is retained, and persistence
 failures remain visible. The expected empty abort response from the stopped turn does not display an
 error banner. Provider failures, unrelated interruptions, and assistant content remain unchanged.
@@ -543,10 +543,18 @@ restoration do not reopen the selector.
 
 Either implementation option authorizes execution without another confirmation, including when the
 saved plan says implementation awaits separate authorization. After planning completes and Pi is
-idle, the current-session action sends a prompt retaining conversation context. The new-session
-action creates a fresh Pi session and sends the prompt through its replacement context. The prompt
-includes the absolute plan path and supplementary notes. Pending user input retains Pi's queue
-behavior before replacement.
+idle, the current-session action starts implementation with conversation context retained. The
+new-session action creates a fresh Pi session and starts its turn through the replacement context.
+Pending user input retains Pi's queue behavior before replacement.
+
+A hidden extension startup message asks the receiving model to call `plan_implement` with action
+`here`. The resulting real tool call returns the absolute approved Markdown path, supplementary
+notes, and execution authorization. The tool result directs the agent to read the file and implement
+the plan with ordinary tools. The startup message does not appear as a pasted user prompt, and Plan
+does not fabricate tool-call history. Model adherence to the startup instruction is not guaranteed.
+The result includes the first nonblank top-level Markdown heading as the plan title. ATX and Setext
+headings are supported; fenced code and nested headings are excluded. Without a heading, the result
+identifies the plan by its absolute path.
 
 Natural-language requests to implement here, implement in a fresh session, or show the options again
 use `plan_implement` with action `here`, `new`, or `options`. These are intent examples, not exact
@@ -556,27 +564,41 @@ plans cannot launch implementation. Internal token routing resolves the planning
 invocation name, including any numeric suffix Pi assigns for a command collision. Missing or
 ambiguous command registration fails before dispatch. Users do not need a launcher command.
 
+Each launch records its identity, exact approval, destination, and delivery state in session
+history. Ordinary repeats reuse that launch across reload and restoration, including requests for
+another destination. In the receiving session, the tool returns execution instructions without
+another startup message or session and does not require a local planning record. In another session,
+it reports the recorded status without starting implementation there. Launch status does not
+establish that implementation has completed. Reopening options remains available and still checks
+for an existing launch before dispatch.
+
+Only an explicit user request to restart implementation permits `restart: true`. A restart creates
+another launch and preserves prior records. A new approval for changed Markdown or supplementary
+notes can start a new launch. Ordinary repeats of failed or uncertain launches report their state;
+they do not retry.
+
 Before scheduling implementation for a saved approval, Plan returns to Default mode and pauses other
 unfinished planning work. Dismissing the options preserves that unfinished work's mode and state.
 Saved drafts remain resumable. An active planning interaction must finish before a separate
 implementation request can proceed.
 
-Cancelled replacement preserves approval and permits a later explicit request. Handoff failures
-remain visible. Stale actions cannot launch into another session, and an ambiguously completed
-launch is never automatically retried. Inspect the intended session before requesting further work.
-Changed or missing approved artifacts must be restored before dispatch. When the user interrupts the
-originating turn during the idle wait, its pending implementation action expires without launching
-work.
+Cancelled replacement preserves approval and requires an explicit restart for another attempt.
+Handoff failures remain visible. Stale actions cannot launch into another session, and an
+ambiguously completed launch is never automatically retried. Inspect the intended session before
+requesting further work. Changed or missing approved artifacts must be restored before dispatch.
+When the user interrupts the originating turn during the idle wait, its pending implementation
+action expires without launching work.
 
 ## Reopening approved plans and recovery
 
 To inspect or fine-tune an approved plan, ask to resume its review or run `/plan`. The normal review
 modal restores the same Markdown revision, overall notes, and block annotations. Closing unchanged
-content preserves approval. Approving unchanged content reopens implementation options without
-replaying its approval event. Editing notes creates unapproved drafts; approval binds their exact
-contents to a new `approvalId`. When approved notes are nonblank, Plan saves an immutable companion
-file. Only agent-returned Markdown creates the next review revision. Historical approvals do not
-approve later revisions or changed notes.
+content preserves approval and completes without a cancellation warning or agent abort. Closure does
+not reopen implementation options. Approving unchanged content reopens implementation options
+without replaying its approval event. Editing notes creates unapproved drafts; approval binds their
+exact contents to a new `approvalId`. When approved notes are nonblank, Plan saves an immutable
+companion file. Only agent-returned Markdown creates the next review revision. Historical approvals
+do not approve later revisions or changed notes.
 
 Approval-event subscribers deduplicate by `approvalId`. Older version-1 records without that field
 retain their original plan/revision identity and companion path. Plan accepts records that omit

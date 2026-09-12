@@ -153,6 +153,13 @@ export type RuntimeResult =
   | { outcome: "started" | "active"; plan: PlanningSession }
   | { outcome: "cancelled"; planId?: string }
   | { outcome: "approval"; message: string; approval: PlanApproval }
+  | {
+      outcome: "implementation";
+      message: string;
+      approval: PlanApproval;
+      launchId: string;
+      status: "requested" | "received";
+    }
   | { outcome: "feedback"; revision: number; feedback: string }
   | {
       outcome: "answers";
@@ -331,7 +338,7 @@ function validReview(review: PlanRevision): boolean {
 
 function validApproval(
   approval: PlanApproval,
-  plan: PlanningSession,
+  plan: Pick<PlanningSession, "planId" | "sessionId" | "cwd">,
   review: PlanRevision | undefined,
 ): boolean {
   if (review === undefined) {
@@ -359,12 +366,30 @@ function validApproval(
   );
 }
 
+/** Validate a detached approval's content, notes, and artifact identities. */
+export function validApprovalPayload(approval: PlanApproval): boolean {
+  const review: PlanRevision = {
+    revision: approval.revision,
+    markdown: approval.planContent,
+    path: approval.planPath,
+    status: "approved",
+    feedbackDraft: approval.notes?.overall ?? "",
+    ...(approval.notes === undefined ? {} : { notes: approval.notes.blocks }),
+  };
+  return (
+    isPlanId(approval.planId) &&
+    validPath(approval.cwd) &&
+    validReview(review) &&
+    validApproval(approval, approval, review)
+  );
+}
+
 /** Derive the immutable companion destination for one approval. */
 export function approvalNotesPath(approval: Pick<PlanApproval, "planPath" | "approvalId">): string {
   return `${approval.planPath.slice(0, -3)}${approval.approvalId === undefined ? "" : `.${approval.approvalId}`}.notes.md`;
 }
 
-/** Identify one approval across events and ephemeral launch deduplication. */
+/** Identify one approval across events and saved launch records. */
 export function approvalKey(approval: PlanApproval): string {
   return approval.approvalId ?? `${approval.planId}:${String(approval.revision)}`;
 }

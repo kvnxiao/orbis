@@ -183,7 +183,8 @@ their predecessors.
 
 ## Implementation options
 
-Requirements: REQ-idle-completion, REQ-implementation-handoff, REQ-handoff-recovery.
+Requirements: REQ-idle-completion, REQ-implementation-handoff, REQ-launch-idempotency,
+REQ-handoff-recovery.
 
 After the package saves approval and review releases its input resources, a native Pi selector opens
 immediately in the composer area with the transcript visible. It is not a floating overlay. The
@@ -208,14 +209,22 @@ options again” invoke the same actions through model intent recognition. Ambig
 an explicit saved-plan selection. Selection identifies the plan; it does not add an implementation
 confirmation after an already authorized destination.
 
-| Scenario                                                            | Expected result                                                                                         |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Approve while the planning tool waits                               | Review closes and releases input before the selector opens; no idle wait or agent abort occurs.         |
-| Dismiss with Escape or Decide later                                 | Both retain exact artifacts and composer text, finish gracefully, and do not start implementation.      |
-| Choose either implementation destination                            | The prompt includes the absolute approved path and notes and states the user's execution authorization. |
-| Queue user input or finalize a mixed batch                          | Pi retains its normal continuation behavior; replacement waits for idleness.                            |
-| Reload, restore, or replace a session during selection or idle wait | Old actions cannot launch and the selector does not reopen.                                             |
-| Cancel replacement or reject prompt submission                      | Approval survives, failures remain visible, and ambiguous launch is not automatically retried.          |
+Hidden startup content does not appear in the transcript. It asks the receiving model to make a real
+`plan_implement` call, whose result includes the title derived from the first nonblank top-level
+Markdown heading, absolute path, supplementary notes, and execution authorization. Without a title,
+the result identifies the plan by its absolute path. Repeated here/new actions reuse the launch;
+only an explicit restart creates another launch. Options remain available after a launch.
+
+| Scenario                                                            | Expected result                                                                                                                                 |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Approve while the planning tool waits                               | Review closes and releases input before the selector opens; no idle wait or agent abort occurs.                                                 |
+| Dismiss with Escape or Decide later                                 | Both retain exact artifacts and composer text, finish gracefully, and do not start implementation.                                              |
+| Choose either implementation destination                            | Hidden startup requests a real receiving tool call; its result includes the approved path, notes, title when present, and authorization.        |
+| Repeat here/new after launch or restoration                         | The receiving session returns execution instructions; another session reports status. Repeats do not create another startup message or session. |
+| Reopen options, restart explicitly, or approve changed content      | Options remain available; ordinary selections reuse the launch, while explicit restart or a changed approval permits a new launch.              |
+| Queue user input or finalize a mixed batch                          | Pi retains its normal continuation behavior; replacement waits for idleness.                                                                    |
+| Reload, restore, or replace a session during selection or idle wait | Old actions cannot launch and the selector does not reopen.                                                                                     |
+| Cancel replacement or reject startup submission                     | Approval survives, failures remain visible, and another attempt requires explicit restart.                                                      |
 
 ## Closing and recovery
 
@@ -223,12 +232,13 @@ Requirements: REQ-revision-validation, REQ-session-recovery, REQ-interaction-can
 REQ-recoverable-failures.
 
 Escape leaves an editor, disclosure view, or answer review without submitting. From the outermost
-frontier or plan review, Escape arms closure; a consecutive Escape closes, stops the owning agent
-turn, and returns to Default. Other input disarms closure. The optional reminder belongs to hints.
-Closing plan review warns `Plan review closed without approval. Use /plan to resume.` Its expected
-empty abort response does not display a model error. Other failures and interruptions remain
-visible. Pending saves are flushed; persistence failures cannot be reported as saved drafts. Saved
-work requires explicit resume. Late callbacks cannot modify a replacement session or revision.
+frontier or plan review, Escape arms closure; a consecutive Escape closes and returns to Default.
+For unfinished work, closure also stops the owning agent turn. Other input disarms closure. The
+optional reminder belongs to hints. Closing plan review without a matching approval warns
+`Plan review closed without approval. Use /plan to resume.` Its expected empty abort response does
+not display a model error. Other failures and interruptions remain visible. Pending saves are
+flushed; persistence failures cannot be reported as saved drafts. Saved work requires explicit
+resume. Late callbacks cannot modify a replacement session or revision.
 
 ## Interaction scenarios
 
@@ -267,9 +277,10 @@ flowchart TD
   Options -->|Decide later or Escape| Accepted
   Options -->|This session| Idle[Graceful completion and idle wait]
   Options -->|New session| Idle
-  Idle -->|This session| Implement[Explicit implementation prompt]
+  Idle -->|This session| Startup[Hidden startup message]
   Idle -->|New session| Replace[Fresh session]
-  Replace -->|Fresh context| Implement
+  Replace -->|Fresh context| Startup
+  Startup -->|Model calls plan_implement| Implement[Tool result supplies execution instructions]
   Replace -->|Cancelled or failed| Accepted
 ```
 
@@ -366,8 +377,9 @@ REQ-implementation-handoff, REQ-handoff-recovery.
 
 Reopening an approved plan uses the normal review modal and its existing CTA actions. Overall text
 and block notes restore as editable drafts. Unchanged approval opens implementation options again;
-closing unchanged review preserves acceptance. Changed drafts remain unapproved across dismissal and
-resume. A revision request sends the current feedback to the agent.
+closing unchanged review preserves acceptance without a cancellation warning, agent abort, or
+implementation selector. Changed drafts remain unapproved across dismissal and resume. A revision
+request sends the current feedback to the agent.
 
 When the latest record is incompatible, explicit entry opens a native selector titled
 `Recover planning`. Its first option identifies the latest valid checkpoint, its plan, and phase;

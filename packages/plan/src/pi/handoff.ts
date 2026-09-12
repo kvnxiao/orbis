@@ -6,9 +6,13 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { Marked } from "@earendil-works/pi-tui";
+import type { Tokens } from "@earendil-works/pi-tui";
 
 import { approvalKey } from "../domain/state.ts";
-import type { PlanApproval } from "../domain/state.ts";
+import type { PlanApproval, RuntimeResult } from "../domain/state.ts";
+import { launchEntryType, readLaunches, saveLaunch } from "../storage/launches.ts";
+import type { LaunchRecord } from "../storage/launches.ts";
 import { planCommandDescription } from "./instructions.ts";
 
 const choices = ["Implement in this session", "Implement in a new session", "Decide later"];
@@ -20,6 +24,7 @@ interface Launch {
   approval: PlanApproval;
   destination: "here" | "new";
   claimed: boolean;
+  record: LaunchRecord;
   signal?: AbortSignal;
 }
 
@@ -28,7 +33,6 @@ export class PlanHandoff {
   private generation = 0;
   private controller: AbortController | undefined;
   private pending: Launch | undefined;
-  private readonly dispatched = new Set<string>();
 
   private readonly pi: ExtensionAPI;
 
@@ -49,11 +53,23 @@ export class PlanHandoff {
     action: "here" | "new" | "options",
     signal?: AbortSignal,
     beforeDispatch?: () => void,
-  ): Promise<string> {
+    restart = false,
+  ): Promise<string | LaunchRecord> {
+    const previous = readLaunches(ctx).findLast(
+      (record) => approvalKey(record.approval) === approvalKey(approval),
+    );
+    if (!restart && action !== "options" && previous !== undefined) {
+      if (
+        previous.status === "received" &&
+        previous.sessionId === ctx.sessionManager.getSessionId()
+      ) {
+        beforeDispatch?.();
+      }
+      return previous;
+    }
     if (this.controller !== undefined || this.pending !== undefined) {
       throw new Error("An implementation selection or launch is already pending.");
     }
-    const key = approvalKey(approval);
     const generation = this.generation;
     const sessionId = ctx.sessionManager.getSessionId();
     const controller = new AbortController();
@@ -84,10 +100,14 @@ export class PlanHandoff {
       if (!current()) {
         return "Approval preserved. The implementation action expired.";
       }
-      if (this.dispatched.has(key)) {
-        throw new Error(
-          "Implementation was already dispatched for this approval. Inspect the session before requesting further work.",
-        );
+      if (!restart && previous !== undefined) {
+        if (
+          previous.status === "received" &&
+          previous.sessionId === ctx.sessionManager.getSessionId()
+        ) {
+          beforeDispatch?.();
+        }
+        return previous;
       }
       const commands = this.pi
         .getCommands()
@@ -105,6 +125,16 @@ export class PlanHandoff {
       }
       beforeDispatch?.();
       const token = randomUUID();
+      const record: LaunchRecord = {
+        version: 1,
+        id: token,
+        approval: structuredClone(approval),
+        destination,
+        originSessionId: sessionId,
+        sessionId,
+        status: "requested",
+      };
+      saveLaunch(this.pi, ctx, record);
       this.pending = {
         token,
         sessionId,
@@ -112,6 +142,7 @@ export class PlanHandoff {
         approval: structuredClone(approval),
         destination,
         claimed: false,
+        record,
         ...(signal === undefined ? {} : { signal }),
       };
       // Command dispatch precedes queueing; its idle wait must not be awaited by this tool.
@@ -130,6 +161,56 @@ export class PlanHandoff {
       }
       controller.abort();
     }
+  }
+
+  /** Return execution instructions only to the recorded receiving session. */
+  result(ctx: ExtensionContext, record: LaunchRecord): RuntimeResult {
+    if (record.status === "failed") {
+      return {
+        outcome: "error",
+        message: `Implementation launch ${record.id} failed: ${record.failure ?? "unknown failure"}. Explicitly request a restart for another attempt.`,
+      };
+    }
+    const received =
+      record.status === "received" && record.sessionId === ctx.sessionManager.getSessionId();
+    if (!received) {
+      return {
+        outcome: "implementation",
+        launchId: record.id,
+        status: "requested",
+        approval: record.approval,
+        message: `Implementation launch ${record.id} was requested for destination ${record.destination}. Delivery is not confirmed by this session. No additional prompt or session was created. Explicitly request a restart for another launch.`,
+      };
+    }
+    const approval = record.approval;
+    if (
+      approval.cwd !== ctx.cwd ||
+      readFileSync(approval.planPath, "utf8") !== approval.planContent ||
+      (approval.notesPath !== undefined &&
+        readFileSync(approval.notesPath, "utf8") !== approval.notesContent)
+    ) {
+      return {
+        outcome: "error",
+        message:
+          "Approved artifacts or working directory changed. Preserve the recorded approval and resolve the conflict before implementation.",
+      };
+    }
+    const heading = new Marked()
+      .lexer(approval.planContent)
+      .filter((token): token is Tokens.Heading => token.type === "heading")
+      .find((token) => token.text.trim() !== "");
+    const introduction =
+      heading === undefined
+        ? `Implement the approved plan at this absolute Markdown path: ${JSON.stringify(approval.planPath)}.`
+        : `Implement the approved plan: ${heading.text.trim()}\n\nApproved Markdown path: ${JSON.stringify(approval.planPath)}.`;
+    const message = `${introduction}\n\nImplementation launch ${record.id} is already in this session. The user selected implementation and authorizes execution now, even if the saved plan says implementation awaits separate authorization. Read the Markdown file at the path above and implement the plan with ordinary tools. Continue this launch without calling the launcher again or requesting the same authorization.${approval.notesContent === undefined ? "" : `\n\nSupplementary approved notes (${JSON.stringify(approval.notesPath)}):\n${approval.notesContent}`}`;
+    return {
+      outcome: "implementation",
+      launchId: record.id,
+      status: "received",
+      approval,
+      message,
+    };
   }
 
   async dispatch(token: string, ctx: ExtensionCommandContext): Promise<void> {
@@ -161,28 +242,68 @@ export class PlanHandoff {
           "Approved artifacts changed. Restore the reviewed bytes before requesting implementation.",
         );
       }
-      const prompt = `Implement the approved plan at this absolute Markdown path: ${JSON.stringify(approval.planPath)}.\n\nThe user selected implementation and authorizes execution now, even if the saved plan says implementation awaits separate authorization. Follow the approved plan and the repository instructions. Start implementation without asking for the same authorization again.${approval.notesContent === undefined ? "" : `\n\nSupplementary approved notes (${JSON.stringify(approval.notesPath)}):\n${approval.notesContent}`}`;
-      const key = approvalKey(approval);
-      this.dispatched.add(key);
+      const bootstrap = `Continue authorized implementation launch ${launch.record.id}. Call plan_implement with action "here" and planId ${JSON.stringify(approval.planId)} to obtain its execution instructions. This is the receiving session for an existing launch; do not request a restart or create another session.`;
+      const message = {
+        customType: "orbis-plan-implementation",
+        content: bootstrap,
+        display: false,
+      };
       if (launch.destination === "here") {
-        this.pi.sendUserMessage(prompt, { deliverAs: "followUp", expandPromptTemplates: false });
+        saveLaunch(this.pi, ctx, { ...launch.record, status: "received" });
+        this.pi.sendMessage(message, { deliverAs: "followUp", triggerTurn: true });
         return;
       }
       const origin = launch.sessionId;
       const submission = { started: false };
       const result = await ctx.newSession({
+        async setup(manager) {
+          await Promise.resolve(
+            manager.appendCustomEntry(launchEntryType, {
+              ...launch.record,
+              sessionId: manager.getSessionId(),
+              status: "received",
+            }),
+          );
+        },
         async withSession(fresh) {
           if (submission.started || fresh.sessionManager.getSessionId() === origin) {
             throw new Error("Replacement did not provide an unused fresh session context.");
           }
           submission.started = true;
-          await fresh.sendUserMessage(prompt, { expandPromptTemplates: false });
+          try {
+            await fresh.sendMessage(message, { triggerTurn: true });
+          } catch (error) {
+            const failure = error instanceof Error ? error.message : String(error);
+            try {
+              const failed: LaunchRecord = {
+                ...launch.record,
+                sessionId: fresh.sessionManager.getSessionId(),
+                status: "failed",
+                failure,
+              };
+              await fresh.sendMessage(
+                {
+                  customType: launchEntryType,
+                  content: `Implementation startup failed: ${failure}`,
+                  details: failed,
+                  display: false,
+                },
+                { triggerTurn: false },
+              );
+            } catch (recordError) {
+              throw new AggregateError(
+                [error, recordError],
+                `Implementation startup failed: ${failure}. Failure recording also failed: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
+                { cause: recordError },
+              );
+            }
+            throw error;
+          }
         },
       });
       if (result.cancelled) {
-        this.dispatched.delete(key);
         throw new Error(
-          "Session replacement was cancelled. Approval is preserved; request implementation again when ready.",
+          "Session replacement was cancelled. Approval is preserved; explicitly request a restart for another attempt.",
         );
       }
       if (!submission.started) {
@@ -191,6 +312,18 @@ export class PlanHandoff {
         );
       }
     } catch (error) {
+      if (current()) {
+        const failure = error instanceof Error ? error.message : String(error);
+        try {
+          saveLaunch(this.pi, ctx, { ...launch.record, status: "failed", failure });
+        } catch (recordError) {
+          throw new AggregateError(
+            [error, recordError],
+            `Implementation handoff failed: ${failure}. Failure recording also failed: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
+            { cause: recordError },
+          );
+        }
+      }
       throw new Error(
         `Implementation handoff failed; approval is preserved. No automatic retry was made. ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },

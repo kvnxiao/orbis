@@ -395,10 +395,8 @@ test("Plan composer submits ordinary text while Default and noninteractive sourc
   initTheme("dark", false);
   factory?.(new TuiMainScreen(new ProcessTerminal()), editorTheme(), keybindings);
   const before = {
-    type: "before_agent_start" as const,
-    prompt: "Task",
-    systemPrompt: "Original",
-    systemPromptOptions: { cwd: f.ctx.cwd },
+    type: "context" as const,
+    messages: [],
   };
   await emit({ type: "input", source: "interactive", text: "Ordinary task" }, ctx);
   expect(await emit(before, ctx)).toEqual([undefined]);
@@ -410,13 +408,20 @@ test("Plan composer submits ordinary text while Default and noninteractive sourc
   expect(await emit({ type: "input", source: "interactive", text: "A reminder CLI" }, ctx)).toEqual(
     [{ action: "continue" }],
   );
-  const planning = await emit(before, ctx);
-  const result = planning[0];
-  if (typeof result !== "object" || result === null || !("systemPrompt" in result)) {
-    throw new Error("Missing planning instructions");
-  }
-  expect(result.systemPrompt).toContain("Planning is active");
-  expect(result.systemPrompt).toContain("Original");
+  const planning = [
+    {
+      messages: [
+        {
+          role: "custom",
+          customType: "orbis-plan-mode",
+          content: expect.stringContaining("Planning is active") as unknown,
+          display: false,
+          timestamp: expect.any(Number) as unknown,
+        },
+      ],
+    },
+  ];
+  expect(await emit(before, ctx)).toEqual(planning);
   const saved = f.manager
     .getBranch()
     .find((entry) => entry.type === "message" && entry.message.role === "assistant");

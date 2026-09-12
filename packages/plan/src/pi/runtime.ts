@@ -35,6 +35,7 @@ import { saveApproval } from "../storage/approval.ts";
 import { prepareReviewArtifact } from "../storage/artifacts.ts";
 import { defaultShortcut, readSettings } from "../storage/config.ts";
 import type { PlanSettings } from "../storage/config.ts";
+import { readLaunches } from "../storage/launches.ts";
 import { readSavedRecord, saveRecord } from "../storage/persistence.ts";
 import type { SaveResult } from "../storage/persistence.ts";
 import { SessionFile } from "../storage/session-file.ts";
@@ -967,12 +968,15 @@ export class PlanRuntime {
             this.pendingCompletion = approval.state.accepted;
           }
           this.settled(ctx);
-          await this.handoff.request(
+          const selection = await this.handoff.request(
             ctx,
             approval.state.accepted,
             "options",
             signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]),
           );
+          if (typeof selection !== "string") {
+            return this.handoff.result(ctx, selection);
+          }
         }
         if (approval.outcome === "error") {
           return { outcome: "error", message: approval.message };
@@ -1021,6 +1025,13 @@ export class PlanRuntime {
         };
       }
       this.pause(ctx);
+      if (reviewClosure.requested && this.current?.accepted !== undefined) {
+        return {
+          outcome: "approval",
+          approval: structuredClone(this.current.accepted),
+          message: "Review closed. Existing approval preserved.",
+        };
+      }
       if (reviewClosure.requested) {
         this.dismissedReviewSignal = ctx.signal;
         ctx.ui.notify("Plan review closed without approval. Use /plan to resume.", "warning");
@@ -1161,6 +1172,7 @@ export class PlanRuntime {
     action: "here" | "new" | "options",
     planId?: string,
     signal?: AbortSignal,
+    restart = false,
   ): Promise<RuntimeResult> {
     if (ctx.mode !== "tui") {
       return unsupportedMode();
@@ -1172,9 +1184,16 @@ export class PlanRuntime {
       };
     }
     const generation = this.generation;
-    const approvals = [this.current, ...this.archived].flatMap((plan) =>
-      plan?.accepted === undefined ? [] : [plan.accepted],
+    const plans = [this.current, ...this.archived];
+    const inherited = new Map(
+      readLaunches(ctx)
+        .filter((record) => !plans.some((plan) => plan?.planId === record.approval.planId))
+        .map((record) => [record.approval.planId, record.approval]),
     );
+    const approvals = [
+      ...plans.flatMap((plan) => (plan?.accepted === undefined ? [] : [plan.accepted])),
+      ...inherited.values(),
+    ];
     let approval = approvals.find((candidate) => candidate.planId === planId);
     if (planId === undefined && approvals.length === 1) {
       approval = approvals[0];
@@ -1214,16 +1233,26 @@ export class PlanRuntime {
           "The approved plan is unavailable on this branch. Select an existing approved plan before requesting implementation.",
       };
     }
-    const message = await this.handoff.request(ctx, approval, action, signal, () => {
-      if (this.current !== undefined && this.current.phase !== "accepted") {
-        this.current = { ...this.current, phase: "cancelled" };
-      }
-      this.selectedMode = "default";
-      const saved = this.save(ctx);
-      if (!saved.saved) {
-        throw new Error(saved.message);
-      }
-    });
+    const message = await this.handoff.request(
+      ctx,
+      approval,
+      action,
+      signal,
+      () => {
+        if (this.current !== undefined && this.current.phase !== "accepted") {
+          this.current = { ...this.current, phase: "cancelled" };
+        }
+        this.selectedMode = "default";
+        const saved = this.save(ctx);
+        if (!saved.saved) {
+          throw new Error(saved.message);
+        }
+      },
+      restart,
+    );
+    if (typeof message !== "string") {
+      return this.handoff.result(ctx, message);
+    }
     return { outcome: "approval", approval: structuredClone(approval), message };
   }
 

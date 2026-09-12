@@ -293,15 +293,15 @@ recovery never infers approval from file existence. Failed recreation remains re
 Cancellation ends the pending interaction without submitting drafts, approving a plan, or emitting
 completion. Saved unfinished work remains available for explicit resume, including unanswered
 clarification. After cancellation, reload, or session replacement, late results and confirmations
-cannot modify replacement work or start a stale agent continuation. Closing planning also stops the
-owning agent turn and returns to Default mode. Pi's normal interrupt during planning research or
-clarification leaves saved work paused. A later unrelated message cannot restart it. Cancellation
-flushes pending draft saves and reports a persistence failure instead of claiming that unsaved
-drafts are durable.
+cannot modify replacement work or start a stale agent continuation. Closing unfinished planning
+stops the owning agent turn and returns to Default mode. Pi's normal interrupt during planning
+research or clarification leaves saved work paused. A later unrelated message cannot restart it.
+Cancellation flushes pending draft saves and reports a persistence failure instead of claiming that
+unsaved drafts are durable.
 
-Explicitly closing plan review reports cancellation without approval. An empty abort response from
-the turn stopped by that closure must not appear as a model failure. Unrelated interruptions,
-provider failures, and assistant content remain unchanged.
+Explicitly closing plan review without a matching approval reports cancellation. An empty abort
+response from the turn stopped by that closure must not appear as a model failure. Unrelated
+interruptions, provider failures, and assistant content remain unchanged.
 
 ### REQ-configuration-precedence — Configuration precedence
 
@@ -362,22 +362,42 @@ start implementation. The selector is ephemeral and does not reopen on dismissal
 restoration.
 
 Selecting an implementation destination authorizes execution without another confirmation. The
-package gracefully completes planning before sending an explicit implementation prompt.
+package gracefully completes planning before starting the receiving implementation turn.
 Current-session implementation retains conversation context. Fresh-session implementation waits for
 idleness in command context, revalidates the originating session, creates a session through Pi's
-public lifecycle, and sends the prompt only through the fresh replacement context. Ordinary queued
+public lifecycle, and starts the turn only through the fresh replacement context. Ordinary queued
 input retains Pi's delivery policy before replacement.
 
-The prompt directs implementation of the approved plan at its absolute Markdown path. When the
-approval includes supplementary notes, the prompt includes them. Even when the saved plan says
-implementation awaits separate authorization, the selected action supplies that authorization. Saved
-plan and note bytes remain unchanged.
+The receiving session uses a hidden extension startup message to request a real `plan_implement`
+call. The tool result supplies the implementation instructions, authorization, and absolute Markdown
+path. The package does not display a pasted user implementation prompt or fabricate tool-call
+history. The startup instruction guides the model; tool selection is not guaranteed. When the
+approved Markdown contains a nonblank top-level heading, the result includes the first nonblank
+heading as the plan title. This title is derived from the approved content without a model request.
+When the approval includes supplementary notes, the result includes them. Even when the saved plan
+says implementation awaits separate authorization, the selected action supplies that authorization.
+Saved plan and note bytes remain unchanged.
 
 A model-callable operation supports subsequent natural-language requests to implement here,
 implement in a fresh session, or reopen the options. These describe intent, not a literal-phrase
 whitelist. Quoted examples and feature questions do not authorize execution. Ambiguous saved-plan
 references require explicit resolution; unknown or unapproved references fail without launching
 work. Internal command routing is permitted without adding a user-facing launcher command.
+
+### REQ-launch-idempotency — Launch idempotency
+
+Each implementation launch records its identity, exact approval, destination, and delivery state.
+The originating and receiving sessions retain their records across reload and restoration. Ordinary
+repeated requests for the same approval reuse the existing launch, even when they request another
+destination. They do not create a session or send another startup message. In the receiving session,
+the repeated operation returns the execution instructions and permits normal agent continuation
+without requiring a local planning record. Elsewhere it reports the recorded launch status without
+starting implementation in that session. Launch status does not assert implementation completion.
+
+An explicit restart request creates another launch and preserves prior records. Changed approved
+Markdown or supplementary notes can start a new launch. The options selector remains available;
+selecting a destination also checks the existing launch. An ordinary repeat of a failed or uncertain
+launch reports that state without retrying. Only explicit restart authorizes another attempt.
 
 ### REQ-handoff-recovery — Handoff recovery
 
@@ -502,7 +522,8 @@ quality also requires representative planning tasks.
 | Recovery and cancellation    | Saved drafts restore on their branch; cancellation and late results cannot submit or replace work; unsaved state is reported.                                                                                                                                                        | REQ-session-recovery, REQ-interaction-cancellation                             |
 | Save and retry               | Saved bytes equal reviewed Markdown; partial failures preserve the recorded attempt and retries avoid conflicting or duplicate artifacts.                                                                                                                                            | REQ-plan-save                                                                  |
 | Approval handoff             | After saving acceptance, the package opens the selector immediately. When the agent is idle, the package emits the version 1 event. Only a selected implementation action launches work; restoration does not replay the event or action.                                            | REQ-idle-completion, REQ-approval-event, REQ-notification-semantics            |
-| Implementation destinations  | Current-session launch retains context; fresh-session launch waits for idle and sends only through the replacement context. Notes and explicit execution authorization are included.                                                                                                 | REQ-implementation-handoff                                                     |
+| Implementation destinations  | Current-session launch retains context; fresh-session launch waits for idle and starts only through the replacement context. Hidden startup requests a real tool call whose result includes the title when present, absolute path, notes, and execution authorization.               | REQ-implementation-handoff                                                     |
+| Launch reuse and restart     | Repeated destinations and restoration reuse the exact approval's recorded launch. Receiving tools continue it without another message or session; other sessions report status. Only explicit restart or a changed approval permits another launch.                                  | REQ-launch-idempotency                                                         |
 | Handoff failures             | Dismissal, stale callbacks, duplicate dispatch, artifact changes, cancelled replacement, and rejected prompts preserve approval and never launch into the wrong session or automatically retry ambiguous completion.                                                                 | REQ-handoff-recovery, REQ-implementation-handoff                               |
 | Optional presenter           | A fake presenter receives the current interaction, updates answer and revision-feedback drafts, and returns validated input; withdrawal, failure, or removal restores active work to the TUI and rejects late results. Plan cancellation and session teardown close the interaction. | REQ-exclusive-interaction, REQ-public-presentation-boundary                    |
 | Invalid or unavailable input | Unknown identities and malformed outcomes fail without mutation; unsupported modes return explicitly and cleanup cannot affect newer work.                                                                                                                                           | REQ-typed-planning-outcomes, REQ-recoverable-failures                          |

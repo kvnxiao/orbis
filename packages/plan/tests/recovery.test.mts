@@ -4,6 +4,7 @@ import { expect, test, vi } from "vitest";
 
 import { validSession, validSnapshot } from "../src/domain/state.ts";
 import * as terminal from "../src/pi/terminal.ts";
+import { toolResult } from "../src/pi/tool-result.ts";
 import { runtimeFixture } from "./runtime-fixture.mts";
 
 test("reopening accepted review preserves its plan, Markdown revision, and approval", async ({
@@ -98,7 +99,22 @@ test.for([false, true])(
       dispatch({ type: "cancel" });
       await Promise.resolve();
     });
-    expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("cancelled");
+    const abort = vi.spyOn(f.ctx, "abort");
+    const notify = vi.spyOn(f.ctx.ui, "notify");
+    const select = vi.spyOn(f.ctx.ui, "select");
+    const emit = vi.spyOn(f.api.events, "emit");
+    const result = await f.runtime.requestStart(f.ctx, "", false);
+    expect(result).toMatchObject({
+      outcome: "approval",
+      approval: f.approval,
+      message: "Review closed. Existing approval preserved.",
+    });
+    expect(abort).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalledWith(expect.any(String), "warning");
+    expect(select).not.toHaveBeenCalled();
+    expect(await toolResult(result)).toMatchObject({ terminate: true });
+    f.runtime.settled(f.ctx);
+    expect(emit).not.toHaveBeenCalledWith("orbis:plan-approved", expect.anything());
     expect(f.runtime.active?.accepted).toEqual(f.approval);
     f.runtime.restore(f.ctx);
     expect(f.runtime.active?.accepted).toEqual(f.approval);

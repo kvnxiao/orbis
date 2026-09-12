@@ -17,9 +17,9 @@ require agent interruption.
 [Interactive host](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts).
 
 `waitForIdle` and `newSession` belong to command context. After replacement, `withSession` supplies
-a fresh context whose `sendUserMessage` returns a promise. A cancelled replacement retains the old
-session. A rejected replacement or prompt can leave an ambiguous completion state and must not
-trigger an automatic retry.
+a fresh context whose `sendMessage` and `sendUserMessage` return promises. A cancelled replacement
+retains the old session. A rejected replacement or prompt can leave an ambiguous completion state
+and must not trigger an automatic retry.
 [Extension contracts](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/extensions/types.ts).
 
 `pi.sendUserMessage` returns immediately and observes asynchronous rejection through Pi's extension
@@ -27,11 +27,13 @@ error reporting. Expansion defaults to false. With `expandPromptTemplates: true`
 precedes steering or follow-up queueing even during active work. If the originating tool cannot
 return independently, the dispatched command must not wait for idle. An opaque, single-use token
 routed through the existing `/plan` command can bind a pending action to its originating session
-without adding a launcher command. Expansion is disabled for ordinary implementation prompts.
+without adding a launcher command. Hidden custom-message startup and receiving-tool delivery use the
+separate [implementation launch APIs](implementation-launches.md).
 [Message routing](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/agent-session.ts).
 
-Approval persistence remains independent of implementation dispatch. The selector and pending
-dispatch are ephemeral. Session changes invalidate old selectors and unconsumed actions; successful
-replacement transfers only the approved artifact data and prompt into the fresh callback. Before
-dispatch, artifact bytes and originating session identity need revalidation. Natural-language intent
-uses a model-callable operation and explicit saved-plan selection when the reference is ambiguous.
+Approval persistence remains independent of implementation dispatch. Selectors and active dispatch
+callbacks are ephemeral; saved launch records preserve approval and delivery state across
+restoration. Session changes invalidate old selectors and unconsumed callbacks. Replacement setup
+records the receiving launch before its startup message. Before dispatch, artifact bytes and
+originating session identity need revalidation. Natural-language intent uses a model-callable
+operation and explicit saved-plan selection when the reference is ambiguous.
