@@ -21,6 +21,7 @@ import type {
 import { getKeybindings } from "@earendil-works/pi-tui";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 
+/** Verify public imports and presenter registration without model traffic. */
 export async function packedProbe(order: "base" | "before" | "after" = "after"): Promise<void> {
   const cwd = await mkdtemp(join(tmpdir(), "orbis-plan-packed-"));
   const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
@@ -88,15 +89,16 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
       stopReason: "stop",
       timestamp: Date.now(),
     });
-    const extension = loader
-      .getExtensions()
-      .extensions.find((item) => item.tools.has("plan_start"));
+    const extension = loader.getExtensions().extensions.find((item) => item.tools.has("plan_open"));
     assert.ok(extension !== undefined);
     const base = session.extensionRunner.createContext();
     let phase: "round" | "review" = "round";
     const ui: ExtensionUIContext = {
       ...base.ui,
       async select(title, _items, options) {
+        if (title === "Implement approved plan?") {
+          return "Decide later";
+        }
         if (title === "Planning presenter") {
           return "scripted-probe";
         }
@@ -164,7 +166,7 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
       },
     };
     const ctx: ExtensionContext = { ...base, mode: "tui", ui };
-    const start = extension.tools.get("plan_start")?.definition;
+    const start = extension.tools.get("plan_open")?.definition;
     const round = extension.tools.get("plan_round")?.definition;
     const review = extension.tools.get("plan_review")?.definition;
     assert.ok(start !== undefined && round !== undefined && review !== undefined);

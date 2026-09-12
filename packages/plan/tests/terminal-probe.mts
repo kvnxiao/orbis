@@ -2,6 +2,7 @@ import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+/** Register scripted modal scenarios for an isolated interactive host. */
 export default function terminalProbe(pi: ExtensionAPI): void {
   let mode: "round" | "review" = "round";
   for (const name of ["round", "review"] as const) {
@@ -46,7 +47,7 @@ export default function terminalProbe(pi: ExtensionAPI): void {
       }
       let call: { name: string; arguments: Record<string, unknown> } | undefined;
       if (previous?.role === "user") {
-        call = { name: "plan_start", arguments: { objective: "Scripted terminal verification" } };
+        call = { name: "plan_open", arguments: { objective: "Scripted terminal verification" } };
       } else if (
         typeof details === "object" &&
         details !== null &&

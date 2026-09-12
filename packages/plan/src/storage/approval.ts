@@ -1,8 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
 import { sameRecord } from "../domain/record-equality.ts";
-import { acceptApproval, isPlanId, recoverReview, supplementaryNotes } from "../domain/state.ts";
+import {
+  acceptApproval,
+  approvalNotesPath,
+  matchingApproval,
+  isPlanId,
+  recoverReview,
+  supplementaryNotes,
+} from "../domain/state.ts";
 import type { PlanApproval, PlanningSession } from "../domain/state.ts";
 import { writeArtifact } from "./artifacts.ts";
 import type { SaveResult } from "./persistence.ts";
@@ -30,9 +38,11 @@ export function saveApproval(
   const supplementary = structuredClone(supplementaryNotes(state.planId, review));
   const notes = supplementary?.notes;
   const notesContent = supplementary?.content;
-  const prior = state.pendingApproval;
+  const prior = state.pendingApproval ?? matchingApproval(state);
+  const approvalId = randomUUID();
   const intent: PlanApproval = prior ?? {
     version: 1,
+    approvalId,
     planId: state.planId,
     revision: review.revision,
     sessionId: state.sessionId,
@@ -44,7 +54,7 @@ export function saveApproval(
       ? {}
       : {
           notes,
-          notesPath: `${review.path.slice(0, -3)}.notes.md`,
+          notesPath: approvalNotesPath({ planPath: review.path, approvalId }),
           notesContent: notesContent ?? "",
         }),
   };

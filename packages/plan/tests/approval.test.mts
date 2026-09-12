@@ -76,8 +76,10 @@ test("approval persists intent, exact file bytes, and acceptance in order", asyn
     throw new Error("Missing acceptance");
   }
   expect(await readFile(accepted.planPath, "utf8")).toBe(f.state.reviews?.at(-1)?.markdown);
+  expect(accepted.approvalId).toMatch(/^[a-f0-9-]{36}$/u);
   expect(accepted).toEqual({
     version: 1,
+    approvalId: accepted.approvalId,
     planId: f.state.planId,
     revision: 1,
     sessionId: f.state.sessionId,

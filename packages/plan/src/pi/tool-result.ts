@@ -73,24 +73,41 @@ export async function toolResult(
       break;
     case "answers":
     case "approval":
+    case "implementation":
     case "cancelled":
     case "feedback":
     case "unsupported-mode":
       break;
   }
   const details = structuredClone(projected);
-  const guidance =
-    result.outcome === "cancelled"
-      ? "The operation was cancelled without submission or approval; saved unfinished work remains resumable. Stop planning for this turn. When the user explicitly asks to resume, call plan_start with replace: false to reopen saved work. Cancellation does not establish that a plan is missing or unrecoverable. Do not replace it or request approval in chat."
-      : instructions;
+  let guidance = instructions;
+  if (result.outcome === "approval") {
+    guidance =
+      "Approval is saved. Acknowledge approval and finish this planning turn. Only an explicit implementation action authorizes execution; a scheduled handoff starts a receiving turn whose plan_implement result supplies execution instructions. Do not start implementation from this approval result alone.";
+  } else if (result.outcome === "implementation") {
+    guidance =
+      result.status === "received"
+        ? "Continue the existing authorized implementation in this session. Read the approved Markdown and follow the execution instructions in this result. Use ordinary implementation tools; do not launch it again."
+        : "This launch is already recorded. Report its status and finish this turn without creating another session or starting implementation here. Only an explicit restart authorizes another launch.";
+  } else if (result.outcome === "cancelled") {
+    guidance =
+      "The operation was cancelled without submission or approval; saved unfinished work remains resumable. Stop planning for this turn. When the user explicitly asks to resume, call plan_open with replace: false to reopen saved work. Cancellation does not establish that a plan is missing or unrecoverable. Do not replace it or request approval in chat.";
+  }
   const serialized = JSON.stringify(
-    guidance === undefined ? details : { ...details, instructions: guidance },
+    guidance === undefined ? details : { instructions: guidance, ...details },
     null,
     2,
   );
   const truncated = truncateHead(serialized);
   if (!truncated.truncated) {
-    return { content: [{ type: "text", text: serialized }], details };
+    return {
+      content: [{ type: "text", text: serialized }],
+      details,
+      ...(result.outcome === "approval" ||
+      (result.outcome === "implementation" && result.status === "requested")
+        ? { terminate: true }
+        : {}),
+    };
   }
   const directory = await mkdtemp(join(tmpdir(), "orbis-plan-result-"));
   const resultPath = join(directory, "result.json");
@@ -103,5 +120,9 @@ export async function toolResult(
   return {
     content: [{ type: "text", text: `${preview.content}${notice}` }],
     details: { outcome: result.outcome, truncated: true, resultPath },
+    ...(result.outcome === "approval" ||
+    (result.outcome === "implementation" && result.status === "requested")
+      ? { terminate: true }
+      : {}),
   };
 }

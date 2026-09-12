@@ -119,7 +119,7 @@ test("disabled persistence returns normally and retains only memory", async ({
   });
 });
 
-test("registered planning tools persist acceptance and emit once after the aborted agent settles", async ({
+test("registered planning tools persist acceptance and emit once after the successful agent settles", async ({
   onTestFinished,
 }) => {
   const notifications: PlanApproval[] = [];
@@ -186,7 +186,7 @@ test("registered planning tools persist acceptance and emit once after the abort
       throw new Error("Approval must not start implementation");
     }
     const entry = context.messages.find(
-      (message) => message.role === "toolResult" && message.toolName === "plan_start",
+      (message) => message.role === "toolResult" && message.toolName === "plan_open",
     );
     const text =
       entry?.role === "toolResult"
@@ -207,7 +207,7 @@ test("registered planning tools persist acceptance and emit once after the abort
             {
               type: "toolCall",
               id: `call-${String(calls)}`,
-              name: calls === 1 ? "plan_start" : "plan_review",
+              name: calls === 1 ? "plan_open" : "plan_review",
               arguments:
                 calls === 1
                   ? { objective: "Scripted approval" }
@@ -301,7 +301,7 @@ test("closing plan review warns without an error response or model continuation"
       throw new Error("Closing review must stop model continuation");
     }
     const entry = context.messages.find(
-      (message) => message.role === "toolResult" && message.toolName === "plan_start",
+      (message) => message.role === "toolResult" && message.toolName === "plan_open",
     );
     const startText =
       entry?.role === "toolResult"
@@ -319,7 +319,7 @@ test("closing plan review warns without an error response or model continuation"
             {
               type: "toolCall",
               id: `call-${String(calls)}`,
-              name: calls === 1 ? "plan_start" : "plan_review",
+              name: calls === 1 ? "plan_open" : "plan_review",
               arguments:
                 calls === 1
                   ? { objective: "Closure fixture" }
@@ -420,7 +420,7 @@ test.for([false, true])(
                 {
                   type: "toolCall",
                   id: "invalid-plan",
-                  name: malformed ? "plan_start" : "plan_round",
+                  name: malformed ? "plan_open" : "plan_round",
                   arguments: malformed
                     ? { objective: {} }
                     : {
@@ -471,7 +471,7 @@ test.for([false, true])(
     ).toContainEqual(
       expect.objectContaining({
         role: "toolResult",
-        toolName: malformed ? "plan_start" : "plan_round",
+        toolName: malformed ? "plan_open" : "plan_round",
         isError: true,
       }),
     );

@@ -73,7 +73,7 @@ test("closed review reopens from a new runtime and disk session with exact Markd
     dispatch({ type: "cancel" });
     await Promise.resolve();
   });
-  expect(await runtime.requestStart(ctx, "Resume plan review", false)).toEqual({
+  expect(await runtime.requestOpen(ctx, "Resume plan review", false)).toEqual({
     outcome: "cancelled",
     planId,
   });
@@ -172,7 +172,7 @@ test("clarification resumes with saved round counts and drafts", async ({ onTest
   expect(f.runtime.active?.roundNumber).toBe(2);
   f.runtime.pause(f.ctx);
   f.runtime.restore(f.ctx);
-  const resumed = await f.runtime.requestStart(f.ctx, "Continue planning", false);
+  const resumed = await f.runtime.requestOpen(f.ctx, "Continue planning", false);
   expect(resumed.outcome).toBe("clarification");
   expect(f.runtime.active?.round?.drafts.scope?.unfinished).toBe("Keep this draft");
   expect(f.runtime.active?.round?.drafts.scope?.options).toEqual({ local: "Keep option notes" });

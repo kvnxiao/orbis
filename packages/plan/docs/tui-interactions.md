@@ -181,18 +181,64 @@ notes, revision requests, or approval. Returning to the latest restores its note
 Browsing cannot change the pending approval identity. New revisions do not inherit active notes from
 their predecessors.
 
+## Implementation options
+
+Requirements: REQ-idle-completion, REQ-implementation-handoff, REQ-launch-idempotency,
+REQ-handoff-recovery.
+
+After the package saves approval and review releases its input resources, a native Pi selector opens
+immediately in the composer area with the transcript visible. It is not a floating overlay. The
+title is `Implement approved plan?`. Options appear in this order:
+
+- Implement in this session
+- Implement in a new session
+- Decide later
+
+The first option starts focused. Native selection bindings navigate and activate the options. Escape
+is equivalent to Decide later: it closes the selector, preserves acceptance and composer text, and
+finishes planning gracefully without implementation or agent abort. The selector never reopens
+automatically. Active unfinished planning interactions retain their double-Escape cancellation.
+
+Either implementation option authorizes execution without another confirmation. The selector closes
+before planning completes. The new-session action waits for idleness before replacing the session.
+When replacement is cancelled or fails, the saved plan and notes remain available and the failure is
+visible. A stale selector cannot launch into a replacement session.
+
+Subsequent requests such as “Implement it here,” “Implement it in a fresh session,” or “Show me the
+options again” invoke the same actions through model intent recognition. Ambiguous references open
+an explicit saved-plan selection. Selection identifies the plan; it does not add an implementation
+confirmation after an already authorized destination.
+
+Hidden startup content does not appear in the transcript. It asks the receiving model to make a real
+`plan_implement` call, whose result includes the title derived from the first nonblank top-level
+Markdown heading, absolute path, supplementary notes, and execution authorization. Without a title,
+the result identifies the plan by its absolute path. Repeated here/new actions reuse the launch;
+only an explicit restart creates another launch. Options remain available after a launch.
+
+| Scenario                                                            | Expected result                                                                                                                                 |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Approve while the planning tool waits                               | Review closes and releases input before the selector opens; no idle wait or agent abort occurs.                                                 |
+| Dismiss with Escape or Decide later                                 | Both retain exact artifacts and composer text, finish gracefully, and do not start implementation.                                              |
+| Choose either implementation destination                            | Hidden startup requests a real receiving tool call; its result includes the approved path, notes, title when present, and authorization.        |
+| Repeat here/new after launch or restoration                         | The receiving session returns execution instructions; another session reports status. Repeats do not create another startup message or session. |
+| Reopen options, restart explicitly, or approve changed content      | Options remain available; ordinary selections reuse the launch, while explicit restart or a changed approval permits a new launch.              |
+| Queue user input or finalize a mixed batch                          | Pi retains its normal continuation behavior; replacement waits for idleness.                                                                    |
+| Reload, restore, or replace a session during selection or idle wait | Old actions cannot launch and the selector does not reopen.                                                                                     |
+| Cancel replacement or reject startup submission                     | Approval survives, failures remain visible, and another attempt requires explicit restart.                                                      |
+
 ## Closing and recovery
 
 Requirements: REQ-revision-validation, REQ-session-recovery, REQ-interaction-cancellation,
 REQ-recoverable-failures.
 
 Escape leaves an editor, disclosure view, or answer review without submitting. From the outermost
-frontier or plan review, Escape arms closure; a consecutive Escape closes, stops the owning agent
-turn, and returns to Default. Other input disarms closure. The optional reminder belongs to hints.
-Closing plan review warns `Plan review closed without approval. Use /plan to resume.` Its expected
-empty abort response does not display a model error. Other failures and interruptions remain
-visible. Pending saves are flushed; persistence failures cannot be reported as saved drafts. Saved
-work requires explicit resume. Late callbacks cannot modify a replacement session or revision.
+frontier or plan review, Escape arms closure; a consecutive Escape closes and returns to Default.
+For unfinished work, closure also stops the owning agent turn. Other input disarms closure. The
+optional reminder belongs to hints. Closing plan review without a matching approval warns
+`Plan review closed without approval. Use /plan to resume.` Its expected empty abort response does
+not display a model error. Other failures and interruptions remain visible. Pending saves are
+flushed; persistence failures cannot be reported as saved drafts. Saved work requires explicit
+resume. Late callbacks cannot modify a replacement session or revision.
 
 ## Interaction scenarios
 
@@ -227,7 +273,15 @@ flowchart TD
   Review -->|Request revision| Research
   Review -->|Approve or Approve with notes| Save[Verify artifacts and persist acceptance]
   Save -->|Failure| Review
-  Save -->|Success and agent idle| Accepted
+  Save -->|Success| Options[Implementation options]
+  Options -->|Decide later or Escape| Accepted
+  Options -->|This session| Idle[Graceful completion and idle wait]
+  Options -->|New session| Idle
+  Idle -->|This session| Startup[Hidden startup message]
+  Idle -->|New session| Replace[Fresh session]
+  Replace -->|Fresh context| Startup
+  Startup -->|Model calls plan_implement| Implement[Tool result supplies execution instructions]
+  Replace -->|Cancelled or failed| Accepted
 ```
 
 ## Composer mode, entry, and settings
@@ -315,3 +369,66 @@ REQ-public-presentation-boundary.
 
 These scenarios define checks to perform during implementation. They are not records of executed
 tests or proof that the current interface implements them.
+
+## Reopening and recovery
+
+Requirements: REQ-planning-entry, REQ-read-only-plan-review, REQ-session-recovery, REQ-plan-save,
+REQ-implementation-handoff, REQ-handoff-recovery.
+
+Reopening an approved plan uses the normal review modal and its existing CTA actions. Overall text
+and block notes restore as editable drafts. Unchanged approval opens implementation options again;
+closing unchanged review preserves acceptance without a cancellation warning, agent abort, or
+implementation selector. Changed drafts remain unapproved across dismissal and resume. A revision
+request sends the current feedback to the agent.
+
+When the latest record is incompatible, explicit entry opens a native selector titled
+`Recover planning`. Its first option identifies the latest valid checkpoint, its plan, and phase;
+`Decide later` follows. The selector warns that newer drafts may be missing. Escape equals Decide
+later. A successful selection restores the checkpoint and reopens its pending interaction. Recovered
+accepted content requires fresh approval. Without a valid checkpoint, entry reports the limitation;
+explicit replacement remains available and preserves the existing records.
+
+When an artifact needs recovery, a native confirmation identifies the original path and offers to
+recreate its recorded content at a new path. Dismissal closes the attempted interaction without
+writing a replacement. On confirmation, the package saves the replacement and opens normal review.
+
+```mermaid
+flowchart TD
+  Entry[Explicit entry] --> State{Saved state}
+  State -->|Valid unfinished| Resume[Restore pending interaction]
+  State -->|Accepted| Review[Reopen same revision and notes]
+  State -->|Invalid latest record| Choice[Offer valid branch checkpoint]
+  Choice -->|Recover| Resume
+  Choice -->|Dismiss| Preserve[Preserve history]
+  Review -->|Unchanged approval| Options[Implementation options]
+  Review -->|Changed notes| Approval[Approve exact supplementary content]
+  Review -->|Request revision| Agent[Agent returns next revision]
+```
+
+Recovery scenarios cover accepted review without identity changes, unchanged closure and
+re-approval, changed and cleared notes, fresh Markdown revisions, incompatible latest records,
+divergent branches, dismissed recovery, and missing or modified artifacts. Each recovered approval
+requires fresh review. Scripted provider scenarios distinguish interrupted tool-argument generation
+from an open modal for question frontiers and plan review. Production frontier, answer-confirmation,
+and review components must preserve drafts through interruption and explicit resume and reject late
+callbacks.
+
+## Tool retries
+
+Requirements: REQ-tool-idempotency, REQ-planning-entry.
+
+`plan_open` displays “Open planning” and creates or reopens collaborative planning, questions, or
+review. An exact completed question, review, or replacement retry returns its recorded result and
+does not open a modal, selector, or confirmation. Explicit opening retains the normal controls.
+
+| Scenario                                                | Expected result                                                                              |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Repeat a submitted frontier or returned review feedback | Return the submitted result without another submission or revision.                          |
+| Repeat approval                                         | Return preserved approval without replaying its event or implementation options.             |
+| Repeat a confirmed replacement                          | Reuse the created plan without another confirmation.                                         |
+| Repeat cancelled or unfinished input                    | Preserve cancellation or report pending recovery; do not open UI.                            |
+| Change payload under the same operation identity        | Report a conflict without mutation.                                                          |
+| Retry after newer planning state or branch restoration  | Replay only the matching saved state; otherwise report supersession.                         |
+| Retry an implementation result after its launch changes | Report the changed launch and direct the agent to `plan_implement` without another dispatch. |
+| Fail receipt persistence before or after interaction    | Preserve saved work and report uncertainty without automatic repetition.                     |
+| Explicitly reopen planning                              | Restore normal questions or review with drafts preserved.                                    |

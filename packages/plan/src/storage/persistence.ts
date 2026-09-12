@@ -16,11 +16,16 @@ export interface SaveResult {
 /** Report the last branch-compatible planning entry without modifying the session. */
 export type SavedRecord =
   | { status: "none" }
-  | { status: "record"; entry: SessionEntry }
+  | { status: "record"; entry: SessionEntry; records: SessionEntry[] }
   | { status: "unreadable"; message: string };
 
 /** Read the last planning record in the matching disk and memory branch prefix. */
-export function readSavedRecord(ctx: ExtensionContext, file?: SessionFile): SavedRecord {
+export function readSavedRecord(
+  ctx: ExtensionContext,
+  file?: SessionFile,
+  customType = "orbis-plan",
+  includeMessages = false,
+): SavedRecord {
   const path = ctx.sessionManager.getSessionFile();
   if (path === undefined) {
     return { status: "none" };
@@ -43,10 +48,13 @@ export function readSavedRecord(ctx: ExtensionContext, file?: SessionFile): Save
   const branch = ctx.sessionManager.getBranch();
   const mismatch = branch.findIndex((entry) => !sameRecord(entries.get(entry.id), entry));
   const prefix = branch.slice(0, mismatch === -1 ? branch.length : mismatch);
-  const entry = prefix.findLast(
-    (item) => item.type === "custom" && item.customType === "orbis-plan",
+  const records = prefix.filter(
+    (item) =>
+      (item.type === "custom" || (includeMessages && item.type === "custom_message")) &&
+      item.customType === customType,
   );
-  return entry === undefined ? { status: "none" } : { status: "record", entry };
+  const entry = records.at(-1);
+  return entry === undefined ? { status: "none" } : { status: "record", entry, records };
 }
 
 /** Compare branch records before append and confirm the appended record on disk. */
@@ -55,6 +63,7 @@ export function saveRecord(
   ctx: ExtensionContext,
   data: unknown,
   file?: SessionFile,
+  customType = "orbis-plan",
 ): SaveResult {
   const path = ctx.sessionManager.getSessionFile();
   if (path === undefined) {
@@ -74,7 +83,7 @@ export function saveRecord(
       error.code === "ENOENT" &&
       !branch.some((entry) => entry.type === "message" && entry.message.role === "assistant")
     ) {
-      pi.appendEntry("orbis-plan", data);
+      pi.appendEntry(customType, data);
       return {
         saved: false,
         deferred: true,
@@ -98,7 +107,7 @@ export function saveRecord(
     };
   }
   try {
-    pi.appendEntry("orbis-plan", data);
+    pi.appendEntry(customType, data);
     const leaf = ctx.sessionManager.getLeafId();
     const disk = file?.read(path) ?? parseSessionEntries(readFileSync(path, "utf8"));
     const confirmed = new Map(
@@ -110,7 +119,7 @@ export function saveRecord(
     const entry = leaf === null ? undefined : confirmed.get(leaf);
     if (
       entry?.type !== "custom" ||
-      entry.customType !== "orbis-plan" ||
+      entry.customType !== customType ||
       !sameRecord(entry.data, data)
     ) {
       throw new Error("Appended planning record was not found on disk");

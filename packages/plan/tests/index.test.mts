@@ -77,7 +77,7 @@ test("loads the TypeScript source and registers the package command", async ({
   expect(loaded.errors).toEqual([]);
   expect(loaded.extensions).toHaveLength(1);
   expect(typeof loaded.extensions[0]?.commands.get("plan")?.handler).toBe("function");
-  expect(loaded.extensions[0]?.tools.has("plan_start")).toBe(true);
+  expect(loaded.extensions[0]?.tools.has("plan_open")).toBe(true);
   expect([...(loaded.extensions[0]?.commands.keys() ?? [])].toSorted()).toEqual([
     "plan",
     "plan-settings",
@@ -89,12 +89,14 @@ test("loads the TypeScript source and registers the package command", async ({
     sessionManager: SessionManager.inMemory(fixture),
     settingsManager: SettingsManager.inMemory(),
   });
-  onTestFinished(() => {
+  onTestFinished(async () => {
+    await session.abort();
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
     session.dispose();
   });
   await session.bindExtensions({});
   expect(session.systemPrompt).toContain(
-    "call plan_start with replace: false before claiming saved work is unavailable",
+    "call plan_open with replace: false before claiming saved work is unavailable",
   );
   expect(session.systemPrompt).toContain("Do not resume for unrelated messages");
   expect(session.systemPrompt).not.toContain("Planning is active");

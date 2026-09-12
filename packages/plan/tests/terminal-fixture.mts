@@ -3,6 +3,7 @@ import { Editor, ProcessTerminal, TuiMainScreen } from "@earendil-works/pi-tui";
 
 const plain = (text: string) => text;
 
+/** Construct a native editor for terminal tests. */
 export function testEditor(): Editor {
   initTheme("dark", false);
   return new Editor(new TuiMainScreen(new ProcessTerminal()), {

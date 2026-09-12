@@ -99,7 +99,9 @@ catches and logs handler errors. The bus does not store events or acknowledgemen
 After saving the artifact and approval state, the extension checks Pi's idleness immediately and on
 `agent_settled`. When Pi is idle, `orbis:plan-approved` notifies companion extensions. The event
 cannot establish successful subscriber execution or durable delivery. The planning extension owns
-saving and notification; subscribers own their implementation workflow and recovery.
+saving, notification, and its explicit implementation actions; subscribers own any independent
+workflow and recovery. The [completion and handoff research](completion-handoff.md) describes native
+selection and session replacement.
 
 ## Settings menus
 
