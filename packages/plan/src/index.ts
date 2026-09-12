@@ -1,3 +1,4 @@
+import { StringEnum } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -51,6 +52,10 @@ export default function extension(pi: ExtensionAPI): void {
   pi.registerCommand("plan", {
     description: "Start or inspect collaborative planning; optionally supply an objective",
     handler: async (args, ctx) => {
+      if (args.startsWith("__handoff ")) {
+        await runtime.dispatchImplementation(args.slice("__handoff ".length), ctx);
+        return;
+      }
       if (!ctx.isIdle()) {
         ctx.ui.notify("Stop the current turn before entering planning.", "info");
         return;
@@ -110,6 +115,26 @@ export default function extension(pi: ExtensionAPI): void {
           commandController = undefined;
         }
       }
+    },
+  });
+  pi.registerTool({
+    name: "plan_implement",
+    label: "Implement approved plan",
+    description:
+      "On explicit user intent, implement an approved plan here, implement it in a fresh session, or show the implementation options again. Use action here, new, or options respectively. These are intent examples, not exact phrases. Do not invoke for quoted examples or feature questions. When the reference is unambiguous, supply planId; otherwise omit it for explicit saved-plan selection. The implementation action authorizes execution without another confirmation. Fresh-session requests replace the Pi session. Approval alone does not authorize execution.",
+    promptGuidelines: [
+      "When the user asks to implement a saved approved plan or reopen implementation options, use plan_implement. For a fresh-session request, use action new; do not simulate an empty context. Resolve ambiguous plan references explicitly.",
+    ],
+    parameters: Type.Object(
+      {
+        action: StringEnum(["here", "new", "options"] as const),
+        planId: Type.Optional(Type.String({ minLength: 1 })),
+      },
+      { additionalProperties: false },
+    ),
+    executionMode: "sequential",
+    async execute(_id, params, signal, _update, ctx) {
+      return await toolResult(await runtime.implement(ctx, params.action, params.planId, signal));
     },
   });
   pi.registerTool({

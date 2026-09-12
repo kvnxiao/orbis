@@ -119,7 +119,7 @@ test("disabled persistence returns normally and retains only memory", async ({
   });
 });
 
-test("registered planning tools persist acceptance and emit once after the aborted agent settles", async ({
+test("registered planning tools persist acceptance and emit once after the successful agent settles", async ({
   onTestFinished,
 }) => {
   const notifications: PlanApproval[] = [];

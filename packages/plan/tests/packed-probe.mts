@@ -97,6 +97,9 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
     const ui: ExtensionUIContext = {
       ...base.ui,
       async select(title, _items, options) {
+        if (title === "Implement approved plan?") {
+          return "Decide later";
+        }
         if (title === "Planning presenter") {
           return "scripted-probe";
         }

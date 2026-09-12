@@ -37,8 +37,9 @@ input contract; it does not establish identical behavior in the CLI.
 [User-input documentation](https://code.claude.com/docs/en/agent-sdk/user-input)
 
 **Design implication:** Structured questions and review-before-action match the requested
-interaction. Orbis's approval completes planning and emits a handoff event; the plan package does
-not start editing. Command filtering and permission enforcement remain outside its responsibility.
+interaction. Orbis's approval completes planning and emits a handoff event. A separate user-selected
+implementation action starts editing in the current or a fresh session. Command filtering and
+permission enforcement remain outside its responsibility.
 
 ## Frontier planning
 
@@ -79,14 +80,14 @@ alongside related studies.
 
 ## Comparison with the specified Orbis behavior
 
-| Concern     | External evidence                                                                                      | Orbis contract                                                                                           |
-| ----------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Entry       | Codex and Claude Code document explicit plan entry.                                                    | `/plan` plus a model-callable entry operation share state and instructions.                              |
-| Questions   | Both expose structured input mechanisms. SDK or protocol support does not imply identical UI behavior. | Complete frontier rounds, stable identities, custom text, recommendations, and main-agent clarification. |
-| Navigation  | The inspected documentation does not establish the entire requested draft-preservation behavior.       | Terminal Tab/Shift+Tab preserve unfinished answers.                                                      |
-| Approval    | Claude Code explicitly continues into editing after approval.                                          | Save the reviewed Markdown, finish planning, and notify subscribers.                                     |
-| Permissions | Claude Code's planning enforcement depends on session permission settings.                             | Planning instructions govern workflow; Orbis does not implement shell filtering or a sandbox.            |
-| Remote use  | Host protocols allow externally rendered input, but require client implementations.                    | The complete workflow works in an SSH terminal.                                                          |
+| Concern     | External evidence                                                                                      | Orbis contract                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Entry       | Codex and Claude Code document explicit plan entry.                                                    | `/plan` plus a model-callable entry operation share state and instructions.                                           |
+| Questions   | Both expose structured input mechanisms. SDK or protocol support does not imply identical UI behavior. | Complete frontier rounds, stable identities, custom text, recommendations, and main-agent clarification.              |
+| Navigation  | The inspected documentation does not establish the entire requested draft-preservation behavior.       | Terminal Tab/Shift+Tab preserve unfinished answers.                                                                   |
+| Approval    | Claude Code explicitly continues into editing after approval.                                          | Save reviewed Markdown, finish planning, and notify subscribers; a separate implementation action authorizes editing. |
+| Permissions | Claude Code's planning enforcement depends on session permission settings.                             | Planning instructions govern workflow; Orbis does not implement shell filtering or a sandbox.                         |
+| Remote use  | Host protocols allow externally rendered input, but require client implementations.                    | The complete workflow works in an SSH terminal.                                                                       |
 
 The [package specification](../../SPEC.md) defines the chosen behavior. This comparison explains
 relevant alternatives and verification gaps; it does not add requirements or establish conformance

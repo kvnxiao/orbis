@@ -103,7 +103,10 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
         notify() {
           return undefined;
         },
-        async select(_title, _options, options) {
+        async select(title, _options, options) {
+          if (title === "Implement approved plan?") {
+            return undefined;
+          }
           await new Promise<undefined>((resolve) => {
             const finish = () => {
               resolve(undefined);

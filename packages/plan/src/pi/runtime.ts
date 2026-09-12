@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type {
   ExtensionAPI,
+  ExtensionCommandContext,
   ExtensionContext,
   MessageEndEvent,
 } from "@earendil-works/pi-coding-agent";
@@ -33,6 +34,7 @@ import type { PlanSettings } from "../storage/config.ts";
 import { readSavedRecord, saveRecord } from "../storage/persistence.ts";
 import type { SaveResult } from "../storage/persistence.ts";
 import { SessionFile } from "../storage/session-file.ts";
+import { PlanHandoff } from "./handoff.ts";
 import {
   availablePresenters,
   presentationAction,
@@ -85,6 +87,7 @@ export class PlanRuntime {
     return structuredClone(this.archived);
   }
   private readonly pi: ExtensionAPI;
+  private readonly handoff: PlanHandoff;
   private readonly agentDir: string;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private controller: AbortController | undefined;
@@ -99,6 +102,7 @@ export class PlanRuntime {
 
   constructor(pi: ExtensionAPI, agentDir = getAgentDir()) {
     this.pi = pi;
+    this.handoff = new PlanHandoff(pi);
     this.agentDir = agentDir;
   }
 
@@ -315,6 +319,7 @@ export class PlanRuntime {
   }
 
   private disposeOperations() {
+    this.handoff.invalidate();
     this.sessionFile.clear();
     this.generation += 1;
     this.pendingCompletion = undefined;
@@ -806,8 +811,13 @@ export class PlanRuntime {
           this.selectedMode = "default";
           this.save(ctx);
           this.pendingCompletion = approval.state.accepted;
-          ctx.abort();
           this.settled(ctx);
+          await this.handoff.request(
+            ctx,
+            approval.state.accepted,
+            "options",
+            signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]),
+          );
         }
         if (approval.outcome === "error") {
           return { outcome: "error", message: approval.message };
@@ -989,6 +999,68 @@ export class PlanRuntime {
         "info",
       );
     }
+  }
+
+  async implement(
+    ctx: ExtensionContext,
+    action: "here" | "new" | "options",
+    planId?: string,
+    signal?: AbortSignal,
+  ): Promise<RuntimeResult> {
+    if (ctx.mode !== "tui") {
+      return unsupportedMode();
+    }
+    if (this.controller !== undefined) {
+      return {
+        outcome: "error",
+        message: "Finish the active planning interaction before requesting implementation.",
+      };
+    }
+    const generation = this.generation;
+    const approvals = [this.current, ...this.archived].flatMap((plan) =>
+      plan?.accepted === undefined ? [] : [plan.accepted],
+    );
+    let approval = approvals.find((candidate) => candidate.planId === planId);
+    if (planId === undefined && approvals.length === 1) {
+      approval = approvals[0];
+    }
+    if (planId === undefined && approvals.length > 1) {
+      const labels = approvals.map((candidate) => `${candidate.planPath} [${candidate.planId}]`);
+      const selected = await ctx.ui.select(
+        "Select an approved plan",
+        labels,
+        signal === undefined ? undefined : { signal },
+      );
+      if (selected === undefined) {
+        return { outcome: "cancelled" };
+      }
+      approval = approvals[labels.indexOf(selected)];
+    }
+    if (generation !== this.generation || signal?.aborted === true) {
+      return { outcome: "cancelled" };
+    }
+    if (approval === undefined) {
+      return {
+        outcome: "error",
+        message:
+          "The approved plan is unavailable on this branch. Select an existing approved plan before requesting implementation.",
+      };
+    }
+    const message = await this.handoff.request(ctx, approval, action, signal, () => {
+      if (this.current !== undefined && this.current.phase !== "accepted") {
+        this.current = { ...this.current, phase: "cancelled" };
+      }
+      this.selectedMode = "default";
+      const saved = this.save(ctx);
+      if (!saved.saved) {
+        throw new Error(saved.message);
+      }
+    });
+    return { outcome: "approval", approval: structuredClone(approval), message };
+  }
+
+  async dispatchImplementation(token: string, ctx: ExtensionCommandContext): Promise<void> {
+    await this.handoff.dispatch(token, ctx);
   }
 
   replaceReviewAbort(

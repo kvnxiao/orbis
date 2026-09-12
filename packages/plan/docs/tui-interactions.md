@@ -181,6 +181,42 @@ notes, revision requests, or approval. Returning to the latest restores its note
 Browsing cannot change the pending approval identity. New revisions do not inherit active notes from
 their predecessors.
 
+## Implementation options
+
+Requirements: REQ-idle-completion, REQ-implementation-handoff, REQ-handoff-recovery.
+
+After the package saves approval and review releases its input resources, a native Pi selector opens
+immediately in the composer area with the transcript visible. It is not a floating overlay. The
+title is `Implement approved plan?`. Options appear in this order:
+
+- Implement in this session
+- Implement in a new session
+- Decide later
+
+The first option starts focused. Native selection bindings navigate and activate the options. Escape
+is equivalent to Decide later: it closes the selector, preserves acceptance and composer text, and
+finishes planning gracefully without implementation or agent abort. The selector never reopens
+automatically. Active unfinished planning interactions retain their double-Escape cancellation.
+
+Either implementation option authorizes execution without another confirmation. The selector closes
+before planning completes. The new-session action waits for idleness before replacing the session.
+When replacement is cancelled or fails, the saved plan and notes remain available and the failure is
+visible. A stale selector cannot launch into a replacement session.
+
+Subsequent requests such as “Implement it here,” “Implement it in a fresh session,” or “Show me the
+options again” invoke the same actions through model intent recognition. Ambiguous references open
+an explicit saved-plan selection. Selection identifies the plan; it does not add an implementation
+confirmation after an already authorized destination.
+
+| Scenario                                                            | Expected result                                                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Approve while the planning tool waits                               | Review closes and releases input before the selector opens; no idle wait or agent abort occurs.         |
+| Dismiss with Escape or Decide later                                 | Both retain exact artifacts and composer text, finish gracefully, and do not start implementation.      |
+| Choose either implementation destination                            | The prompt includes the absolute approved path and notes and states the user's execution authorization. |
+| Queue user input or finalize a mixed batch                          | Pi retains its normal continuation behavior; replacement waits for idleness.                            |
+| Reload, restore, or replace a session during selection or idle wait | Old actions cannot launch and the selector does not reopen.                                             |
+| Cancel replacement or reject prompt submission                      | Approval survives, failures remain visible, and ambiguous launch is not automatically retried.          |
+
 ## Closing and recovery
 
 Requirements: REQ-revision-validation, REQ-session-recovery, REQ-interaction-cancellation,
@@ -227,7 +263,14 @@ flowchart TD
   Review -->|Request revision| Research
   Review -->|Approve or Approve with notes| Save[Verify artifacts and persist acceptance]
   Save -->|Failure| Review
-  Save -->|Success and agent idle| Accepted
+  Save -->|Success| Options[Implementation options]
+  Options -->|Decide later or Escape| Accepted
+  Options -->|This session| Idle[Graceful completion and idle wait]
+  Options -->|New session| Idle
+  Idle -->|This session| Implement[Explicit implementation prompt]
+  Idle -->|New session| Replace[Fresh session]
+  Replace -->|Fresh context| Implement
+  Replace -->|Cancelled or failed| Accepted
 ```
 
 ## Composer mode, entry, and settings

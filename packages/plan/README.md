@@ -117,7 +117,9 @@ When a result exceeds Pi's default text byte or line limit, the tool saves the f
 preview. Truncated tool details contain `outcome`, `truncated: true`, and `resultPath`. Read
 `resultPath` to retrieve the full result. Input reopened through `/plan` is delivered to the agent
 as a displayed custom message of type `orbis-plan-input` that starts a turn. Its results use the
-same limits and include the file path in their truncation notice.
+same limits and include the file path in their truncation notice. When approved content exceeds the
+output limit, approval results retain completion instructions in the preview and request graceful
+termination.
 
 The extension retains these files after shutdown. Operating-system cleanup or manual deletion can
 remove them; copy any result that needs lasting storage.
@@ -526,9 +528,43 @@ the companion file. Tool results and the approval event contain the same payload
 
 After saving approval, the package checks Pi's idleness immediately and on `agent_settled`. When Pi
 is idle, it emits `orbis:plan-approved` with the [version 1 payload](SPEC.md#approval-and-handoff).
-It does not start implementation or replay events on restoration. Subscriber failure does not revoke
-acceptance or trigger delivery retries. Pi can display its normal aborted-operation banner while the
-package stops model continuation.
+It does not replay events on restoration. Subscriber failure does not revoke acceptance or trigger
+delivery retries. Successful approval returns a terminating tool result without aborting the agent.
+A mixed tool batch can continue the model, and queued user messages retain Pi's normal delivery
+behavior. The approval result asks a continuing model to acknowledge approval and finish; it does
+not guarantee immediate idleness.
+
+After saving acceptance and closing review, Plan immediately opens a native composer-area selector
+with the transcript visible. Its options are `Implement in this session`,
+`Implement in a new session`, and `Decide later`, in that order, with the first focused. Escape and
+Decide later preserve approval and composer text and do not start implementation. Reload and
+restoration do not reopen the selector.
+
+Either implementation option authorizes execution without another confirmation, including when the
+saved plan says implementation awaits separate authorization. After planning completes and Pi is
+idle, the current-session action sends a prompt retaining conversation context. The new-session
+action creates a fresh Pi session and sends the prompt through its replacement context. The prompt
+includes the absolute plan path and supplementary notes. Pending user input retains Pi's queue
+behavior before replacement.
+
+Natural-language requests to implement here, implement in a fresh session, or show the options again
+use `plan_implement` with action `here`, `new`, or `options`. These are intent examples, not exact
+phrases; recognition depends on the model. An optional `planId` identifies an unambiguous approved
+plan. Without `planId`, multiple saved approvals require explicit selection. Unknown or unapproved
+plans cannot launch implementation. Internal token routing uses the existing `/plan` command; users
+do not need a launcher command.
+
+Before scheduling implementation for a saved approval, Plan returns to Default mode and pauses other
+unfinished planning work. Dismissing the options preserves that unfinished work's mode and state.
+Saved drafts remain resumable. An active planning interaction must finish before a separate
+implementation request can proceed.
+
+Cancelled replacement preserves approval and permits a later explicit request. Handoff failures
+remain visible. Stale actions cannot launch into another session, and an ambiguously completed
+launch is never automatically retried. Inspect the intended session before requesting further work.
+Changed or missing approved artifacts must be restored before dispatch. When the user interrupts the
+originating turn during the idle wait, its pending implementation action expires without launching
+work.
 
 ## Verification
 

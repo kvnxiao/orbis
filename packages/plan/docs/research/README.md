@@ -1,6 +1,6 @@
 # Collaborative planning research
 
-Research dates: 2026-09-08 through 2026-09-11. These documents synthesize inspected sources for the
+Research dates: 2026-09-08 through 2026-09-12. These documents synthesize inspected sources for the
 [planning specification](../../SPEC.md). Each document identifies its evidence and verification
 limits.
 
@@ -12,7 +12,8 @@ limits.
 | [Frontier history and annotated review](frontier-and-review.md) | Can terminal links, source ranges, function keys, and persisted snapshots support evolving frontiers and approval with supplementary notes?                                           |
 | [Composer mode](composer-mode.md)                               | How can Plan mode compose with Pi's editor, recognize planning intent, and preserve interruption and recovery behavior?                                                               |
 | [Planning boundaries](planning-boundaries.md)                   | How do branch restoration, keyboard conflicts, agent completion, and input-size costs affect planning?                                                                                |
-| [Agent planning comparison](agent-planning-comparison.md)       | How do Codex and Claude Code expose planning and structured input? How do frontier rounds and approval-only handoff differ?                                                           |
+| [Agent planning comparison](agent-planning-comparison.md)       | How do Codex and Claude Code expose planning and structured input? How do frontier rounds and separate implementation authorization differ?                                           |
+| [Completion and implementation handoff](completion-handoff.md)  | How do graceful tool termination, native selectors, command routing, and fresh-session submission preserve approval and queued input?                                                 |
 
 Package identities and versions come from registry reads. API and implementation findings come from
 current official documentation, pinned source, and Pi 0.85.1 installed in this workspace. README
@@ -21,9 +22,9 @@ each document.
 
 The evidence supports implementing the required experience as a Pi extension with commands,
 model-callable operations, saved drafts, and a terminal questionnaire. It does not establish an
-already conforming package or a best-practice consensus. The complete TUI workflow and approval-only
-boundary are Orbis design requirements, not conclusions about what every Pi package should
-implement.
+already conforming package or a best-practice consensus. The complete TUI workflow and separate
+implementation authorization are Orbis design requirements, not conclusions about what every Pi
+package should implement.
 
 Optional external presentation is discussed only as a boundary supported by Pi's extension APIs.
 Companion application architecture and integration protocols are maintained outside this package.

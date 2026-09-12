@@ -30,10 +30,10 @@ extensions' shortcuts.
 
 ## Approval completion
 
-After clearing its active-run flag, Pi's agent prompt cleanup emits `agent_settled`. Tool-context
-`abort` requests cancellation without waiting inside the executing tool. An approval completed by an
-already-idle command also needs an immediate idleness check because another agent run need not
-follow it.
+After clearing its active-run flag, Pi's agent prompt cleanup emits `agent_settled`. An approval
+completed by an already-idle command also needs an immediate idleness check because another agent
+run need not follow it. Successful approval requests tool termination without agent cancellation;
+the [completion and handoff research](completion-handoff.md) describes batch and queue limits.
 [Agent session](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/agent-session.ts)
 
 ## Input size and persistence
