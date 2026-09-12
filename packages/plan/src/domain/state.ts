@@ -147,28 +147,7 @@ export type PlanApproval = Static<typeof approvalSchema>;
 /** Bind domain state to its plan, working directory, and session identity. */
 export type PlanningSession = Static<typeof sessionSchema>;
 /** Return detached planning outcomes to tool and command adapters. */
-export type RuntimeResult =
-  | { outcome: "error"; message: string }
-  | { outcome: "unsupported-mode"; message: string }
-  | { outcome: "started" | "active"; plan: PlanningSession }
-  | { outcome: "cancelled"; planId?: string }
-  | { outcome: "approval"; message: string; approval: PlanApproval }
-  | {
-      outcome: "implementation";
-      message: string;
-      approval: PlanApproval;
-      launchId: string;
-      status: "requested" | "received";
-    }
-  | { outcome: "feedback"; revision: number; feedback: string }
-  | {
-      outcome: "answers";
-      roundId: string;
-      revision: number;
-      decisions: RoundState["decisions"];
-      clarifications?: Clarification[];
-    }
-  | { outcome: "clarification"; round: NonNullable<RoundState["round"]>; draftsSubmitted: false };
+export type RuntimeResult = Static<typeof runtimeResultSchema>;
 
 /** Validate the expected revision and exact Markdown submitted for review. */
 export const reviewSchema = Type.Object(
@@ -263,6 +242,46 @@ export const snapshotSchema = Type.Object({
   active: Type.Optional(sessionSchema),
   unfinished: Type.Array(sessionSchema),
 });
+
+/** Validate persisted tool outcomes before replay. */
+export const runtimeResultSchema = Type.Union([
+  Type.Object({ outcome: Type.Literal("error"), message: Type.String() }),
+  Type.Object({ outcome: Type.Literal("unsupported-mode"), message: Type.String() }),
+  Type.Object({
+    outcome: Type.Union([Type.Literal("started"), Type.Literal("active")]),
+    plan: sessionSchema,
+  }),
+  Type.Object({ outcome: Type.Literal("cancelled"), planId: Type.Optional(Type.String()) }),
+  Type.Object({
+    outcome: Type.Literal("approval"),
+    message: Type.String(),
+    approval: approvalSchema,
+  }),
+  Type.Object({
+    outcome: Type.Literal("implementation"),
+    message: Type.String(),
+    approval: approvalSchema,
+    launchId: Type.String(),
+    status: Type.Union([Type.Literal("requested"), Type.Literal("received")]),
+  }),
+  Type.Object({
+    outcome: Type.Literal("feedback"),
+    revision: Type.Integer({ minimum: 1 }),
+    feedback: Type.String(),
+  }),
+  Type.Object({
+    outcome: Type.Literal("answers"),
+    roundId: Type.String(),
+    revision: Type.Integer({ minimum: 1 }),
+    decisions: roundStateSchema.properties.decisions,
+    clarifications: Type.Optional(Type.Array(clarificationSchema)),
+  }),
+  Type.Object({
+    outcome: Type.Literal("clarification"),
+    round: storedRoundSchema,
+    draftsSubmitted: Type.Literal(false),
+  }),
+]);
 
 /** Accept canonical UUID identities used in artifact filenames. */
 export function isPlanId(value: string): boolean {

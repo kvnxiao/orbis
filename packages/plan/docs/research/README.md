@@ -16,6 +16,7 @@ limits.
 | [Completion and implementation handoff](completion-handoff.md)  | How do graceful tool termination, native selectors, command routing, and fresh-session submission preserve approval and queued input?                                                 |
 | [Recovery and command routing](recovery.md)                     | How do resolved command names, streamed tool calls, and branch-local session records constrain restoration and dispatch?                                                              |
 | [Implementation launch delivery](implementation-launches.md)    | How do hidden custom messages, replacement setup, and receiving tools preserve launch identity and execution authorization?                                                           |
+| [Planning tool retries](tool-retries.md)                        | How do branch entries, deferred persistence, tool invocation identities, and JSON equality constrain retry records?                                                                   |
 
 Package identities and versions come from registry reads. API and implementation findings come from
 current official documentation, pinned source, and Pi 0.85.1 installed in this workspace. README

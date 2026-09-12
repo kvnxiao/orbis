@@ -28,7 +28,7 @@ test("reopening accepted review preserves its plan, Markdown revision, and appro
     expectedRevision: 0,
     markdown: "# Reviewed\n",
   });
-  const reopened = await f.runtime.requestStart(f.ctx, "", false);
+  const reopened = await f.runtime.requestOpen(f.ctx, "", false);
   expect(reopened).toMatchObject({ outcome: "approval" });
   expect(f.runtime.active?.planId).toBe(planId);
   expect(f.runtime.active?.reviews).toHaveLength(1);
@@ -103,7 +103,7 @@ test.for([false, true])(
     const notify = vi.spyOn(f.ctx.ui, "notify");
     const select = vi.spyOn(f.ctx.ui, "select");
     const emit = vi.spyOn(f.api.events, "emit");
-    const result = await f.runtime.requestStart(f.ctx, "", false);
+    const result = await f.runtime.requestOpen(f.ctx, "", false);
     expect(result).toMatchObject({
       outcome: "approval",
       approval: f.approval,
@@ -134,7 +134,7 @@ test("cleared notes require re-approval and leave the previous companion unchang
     dispatch({ type: "approve" });
     await Promise.resolve();
   });
-  await f.runtime.requestStart(f.ctx, "", false);
+  await f.runtime.requestOpen(f.ctx, "", false);
   expect(f.runtime.active?.accepted?.notes).toBeUndefined();
   expect(f.runtime.active?.accepted?.approvalId).not.toBe(f.approval.approvalId);
   expect(await readFile(f.approval.notesPath ?? "", "utf8")).toBe(f.approval.notesContent);
@@ -159,7 +159,7 @@ test("checkpoint recovery rejects stale selection and mode toggling preserves th
     opened.resolve(choices[0] ?? "");
     return await selected.promise;
   });
-  const pending = f.runtime.requestStart(f.ctx, "", false);
+  const pending = f.runtime.requestOpen(f.ctx, "", false);
   const choice = await opened.promise;
   f.runtime.restore(f.ctx);
   selected.resolve(choice);
@@ -176,11 +176,19 @@ test("missing checkpoints reject ordinary entry and permit explicit replacement 
   f.api.appendEntry("orbis-plan", { version: 999 });
   const leaf = f.manager.getLeafId();
   f.runtime.restore(f.ctx);
-  await expect(f.runtime.requestStart(f.ctx, "", false)).rejects.toThrow("No valid earlier");
+  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow("No valid earlier");
   expect(f.runtime.active).toBeUndefined();
-  expect((await f.runtime.requestStart(f.ctx, "Replacement objective", true)).outcome).toBe(
-    "started",
-  );
+  expect(
+    (
+      await f.runtime.requestOpen(
+        f.ctx,
+        "Replacement objective",
+        true,
+        undefined,
+        "recover-replacement",
+      )
+    ).outcome,
+  ).toBe("started");
   expect(f.manager.getEntry(leaf ?? "")).toMatchObject({ data: { version: 999 } });
 });
 
@@ -195,7 +203,7 @@ test("artifact recovery dismissal preserves the existing file and approval histo
   await writeFile(f.approval.planPath, "External edit");
   vi.spyOn(f.ctx.ui, "confirm").mockResolvedValue(false);
   const calls = f.view.mock.calls.length;
-  expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("cancelled");
+  expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("cancelled");
   expect(f.view).toHaveBeenCalledTimes(calls);
   expect(await readFile(f.approval.planPath, "utf8")).toBe("External edit");
   expect(f.runtime.active?.approvals).toContainEqual(f.approval);
@@ -216,7 +224,7 @@ test("recovery never selects a checkpoint from an abandoned sibling branch", asy
   f.manager.branch(root.id);
   f.api.appendEntry("orbis-plan", { version: 999 });
   f.runtime.restore(f.ctx);
-  await expect(f.runtime.requestStart(f.ctx, "", false)).rejects.toThrow("No valid earlier");
+  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow("No valid earlier");
   expect(f.runtime.active).toBeUndefined();
 });
 
@@ -237,7 +245,7 @@ test("archived accepted plans can be selected for review without replacing their
           : undefined,
       ),
   );
-  const result = await f.runtime.requestStart(f.ctx, "", false);
+  const result = await f.runtime.requestOpen(f.ctx, "", false);
   expect(result).toMatchObject({ outcome: "approval", approval: { planId: f.approval.planId } });
 });
 
@@ -254,7 +262,7 @@ test("changed notes stay unapproved across dismissal and receive an immutable ap
     dispatch({ type: "cancel" });
     await Promise.resolve();
   });
-  await f.runtime.requestStart(f.ctx, "", false);
+  await f.runtime.requestOpen(f.ctx, "", false);
   f.runtime.restore(f.ctx);
   expect(f.runtime.active?.accepted).toBeUndefined();
   expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Changed supplementary notes");
@@ -263,7 +271,7 @@ test("changed notes stay unapproved across dismissal and receive an immutable ap
     dispatch({ type: "approve-with-notes" });
     await Promise.resolve();
   });
-  const result = await f.runtime.requestStart(f.ctx, "", false);
+  const result = await f.runtime.requestOpen(f.ctx, "", false);
   expect(result.outcome).toBe("approval");
   const state = f.runtime.active;
   expect(state?.accepted?.revision).toBe(1);
@@ -287,7 +295,7 @@ test("feedback on an approved plan requires approval of the agent's next Markdow
     dispatch({ type: "submit-feedback" });
     await Promise.resolve();
   });
-  expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("feedback");
+  expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("feedback");
   expect(f.runtime.active?.accepted).toBeUndefined();
   f.view.mockImplementation(async (_ctx, _read, dispatch) => {
     dispatch({ type: "approve" });
@@ -325,7 +333,7 @@ test.for(["missing", "changed", "notes"] as const)(
       dispatch({ type: damage === "notes" ? "approve-with-notes" : "approve" });
       await Promise.resolve();
     });
-    await f.runtime.requestStart(f.ctx, "", false);
+    await f.runtime.requestOpen(f.ctx, "", false);
     const recovered = f.runtime.active?.accepted;
     expect(recovered?.planPath).not.toBe(f.approval.planPath);
     expect(recovered?.approvalId).not.toBe(f.approval.approvalId);
@@ -354,7 +362,7 @@ test.for([false, true])(
         async (title, choices) =>
           await Promise.resolve(title === "Recover planning" && recover ? choices[0] : undefined),
       );
-    await f.runtime.requestStart(f.ctx, "", false);
+    await f.runtime.requestOpen(f.ctx, "", false);
     expect(select).toHaveBeenCalledWith(
       "Recover planning",
       expect.arrayContaining(["Decide later"]),
@@ -383,14 +391,14 @@ test("closing unchanged review after failed reapproval restores valid acceptance
         ? originalSave(ctx)
         : { saved: false, message: "Injected approval persistence failure" },
     );
-  expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("error");
+  expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("error");
   expect(f.runtime.active?.pendingApproval).toBeDefined();
   save.mockRestore();
   f.view.mockImplementation(async (_ctx, _read, dispatch) => {
     dispatch({ type: "cancel" });
     await Promise.resolve();
   });
-  await f.runtime.requestStart(f.ctx, "", false);
+  await f.runtime.requestOpen(f.ctx, "", false);
   expect(f.runtime.active?.accepted).toEqual(f.approval);
   expect(f.runtime.active?.pendingApproval).toBeUndefined();
   f.runtime.restore(f.ctx);
@@ -441,7 +449,7 @@ test.for([false, true])(
       );
     }
     const confirm = vi.spyOn(f.ctx.ui, "confirm").mockResolvedValue(true);
-    expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("approval");
+    expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("approval");
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(f.runtime.active?.accepted?.approvalId).not.toBe(pending?.approvalId);
     expect(f.runtime.active?.accepted?.planPath).not.toBe(pending?.planPath);
@@ -465,7 +473,7 @@ test("checkpoint recovery checks recorded notes and mints a fresh approval", asy
       await Promise.resolve(title === "Recover planning" ? choices[0] : undefined),
   );
   const confirm = vi.spyOn(f.ctx.ui, "confirm").mockResolvedValue(true);
-  await f.runtime.requestStart(f.ctx, "", false);
+  await f.runtime.requestOpen(f.ctx, "", false);
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(f.runtime.active?.accepted?.approvalId).not.toBe(f.approval.approvalId);
   expect(f.runtime.active?.accepted?.planPath).not.toBe(f.approval.planPath);
@@ -488,7 +496,7 @@ test("checkpoint recovery discards historical pending intent before fresh approv
         ? { saved: false, message: "Injected acceptance failure" }
         : originalSave(ctx),
     );
-  await f.runtime.requestStart(f.ctx, "", false);
+  await f.runtime.requestOpen(f.ctx, "", false);
   expect(f.runtime.active?.pendingApproval?.approvalId).toBe(f.approval.approvalId);
   save.mockRestore();
   f.api.appendEntry("orbis-plan", { version: 999 });
@@ -497,7 +505,7 @@ test("checkpoint recovery discards historical pending intent before fresh approv
     async (title, choices) =>
       await Promise.resolve(title === "Recover planning" ? choices[0] : undefined),
   );
-  await f.runtime.requestStart(f.ctx, "", false);
+  await f.runtime.requestOpen(f.ctx, "", false);
   expect(f.runtime.active?.accepted?.approvalId).not.toBe(f.approval.approvalId);
   expect(f.runtime.active?.accepted).toBeDefined();
 });
@@ -520,13 +528,13 @@ test("failed checkpoint append preserves recovery for an explicit retry", async 
   const save = vi
     .spyOn(f.runtime, "save")
     .mockReturnValueOnce({ saved: false, message: "Injected checkpoint failure" });
-  await expect(f.runtime.requestStart(f.ctx, "", false)).rejects.toThrow(
+  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow(
     "Injected checkpoint failure",
   );
   expect(f.runtime.active).toBeUndefined();
   expect(f.manager.getLeafId()).toBe(damagedId);
   save.mockRestore();
-  expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("approval");
+  expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("approval");
   expect(f.manager.getEntry(damagedId ?? "")).toMatchObject({ data: { version: 999 } });
 });
 
@@ -543,9 +551,9 @@ test("failed artifact recreation remains retryable after persistence repair", as
   const save = vi
     .spyOn(f.runtime, "save")
     .mockReturnValueOnce({ saved: false, message: "Injected recreation failure" });
-  expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("error");
+  expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("error");
   save.mockRestore();
-  expect((await f.runtime.requestStart(f.ctx, "", false)).outcome).toBe("approval");
+  expect((await f.runtime.requestOpen(f.ctx, "", false)).outcome).toBe("approval");
   expect(f.runtime.active?.accepted?.planPath).not.toBe(f.approval.planPath);
   expect(await readFile(f.approval.planPath, "utf8")).toBe("Preserved external edit");
   f.runtime.restore(f.ctx);

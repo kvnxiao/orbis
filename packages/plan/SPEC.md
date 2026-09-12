@@ -41,16 +41,48 @@ instructions are not a security sandbox.
 
 ### REQ-planning-entry — Planning entry
 
-`/plan [objective]` and a model-callable entry operation start the same workflow in the current
-conversation. Agent instructions recognize planning intent without requiring a literal phrase.
-Repeated entry preserves and reopens active work, including accepted-plan review, paused rounds,
-review, and unanswered clarification. Explicit natural-language requests to resume use the same
-recovery path. Examples include “enter plan mode,” “help me plan this change,” “resume the plan,”
-and “continue planning”; these illustrate intent rather than an exact-phrase whitelist. Quoted
-examples, discussion of the feature, and unrelated messages do not authorize entry or resumption.
-Ambiguous saved-plan references require a selection. When multiple saved plans are available on the
-branch, `/plan` prompts for a selection. Replacing unfinished work requires an explicit user choice
-and retains the previous plan. The base package registers only `/plan` and `/plan-settings`.
+`/plan [objective]` and the `plan_open` model-callable entry operation start the same workflow in
+the current conversation. Agent instructions recognize planning intent without requiring a literal
+phrase. Repeated entry preserves and reopens active work, including accepted-plan review, paused
+rounds, review, and unanswered clarification. Explicit natural-language requests to resume use the
+same recovery path. Examples include “enter plan mode,” “help me plan this change,” “resume the
+plan,” and “continue planning”; these illustrate intent rather than an exact-phrase whitelist.
+Quoted examples, discussion of the feature, and unrelated messages do not authorize entry or
+resumption. Ambiguous saved-plan references require a selection. When multiple saved plans are
+available on the branch, `/plan` prompts for a selection. Replacing unfinished work requires an
+explicit user choice and retains the previous plan. The base package registers only `/plan` and
+`/plan-settings`.
+
+`plan_open` creates or reopens collaborative planning, questions, or review; it does not start
+implementation. Calls with `replace: true` require a stable, nonblank `requestId`. An exact retry of
+a completed replacement reuses its result without another confirmation or plan. Ordinary entry
+remains an explicit reopening action. The package does not register the former entry-tool name as an
+alias.
+
+### REQ-tool-idempotency — Tool idempotency
+
+Question-round and Markdown-review calls identify their operation by the plan, interaction, and
+expected predecessor revision. Replacement entry uses its explicit request identity. Each accepted
+operation binds that identity to its exact input and records its outcome on the owning branch.
+Object member ordering does not change request meaning; ordered questions and options retain their
+order. Exact retries of completed operations return their recorded typed result without opening UI,
+creating revisions, submitting decisions, emitting approval events, or dispatching implementation.
+Different input under an existing identity fails without mutation.
+
+Replay requires the same current planning state. When newer state supersedes an operation, replay
+fails without restoring an older approval, revision, or drafts. A recorded cancellation remains
+cancelled. An unfinished or uncertain operation reports its state and requires explicit opening for
+recovery; a retry does not resume it automatically. Unsubmitted drafts remain unsubmitted and retain
+the normal agent-result privacy boundary. Records survive reload and restoration on their saved
+branch. Persistence failures remain visible; a missing terminal result does not authorize
+repetition. When a recorded result includes an implementation launch, replay also requires that
+launch's identity, status, and owning session to remain current for the exact approval. When the
+launch changes, Plan reports an error and directs the agent to inspect its current state through
+`plan_implement`.
+
+Explicit `plan_open` and `/plan` continue to reopen saved input and approved review. New revisions
+and new replacement requests use new operation identities. Implementation launches retain
+REQ-launch-idempotency and its explicit restart behavior.
 
 ### REQ-composer-mode — Composer mode
 
@@ -523,6 +555,7 @@ quality also requires representative planning tasks.
 | Save and retry               | Saved bytes equal reviewed Markdown; partial failures preserve the recorded attempt and retries avoid conflicting or duplicate artifacts.                                                                                                                                            | REQ-plan-save                                                                  |
 | Approval handoff             | After saving acceptance, the package opens the selector immediately. When the agent is idle, the package emits the version 1 event. Only a selected implementation action launches work; restoration does not replay the event or action.                                            | REQ-idle-completion, REQ-approval-event, REQ-notification-semantics            |
 | Implementation destinations  | Current-session launch retains context; fresh-session launch waits for idle and starts only through the replacement context. Hidden startup requests a real tool call whose result includes the title when present, absolute path, notes, and execution authorization.               | REQ-implementation-handoff                                                     |
+| Tool retry and reopening     | Exact retries return recorded results without repeated UI or mutations; conflicts, pending work, cancellation, supersession, failed persistence, and restored branches preserve state. Explicit opening remains available.                                                           | REQ-tool-idempotency, REQ-planning-entry                                       |
 | Launch reuse and restart     | Repeated destinations and restoration reuse the exact approval's recorded launch. Receiving tools continue it without another message or session; other sessions report status. Only explicit restart or a changed approval permits another launch.                                  | REQ-launch-idempotency                                                         |
 | Handoff failures             | Dismissal, stale callbacks, duplicate dispatch, artifact changes, cancelled replacement, and rejected prompts preserve approval and never launch into the wrong session or automatically retry ambiguous completion.                                                                 | REQ-handoff-recovery, REQ-implementation-handoff                               |
 | Optional presenter           | A fake presenter receives the current interaction, updates answer and revision-feedback drafts, and returns validated input; withdrawal, failure, or removal restores active work to the TUI and rejects late results. Plan cancellation and session teardown close the interaction. | REQ-exclusive-interaction, REQ-public-presentation-boundary                    |

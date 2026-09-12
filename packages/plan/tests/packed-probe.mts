@@ -89,9 +89,7 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
       stopReason: "stop",
       timestamp: Date.now(),
     });
-    const extension = loader
-      .getExtensions()
-      .extensions.find((item) => item.tools.has("plan_start"));
+    const extension = loader.getExtensions().extensions.find((item) => item.tools.has("plan_open"));
     assert.ok(extension !== undefined);
     const base = session.extensionRunner.createContext();
     let phase: "round" | "review" = "round";
@@ -168,7 +166,7 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
       },
     };
     const ctx: ExtensionContext = { ...base, mode: "tui", ui };
-    const start = extension.tools.get("plan_start")?.definition;
+    const start = extension.tools.get("plan_open")?.definition;
     const round = extension.tools.get("plan_round")?.definition;
     const review = extension.tools.get("plan_review")?.definition;
     assert.ok(start !== undefined && round !== undefined && review !== undefined);

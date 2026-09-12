@@ -149,7 +149,7 @@ async function fixture(kind: "round" | "review", root?: string) {
                 {
                   type: "toolCall",
                   id: `start-${String(Date.now())}`,
-                  name: "plan_start",
+                  name: "plan_open",
                   arguments: { replace: false },
                 },
               ];

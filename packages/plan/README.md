@@ -62,8 +62,8 @@ conversation. During an active turn, `/plan` is refused with
 branch, select the intended plan. Natural-language requests such as “enter plan mode,” “help me plan
 this change,” “resume the plan,” and “continue planning” also invoke the planning tools. These are
 examples, not required phrases; recognition depends on the model. The owning Pi agent researches and
-calls `plan_start`, `plan_round`, and `plan_review`. Repeated entry preserves active work. When the
-agent requests replacement through `plan_start`, Pi asks for confirmation and retains saved
+calls `plan_open`, `plan_round`, and `plan_review`. Repeated entry preserves active work. When the
+agent requests replacement through `plan_open`, Pi asks for confirmation and retains saved
 unfinished work. Cancelling the confirmation preserves the current plan. Session replacement
 invalidates pending confirmation.
 
@@ -106,6 +106,42 @@ considered. Model-quality checks remain separate from runtime tests.
 
 Pi loads `src/index.ts` directly without a build. Interactive planning requires Pi TUI mode; RPC,
 JSON, and print execution return unsupported-mode results.
+
+## Planning tools
+
+The agent calls these tools in response to planning or implementation intent:
+
+| Tool             | Arguments and behavior                                                                                                                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan_open`      | Optional `objective` and `replace` create or reopen planning. `replace: true` requires a nonblank `requestId` and confirmation before replacing existing work. It does not start implementation.                       |
+| `plan_round`     | `planId`, `roundId`, `expectedRevision`, and `questions` present an answerable frontier. Clarification updates retain the round identity and include the pending clarification response.                               |
+| `plan_review`    | `planId`, `expectedRevision`, and complete `markdown` present a revision for user feedback or approval.                                                                                                                |
+| `plan_implement` | `action: "here"`, `"new"`, or `"options"` implements an approved plan or reopens its implementation options. Optional `planId` selects an unambiguous plan; `restart: true` requires an explicit user restart request. |
+
+When no plan exists, `plan_open` with `{ "objective": "Plan a local cache" }` creates one. To
+explicitly reopen saved questions or review, call it with `{ "replace": false }`. To replace
+existing work, use
+`{ "objective": "Plan a local cache", "replace": true, "requestId": "replace-local-cache" }`. Reuse
+that request ID and the original arguments for a retry; choose a new request ID only for a new
+replacement request.
+
+For a new round, set `expectedRevision: 0`. To retry that call, resend its original arguments,
+including `expectedRevision: 0`; using its returned revision requests an update. The same rule
+applies to `plan_review`: resend the original Markdown and predecessor revision to retrieve its
+recorded result. A changed review or clarification update uses the current returned revision. Object
+member order does not affect a retry, but question and option order does.
+
+Completed retries return recorded feedback, decisions, approval, or cancellation without another
+modal, revision, approval event, or implementation launch. Replay requires unchanged planning state
+and intact approved artifacts. Conflicting arguments and superseded results fail without changing
+the plan. Pending or uncertain operations require explicit recovery through `plan_open` or `/plan`;
+repeating the mutation does not reopen input. A recorded cancellation continues to return
+cancellation; explicit reopening restores the interaction. Local-only drafts remain private, and
+clarification selections remain explicitly unsubmitted.
+
+If a recorded result includes an implementation launch whose identity, status, or owning session has
+changed, replay fails. Use `plan_implement` to inspect the current launch; ordinary repeats do not
+start another launch. Only an explicit restart request permits `restart: true`.
 
 ## Tool results
 
@@ -479,6 +515,12 @@ Planning state is stored as Pi session custom entries of type `orbis-plan`. Each
 Runtime draft writes use a 200 ms debounce. Interaction outcomes, entry, review, and shutdown save
 immediately. Before Pi writes its first assistant message, or when persistence is disabled or
 unavailable, planning state is unsaved.
+
+Question, review, and replacement operations also save `orbis-plan-operation` session entries.
+Before opening UI or mutating planning state, Plan records pending intent with the operation
+identity and arguments. After completion, it records the result and planning state. Replay reads
+disk-confirmed records on the active branch, including after reload or restoration. A failed record
+write remains an error; an absent completed result does not authorize another mutation.
 
 Restoration reads disk-confirmed records on the active conversation branch. Only the current record
 format is accepted. Incompatible or malformed records report an error without rewriting saved data.

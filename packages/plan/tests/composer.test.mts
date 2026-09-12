@@ -300,7 +300,7 @@ test("paused round resumes through model entry with drafts and round count prese
   onTestFinished(() => {
     view.mockRestore();
   });
-  const result = await f.runtime.requestStart({ ...f.ctx, abort }, "Resume planning", false);
+  const result = await f.runtime.requestOpen({ ...f.ctx, abort }, "Resume planning", false);
   expect(result.outcome).toBe("cancelled");
   expect(abort).toHaveBeenCalledOnce();
   expect(f.runtime.active?.objective).toBe("Original objective");
@@ -344,7 +344,7 @@ test("saved-plan selection exposes archived work and cancellation preserves the 
   ).toBe(false);
   expect(f.runtime.active?.planId).toBe(first);
   expect(f.runtime.unfinished.some((plan) => plan.objective === "Second")).toBe(true);
-  const resumed = await f.runtime.requestStart(
+  const resumed = await f.runtime.requestOpen(
     {
       ...ctx,
       ui: {

@@ -45,7 +45,7 @@ test.each([false, true])(
       .join("\n");
     expect(text).not.toContain("Planning is active");
     expect(text).toContain("saved unfinished work remains resumable");
-    expect(text).toContain("plan_start");
+    expect(text).toContain("plan_open");
     expect(text).toContain("replace: false");
     expect(text).toContain("explicitly asks to resume");
     expect(result.details).toEqual({ outcome: "cancelled", planId: "saved-plan" });
@@ -84,7 +84,7 @@ test.for(["rpc", "json", "print"] as const)(
     const f = await fixture();
     onTestFinished(f.dispose);
     await Promise.all(
-      ["plan_start", "plan_round", "plan_review"].map(async (name) => {
+      ["plan_open", "plan_round", "plan_review"].map(async (name) => {
         const result = await f
           .tool(name)
           .execute("unsupported", {}, undefined, undefined, { ...f.ctx, mode });
@@ -99,7 +99,7 @@ test("cancelled replacement confirmation preserves the active objective", async 
 }) => {
   const f = await fixture();
   onTestFinished(f.dispose);
-  const start = f.tool("plan_start");
+  const start = f.tool("plan_open");
   await start.execute("first", { objective: "First" }, undefined, undefined, f.ctx);
   const confirmation = Promise.withResolvers<boolean>();
   const opened = Promise.withResolvers<undefined>();
@@ -107,7 +107,7 @@ test("cancelled replacement confirmation preserves the active objective", async 
   let dialogSignal: AbortSignal | undefined;
   const pending = start.execute(
     "replacement",
-    { objective: "Second", replace: true },
+    { objective: "Second", replace: true, requestId: "replace-second" },
     controller.signal,
     undefined,
     {
@@ -161,7 +161,7 @@ test("oversized tool results return a bounded preview and retrievable full JSON"
   onTestFinished(f.dispose);
   const objective = "é".repeat(60_000);
   const result = await f
-    .tool("plan_start")
+    .tool("plan_open")
     .execute("large", { objective }, undefined, undefined, f.ctx);
   const text = result.content
     .filter((item) => item.type === "text")
@@ -186,4 +186,21 @@ test("oversized tool results return a bounded preview and retrievable full JSON"
   expect(text).toContain(path);
   const saved: unknown = JSON.parse(await readFile(path, "utf8"));
   expect(saved).toMatchObject({ outcome: "started", plan: { objective } });
+});
+
+test("entry registration exposes plan_open and rejects replacement without a request identity", async ({
+  onTestFinished,
+}) => {
+  const f = await fixture();
+  onTestFinished(f.dispose);
+  expect(() => f.tool("plan_start")).toThrow("Missing tool");
+  await expect(
+    f
+      .tool("plan_open")
+      .execute("missing-id", { objective: "Replace", replace: true }, undefined, undefined, f.ctx),
+  ).rejects.toThrow("stable requestId");
+  expect(Value.Check(f.tool("plan_open").parameters, { replace: true, requestId: " " })).toBe(
+    false,
+  );
+  expect(Value.Check(f.tool("plan_open").parameters, { replace: true, requestId: 42 })).toBe(false);
 });

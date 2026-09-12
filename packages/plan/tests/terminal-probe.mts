@@ -47,7 +47,7 @@ export default function terminalProbe(pi: ExtensionAPI): void {
       }
       let call: { name: string; arguments: Record<string, unknown> } | undefined;
       if (previous?.role === "user") {
-        call = { name: "plan_start", arguments: { objective: "Scripted terminal verification" } };
+        call = { name: "plan_open", arguments: { objective: "Scripted terminal verification" } };
       } else if (
         typeof details === "object" &&
         details !== null &&

@@ -11,8 +11,12 @@ import { PlanRuntime } from "./pi/runtime.ts";
 import { showPlanSettings } from "./pi/settings-menu.ts";
 import { toolResult } from "./pi/tool-result.ts";
 
-const startSchema = Type.Object(
-  { objective: Type.Optional(Type.String()), replace: Type.Optional(Type.Boolean()) },
+const openSchema = Type.Object(
+  {
+    objective: Type.Optional(Type.String()),
+    replace: Type.Optional(Type.Boolean()),
+    requestId: Type.Optional(Type.String({ minLength: 1, pattern: "\\S" })),
+  },
   { additionalProperties: false },
 );
 
@@ -145,7 +149,7 @@ export default function extension(pi: ExtensionAPI): void {
     name: "plan_review",
     label: "Review plan",
     description:
-      "Present complete Markdown for explicit user review. Include objective, constraints, decisions, implementation approach, verification and unresolved assumptions. Only the user can approve this exact revision. Return feedback to revise the plan; approval does not authorize implementation.",
+      "Present complete Markdown for explicit user review. Retry with the original expectedRevision and exact arguments to retrieve a completed result; use plan_open to explicitly reopen review. Include objective, constraints, decisions, implementation approach, verification and unresolved assumptions. Only the user can approve this exact revision. Return feedback to revise the plan; approval does not authorize implementation.",
     parameters: reviewSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -154,21 +158,22 @@ export default function extension(pi: ExtensionAPI): void {
     },
   });
   pi.registerTool({
-    name: "plan_start",
-    label: "Start planning",
+    name: "plan_open",
+    label: "Open planning",
     promptGuidelines: [
-      "When the user explicitly asks to resume planning or plan review, call plan_start with replace: false before claiming saved work is unavailable. A previous cancelled result ends that interaction and preserves saved unfinished work. Do not resume for unrelated messages or replace modal approval with chat approval.",
+      "When the user explicitly asks to resume planning or plan review, call plan_open with replace: false before claiming saved work is unavailable. A previous cancelled result ends that interaction and preserves saved unfinished work. Do not resume for unrelated messages or replace modal approval with chat approval.",
     ],
     description:
-      "Start or resume collaborative planning on explicit user intent: enter plan mode, help me plan, resume the plan, or continue planning. These are examples, not exact phrases. Do not activate for quoted examples, questions about this feature, or unrelated conversation. Reopen pending input through this tool; preserve existing drafts. Ambiguous saved plans require user selection. Replacement requires confirmation.",
-    parameters: startSchema,
+      "Create or reopen collaborative planning, questions, or review without starting implementation. Invoke on explicit user intent, such as enter plan mode, help me plan, resume the plan, or continue planning. These are examples, not exact phrases. Do not activate for quoted examples, questions about this feature, or unrelated conversation. Reopen pending input through this tool; preserve existing drafts. Ambiguous saved plans require user selection. Replacement requires confirmation and a stable requestId. Reuse the requestId and original arguments for retries; use a new requestId for a new replacement request.",
+    parameters: openSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
-      const result = await runtime.requestStart(
+      const result = await runtime.requestOpen(
         ctx,
         params.objective?.trim() ?? "",
         params.replace === true,
         signal,
+        params.requestId,
       );
       return await toolResult(result, planningInstructions);
     },
@@ -176,7 +181,7 @@ export default function extension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "plan_round",
     label: "Planning questions",
-    description: `Present the researched, answerable frontier. ${questionGuidance} Each option needs id, label, and explanation. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates, include clarification: { id, response } for the pending request, and send the complete active questions. Clarification can steer options, recommendations, and membership. Preserve the question ID for the same decision; use a new ID for a different decision. Explicitly retire omitted active questions with retire: [{ id, status: 'withdrawn' | 'deferred', reason }]. To retire every active question, send questions: [] with retire entries. Deferred questions keep their IDs when they return. Drafts remain unsubmitted until explicit whole-round submission.`,
+    description: `Present the researched, answerable frontier. Retry with the original expectedRevision and exact arguments to retrieve a completed result; use plan_open to explicitly reopen pending input. ${questionGuidance} Each option needs id, label, and explanation. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates, include clarification: { id, response } for the pending request, and send the complete active questions. Clarification can steer options, recommendations, and membership. Preserve the question ID for the same decision; use a new ID for a different decision. Explicitly retire omitted active questions with retire: [{ id, status: 'withdrawn' | 'deferred', reason }]. To retire every active question, send questions: [] with retire entries. Deferred questions keep their IDs when they return. Drafts remain unsubmitted until explicit whole-round submission.`,
     parameters: roundSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
@@ -198,7 +203,7 @@ export default function extension(pi: ExtensionAPI): void {
           {
             role: "custom" as const,
             customType: "orbis-plan-mode",
-            content: `${planningInstructions}\nCurrent plan identity: ${active.planId}. Current phase: ${active.phase}. When a question round or review is pending, call plan_start to reopen it before replacing its content.`,
+            content: `${planningInstructions}\nCurrent plan identity: ${active.planId}. Current phase: ${active.phase}. When a question round or review is pending, call plan_open to reopen it before replacing its content.`,
             display: false,
             timestamp: Date.now(),
           },

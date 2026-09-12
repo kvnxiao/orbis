@@ -202,12 +202,12 @@ test("review closure warns while idle and preserves persistence failure warnings
     notify.mockRestore();
   });
   f.runtime.start(f.ctx, "Idle review");
-  const result = await f.runtime.review(f.ctx, {
+  const result = f.runtime.review(f.ctx, {
     planId: f.runtime.active?.planId ?? "",
     expectedRevision: 0,
     markdown: "# Pending",
   });
-  expect(result.outcome).toBe("cancelled");
+  await expect(result).rejects.toThrow("Planning result is not confirmed on disk");
   expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Unsent feedback");
   expect(notify).toHaveBeenCalledWith("Injected persistence failure", "warning");
   expect(notify).toHaveBeenLastCalledWith(
@@ -237,7 +237,7 @@ test("cancellation flushes pending drafts and reports a failing persistence back
     save.mockRestore();
     notify.mockRestore();
   });
-  const result = await f.runtime.round(f.ctx, {
+  const result = f.runtime.round(f.ctx, {
     planId: f.runtime.active?.planId ?? "",
     roundId: "round",
     expectedRevision: 0,
@@ -245,9 +245,9 @@ test("cancellation flushes pending drafts and reports a failing persistence back
       { id: "scope", prerequisites: [], context: "Known", prompt: "Scope?", options: [] },
     ],
   });
-  expect(result.outcome).toBe("cancelled");
+  await expect(result).rejects.toThrow("Planning result is not confirmed on disk");
   expect(save.mock.calls.at(-1)?.slice(0, 2)).toEqual([f.api, f.ctx]);
-  expect(save.mock.calls.at(-1)?.[2]).toMatchObject({
+  expect(save.mock.calls.findLast((call) => call[4] === undefined)?.[2]).toMatchObject({
     active: {
       phase: "cancelled",
       round: { drafts: { scope: { unfinished: "Unsaved cancellation draft" } } },
@@ -399,7 +399,7 @@ test("session restoration aborts replacement confirmation and rejects a late res
   const confirmation = Promise.withResolvers<boolean>();
   const opened = Promise.withResolvers<undefined>();
   let signal: AbortSignal | undefined;
-  const pending = f.runtime.requestStart(
+  const pending = f.runtime.requestOpen(
     {
       ...f.ctx,
       ui: {
@@ -413,6 +413,8 @@ test("session restoration aborts replacement confirmation and rejects a late res
     },
     "Obsolete",
     true,
+    undefined,
+    "replace-obsolete",
   );
   await opened.promise;
   f.runtime.restore(f.ctx);

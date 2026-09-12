@@ -91,7 +91,7 @@ export async function toolResult(
         : "This launch is already recorded. Report its status and finish this turn without creating another session or starting implementation here. Only an explicit restart authorizes another launch.";
   } else if (result.outcome === "cancelled") {
     guidance =
-      "The operation was cancelled without submission or approval; saved unfinished work remains resumable. Stop planning for this turn. When the user explicitly asks to resume, call plan_start with replace: false to reopen saved work. Cancellation does not establish that a plan is missing or unrecoverable. Do not replace it or request approval in chat.";
+      "The operation was cancelled without submission or approval; saved unfinished work remains resumable. Stop planning for this turn. When the user explicitly asks to resume, call plan_open with replace: false to reopen saved work. Cancellation does not establish that a plan is missing or unrecoverable. Do not replace it or request approval in chat.";
   }
   const serialized = JSON.stringify(
     guidance === undefined ? details : { instructions: guidance, ...details },

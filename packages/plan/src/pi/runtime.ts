@@ -36,6 +36,7 @@ import { prepareReviewArtifact } from "../storage/artifacts.ts";
 import { defaultShortcut, readSettings } from "../storage/config.ts";
 import type { PlanSettings } from "../storage/config.ts";
 import { readLaunches } from "../storage/launches.ts";
+import { runPlanningOperation } from "../storage/operations.ts";
 import { readSavedRecord, saveRecord } from "../storage/persistence.ts";
 import type { SaveResult } from "../storage/persistence.ts";
 import { SessionFile } from "../storage/session-file.ts";
@@ -116,6 +117,7 @@ export class PlanRuntime {
   private controller: AbortController | undefined;
   private entryController: AbortController | undefined;
   private generation = 0;
+  private sessionGeneration = 0;
   private viewController: AbortController | undefined;
   private selectedInterface = "terminal";
   private pendingCompletion: PlanApproval | undefined;
@@ -276,6 +278,7 @@ export class PlanRuntime {
   }
 
   close(ctx: ExtensionContext): void {
+    this.sessionGeneration++;
     if (this.current !== undefined) {
       this.save(ctx);
     }
@@ -290,6 +293,7 @@ export class PlanRuntime {
   }
 
   restore(ctx: ExtensionContext): void {
+    this.sessionGeneration++;
     this.disposeOperations();
 
     this.selectedInterface = "terminal";
@@ -323,7 +327,7 @@ export class PlanRuntime {
           : {}),
       };
       ctx.ui.notify(
-        "Cannot restore malformed planning state. The saved record remains unchanged. Use /plan or plan_start to select recovery.",
+        "Cannot restore malformed planning state. The saved record remains unchanged. Use /plan or plan_open to select recovery.",
         "error",
       );
       return;
@@ -413,11 +417,41 @@ export class PlanRuntime {
     this.viewController = undefined;
   }
 
-  async requestStart(
+  async requestOpen(
     ctx: ExtensionContext,
     objective: string,
     replace: boolean,
     signal?: AbortSignal,
+    requestId?: string,
+  ): Promise<RuntimeResult> {
+    if (!replace || ctx.mode !== "tui" || signal?.aborted === true) {
+      return await this.open(ctx, objective, replace, signal);
+    }
+    if (requestId === undefined || requestId.trim() === "") {
+      return {
+        outcome: "error",
+        message:
+          "Replacement requires a stable requestId. Reuse it only when retrying this replacement.",
+      };
+    }
+    const generation = this.sessionGeneration;
+    return await runPlanningOperation(
+      this.pi,
+      ctx,
+      JSON.stringify(["open", requestId]),
+      { objective, replace },
+      () => this.current,
+      () => generation === this.sessionGeneration,
+      async (begin) => await this.open(ctx, objective, replace, signal, begin),
+    );
+  }
+
+  private async open(
+    ctx: ExtensionContext,
+    objective: string,
+    replace: boolean,
+    signal?: AbortSignal,
+    begin?: () => void,
   ): Promise<RuntimeResult> {
     if (ctx.mode !== "tui") {
       return unsupportedMode();
@@ -434,6 +468,7 @@ export class PlanRuntime {
       if (!current()) {
         return { outcome: "cancelled" };
       }
+      begin?.();
       if (replace && plan !== undefined) {
         const confirmed = await ctx.ui.confirm(
           "Start another plan?",
@@ -483,7 +518,7 @@ export class PlanRuntime {
     if (this.recovery !== undefined && !replace) {
       return {
         outcome: "error",
-        message: "Use /plan or plan_start to select recovery before starting work.",
+        message: "Use /plan or plan_open to select recovery before starting work.",
       };
     }
     if (replace) {
@@ -1066,6 +1101,27 @@ export class PlanRuntime {
     input: RoundInput,
     signal?: AbortSignal,
   ): Promise<RuntimeResult> {
+    if (ctx.mode !== "tui" || signal?.aborted === true) {
+      return await this.applyRound(ctx, input, signal);
+    }
+    const generation = this.sessionGeneration;
+    return await runPlanningOperation(
+      this.pi,
+      ctx,
+      JSON.stringify(["round", input.planId, input.roundId, input.expectedRevision]),
+      input,
+      () => this.current,
+      () => generation === this.sessionGeneration,
+      async (begin) => await this.applyRound(ctx, input, signal, begin),
+    );
+  }
+
+  private async applyRound(
+    ctx: ExtensionContext,
+    input: RoundInput,
+    signal?: AbortSignal,
+    begin?: () => void,
+  ): Promise<RuntimeResult> {
     if (signal?.aborted === true) {
       return { outcome: "cancelled" };
     }
@@ -1092,7 +1148,9 @@ export class PlanRuntime {
       };
     }
     try {
-      this.current = { ...active, ...presentRound(active, input) };
+      const next = { ...active, ...presentRound(active, input) };
+      begin?.();
+      this.current = next;
 
       this.save(ctx);
       return await this.interact(ctx, signal);
@@ -1105,6 +1163,27 @@ export class PlanRuntime {
     ctx: ExtensionContext,
     input: ReviewInput,
     signal?: AbortSignal,
+  ): Promise<RuntimeResult> {
+    if (ctx.mode !== "tui" || signal?.aborted === true) {
+      return await this.applyReview(ctx, input, signal);
+    }
+    const generation = this.sessionGeneration;
+    return await runPlanningOperation(
+      this.pi,
+      ctx,
+      JSON.stringify(["review", input.planId, input.expectedRevision]),
+      input,
+      () => this.current,
+      () => generation === this.sessionGeneration,
+      async (begin) => await this.applyReview(ctx, input, signal, begin),
+    );
+  }
+
+  private async applyReview(
+    ctx: ExtensionContext,
+    input: ReviewInput,
+    signal?: AbortSignal,
+    begin?: () => void,
   ): Promise<RuntimeResult> {
     if (signal?.aborted === true) {
       return { outcome: "cancelled" };
@@ -1138,6 +1217,7 @@ export class PlanRuntime {
         review.markdown === input.markdown &&
         active.phase === "review"
       ) {
+        begin?.();
         return await this.interact(ctx, signal);
       }
       return {
@@ -1147,7 +1227,9 @@ export class PlanRuntime {
       };
     }
     try {
-      this.current = { ...active, ...presentReview(active, input) };
+      const next = { ...active, ...presentReview(active, input) };
+      begin?.();
+      this.current = next;
 
       this.save(ctx);
       return await this.interact(ctx, signal);
@@ -1224,7 +1306,7 @@ export class PlanRuntime {
         return {
           outcome: "error",
           message:
-            "The current revision or supplementary notes require approval. Call plan_start with replace: false to reopen review before implementation.",
+            "The current revision or supplementary notes require approval. Call plan_open with replace: false to reopen review before implementation.",
         };
       }
       return {

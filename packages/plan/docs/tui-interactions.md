@@ -412,3 +412,23 @@ requires fresh review. Scripted provider scenarios distinguish interrupted tool-
 from an open modal for question frontiers and plan review. Production frontier, answer-confirmation,
 and review components must preserve drafts through interruption and explicit resume and reject late
 callbacks.
+
+## Tool retries
+
+Requirements: REQ-tool-idempotency, REQ-planning-entry.
+
+`plan_open` displays “Open planning” and creates or reopens collaborative planning, questions, or
+review. An exact completed question, review, or replacement retry returns its recorded result and
+does not open a modal, selector, or confirmation. Explicit opening retains the normal controls.
+
+| Scenario                                                | Expected result                                                                              |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Repeat a submitted frontier or returned review feedback | Return the submitted result without another submission or revision.                          |
+| Repeat approval                                         | Return preserved approval without replaying its event or implementation options.             |
+| Repeat a confirmed replacement                          | Reuse the created plan without another confirmation.                                         |
+| Repeat cancelled or unfinished input                    | Preserve cancellation or report pending recovery; do not open UI.                            |
+| Change payload under the same operation identity        | Report a conflict without mutation.                                                          |
+| Retry after newer planning state or branch restoration  | Replay only the matching saved state; otherwise report supersession.                         |
+| Retry an implementation result after its launch changes | Report the changed launch and direct the agent to `plan_implement` without another dispatch. |
+| Fail receipt persistence before or after interaction    | Preserve saved work and report uncertainty without automatic repetition.                     |
+| Explicitly reopen planning                              | Restore normal questions or review with drafts preserved.                                    |

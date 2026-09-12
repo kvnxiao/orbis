@@ -42,6 +42,7 @@ const unused = () => {
 interface Options {
   splitPlanningTurns?: boolean;
   rejectStartup?: boolean;
+  replayReview?: boolean;
   commandCollision?: boolean;
   selection?: string;
   queue?: "steer" | "followUp";
@@ -149,7 +150,7 @@ async function fixture(options: Options = {}) {
                         .map((part) => (part.type === "text" ? part.text : ""))
                         .join("") ?? "");
                 const start = context.messages.find(
-                  (message) => message.role === "toolResult" && message.toolName === "plan_start",
+                  (message) => message.role === "toolResult" && message.toolName === "plan_open",
                 );
                 const reviewed = context.messages.some(
                   (message) => message.role === "toolResult" && message.toolName === "plan_review",
@@ -207,12 +208,26 @@ async function fixture(options: Options = {}) {
                       },
                     ];
                   }
+                } else if (
+                  options.replayReview === true &&
+                  context.messages.filter(
+                    (message) =>
+                      message.role === "toolResult" && message.toolName === "plan_review",
+                  ).length === 1
+                ) {
+                  const call = context.messages
+                    .flatMap((message) => (message.role === "assistant" ? message.content : []))
+                    .find((part) => part.type === "toolCall" && part.name === "plan_review");
+                  if (call?.type !== "toolCall") {
+                    throw new Error("Missing original review call");
+                  }
+                  content = [{ ...call, id: "review-retry" }];
                 } else if (start === undefined) {
                   content = [
                     {
                       type: "toolCall",
                       id: "start",
-                      name: "plan_start",
+                      name: "plan_open",
                       arguments: { objective: "Completion fixture" },
                     },
                   ];
@@ -728,4 +743,28 @@ test("rejected fresh startup records failure and ordinary repeats do not launch 
     ),
   ).toMatchObject({ role: "toolResult", isError: true });
   expect(JSON.stringify(f.runtime.session.messages)).toContain("Injected startup rejection");
+});
+
+test("SDK exact review retry returns approval without replaying review or selector", async ({
+  onTestFinished,
+}) => {
+  const view = approve();
+  onTestFinished(() => {
+    view.mockRestore();
+  });
+  const f = await fixture({ replayReview: true, sibling: "continue" });
+  onTestFinished(f.dispose);
+  await f.runtime.session.prompt("Plan the change");
+  await f.idle();
+  const results = f.runtime.session.messages.filter(
+    (message) => message.role === "toolResult" && message.toolName === "plan_review",
+  );
+  expect(results).toHaveLength(2);
+  expect(
+    results.map((message) => (message.role === "toolResult" ? message.isError : true)),
+  ).toEqual([false, false]);
+  expect(view).toHaveBeenCalledTimes(1);
+  expect(f.approvals).toHaveLength(1);
+  expect(f.launches).toEqual([]);
+  expect(f.errors).toEqual([]);
 });
