@@ -25,13 +25,18 @@ follows the CTA padding and precedes at most one hint line. F1 toggles hints and
 CTA controls or errors. Each modal starts with the configured hints default. Short terminals omit
 decorative padding, dividers, and hints before action controls or the last usable content row.
 
-Enabled buttons use bracketed accent-colored labels. Focused enabled buttons use a contrasting
-background, bold text, and `›`; disabled buttons use muted text. A focused disabled button retains
-`›` and displays the reason it cannot activate. Focus styling applies even when only one button
-exists. While an editor owns focus, buttons retain their unfocused appearance. Buttons wrap as
-complete labels on narrow terminals; labels wider than the terminal wrap without losing text. Errors
-remain above the buttons. Tab/Shift+Tab traverse individual buttons; Left/Right also move within the
-bar. Enter activates only the focused control. Navigation never submits input.
+Enabled buttons use bracketed accent-colored labels. Button focus values are:
+
+| Button facet     | Display                                    |
+| ---------------- | ------------------------------------------ |
+| Focused enabled  | Contrasting background, bold text, `›`     |
+| Focused disabled | Muted text, `›`, and the activation reason |
+
+Focus styling applies even when only one button exists. While an editor owns focus, buttons retain
+their unfocused appearance. Buttons wrap as complete labels on narrow terminals; labels wider than
+the terminal wrap without losing text. Errors remain above the buttons. Tab/Shift+Tab traverse
+individual buttons; Left/Right also move within the bar. Enter activates only the focused control.
+Navigation never submits input.
 
 An active agent waiting for a modal displays `Awaiting Plan` and a rotating working indicator.
 Closing, failure, transfer, cancellation, and shutdown restore Pi's defaults. Cleanup from an older
@@ -135,29 +140,35 @@ must be persisted. Failed persistence blocks display with retry/cancellation gui
 
 The full Markdown remains read-only and scrollable without source-line numbers. Actual blank source
 lines remain visible, including consecutive blank lines. Equal outer margins surround the document
-content. The left margin reserves space for `→` on the selected block's first visual row. The entire
-selected block is bold, including wrapped rows and descendants of a selected container. A heading
-targets only its heading text. Selection is rendered in the document without a duplicated
+content. Plan-review marker values are:
+
+| Review facet     | Display                     |
+| ---------------- | --------------------------- |
+| Selected block   | `→` on the first visual row |
+| Annotation label | `↑ Note`                    |
+
+The entire selected block is bold, including wrapped rows and descendants of a selected container. A
+heading targets only its heading text. Selection is rendered in the document without a duplicated
 `Block N: excerpt` footer. Paragraphs, headings, list items, code blocks, and other block structures
 retain their source identities, including repeated and nested text. Markdown references, tables,
 lists, and code content remain intact.
 
-Each nonblank annotation appears directly below its target block with the label `↑ Note` and a
-distinct theme background. Note labels, retained note text, and retained overall feedback use Pi's
-built-in `warning` foreground, which the bundled themes define as yellow. Without a supplied theme,
-note text is uncolored. Active editors retain native input styling. The label omits source-line
-numbers; annotations retain their source identities and exact excerpts. Nested notes are ordered by
-their source position and target range. When the selected block owns a note, its label and retained
-text are also bold. Selecting a different block removes that note's bold highlight. The note
-background remains visible. Overall feedback appears after the complete plan, beneath a divider
-matching the configured border style and a blank padding row. Its title,
-`Overall feedback (optional)`, is a nonselectable label above a persistent input with horizontal
-borders. The title, field, and retained text align with the document content. On the latest
-revision, an empty unfocused field displays muted `Add overall feedback` placeholder text. Focusing
-the field immediately displays the input cursor and hides the placeholder. Leaving an empty field
-restores the placeholder. Earlier revisions display retained feedback or a read-only empty state
-without an editing invitation. Clearing a field removes its outgoing note. Notes remain visible
-outside editing and are never inserted into the immutable plan file.
+Each nonblank annotation appears directly below its target block with a distinct theme background.
+Note labels, retained note text, and retained overall feedback use Pi's built-in `warning`
+foreground, which the bundled themes define as yellow. Without a supplied theme, note text is
+uncolored. Active editors retain native input styling. The label omits source-line numbers;
+annotations retain their source identities and exact excerpts. Nested notes are ordered by their
+source position and target range. When the selected block owns a note, its label and retained text
+are also bold. Selecting a different block removes that note's bold highlight. The note background
+remains visible. Overall feedback appears after the complete plan, beneath a divider matching the
+configured border style and a blank padding row. Its title, `Overall feedback (optional)`, is a
+nonselectable label above a persistent input with horizontal borders. The title, field, and retained
+text align with the document content. On the latest revision, an empty unfocused field displays
+muted `Add overall feedback` placeholder text. Focusing the field immediately displays the input
+cursor and hides the placeholder. Leaving an empty field restores the placeholder. Earlier revisions
+display retained feedback or a read-only empty state without an editing invitation. Clearing a field
+removes its outgoing note. Notes remain visible outside editing and are never inserted into the
+immutable plan file.
 
 Up/Down select document blocks; PgUp/PgDn scroll. A simple list item has one navigation stop; its
 text does not create a duplicate paragraph stop. Separate paragraphs and nested blocks inside list
@@ -337,13 +348,22 @@ a plan when a reference is ambiguous.
 `/plan-settings` selects personal defaults or trusted project overrides and shows the approved-plan
 directory, symbols, border style, Show hints by default, and Planning shortcut. When a trusted
 project value masks a personal setting, the personal menu names that value and its configuration
-file. Updating appearance does not submit drafts. Unicode and Rounded are defaults; Double uses
-double-line frames and dividers, ASCII uses ASCII frame characters and dividers, and None omits the
-outer frame while retaining content and CTA dividers. Hints add a separate divider only when shown.
-Pi's editor lines retain native styling. When a planning interaction next opens, it uses the updated
-appearance settings and preserves its drafts. The settings menu displays each change immediately and
-saves without progress or success messages. Key hints remain unchanged. A failed write restores the
-previous setting and reports the error; Escape closes the menu.
+file. Updating appearance does not submit drafts. Unicode symbols and Rounded borders are defaults.
+Border display values are:
+
+| Border setting | Frame characters                                | Divider |
+| -------------- | ----------------------------------------------- | ------- |
+| Rounded        | `╭ ╮ ╰ ╯ │`                                     | `─`     |
+| Square         | `┌ ┐ └ ┘ │`                                     | `─`     |
+| Double         | `╔ ╗ ╚ ╝ ║`                                     | `═`     |
+| ASCII          | `+ - \|`                                        | `-`     |
+| None           | No outer frame; content and CTA dividers remain | `─`     |
+
+Hints add a separate divider only when shown. Pi's editor lines retain native styling. When a
+planning interaction next opens, it uses the updated appearance settings and preserves its drafts.
+The settings menu displays each change immediately and saves without progress or success messages.
+Key hints remain unchanged. A failed write restores the previous setting and reports the error;
+Escape closes the menu.
 
 Show hints by default uses the same personal/trusted-project precedence as the other settings. Set
 it to Off and open a modal: hints and their divider are hidden, while errors and action controls
