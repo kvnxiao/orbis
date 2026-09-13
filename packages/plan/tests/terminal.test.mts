@@ -19,6 +19,7 @@ import {
   transitionReview,
 } from "../src/domain/state.ts";
 import type { RoundState } from "../src/domain/state.ts";
+import { symbolsSchema } from "../src/tui/appearance.ts";
 import type { PlanAppearance } from "../src/tui/appearance.ts";
 import { framedModalLines, modalLines } from "../src/tui/terminal-layout.ts";
 import { TerminalReview } from "../src/tui/terminal-review.ts";
@@ -32,6 +33,15 @@ const escape = "\x1b";
 const enter = "\r";
 const tab = "\t";
 const shiftEnter = "\x1b[13;2u";
+
+const answerRowMarkers = {
+  unicode: { focused: "●", unfocused: "·", selected: "✓" },
+  emoji: { focused: "🔹", unfocused: "·", selected: "✅" },
+} satisfies Record<
+  PlanAppearance["symbols"],
+  { focused: string; unfocused: string; selected: string }
+>;
+const symbolModes = symbolsSchema.anyOf.map((item) => item.const);
 
 test.each([24, 90])("review omits source numbers from corpus rows at width %i", (width) => {
   const source = readFileSync(new URL("./fixtures/review-document.md", import.meta.url), "utf8");
@@ -587,6 +597,7 @@ test("brainstorm symbols and input colors distinguish the field roles", () => {
 
 test.for([
   { border: "rounded", glyph: "─" },
+  { border: "square", glyph: "─" },
   { border: "double", glyph: "═" },
   { border: "ascii", glyph: "-" },
   { border: "none", glyph: "─" },
@@ -696,10 +707,10 @@ test("option explanations wrap around the label and preserve separate Markdown p
   option.explanation =
     "Keep small files safely on disk with a plain format.\n\nUse `JSON` for export.";
   const lines = f.view.render(40).map((line) => stripTerminalSequences(line).trimEnd());
-  const start = lines.indexOf("› A. Local storage — Keep small files");
+  const start = lines.indexOf("● A. Local storage — Keep small files");
   expect(start).toBeGreaterThan(-1);
   expect(lines.slice(start, start + 4)).toEqual([
-    "› A. Local storage — Keep small files",
+    "● A. Local storage — Keep small files",
     "safely on disk with a plain format.",
     "",
     "Use JSON for export.",
@@ -793,10 +804,10 @@ test.each(["", "   "])("blank notes %j let arrows leave without confirmation", (
   const f = roundFixture();
   f.resize(60);
   keys(f.view, "x", "\x7f", blank, down);
-  expect(text(f.view)).toContain("› B. Remote");
+  expect(text(f.view)).toContain("● B. Remote");
   expect(f.state().round?.drafts.scope?.answer).toBeUndefined();
   keys(f.view, "x", "\x7f", blank, "\x1b[A");
-  expect(text(f.view)).toContain("› A. Local");
+  expect(text(f.view)).toContain("● A. Local");
   expect(f.state().round?.drafts.scope?.answer).toBeUndefined();
 });
 
@@ -872,9 +883,9 @@ test("a revised round that drops the selected option keeps the frontier navigabl
     refresh: () => undefined,
     editor: testEditor(),
   });
-  expect(text(view)).toContain("› A. Local");
+  expect(text(view)).toContain("● A. Local");
   keys(view, down);
-  expect(text(view)).toContain("› B. Hosted");
+  expect(text(view)).toContain("● B. Hosted");
   keys(view, enter);
   expect(state.round?.drafts.scope?.answer).toEqual({ optionId: "hosted" });
   keys(view, escape, escape);
@@ -1007,16 +1018,18 @@ test("Other and clarification follow generated choices and precede the recommend
   expect(rendered).toContain("Plan questions (round 1)");
 });
 
-test.each(["unicode", "emoji"] as const)(
-  "selected %s markers persist when the cursor moves",
+test.each(symbolModes)(
+  "%s rows render focused, unfocused, and persistent selected markers",
   (symbols) => {
+    const markers = answerRowMarkers[symbols];
     const f = roundFixture({ symbols, border: "rounded", showHints: true });
+    expect(text(f.view)).toContain(`${markers.focused} A. Local`);
+    expect(text(f.view)).toContain(`${markers.unfocused} B. Remote`);
     keys(f.view, enter);
-    const check = symbols === "emoji" ? "✅" : "✓";
-    expect(text(f.view)).toContain(`${check} A. Local`);
+    expect(text(f.view)).toContain(`${markers.selected} A. Local`);
     expect(text(f.view)).not.toContain("[selected]");
     keys(f.view, down);
-    expect(text(f.view)).toContain(`${check} A. Local`);
+    expect(text(f.view)).toContain(`${markers.selected} A. Local`);
   },
 );
 

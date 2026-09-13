@@ -21,7 +21,7 @@ import type { ReviewAction, RoundState } from "../domain/state.ts";
 import { defaultAppearance } from "./appearance.ts";
 import type { PlanAppearance } from "./appearance.ts";
 import { ModalKeybindings } from "./terminal-keys.ts";
-import { dividerGlyphs, modalContentWidth, modalLines } from "./terminal-layout.ts";
+import { borderGlyphs, modalContentWidth, modalLines } from "./terminal-layout.ts";
 import type { TerminalOptions } from "./terminal-options.ts";
 
 const home = homedir();
@@ -419,7 +419,7 @@ export class TerminalReview implements Component {
     const indent = " ".repeat(gutter);
     lines.push(
       "",
-      indent + markdown.hr(dividerGlyphs[this.appearance.border].repeat(contentWidth)),
+      indent + markdown.hr(borderGlyphs[this.appearance.border].divider.repeat(contentWidth)),
       "",
       ...wrapTextWithAnsi("Overall feedback (optional)", contentWidth).map((line) => indent + line),
     );

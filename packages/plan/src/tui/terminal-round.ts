@@ -27,6 +27,27 @@ type Row =
   | { kind: "inactive"; question: Question }
   | { kind: "review" };
 
+type AnswerRowFacet = "focused" | "unfocused" | "selected";
+
+interface RoundSymbols {
+  question: string;
+  recommendation: string;
+  answerRow: Record<AnswerRowFacet, string>;
+}
+
+const roundSymbols = {
+  unicode: {
+    question: "?",
+    recommendation: "→ ",
+    answerRow: { focused: "●", unfocused: "·", selected: "✓" },
+  },
+  emoji: {
+    question: "❓",
+    recommendation: "➡️ ",
+    answerRow: { focused: "🔹", unfocused: "·", selected: "✅" },
+  },
+} satisfies Record<PlanAppearance["symbols"], RoundSymbols>;
+
 function reconfirmationWarning(draft: Draft | undefined, revision: number): string {
   if (draft?.answer !== undefined && draft.revision !== revision) {
     return "\n\nPlease select again";
@@ -71,13 +92,14 @@ function rowMarker(
   focused: boolean,
   symbols: PlanAppearance["symbols"],
 ): string {
-  if (selected) {
-    return symbols === "emoji" ? "✅" : "✓";
-  }
+  let facet: AnswerRowFacet = "unfocused";
   if (focused) {
-    return symbols === "emoji" ? "🔹" : "›";
+    facet = "focused";
   }
-  return "·";
+  if (selected) {
+    facet = "selected";
+  }
+  return roundSymbols[symbols].answerRow[facet];
 }
 
 function fieldText(
@@ -645,7 +667,7 @@ export class TerminalRound implements Component {
         return [
           ...(index === 0 ? [] : [""]),
           ...this.markdown(
-            `## ${this.appearance.symbols === "emoji" ? "❓" : "?"} ${String(question.number)}. ${question.prompt}`,
+            `## ${roundSymbols[this.appearance.symbols].question} ${String(question.number)}. ${question.prompt}`,
             width,
           ),
           "",
@@ -763,7 +785,7 @@ export class TerminalRound implements Component {
         const draft = round.drafts[row.question.id];
         lines.push(
           ...this.markdown(
-            `## ${this.appearance.symbols === "emoji" ? "❓" : "?"} ${String(row.question.number)}. ${row.question.prompt}
+            `## ${roundSymbols[this.appearance.symbols].question} ${String(row.question.number)}. ${row.question.prompt}
 
 ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
             width,
@@ -880,7 +902,7 @@ ${row.question.context}${reconfirmationWarning(draft, row.question.revision)}`,
           lines.push(
             "",
             ...this.markdown(
-              `${this.appearance.symbols === "emoji" ? "➡️ " : "→ "}Recommendation: ${String.fromCharCode(65 + recommended)}. ${row.question.options[recommended]?.label ?? ""} — ${recommendation.reason}`,
+              `${roundSymbols[this.appearance.symbols].recommendation}Recommendation: ${String.fromCharCode(65 + recommended)}. ${row.question.options[recommended]?.label ?? ""} — ${recommendation.reason}`,
               width,
             ),
           );

@@ -138,8 +138,12 @@ stable requirement IDs. When moving rules, preserve their meaning and verificati
 The interaction document states required behavior and supplies scenarios that exercise it. Label
 illustrative examples separately. Do not impose a shared layout or keymap across packages. Keep the
 system and interaction contracts consistent and separate from research synthesis and execution logs.
-The design workflow checks the document's existence, SPEC link, scenario coverage, and agreement
-with system guarantees before reporting completion.
+When a UI has grouped values or configurable display variants, define its facets and scenarios in
+prose, then record their concrete values in a table with facets or scenarios as rows. Add a column
+for each mode or configuration; a single value column is sufficient when no matrix applies. Use the
+table for symbol, color, label, and other UI values or implementation decisions instead of
+enumerating those mappings in sentences. The design workflow checks the document's existence, SPEC
+link, scenario coverage, and agreement with system guarantees before reporting completion.
 
 ### Conformance evidence
 
