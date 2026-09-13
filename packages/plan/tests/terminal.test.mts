@@ -19,6 +19,7 @@ import {
   transitionReview,
 } from "../src/domain/state.ts";
 import type { RoundState } from "../src/domain/state.ts";
+import { symbolsSchema } from "../src/tui/appearance.ts";
 import type { PlanAppearance } from "../src/tui/appearance.ts";
 import { framedModalLines, modalLines } from "../src/tui/terminal-layout.ts";
 import { TerminalReview } from "../src/tui/terminal-review.ts";
@@ -32,6 +33,15 @@ const escape = "\x1b";
 const enter = "\r";
 const tab = "\t";
 const shiftEnter = "\x1b[13;2u";
+
+const answerRowMarkers = {
+  unicode: { focused: "●", unfocused: "·", selected: "✓" },
+  emoji: { focused: "🔹", unfocused: "·", selected: "✅" },
+} satisfies Record<
+  PlanAppearance["symbols"],
+  { focused: string; unfocused: string; selected: string }
+>;
+const symbolModes = symbolsSchema.anyOf.map((item) => item.const);
 
 test.each([24, 90])("review omits source numbers from corpus rows at width %i", (width) => {
   const source = readFileSync(new URL("./fixtures/review-document.md", import.meta.url), "utf8");
@@ -587,6 +597,7 @@ test("brainstorm symbols and input colors distinguish the field roles", () => {
 
 test.for([
   { border: "rounded", glyph: "─" },
+  { border: "square", glyph: "─" },
   { border: "double", glyph: "═" },
   { border: "ascii", glyph: "-" },
   { border: "none", glyph: "─" },
@@ -1007,18 +1018,18 @@ test("Other and clarification follow generated choices and precede the recommend
   expect(rendered).toContain("Plan questions (round 1)");
 });
 
-test.each(["unicode", "emoji"] as const)(
-  "selected %s markers persist when the cursor moves",
+test.each(symbolModes)(
+  "%s rows render focused, unfocused, and persistent selected markers",
   (symbols) => {
+    const markers = answerRowMarkers[symbols];
     const f = roundFixture({ symbols, border: "rounded", showHints: true });
-    const focused = symbols === "emoji" ? "🔹" : "●";
-    expect(text(f.view)).toContain(`${focused} A. Local`);
+    expect(text(f.view)).toContain(`${markers.focused} A. Local`);
+    expect(text(f.view)).toContain(`${markers.unfocused} B. Remote`);
     keys(f.view, enter);
-    const check = symbols === "emoji" ? "✅" : "✓";
-    expect(text(f.view)).toContain(`${check} A. Local`);
+    expect(text(f.view)).toContain(`${markers.selected} A. Local`);
     expect(text(f.view)).not.toContain("[selected]");
     keys(f.view, down);
-    expect(text(f.view)).toContain(`${check} A. Local`);
+    expect(text(f.view)).toContain(`${markers.selected} A. Local`);
   },
 );
 

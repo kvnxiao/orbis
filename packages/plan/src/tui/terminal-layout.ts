@@ -4,14 +4,21 @@ import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works
 
 import type { PlanAppearance } from "./appearance.ts";
 
-/** Select separators from the resolved border style. */
-export const dividerGlyphs: Record<PlanAppearance["border"], string> = {
-  rounded: "─",
-  square: "─",
-  double: "═",
-  ascii: "-",
-  none: "─",
-};
+type FrameGlyphs = readonly [string, string, string, string, string];
+
+interface BorderGlyphs {
+  frame: FrameGlyphs | null;
+  divider: string;
+}
+
+/** Map resolved border styles to frame and divider glyphs. */
+export const borderGlyphs = {
+  rounded: { frame: ["╭", "╮", "╰", "╯", "│"], divider: "─" },
+  square: { frame: ["┌", "┐", "└", "┘", "│"], divider: "─" },
+  double: { frame: ["╔", "╗", "╚", "╝", "║"], divider: "═" },
+  ascii: { frame: ["+", "+", "+", "+", "|"], divider: "-" },
+  none: { frame: null, divider: "─" },
+} satisfies Record<PlanAppearance["border"], BorderGlyphs>;
 
 /** Deduct frame cells only when the available geometry displays a frame. */
 export function frameContentWidth(
@@ -19,7 +26,7 @@ export function frameContentWidth(
   rows: number,
   style: PlanAppearance["border"],
 ): number {
-  return style === "none" || width < 4 || rows < 8
+  return borderGlyphs[style].frame === null || width < 4 || rows < 8
     ? Math.max(1, width)
     : width - 2 - (width >= 6 ? 2 : 0);
 }
@@ -32,19 +39,14 @@ export function framedModalLines(
   rows = Number.POSITIVE_INFINITY,
   style: PlanAppearance["border"] = "rounded",
 ): string[] {
-  if (style === "none" || width < 4 || rows < 8) {
+  const { frame, divider } = borderGlyphs[style];
+  if (frame === null || width < 4 || rows < 8) {
     return render(Math.max(1, width)).map((line) => truncateToWidth(line, width));
   }
   const padding = width >= 6 ? 1 : 0;
   const contentWidth = frameContentWidth(width, rows, style);
-  const glyphs = {
-    rounded: ["╭", "╮", "╰", "╯", "─", "│"],
-    square: ["┌", "┐", "└", "┘", "─", "│"],
-    double: ["╔", "╗", "╚", "╝", "═", "║"],
-    ascii: ["+", "+", "+", "+", "-", "|"],
-  } as const;
-  const [topLeft, topRight, bottomLeft, bottomRight, horizontal, vertical] = glyphs[style];
-  const edge = horizontal.repeat(width - 2);
+  const [topLeft, topRight, bottomLeft, bottomRight, vertical] = frame;
+  const edge = divider.repeat(width - 2);
   return [
     border(`${topLeft}${edge}${topRight}`),
     ...render(contentWidth).map((line) => {
@@ -84,7 +86,7 @@ export function modalLines(
 ): string[] {
   width = Math.max(1, width);
   const markdown = getMarkdownTheme();
-  const divider = markdown.hr(dividerGlyphs[style].repeat(width));
+  const divider = markdown.hr(borderGlyphs[style].divider.repeat(width));
   const buttons: string[] = [];
   let row = "";
   for (const [index, button] of actions.buttons.entries()) {
