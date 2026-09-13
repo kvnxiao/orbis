@@ -90,8 +90,11 @@ skill files.
   details in the SPEC. Headings there name the interaction area alone and keep stable anchors; a
   `Requirements:` line in the section body lists its requirement IDs. Together, the documents define
   the complete package contract. Before design approval, explore user flows and document scenarios
-  and branching or multistep diagrams. Commands that only execute an action or print output do not
-  need an empty interaction document.
+  and branching or multistep diagrams. When UI values or implementation decisions form a group,
+  define the facets and scenarios in prose and put their concrete values in a table with facets or
+  scenarios as rows. Add columns for modes or configurations; use one value column when no matrix
+  applies. Use the table for symbol, emoji, color, label, and other variant mappings. Commands that
+  only execute an action or print output do not need an empty interaction document.
 - Before deriving implementation work, review relevant specification requirements with the user.
   Existing session approval is sufficient; explicit user direction approves the behavior it
   specifies. Resolve only material unanswered decisions.

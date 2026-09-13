@@ -50,11 +50,18 @@ current selection. Earlier selections and question-version history are not displ
 
 Questions show the current context, prompt, generated options, Other, and Ask for clarification. The
 recommendation and reason follow the options. Option letters and labels are bold; selected options
-have a selection marker distinct from keyboard focus. Focused Unicode answer rows use `●`, emoji
-answer rows use `🔹`, and unfocused answer rows use `·`. Generated-option notes follow the option in
-an accent-colored `[notes: …]` suffix. Other text appears directly after its label in the theme's
-Markdown code-block color; clarification text uses its link color. Neither has an answer/question
-wrapper. Input and cursor positions wrap with the row.
+have a selection marker distinct from keyboard focus. The answer-row display values are:
+
+| Answer-row facet | Unicode | Emoji |
+| ---------------- | ------- | ----- |
+| Focused          | `●`     | `🔹`  |
+| Unfocused        | `·`     | `·`   |
+| Selected         | `✓`     | `✅`  |
+
+Generated-option notes follow the option in an accent-colored `[notes: …]` suffix. Other text
+appears directly after its label in the theme's Markdown code-block color; clarification text uses
+its link color. Neither has an answer/question wrapper. Input and cursor positions wrap with the
+row.
 
 Only the latest clarification exchange for a question is visible in the frontier. A blank row
 separates it from the recommendation. The request label is `User question N: …`; N counts sent
