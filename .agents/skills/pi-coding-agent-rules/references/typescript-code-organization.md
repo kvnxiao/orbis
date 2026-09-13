@@ -63,6 +63,11 @@ same rule — one precedence order, one retry policy — unify them at the secon
 divergence between them is a defect. Where two modules merely look alike, wait: extract once a third
 caller confirms the shape, or once a shared type already unions the variants.
 
+When variant data duplicates knowledge, needs shared ownership, or defines a closed contract that
+needs exhaustive coverage, introduce a mapping. Otherwise, keep an isolated literal or single-use
+branch inline. Place the mapping with the contract's owner and apply the
+[variant mapping rules](typescript-architecture.md#derive-choices-and-counts-from-declared-contracts-default).
+
 A type that unions two implementations is evidence that the contract exists. When a function accepts
 `A | B` and both supply the same fields in the same order, name that contract: declare the shared
 interface, or give both a single argument object so callers cannot transpose positional parameters.

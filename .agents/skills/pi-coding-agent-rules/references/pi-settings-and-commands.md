@@ -26,6 +26,11 @@ component. Define whether edits apply immediately or on Save, and whether they a
 or the next operation. Display the effective value and write scope. When a project override masks a
 personal value, make that override visible.
 
+Resolve effective configuration through the
+[configuration boundary](typescript-architecture.md#separate-policy-from-integration-code-when-it-has-an-independent-contract-default)
+before passing values to the menu or operation; do not reapply defaults independently in each
+consumer.
+
 When project overrides are supported, apply only trusted project configuration and merge only
 supplied fields over personal defaults. Preserve unrelated settings during writes. On invalid
 configuration or a failed write, report the affected setting and retain a recoverable edit; do not

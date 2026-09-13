@@ -6,6 +6,28 @@ Test accepted and rejected state transitions, boundary validation, and externall
 results. A test should fail when the contract breaks even if private helpers or file layout change.
 Keep pure domain tests independent of Pi and terminal rendering.
 
+For correlated requests, cover rejected command-payload combinations at external parsers and keep
+compile-time rejection cases in the project's type-test mechanism when one exists. For partial
+updates, assert preservation, clearing, replacement, and rejection of unsupported representations,
+including nested values and serialization boundaries the API uses. For layered configuration,
+exercise conflicting scopes, omitted overrides, and reload behavior through the resolver and its
+consumers.
+
+For collection transformations, cover duplicate identities and meaningful order or multiplicity. For
+queries, assert that reads preserve domain state; for consuming operations, assert the returned
+value and the mutation together. When preview and execution are separate operations, verify that
+preview does not perform execution's external writes. Check public projections through their
+declared boundary types and assert that observable output contains only permitted fields.
+
+For closed variant mappings, derive exercised variant membership from the authoritative schema or
+registry and assert observable results against an exhaustive test-owned expected mapping, such as
+`expected satisfies Record<Variant, ExpectedShape>`. Keep expected values independent of the
+production mapping; do not import, copy, or calculate them from that mapping. When the declaration
+exists only as a TypeScript union, use the exhaustive expected mapping to enumerate test cases.
+Adding a variant must cause a compile-time failure, a missing-case test failure, or both until its
+expectations are supplied. Cover unavailable facets and required equality between uses. Test state
+classification precedence separately from the selected values.
+
 For asynchronous state changes, control completion order with deferred operations or a fake clock.
 When the operation supports cancellation, cover cancellation before work starts and during I/O. When
 the owner can change, test a stale completion after replacement. Avoid timing assertions that depend
