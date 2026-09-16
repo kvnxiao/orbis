@@ -31,6 +31,9 @@ metadata; a model cannot act on information available only to a custom renderer.
 fails, throw an error from `execute` to set Pi's failure status. Returning text that says "Error"
 does not mark the tool result as failed.
 
+Apply [Pi failure signaling](pi-failure-signaling.md) when rendering error data and remediation into
+the failed result's text.
+
 When overriding a built-in tool, preserve its result contract, including the `details` shape used by
 rendering and session logic. Prefer delegating to the public built-in tool implementation over
 reproducing its path handling and output behavior. Only `renderCall` and `renderResult` are

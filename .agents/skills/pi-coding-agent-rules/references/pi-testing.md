@@ -96,6 +96,10 @@ For custom tools, test malformed arguments, domain failures, cancellation, and o
 file mutation tools, exercise competing updates to the same file. Assert Pi's failure status for
 failed execution; an error-colored renderer does not establish that status.
 
+Apply the
+[failure-signaling assertions](pi-failure-signaling.md#test-failure-status-and-cancellation-through-the-adapter-default)
+to assert cancelled outcomes and verify that the adapter does not add remediation for defects.
+
 Test each mode the extension claims to support. For extensions that use UI, include unavailable UI
 and dismissed prompts. For terminal components, exercise narrow widths, Unicode, resize, and partial
 results. For an RPC client, split records across chunks, interleave events and responses, and close

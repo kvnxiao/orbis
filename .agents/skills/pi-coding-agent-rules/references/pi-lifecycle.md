@@ -48,6 +48,10 @@ For work started in an idle context, create an operation-owned `AbortController`
 dismissal or `session_shutdown`. Test cancellation while idle as well as during a turn.
 [Context signal](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#ctxsignal).
 
+Use the
+[abort-reason contract](typescript-error-contracts.md#keep-cancellation-and-supersession-on-the-signal-required)
+to distinguish user cancellation from supersession before translating an error.
+
 UI-owned controllers may cancel obsolete rendering, listeners, or pending UI work during normal
 cleanup, including successful completion. Aborting a UI-owned controller is distinct from
 `ctx.abort()`, which interrupts ongoing agent work. Define cancellation according to the

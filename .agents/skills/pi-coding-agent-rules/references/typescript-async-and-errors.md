@@ -46,16 +46,9 @@ outer loop. Do not retry validation failures, unsupported operations, or user ca
 
 ## Translate errors at the boundary that can act on them (Default)
 
-When callers need different actions, distinguish cancellation, an expected domain refusal,
-unavailable infrastructure, and a programming defect. Catch errors to recover, translate the
-contract, or add operation context; preserve the cause. Avoid logging the same failure at every
-layer.
-
-At a Pi tool boundary, translate a failed execution into a thrown error. Keep an expected negative
-domain result as a successful result only when it answers the tool's documented question. For
-example, a search with no matches can succeed; a search whose backend could not be reached has
-failed. Include actionable context without credentials or full sensitive payloads.
-[Pi error signaling](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#tool-definition).
+Use [TypeScript error contracts](typescript-error-contracts.md) to choose outcomes, thrown kinds,
+abort reasons, and remediation ownership; apply [Pi failure signaling](pi-failure-signaling.md) when
+translating them into tool results, notifications, or TUI messages.
 
 ## Keep subprocess arguments separate from shell programs (Required)
 
