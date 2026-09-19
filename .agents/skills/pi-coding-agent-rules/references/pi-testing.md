@@ -30,8 +30,11 @@ classification precedence separately from the selected values.
 
 For asynchronous state changes, control completion order with deferred operations or a fake clock.
 When the operation supports cancellation, cover cancellation before work starts and during I/O. When
-the owner can change, test a stale completion after replacement. Avoid timing assertions that depend
-on arbitrary sleeps.
+the owner can change, test a stale completion after replacement and cancellation followed by
+replacement before cleanup finishes. Assert the original abort reason, unchanged replacement state,
+and release of only the old operation's resources. Include a late rejection as well as a late
+success, and verify that unrelated defects remain observable. Avoid timing assertions that depend on
+arbitrary sleeps.
 
 Name each test file for the contract it enforces and use one naming basis across the suite; a suite
 that mixes module names with workflow names gives no rule for where a new test belongs. When a test
@@ -42,9 +45,11 @@ file grows beyond the modules it covers, split it along the same module boundari
 When correctness depends on event delivery, resource cleanup, or storage commits, exercise the
 boundary that performs that behavior. Use integration coverage when mocked dependencies would remove
 the behavior under test. For versioned operations, delay completion, change the version, and verify
-that the stale action cannot commit. For dependent operations, verify that the prerequisite finishes
-before the next operation starts. For replaceable interactions, exercise repeated replacement and a
-late callback from an old instance.
+that the stale action cannot commit. Assert distinct recovery kinds for an expired identity and a
+revision mismatch within a current interaction, including an expired identity with a matching
+revision. For dependent operations, verify that the prerequisite finishes before the next operation
+starts. For replaceable interactions, exercise repeated replacement and a late callback from an old
+instance.
 
 For domain equality, test reordered object keys, changed nested fields, and reordered collections
 whose order matters. For derived outputs, change a determining input and verify invalidation or

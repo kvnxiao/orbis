@@ -9,6 +9,13 @@ newer state changes the action's meaning, reject the stale action and obtain fre
 applying it to a different version. HTTP's `If-Match` precondition is one implementation of this
 concurrency check. [Conditional writes](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
 
+Distinguish an expired interaction identity from a revision conflict in the current interaction.
+Check identity before revision: an expired callback requires the caller to stop using it and obtain
+a new interaction; a current callback with an old revision requires reloading current input before
+retrying. For example, reject an old editor's callback even if its revision number matches the new
+editor's revision. Include both revisions in the conflict's structured data and preserve state on
+either rejection.
+
 ## Bind retries to an operation and accepted input (Conditional)
 
 When an operation supports deduplicated retries, define its identity, scope, and retention lifetime.

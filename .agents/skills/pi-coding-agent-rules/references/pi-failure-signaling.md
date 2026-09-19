@@ -1,5 +1,8 @@
 # Pi failure signaling
 
+For a failure passed to different consumers, use the
+[inline example](typescript-error-contracts.md#give-remediation-text-one-owner-at-the-boundary-default).
+
 ## Failed tool results carry text only (Required)
 
 Throw from `execute` to fail, and render any data the model needs into the message in a fixed form,
@@ -27,10 +30,14 @@ when the required UI is unavailable.
 
 ## Translate at each Pi surface (Default)
 
-At a tool boundary, throw with remediation composed from the kind; in a command handler, notify; in
-a TUI component, display the failed action without remediation. For example, a conflict tool message
-includes the current revision and reload instruction, while the component displays the rejected
-save. Give model-facing wording one owner under the
+At a tool boundary, render a recognized failure's data and recovery action into the thrown message
+and retain the original failure as its cause. Rethrow unexpected errors unchanged when the adapter
+accepts them; if it requires a wrapper for a non-Error value, retain that value as the cause and add
+no speculative advice. In a command handler, notify with actions the user can perform. In a TUI,
+show the failed action and only the recovery guidance needed beside its controls. For programmatic
+consumers, preserve the typed failure instead of returning tool-oriented text. For example, render a
+conflict's revision and reload instruction for the model, but expose both revisions to a callback
+consumer. Give model-facing wording one owner under the
 [tool wording rule](pi-tools.md#make-the-tool-contract-sufficient-for-invocation-default), and
 derive remediation from the
 [error contract](typescript-error-contracts.md#give-remediation-text-one-owner-at-the-boundary-default).
@@ -48,9 +55,11 @@ across those copies.
 
 ## Test failure status and cancellation through the adapter (Default)
 
-Assert `isError` through the tool adapter, a cancelled extension outcome on abort, and no
-remediation for a defect. Keep the extension outcome assertion separate from Pi's aborted-tool
-failure status; neither a rendered message nor a direct domain call establishes the adapter's
-behavior. Follow the
+Assert `isError` through the tool adapter, a cancelled extension outcome on abort, and preserved
+unexpected errors without added remediation. Exercise both rejected promises and returned failure
+outcomes when the adapter accepts both. Verify that each supported surface renders only its
+audience's instructions, exactly once, and that programmatic consumers retain structured data and
+causes. Keep the extension outcome assertion separate from Pi's aborted-tool failure status; neither
+a rendered message nor a direct domain call establishes the adapter's behavior. Follow the
 [adapter testing rule](pi-testing.md#test-tool-and-mode-contracts-at-the-adapter-boundary-required)
 and [kind assertions](typescript-error-contracts.md#assert-kinds-not-message-text-default).
