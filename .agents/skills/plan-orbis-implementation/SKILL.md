@@ -1,7 +1,7 @@
 ---
 name: plan-orbis-implementation
 description:
-  Write local Markdown implementation plans with concrete tasks and verification from an approved
+  Write GitHub issue implementation plans with concrete tasks and verification from an approved
   Orbis package SPEC.md. Use when planning implementation or vertical slices against an existing
   package contract.
 ---
@@ -9,8 +9,9 @@ description:
 # Plan implementation of an Orbis specification
 
 Write an implementation plan grounded in the approved package contract and the current repository.
-Save it locally by default. A planning request authorizes the plan files, not execution of their
-tasks.
+Keep it in issue bodies by default. A planning request authorizes shared planning records, not
+execution of their tasks. Follow the [development workflow](../../../docs/development-workflow.md)
+and read the wiki decision index once per working session, opening relevant records.
 
 ## Establish the approved baseline
 
@@ -59,9 +60,9 @@ When several tasks contribute to a requirement, name each task's contribution an
 obligations. Assign the check that establishes full coverage to a task. A requirement reference
 alone does not establish that a slice satisfies the whole requirement.
 
-Read the [plan format](references/plan-format.md) before drafting. Use one plan when the work is
+Read the [plan format](references/plan-format.md) before drafting. Use one issue when the work is
 cohesive. When separate tasks are useful, divide them into vertical slices with observable outcomes,
-each implementing the layers needed for that behavior. Split large work into linked plans when a
+each implementing the layers needed for that behavior. Split large work into native sub-issues when a
 slice needs an independent handoff, prerequisite investigation, or substantial context unrelated to
 other slices. Do not split solely by file count or make every layer a separate task. Infrastructure
 tasks are appropriate when a concrete prerequisite cannot form a useful independent slice; name the
@@ -89,7 +90,7 @@ For each task, provide:
   by a live orchestrator.
 - Remaining uncertainties and the specific research or experiment that resolves them.
 
-Make each task executable from the repository and saved plan without the chat. Name the files or
+Make each task executable from the repository and issue plan without the chat. Name the files or
 symbols to change, the existing behavior to reuse, the intended edits, and the commands or
 interaction steps that establish acceptance. State each command's working directory and expected
 observable result. Label proposed paths and interfaces as additions; do not claim they already
@@ -118,56 +119,37 @@ When an implementation decision changes observable behavior, treat it as a speci
 and obtain the user's direction. Do not add requirements, weaken acceptance criteria, or treat a
 proposed change as already approved.
 
-## Deliver and verify the plan
+## Publish and verify the plan
 
-Unless the user specifies another destination or requests chat-only output, write the
-dependency-ordered plan to `packages/<name>/implementation/PLAN.md` relative to the repository root.
-Use a descriptive title. Inspect existing plans before creating a directory; revise the matching
-plan without overwriting unrelated work. For multiple plans, make `PLAN.md` the index and use
-descriptive numbered sibling files as described in the format reference. Create directories only
-when writing their contents.
+Search existing issues before creating plans. Reuse a bounded initiative for the requested delivery
+and create native sub-issues only for independently executable outcomes. Keep small work in one
+issue. Store shared scope, the SPEC baseline, coverage, and integrated acceptance on the initiative;
+keep each child's concrete plan and handoff in its body. Use native blocking relationships and add
+every tracked issue to the Project. Do not mirror every requirement or checklist step as an issue.
 
-Verify that Git ignores the default destination with `git check-ignore -v` and that no plan files
-there are tracked. Orbis ignores `/packages/*/implementation/`; do not add a blanket `PLAN.md`
-ignore rule or force-add local plans. When a user selects another local destination, check its
-ignore status and add a narrowly scoped ignore rule if needed. An explicit request for tracked plans
-overrides the local default.
+Use the issue plan format and the workflow's authorization boundaries. Reread issues before editing,
+preserve contributor changes, and check remote state after an uncertain write before retrying.
+Publish current scope and decisions without uploading raw transcripts or old local plans. When
+resuming local plans, reconcile their baseline and publish the current executable work. Do not
+maintain two authoritative copies. Explicit local or chat-only requests override the shared default.
+If GitHub is unavailable, save a local draft and report that publication remains pending.
 
-Keep the reusable format in the tracked skill and the generated plans in the chosen local directory.
-The package scaffold does not create plan directories. These files guide implementation work; they
-are not approved artifacts emitted by the `@orbis/plan` runtime. Preserve its requirement to save
-the exact reviewed Markdown.
+Keep detailed run evidence in ignored `packages/<name>/implementation/` directories. Check ignore
+and tracking status before writing local evidence. Put concise check results, remaining obligations,
+and the next action in the issue handoff. Keep reusable tests and instructions in the repository.
+This workflow does not change the `@orbis/plan` runtime's exact reviewed Markdown artifact contract.
 
-Colocate verification records and run evidence with the implementation plans. Record results in task
-evidence fields or sibling files under the same default Git-ignored directory. Keep session logs,
-environment details, command results, and remaining checks there; do not create publicly referenced
-verification documents or link package documentation to these local records. Tracking or publishing
-evidence requires an explicit user opt-in. Keep reusable test instructions in the root
-`CONTRIBUTING.md` or package `docs/development.md`.
-Package documentation describes behavior and compatibility limits without session logs or test-run
-results.
+For affected READMEs, plan the purpose, installation, and first use through
+[write-orbis-readme](../write-orbis-readme/SKILL.md). When evidence invalidates an assumption, revise
+affected issue plans, dependencies, and coverage while preserving unaffected work. Resolve proposed
+behavioral changes through [revise-orbis-package](../revise-orbis-package/SKILL.md).
 
-For affected READMEs, plan the purpose, installation, and first-use example through
-[write-orbis-readme](../write-orbis-readme/SKILL.md). Link advanced usage and integration details
-from focused package documents instead of adding them to the README.
+Place `verify-changes` after accumulated implementation and before commit or PR delivery. Include
+[verify-orbis-conformance](../verify-orbis-conformance/SKILL.md) for affected contracts. Verification
+and delivery usually belong in acceptance criteria, not separate issues. Follow the workflow's
+definitions of done and explicit PR closing links. A passing test suite or completed child count does
+not establish full conformance.
 
-When evidence invalidates an assumption, revise the affected tasks, dependencies, and coverage
-claims. Preserve unaffected work and settled requirements. Distinguish a task adjustment within the
-contract from a proposed specification change that requires the user's direction.
-
-Include the repository's applicable verification in the implementation work. Place `verify-changes`
-after the accumulated implementation and before a requested commit or PR. Do not infer permission to
-commit, push, or publish from a planning request. Assign
-[verify-orbis-conformance](../verify-orbis-conformance/SKILL.md) to final verification through
-`verify-changes`, including requirements affected by review fixes. Plan tracked tests and reusable
-verification instructions that a fresh clone can use without the ignored plans or evidence journals.
-Keep missing tests and implementation defects separate from contract amendments that require
-approval. A completed plan or passing test suite does not establish package conformance.
-
-If the user also authorized implementation, use the agreed plan to continue that work. Otherwise
-finish with links to the saved plan or index, its approval and readiness state, and explicit
-blockers. Check links, requirement coverage, task dependencies, and the separation between expected
-checks and recorded results. Verify that evidence is colocated with the plans and that public
-documentation does not reference it. Check ignore and tracking status for evidence as well as plans.
-Report the saved paths and ignore status without repeating the entire plan in chat. If saving fails,
-report the failure and provide the plan in chat without claiming it was persisted.
+If implementation is authorized, continue with the next ready task. Otherwise report issue links,
+approved scope, readiness, and blockers. Verify remote issue contents, hierarchy, dependencies, and
+Project membership. Distinguish a saved local draft from a published issue plan.

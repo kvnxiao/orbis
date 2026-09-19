@@ -14,6 +14,12 @@ separate task unless the user explicitly includes it.
 
 ## Establish context and research
 
+Follow the [development workflow](../../../docs/development-workflow.md). Read the wiki decision
+index once per working session and open relevant records. When the intended outcome can be named,
+create or reuse a bounded initiative and add it to the Project. Keep unresolved decisions visible
+there. A package-delivery initiative remains open after design approval; a design-only initiative
+has its own design deliverable. Do not create implementation children for unsettled behavior.
+
 Read the repository's `AGENTS.md`, `README.md`, and
 [specification guidance](../../../docs/specifications.md). Inspect an existing package specification
 and source when the request concerns that package. Preserve the user's settled requirements,
@@ -144,6 +150,12 @@ Use the repository's specification starter as guidance, not a mandatory outline.
 prose under the repository license and cite external contracts that implementers need. Describe
 implementation availability separately from intended behavior. Do not create runtime stubs or
 package-local plan directories merely to store a specification.
+
+Link the SPEC and approved scope from the initiative. Use a SPEC-only PR when a substantial design
+needs independent review or a shared implementation baseline; small deliveries can combine design
+and implementation. Later focused revisions can amend the SPEC alongside code and tests. Reference
+an implementation initiative without closing it from a design-only PR. Publish approved consequential
+decisions in the wiki when they meet the development workflow's decision-record threshold.
 
 Follow the repository verification requirements for changed files. Report the research,
 specification, and applicable interaction-document paths, any unresolved decisions, and verification

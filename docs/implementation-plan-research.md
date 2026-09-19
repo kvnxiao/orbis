@@ -101,21 +101,13 @@ contains its task details and evidence. Assign verification of interactions acro
 tasks. A separate JSON ledger or YAML schema is unnecessary until a consumer needs machine-readable
 state.
 
-Local implementation files belong in `packages/<name>/implementation/`, ignored by Git by default.
-The tracked skill defines their format. The scaffold must preserve this directory when adding
-runtime files to a specification-only package. These mutable work documents are separate from
-`@orbis/plan`'s approved artifacts; the runtime specification still requires saving the exact
-reviewed Markdown.
+The [development workflow](development-workflow.md) applies this content to GitHub initiative and
+work issues. Issue bodies contain the current shared plan; native relationships express hierarchy
+and dependencies. The
+[issue plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md) defines
+their content.
 
-The selected naming scheme keeps `PLAN.md` as the entry point. A single plan uses that file
-directly; multiple plans use it as an index of `01-<outcome>.md` siblings. The alternatives have
-these trade-offs:
-
-| Choice                           | One plan                    | Multiple plans                               | Trade-off                                                                        |
-| -------------------------------- | --------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
-| Stable entry point (recommended) | `PLAN.md` contains the work | `PLAN.md` indexes `01-<outcome>.md` siblings | The entry path survives splitting; the file's role changes.                      |
-| Explicit index                   | `PLAN.md`                   | `INDEX.md` plus `01-<outcome>.md` siblings   | The index's role is explicit; splitting changes the entry path.                  |
-| Descriptive files                | `<outcome>.md`              | Descriptive plans plus `INDEX.md`            | Every plan has a meaningful filename; readers need discovery or a supplied link. |
-
-Numbering helps browsing. Explicit task and plan dependencies determine execution order. Stable task
-IDs preserve references when plans are reordered.
+Local files under `packages/<name>/implementation/` remain optional scratch work and detailed
+evidence, ignored by Git. The scaffold preserves that directory when adding runtime files to a
+specification-only package. Repository development plans remain separate from `@orbis/plan`'s
+approved artifacts, whose runtime contract requires saving the exact reviewed Markdown.

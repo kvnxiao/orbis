@@ -8,6 +8,11 @@ introductions; keep operational documentation concrete.
 
 ## Commands and skills
 
+At the start of substantive repository work, read the
+[wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) once and load relevant
+records. Follow the [development workflow](docs/development-workflow.md) for shared work, approval,
+and delivery. If remote context is unavailable, report the gap and continue independent local work.
+
 Use the root `justfile` for common workspace commands. Run `just` to list the available recipes, and
 prefer `just install`, `just new <name>`, `just fix`, `just check`, and `just test` over their root
 `pnpm` scripts. Use `pnpm` directly for package-filtered commands, dependency-manifest changes,
@@ -26,6 +31,7 @@ skill files.
 | Trigger                                               | Required skill                                                                 |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Before touching any package                           | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)         |
+| Start or resume tracked development                   | [work-orbis-issue](.agents/skills/work-orbis-issue/SKILL.md)                   |
 | Package design                                        | [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md)   |
 | Implementation planning                               | [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md) |
 | Package contract changes                              | [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md)           |
@@ -112,8 +118,10 @@ skill files.
   not approval of behavior.
 - Derive tasks from the approved contract and current source. Each task identifies requirements,
   dependencies, observable outcomes, and verification. Before implementing a change, state its
-  behavior and verification. Save plans under `packages/<name>/implementation/` by default; Git
-  ignores these directories.
+  behavior and verification. Keep the authoritative plan in initiative and work issue bodies using
+  the [issue plan format](.agents/skills/plan-orbis-implementation/references/plan-format.md). Use
+  native sub-issues for independent work and checklists for smaller steps. Keep scratch work and
+  detailed evidence in ignored local files; do not maintain duplicate authoritative plans.
 
 ## Implementation
 
@@ -187,16 +195,21 @@ skill files.
 
 ### Evidence and publication
 
-- Colocate verification records and run evidence, including real-agent checks, with plans in the
-  default Git-ignored implementation directory. Tracking or publishing evidence requires explicit
-  user opt-in. Do not create publicly referenced verification documents or link package
-  documentation to local evidence. Keep reusable test instructions in `CONTRIBUTING.md` or package
-  `docs/development.md`; package documentation describes behavior and compatibility limits without
-  session logs or test-run results.
+- Keep detailed run evidence, including real-agent checks, in ignored
+  `packages/<name>/implementation/` directories or `.artifacts/` for workspace work. Publish concise
+  verification summaries and handoffs in issues and PRs; raw logs require explicit user opt-in. Keep
+  reusable tests and instructions available from a clone. Do not link package documentation to local
+  evidence or include session logs in package contracts.
 - Before publication, use `pnpm pack` and test the tarball outside the workspace. Check that runtime
   imports resolve without workspace symlinks or development dependencies and that Pi registers the
   expected behavior.
-- Do not publish packages, push commits, or create releases unless the user requests those actions.
+- Within authorized work, create and update relevant issues, Project items, and wiki records of
+  approved consequential decisions. Prepare verified commits on a work branch, push that branch, and
+  open focused PRs for authorized deliverables. Developers review and merge. Do not merge, push
+  directly to the default branch, publish packages, or create releases without separate explicit
+  authorization. Honor requests limited to local or chat-only work.
+- Include explicit closing links only for issue outcomes the PR delivers. The final delivery PR
+  closes the initiative after integrated acceptance; do not infer completion from child counts.
 
 ## Writing
 

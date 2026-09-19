@@ -65,10 +65,10 @@ When the design needs research, save its synthesis in `packages/<name>/docs/rese
 writing `SPEC.md`. Simple packages can omit research docs. Review the spec's requirements, then
 derive implementation tasks from the approved contract. The
 [specification guide](docs/specifications.md) defines this workflow and how to write
-package-specific contracts. The planning skill saves local Markdown tasks under
-`packages/<name>/implementation/`, which Git ignores. `PLAN.md` contains a single plan or indexes
-numbered outcome files for larger work. The scaffold preserves existing plans without creating empty
-implementation directories.
+package-specific contracts. Follow the [development workflow](docs/development-workflow.md) to
+create a bounded initiative, plan work through GitHub sub-issues, and deliver focused PRs. Issue
+bodies contain the authoritative implementation plans. Local scratch work and detailed evidence
+remain optional and ignored.
 
 For packages that own prompts, menus, forms, modals, or interactive terminal views, explore the user
 flows before approving the design and document them in `docs/tui-interactions.md`, linked from the
@@ -80,18 +80,25 @@ settings components, and command design.
 
 Repository-local skills support package design, implementation planning, and revision:
 
+- [work-orbis-issue](.agents/skills/work-orbis-issue/SKILL.md) starts or resumes work from an issue
+  or concrete request, reads relevant wiki decisions, and coordinates the specialist skills.
+
 - [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md) researches existing
   packages and Pi APIs, works through decision rounds, saves research synthesis, and writes a
   specification.
 - [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md) turns an approved
-  specification into saved implementation plans with concrete edits, task dependencies, and
-  verification against the current code.
+  specification into issue implementation plans with concrete edits, dependencies, and verification
+  against the current code.
 - [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md) coordinates approved behavior
   changes across the SPEC, interaction scenarios, plans, code, and tests. Package code requests
   require contract inspection even without an explicit skill invocation.
 
-In Codex, invoke `$brainstorm-orbis-package`, `$plan-orbis-implementation`, or
-`$revise-orbis-package`. In Pi, use `/skill:brainstorm-orbis-package`,
+For example, ask `$work-orbis-issue resume https://github.com/kvnxiao/orbis/issues/<number>`. The
+agent inspects the issue and current repository, identifies the next unblocked action, and continues
+within the task's authorization. It leaves verified PRs for developer review and merge.
+
+In Codex, invoke `$work-orbis-issue`, `$brainstorm-orbis-package`, `$plan-orbis-implementation`, or
+`$revise-orbis-package`. In Pi, use `/skill:work-orbis-issue`, `/skill:brainstorm-orbis-package`,
 `/skill:plan-orbis-implementation`, or `/skill:revise-orbis-package`. After project trust is
 established, Pi discovers the repository's `.agents/skills`. When a host does not discover these
 skills, ask it to read the linked `SKILL.md` directly.
