@@ -5,6 +5,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Input, SettingsList, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { SettingItem } from "@earendil-works/pi-tui";
 
+import { describe } from "../domain/errors.ts";
 import {
   defaultPlanDirectory,
   isPlanShortcut,
@@ -212,7 +213,7 @@ export async function showPlanSettings(
               if (!closed && isField(id)) {
                 list.updateValue(id, displayed[id]());
               }
-              ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+              ctx.ui.notify(describe(error), "error");
               if (!closed) {
                 tui.requestRender();
               }

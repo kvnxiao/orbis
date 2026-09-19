@@ -56,7 +56,7 @@ test("cancelled state requires explicit resume before presenting questions", () 
       expectedRevision: 1,
       questions: [question("storage"), question("scope")],
     }),
-  ).toThrow("Use /plan to explicitly resume unfinished work before changing its questions.");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   expect(state.phase).toBe("cancelled");
 });
 
@@ -102,7 +102,7 @@ test.each(["round", "clarification"] as const)(
     expect(restored).toEqual(state);
     expect(restored.phase).toBe(phase);
     expect(() => action({ ...restored, phase: "round" }, { type: "submit" })).toThrow(
-      "Answer or reconfirm storage",
+      expect.objectContaining({ kind: "rejected" }),
     );
     expect(
       action(restored, { type: "answer", questionId: "storage", answer: { optionId: "local" } })
@@ -118,11 +118,13 @@ test("clearing rejects unknown questions and stale round revisions without mutat
     answer: { optionId: "local" },
   });
   expect(() => action(state, { type: "clear-answer", questionId: "missing" })).toThrow(
-    "Unknown question",
+    expect.objectContaining({ kind: "rejected" }),
   );
   expect(() =>
     transitionRound(state, "frontier", 0, { type: "clear-answer", questionId: "storage" }),
-  ).toThrow("Round changed");
+  ).toThrow(
+    expect.objectContaining({ kind: "revision-conflict", data: { expected: 0, current: 1 } }),
+  );
   expect(state.round?.drafts.storage?.answer).toEqual({ optionId: "local" });
 });
 
@@ -167,7 +169,9 @@ test("reordering preserves identities and changed questions require selective re
     expectedRevision: 2,
     questions: [question("scope"), storage],
   });
-  expect(() => action(state, { type: "submit" })).toThrow("reconfirm storage");
+  expect(() => action(state, { type: "submit" })).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   expect(state.round?.drafts.storage?.unfinished).toBe("Unfinished alternative");
   state = action(state, { type: "answer", questionId: "storage", answer: { optionId: "remote" } });
   expect(action(state, { type: "submit" }).decisions.scope?.answer).toEqual({
@@ -180,15 +184,19 @@ test("invalid answers and stale submissions preserve round state", () => {
   const before = structuredClone(state);
   expect(() =>
     action(state, { type: "answer", questionId: "missing", answer: { optionId: "local" } }),
-  ).toThrow("Unknown question");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   expect(() =>
     action(state, { type: "answer", questionId: "storage", answer: { optionId: "missing" } }),
-  ).toThrow("Unknown option");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   expect(() =>
     action(state, { type: "answer", questionId: "storage", answer: { custom: " " } }),
-  ).toThrow("contain text");
-  expect(() => action(state, { type: "submit" })).toThrow("Answer or reconfirm");
-  expect(() => transitionRound(state, "frontier", 0, { type: "submit" })).toThrow("Round changed");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
+  expect(() => action(state, { type: "submit" })).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
+  expect(() => transitionRound(state, "frontier", 0, { type: "submit" })).toThrow(
+    expect.objectContaining({ kind: "revision-conflict", data: { expected: 0, current: 1 } }),
+  );
   expect(state).toEqual(before);
 });
 
@@ -245,27 +253,31 @@ test("clarification retains unsubmitted drafts and resolves the same round", () 
 });
 
 test("duplicate identities, unknown prerequisites and invalid recommendations are rejected", () => {
-  expect(() => round([question("storage"), question("storage")])).toThrow("unique");
+  expect(() => round([question("storage"), question("storage")])).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   const dependent = question("format");
   dependent.prerequisites = ["storage"];
-  expect(() => round([dependent])).toThrow("unresolved prerequisite");
+  expect(() => round([dependent])).toThrow(expect.objectContaining({ kind: "rejected" }));
   const invalid = question("storage");
   invalid.recommendation = { optionId: "missing", reason: "Invalid" };
-  expect(() => round([invalid])).toThrow("unknown option");
+  expect(() => round([invalid])).toThrow(expect.objectContaining({ kind: "rejected" }));
   const lonely = question("storage");
   lonely.options = lonely.options.slice(0, 1);
-  expect(() => round([lonely])).toThrow("Exactly one option is invalid");
+  expect(() => round([lonely])).toThrow(expect.objectContaining({ kind: "rejected" }));
   const unrecommended = question("storage");
   delete unrecommended.recommendation;
-  expect(() => round([unrecommended])).toThrow("recommendation");
-  expect(() => round([question("__proto__")])).toThrow("Invalid round");
+  expect(() => round([unrecommended])).toThrow(expect.objectContaining({ kind: "rejected" }));
+  expect(() => round([question("__proto__")])).toThrow(
+    expect.objectContaining({ kind: "invalid-input" }),
+  );
 });
 
 test("prerequisite errors identify missing decisions and drafts become eligible only after submission", () => {
   const storage = { ...question("storage"), prerequisites: ["interface"] };
-  const message =
-    "Question storage has unresolved prerequisite IDs: interface. Prerequisites must reference submitted decisions. Defer this question until those decisions are submitted; preserve their question IDs.";
-  expect(() => round([question("interface"), storage])).toThrow(message);
+  expect(() => round([question("interface"), storage])).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   const draft = action(round([question("interface")]), {
     type: "answer",
     questionId: "interface",
@@ -278,7 +290,7 @@ test("prerequisite errors identify missing decisions and drafts become eligible 
       expectedRevision: 1,
       questions: [question("interface"), storage],
     }),
-  ).toThrow(message);
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   const submitted = action(draft, { type: "submit" });
   const next = presentRound(submitted, {
     planId: "plan",
@@ -400,5 +412,5 @@ test("option notes update immediately while unselected notes stay out of submiss
   expect(submitted.round?.drafts.storage?.options?.remote).toBe("Private alternative");
   expect(() =>
     action(state, { type: "edit-option", questionId: "storage", optionId: "missing", text: "x" }),
-  ).toThrow("Unknown option");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
 });

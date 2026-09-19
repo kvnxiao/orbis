@@ -623,7 +623,11 @@ test.for(["cancel", "failure"] as const)(
     await f.runtime.session.prompt("Plan the change");
     await f.finished;
     expect(f.errors).toHaveLength(1);
-    expect(f.errors[0]).toContain("approval is preserved");
+    expect(f.errors[0]).toBe(
+      failure === "failure"
+        ? "Injected replacement creation failure"
+        : "Session replacement was cancelled. Approval is preserved; explicitly request a restart for another attempt.",
+    );
     expect(f.launches).toEqual([]);
     expect(f.approvals).toHaveLength(1);
     expect(f.runtime.session.sessionId).toBe(origin);

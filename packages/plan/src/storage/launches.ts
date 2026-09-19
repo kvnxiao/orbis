@@ -3,8 +3,9 @@ import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
+import { PlanningError } from "../domain/errors.ts";
 import { approvalSchema, validApprovalPayload } from "../domain/state.ts";
-import { readSavedRecord, saveRecord } from "./persistence.ts";
+import { saveFailure, readSavedRecord, saveRecord } from "./persistence.ts";
 
 /** Identify session entries that record authorized implementation attempts. */
 export const launchEntryType = "orbis-plan-launch";
@@ -27,7 +28,7 @@ export type LaunchRecord = Static<typeof launchSchema>;
 export function readLaunches(ctx: ExtensionContext): LaunchRecord[] {
   const saved = readSavedRecord(ctx, undefined, launchEntryType, true);
   if (saved.status === "unreadable") {
-    throw new Error(saved.message);
+    throw new PlanningError("persistence", saved.message, { cause: saved });
   }
   if (saved.status === "none") {
     return [];
@@ -44,9 +45,7 @@ export function readLaunches(ctx: ExtensionContext): LaunchRecord[] {
       !validApprovalPayload(data.approval) ||
       (data.status === "failed") !== (data.failure !== undefined)
     ) {
-      throw new Error(
-        "Invalid implementation launch record. Preserve the session history and resolve the record before launching again.",
-      );
+      throw new PlanningError("persistence", "Invalid implementation launch record.");
     }
     return structuredClone(data);
   });
@@ -56,6 +55,6 @@ export function readLaunches(ctx: ExtensionContext): LaunchRecord[] {
 export function saveLaunch(pi: ExtensionAPI, ctx: ExtensionContext, record: LaunchRecord): void {
   const result = saveRecord(pi, ctx, record, undefined, launchEntryType);
   if (!result.saved) {
-    throw new Error(result.message);
+    throw saveFailure(result);
   }
 }

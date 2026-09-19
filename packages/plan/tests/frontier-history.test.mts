@@ -44,7 +44,7 @@ test("withdrawal preserves drafts and permits explicit continuation without deci
       questionId: "scope",
       answer: { custom: "Wrong" },
     }),
-  ).toThrow("inactive");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   const continued = transitionRound(retired, "one", 2, { type: "submit" });
   expect(continued.phase).toBe("research");
   expect(continued.decisions).toEqual({});
@@ -67,7 +67,7 @@ test("reactivation retains question number and increments revision without accep
   });
   expect(returned.round?.questions[0]).toMatchObject({ number: 1, revision: 3 });
   expect(() => transitionRound(returned, "one", 3, { type: "submit" })).toThrow(
-    "Answer or reconfirm",
+    expect.objectContaining({ kind: "rejected" }),
   );
 });
 
@@ -116,7 +116,7 @@ test("completed logical frontiers retain detached snapshots and sent question co
 test("updates cannot silently omit questions or skip a pending clarification response", () => {
   expect(() =>
     presentRound(initial(), { planId: "plan", roundId: "one", expectedRevision: 1, questions: [] }),
-  ).toThrow("retire");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   const waiting = transitionRound(initial(), "one", 1, {
     type: "clarify",
     questionId: "scope",
@@ -130,7 +130,7 @@ test("updates cannot silently omit questions or skip a pending clarification res
       expectedRevision: 1,
       questions: [question],
     }),
-  ).toThrow("clarification");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
 });
 
 test("a deferred draft survives another logical frontier and requires reconfirmation", () => {
@@ -167,7 +167,9 @@ test("a deferred draft survives another logical frontier and requires reconfirma
   });
   expect(state.round?.questions[0]).toMatchObject({ number: 1, revision: 3 });
   expect(state.round?.drafts.scope?.unfinished).toBe("Retained");
-  expect(() => transitionRound(state, "three", 1, { type: "submit" })).toThrow("reconfirm");
+  expect(() => transitionRound(state, "three", 1, { type: "submit" })).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
 });
 
 test.each(["withdrawn", "deferred"] as const)(

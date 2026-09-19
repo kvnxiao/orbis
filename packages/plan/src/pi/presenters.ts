@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 import { documentBlocks } from "../document/blocks.ts";
+import { PlanningError } from "../domain/errors.ts";
 import { draftActionSchema, resultActionSchema } from "../domain/state.ts";
 import type { RoundState, RoundAction, ReviewAction } from "../domain/state.ts";
 import type {
@@ -52,7 +53,8 @@ function isPresenter(value: unknown): value is PlanPresenter {
 /** Register a presenter and return idempotent removal across session reloads. */
 export function registerPresenter(pi: ExtensionAPI, value: unknown): () => void {
   if (!isPresenter(value)) {
-    throw new Error(
+    throw new PlanningError(
+      "invalid-input",
       "A presenter requires version 1, a unique ID other than terminal, a label, and present().",
     );
   }
@@ -79,7 +81,10 @@ export function registerPresenter(pi: ExtensionAPI, value: unknown): () => void 
     });
   }
   if ([...registry].some((item) => item.id === definition.id)) {
-    throw new Error(`Planning presenter ${definition.id} is already registered.`);
+    throw new PlanningError(
+      "rejected",
+      `Planning presenter ${definition.id} is already registered.`,
+    );
   }
   let remove: (() => void) | undefined;
   let disposed = false;
@@ -88,7 +93,10 @@ export function registerPresenter(pi: ExtensionAPI, value: unknown): () => void 
       return;
     }
     if (availablePresenters(pi.events).some((item) => item.id === definition.id)) {
-      throw new Error(`Planning presenter ${definition.id} is already registered.`);
+      throw new PlanningError(
+        "rejected",
+        `Planning presenter ${definition.id} is already registered.`,
+      );
     }
     remove = pi.events.on(discovery, (receive: unknown) => {
       if (typeof receive === "function") {
@@ -144,16 +152,20 @@ export function presentationAction(
 ): RoundAction | ReviewAction {
   const schema = draft ? draftEnvelope : resultEnvelope;
   if (!Value.Check(schema, value)) {
-    throw new Error("Invalid planning presenter input.");
+    throw new PlanningError("invalid-input", "Invalid planning presenter input.");
   }
   const identity = value.identity;
   if (
     identity.sessionId !== expected.sessionId ||
     identity.planId !== expected.planId ||
-    identity.interactionId !== expected.interactionId ||
-    identity.revision !== expected.revision
+    identity.interactionId !== expected.interactionId
   ) {
-    throw new Error("Planning interaction changed; reopen current input.");
+    throw new PlanningError("interaction-closed", "Planning interaction identity changed.");
+  }
+  if (identity.revision !== expected.revision) {
+    throw new PlanningError("revision-conflict", "Planning interaction revision changed.", {
+      data: { expected: identity.revision, current: expected.revision },
+    });
   }
   return structuredClone(value.action);
 }
@@ -175,5 +187,8 @@ export function presentationSnapshot(state: RoundState): PlanPresentationSnapsho
       blocks: documentBlocks(review.markdown),
     };
   }
-  throw new Error("This planning interaction is no longer accepting input.");
+  throw new PlanningError(
+    "interaction-closed",
+    "This planning interaction is no longer accepting input.",
+  );
 }

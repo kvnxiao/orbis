@@ -3,6 +3,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
+import { describe, superseded } from "./domain/errors.ts";
 import { fencedObjective } from "./domain/objective.ts";
 import { questionGuidance, reviewSchema, roundSchema } from "./domain/state.ts";
 import { installPlanComposer } from "./pi/composer.ts";
@@ -33,7 +34,7 @@ export default function extension(pi: ExtensionAPI): void {
   pi.registerCommand("plan-settings", {
     description: "Configure Plan appearance, shortcut, and saved-plan directory",
     async handler(_args, ctx) {
-      settingsController?.abort();
+      settingsController?.abort(superseded);
       const controller = new AbortController();
       settingsController = controller;
       const signal =
@@ -44,7 +45,7 @@ export default function extension(pi: ExtensionAPI): void {
         await showPlanSettings(ctx, agentDir, signal);
       } catch (error) {
         if (!signal.aborted) {
-          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          ctx.ui.notify(describe(error), "error");
         }
       } finally {
         if (settingsController === controller) {
@@ -64,7 +65,7 @@ export default function extension(pi: ExtensionAPI): void {
         ctx.ui.notify("Stop the current turn before entering planning.", "info");
         return;
       }
-      commandController?.abort();
+      commandController?.abort(superseded);
       const controller = new AbortController();
       commandController = controller;
       const signal =
@@ -112,7 +113,7 @@ export default function extension(pi: ExtensionAPI): void {
         }
       } catch (error) {
         if (!signal.aborted) {
-          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          ctx.ui.notify(describe(error), "error");
         }
       } finally {
         if (commandController === controller) {
@@ -141,7 +142,7 @@ export default function extension(pi: ExtensionAPI): void {
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       return await toolResult(
-        await runtime.implement(ctx, params.action, params.planId, signal, params.restart === true),
+        runtime.implement(ctx, params.action, params.planId, signal, params.restart === true),
       );
     },
   });
@@ -153,7 +154,7 @@ export default function extension(pi: ExtensionAPI): void {
     parameters: reviewSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
-      const result = await runtime.review(ctx, params, signal);
+      const result = runtime.review(ctx, params, signal);
       return await toolResult(result);
     },
   });
@@ -168,7 +169,7 @@ export default function extension(pi: ExtensionAPI): void {
     parameters: openSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
-      const result = await runtime.requestOpen(
+      const result = runtime.requestOpen(
         ctx,
         params.objective?.trim() ?? "",
         params.replace === true,
@@ -185,7 +186,7 @@ export default function extension(pi: ExtensionAPI): void {
     parameters: roundSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
-      const result = await runtime.round(ctx, params, signal);
+      const result = runtime.round(ctx, params, signal);
       return await toolResult(result);
     },
   });
@@ -249,8 +250,8 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.on("session_shutdown", (_event, ctx) => {
     sessionGeneration++;
-    settingsController?.abort();
-    commandController?.abort();
+    settingsController?.abort(superseded);
+    commandController?.abort(superseded);
     interrupted = false;
     removeComposer?.();
     removeComposer = undefined;
@@ -258,8 +259,8 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.on("session_start", async (event, ctx) => {
     const generation = ++sessionGeneration;
-    settingsController?.abort();
-    commandController?.abort();
+    settingsController?.abort(superseded);
+    commandController?.abort(superseded);
     removeComposer?.();
     removeComposer = undefined;
     interrupted = false;
@@ -271,7 +272,7 @@ export default function extension(pi: ExtensionAPI): void {
       }
     } catch (error) {
       if (generation === sessionGeneration) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        ctx.ui.notify(describe(error), "error");
       }
     }
     if (generation === sessionGeneration) {
@@ -280,8 +281,8 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.on("session_tree", (_event, ctx) => {
     sessionGeneration++;
-    settingsController?.abort();
-    commandController?.abort();
+    settingsController?.abort(superseded);
+    commandController?.abort(superseded);
     interrupted = false;
     runtime.restore(ctx);
   });

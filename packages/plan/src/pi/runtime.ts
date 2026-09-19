@@ -11,6 +11,7 @@ import type {
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 import { DocumentAnalysis } from "../document/document-analysis.ts";
+import { PlanningError, describe, errorResult, superseded } from "../domain/errors.ts";
 import { fencedObjective } from "../domain/objective.ts";
 import {
   recoverReview,
@@ -37,7 +38,7 @@ import { defaultShortcut, readSettings } from "../storage/config.ts";
 import type { PlanSettings } from "../storage/config.ts";
 import { readLaunches } from "../storage/launches.ts";
 import { runPlanningOperation } from "../storage/operations.ts";
-import { readSavedRecord, saveRecord } from "../storage/persistence.ts";
+import { saveFailure, readSavedRecord, saveRecord } from "../storage/persistence.ts";
 import type { SaveResult } from "../storage/persistence.ts";
 import { SessionFile } from "../storage/session-file.ts";
 import { PlanHandoff } from "./handoff.ts";
@@ -217,12 +218,15 @@ export class PlanRuntime {
 
   private resume(ctx: ExtensionContext, planId: string): void {
     if (this.controller !== undefined) {
-      throw new Error("Cancel the current interaction before resuming another plan.");
+      throw new PlanningError(
+        "rejected",
+        "Cancel the current interaction before resuming another plan.",
+      );
     }
     const index = this.archived.findIndex((plan) => plan.planId === planId);
     const selected = this.archived[index];
     if (selected === undefined) {
-      throw new Error("The selected saved plan is unavailable on this branch.");
+      throw new PlanningError("rejected", "The selected saved plan is unavailable on this branch.");
     }
     this.archived.splice(index, 1);
     if (this.current !== undefined) {
@@ -363,7 +367,8 @@ export class PlanRuntime {
     }
     const checkpoint = recovery.checkpoint;
     if (checkpoint === undefined) {
-      throw new Error(
+      throw new PlanningError(
+        "rejected",
         "No valid earlier planning checkpoint exists on this branch. Explicitly start replacement planning to preserve history and begin again.",
       );
     }
@@ -384,7 +389,10 @@ export class PlanRuntime {
     }
     const saved = readSavedRecord(ctx, this.sessionFile);
     if (saved.status !== "record" || saved.entry.id !== recovery.entryId) {
-      throw new Error("Planning history changed. Reload before choosing recovery.");
+      throw new PlanningError(
+        "rejected",
+        "Planning history changed. Reload before choosing recovery.",
+      );
     }
     this.current =
       checkpoint.data.active === undefined
@@ -399,7 +407,7 @@ export class PlanRuntime {
       this.archived.length = 0;
       this.selectedMode = "default";
       this.recovery = recovery;
-      throw new Error(result.message);
+      throw saveFailure(result);
     }
     return true;
   }
@@ -410,9 +418,9 @@ export class PlanRuntime {
     this.generation += 1;
     this.pendingCompletion = undefined;
     this.dismissedReviewSignal = undefined;
-    this.controller?.abort();
-    this.entryController?.abort();
-    this.viewController?.abort();
+    this.controller?.abort(superseded);
+    this.entryController?.abort(superseded);
+    this.viewController?.abort(superseded);
     this.controller = undefined;
     this.viewController = undefined;
   }
@@ -459,7 +467,7 @@ export class PlanRuntime {
     const generation = this.generation;
     const plan = this.current;
     const controller = new AbortController();
-    this.entryController?.abort();
+    this.entryController?.abort(superseded);
     this.entryController = controller;
     const combined =
       signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
@@ -683,29 +691,16 @@ export class PlanRuntime {
     const generation = this.generation;
     const controller = new AbortController();
     const reviewClosure = { requested: false };
-    const cancelled = () => controller.signal.aborted;
+    const combined =
+      signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
     this.controller = controller;
-    const abort = () => {
-      controller.abort();
-      if (this.controller === controller) {
-        this.viewController?.abort();
-      }
-    };
-    signal?.addEventListener("abort", abort, { once: true });
     try {
-      const settings = await readSettings(
-        this.agentDir,
-        ctx.cwd,
-        ctx.isProjectTrusted(),
-        controller.signal,
-      );
+      combined.throwIfAborted();
+      const settings = await readSettings(this.agentDir, ctx.cwd, ctx.isProjectTrusted(), combined);
       if (generation !== this.generation) {
         return { outcome: "cancelled" };
       }
-      if (controller.signal.aborted) {
-        this.pause(ctx);
-        return { outcome: "cancelled" };
-      }
+      combined.throwIfAborted();
       if (reviewing && this.current !== undefined) {
         const review = this.current.reviews?.at(-1);
         const prior = [
@@ -736,11 +731,12 @@ export class PlanRuntime {
           const confirmed = await ctx.ui.confirm(
             "Recover plan artifact",
             `Recreate the recorded content from ${review.path ?? "the saved revision"} at a new path? Existing files will be preserved and fresh approval is required.`,
-            { signal: controller.signal },
+            { signal: combined },
           );
-          if (generation !== this.generation || cancelled()) {
+          if (generation !== this.generation) {
             return { outcome: "cancelled" };
           }
+          combined.throwIfAborted();
           if (!confirmed) {
             this.pause(ctx);
             return { outcome: "cancelled" };
@@ -776,7 +772,7 @@ export class PlanRuntime {
       ) => {
         const active = this.current;
         if (active === undefined) {
-          throw new Error("Planning session ended.");
+          throw new PlanningError("interaction-closed", "Planning session ended.");
         }
         this.current = {
           ...active,
@@ -787,7 +783,7 @@ export class PlanRuntime {
       };
       const dispatch = (action: Parameters<typeof transitionInteraction>[3]) => {
         if (generation !== this.generation) {
-          throw new Error("Planning session changed; reopen the active interaction.");
+          throw new PlanningError("interaction-closed", "Planning session changed.");
         }
         apply(roundId, revision, action);
         if (reviewing && action.type === "cancel") {
@@ -798,10 +794,11 @@ export class PlanRuntime {
         const view = this.selectedInterface;
         const viewController = new AbortController();
         this.viewController = viewController;
+        const viewSignal = AbortSignal.any([combined, viewController.signal]);
         const valid = () =>
           this.controller === controller &&
-          !controller.signal.aborted &&
-          !viewController.signal.aborted &&
+          !combined.aborted &&
+          !viewSignal.aborted &&
           this.viewController === viewController &&
           generation === this.generation &&
           this.current?.planId === current?.planId;
@@ -812,7 +809,10 @@ export class PlanRuntime {
         let fallback = false;
         const guardedDispatch = (action: Parameters<typeof transitionInteraction>[3]) => {
           if (!valid()) {
-            throw new Error("Planning presenter is no longer active.");
+            throw new PlanningError(
+              "interaction-closed",
+              "Planning presenter is no longer active.",
+            );
           }
           dispatch(action);
         };
@@ -829,12 +829,12 @@ export class PlanRuntime {
               ctx,
               () => {
                 if (this.current === undefined) {
-                  throw new Error("Planning session ended.");
+                  throw new PlanningError("interaction-closed", "Planning session ended.");
                 }
                 return this.current;
               },
               guardedDispatch,
-              viewController.signal,
+              viewSignal,
               this.presenters.length === 0
                 ? undefined
                 : () => {
@@ -860,7 +860,7 @@ export class PlanRuntime {
               const onAbort = () => {
                 interrupted.resolve(stop);
               };
-              viewController.signal.addEventListener("abort", onAbort, { once: true });
+              viewSignal.addEventListener("abort", onAbort, { once: true });
               try {
                 const pending = Promise.resolve().then(async () => {
                   if (!valid()) {
@@ -873,11 +873,17 @@ export class PlanRuntime {
                   return await presenter.present({
                     identity: { ...identity },
                     snapshot: presentationSnapshot(active),
-                    signal: viewController.signal,
+                    signal: viewSignal,
                     updateDraft: (update) => {
+                      if (!valid()) {
+                        throw new PlanningError(
+                          "interaction-closed",
+                          "Planning presenter is no longer active.",
+                        );
+                      }
                       guardedDispatch(presentationAction(update, identity, true));
                       if (this.current === undefined) {
-                        throw new Error("Planning session ended.");
+                        throw new PlanningError("interaction-closed", "Planning session ended.");
                       }
                       return presentationSnapshot(this.current);
                     },
@@ -887,7 +893,7 @@ export class PlanRuntime {
                   .select(
                     "Planning presenter: " + presenter.label,
                     ["Use terminal (Recommended)", "Cancel planning"],
-                    { signal: viewController.signal },
+                    { signal: viewSignal },
                   )
                   .then((selection) => {
                     if (valid()) {
@@ -909,17 +915,16 @@ export class PlanRuntime {
                   }
                 }
               } catch (error) {
+                combined.throwIfAborted();
                 if (valid()) {
                   ctx.ui.notify(
-                    "Presenter failed: " +
-                      (error instanceof Error ? error.message : String(error)) +
-                      ". Returning to terminal input.",
+                    "Presenter failed: " + describe(error) + ". Returning to terminal input.",
                     "error",
                   );
                   fallback = true;
                 }
               } finally {
-                viewController.signal.removeEventListener("abort", onAbort);
+                viewSignal.removeEventListener("abort", onAbort);
               }
             }
           }
@@ -931,7 +936,7 @@ export class PlanRuntime {
           }
         }
         const active =
-          !controller.signal.aborted &&
+          !combined.aborted &&
           generation === this.generation &&
           (this.current?.phase === "round" || this.current?.phase === "review");
         if (!active) {
@@ -940,7 +945,7 @@ export class PlanRuntime {
         if (chooser.requested) {
           const choices = ["terminal", ...this.presenters.map((item) => item.id)];
           const selected = await ctx.ui.select("Planning presenter", choices, {
-            signal: controller.signal,
+            signal: combined,
           });
           if (
             signal?.aborted === true ||
@@ -962,6 +967,7 @@ export class PlanRuntime {
       do {
         // oxlint-disable-next-line no-await-in-loop -- The active view must close before its replacement opens.
         switching = await runView();
+        combined.throwIfAborted();
       } while (switching);
       if (generation !== this.generation) {
         return { outcome: "cancelled" };
@@ -975,16 +981,12 @@ export class PlanRuntime {
           this.agentDir,
           ctx.cwd,
           ctx.isProjectTrusted(),
-          controller.signal,
+          combined,
         );
         if (generation !== this.generation) {
           return { outcome: "cancelled" };
         }
-        if (cancelled()) {
-          this.current = recoverReview(active);
-          this.pause(ctx);
-          return { outcome: "cancelled" };
-        }
+        combined.throwIfAborted();
         const approval = saveApproval(active, approvalSettings.planDirectory, (state) => {
           this.current = state;
           return this.save(ctx);
@@ -1007,14 +1009,14 @@ export class PlanRuntime {
             ctx,
             approval.state.accepted,
             "options",
-            signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]),
+            combined,
           );
           if (typeof selection !== "string") {
             return this.handoff.result(ctx, selection);
           }
         }
         if (approval.outcome === "error") {
-          return { outcome: "error", message: approval.message };
+          return errorResult(approval.error ?? new PlanningError("rejected", approval.message));
         }
         if (approval.state.accepted === undefined) {
           throw new Error("Approval completed without its accepted record.");
@@ -1074,7 +1076,7 @@ export class PlanRuntime {
       ctx.abort();
       return { outcome: "cancelled", planId: active.planId };
     } catch (error) {
-      if (generation !== this.generation) {
+      if (generation !== this.generation || (combined.aborted && combined.reason === superseded)) {
         return { outcome: "cancelled" };
       }
       if (this.current?.phase === "saving") {
@@ -1082,17 +1084,15 @@ export class PlanRuntime {
 
         this.save(ctx);
       }
-      if (controller.signal.aborted) {
+      if (combined.aborted) {
         this.pause(ctx);
         return { outcome: "cancelled" };
       }
-      const message = `${error instanceof Error ? error.message : String(error)} Use /plan to retry the current interaction, or close the planning interaction to pause.`;
-      return { outcome: "error", message };
+      return errorResult(error);
     } finally {
       if (this.controller === controller) {
         this.controller = undefined;
       }
-      signal?.removeEventListener("abort", abort);
     }
   }
 
@@ -1122,7 +1122,8 @@ export class PlanRuntime {
     signal?: AbortSignal,
     begin?: () => void,
   ): Promise<RuntimeResult> {
-    if (signal?.aborted === true) {
+    const cancelled = () => signal?.aborted === true;
+    if (cancelled()) {
       return { outcome: "cancelled" };
     }
     if (ctx.mode !== "tui") {
@@ -1155,7 +1156,10 @@ export class PlanRuntime {
       this.save(ctx);
       return await this.interact(ctx, signal);
     } catch (error) {
-      return { outcome: "error", message: error instanceof Error ? error.message : String(error) };
+      if (cancelled()) {
+        return { outcome: "cancelled" };
+      }
+      return errorResult(error);
     }
   }
 
@@ -1185,7 +1189,8 @@ export class PlanRuntime {
     signal?: AbortSignal,
     begin?: () => void,
   ): Promise<RuntimeResult> {
-    if (signal?.aborted === true) {
+    const cancelled = () => signal?.aborted === true;
+    if (cancelled()) {
       return { outcome: "cancelled" };
     }
     if (ctx.mode !== "tui") {
@@ -1234,7 +1239,10 @@ export class PlanRuntime {
       this.save(ctx);
       return await this.interact(ctx, signal);
     } catch (error) {
-      return { outcome: "error", message: error instanceof Error ? error.message : String(error) };
+      if (cancelled()) {
+        return { outcome: "cancelled" };
+      }
+      return errorResult(error);
     }
   }
 
@@ -1327,7 +1335,7 @@ export class PlanRuntime {
         this.selectedMode = "default";
         const saved = this.save(ctx);
         if (!saved.saved) {
-          throw new Error(saved.message);
+          throw saveFailure(saved);
         }
       },
       restart,

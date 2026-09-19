@@ -14,9 +14,11 @@ import type { ExtensionAPI, ExtensionUIContext } from "@earendil-works/pi-coding
 import { Value } from "typebox/value";
 import { expect, test, vi } from "vitest";
 
+import { PlanningError } from "../src/domain/errors.ts";
 import { approvalSchema } from "../src/domain/state.ts";
 import type { PlanApproval } from "../src/domain/state.ts";
 import extension from "../src/index.ts";
+import { PlanRuntime } from "../src/pi/runtime.ts";
 import * as terminal from "../src/pi/terminal.ts";
 import { saveRecord } from "../src/storage/persistence.ts";
 import { appendAssistantFixture } from "./runtime-fixture.mts";
@@ -377,9 +379,22 @@ test("closing plan review warns without an error response or model continuation"
   });
 });
 
-test.for([false, true])(
-  "Pi records rejected planning input once (malformed=%s)",
-  async (malformed, { onTestFinished }) => {
+test.for(["malformed", "refusal", "revision", "defect"] as const)(
+  "Pi records planning failures with failed-tool status: %s",
+  async (scenario, { onTestFinished }) => {
+    const malformed = scenario === "malformed";
+    const failure =
+      scenario === "revision"
+        ? new PlanningError("revision-conflict", "Round revision changed.", {
+            data: { expected: 1, current: 2 },
+          })
+        : new Error("Injected defect");
+    if (scenario === "revision" || scenario === "defect") {
+      const round = vi.spyOn(PlanRuntime.prototype, "round").mockRejectedValue(failure);
+      onTestFinished(() => {
+        round.mockRestore();
+      });
+    }
     const execute = vi.fn<() => void>();
     const f = await fixture(true, (pi) => {
       extension({
@@ -463,6 +478,24 @@ test.for([false, true])(
     };
     await f.session.prompt("Present the round for the missing plan.");
     expect(execute).toHaveBeenCalledTimes(malformed ? 0 : 1);
+    const result = f.manager
+      .getBranch()
+      .filter((entry) => entry.type === "message")
+      .map((entry) => entry.message)
+      .find((message) => message.role === "toolResult");
+    if (result?.role !== "toolResult") {
+      throw new Error("Missing failed tool result");
+    }
+    const anyText: unknown = expect.any(String);
+    const expected: Record<typeof scenario, unknown> = {
+      revision:
+        "Round revision changed. Current revision: 2. Reload this revision before retrying.",
+      defect: "Injected defect",
+      malformed: anyText,
+      refusal: anyText,
+    };
+    expect(result.content).toEqual([{ type: "text", text: expected[scenario] }]);
+    expect(result.details).toEqual({});
     expect(
       f.manager
         .getBranch()
@@ -502,6 +535,6 @@ test("disk confirmation distinguishes deferred, saved, and divergent branch reco
   const before = await readFile(path, "utf8");
   const result = saveRecord(f.api, f.ctx, { revision: 3 });
   expect(result.saved).toBe(false);
-  expect(result.message).toContain("Reload");
+  expect(result.deferred).toBeUndefined();
   expect(await readFile(path, "utf8")).toBe(before);
 });

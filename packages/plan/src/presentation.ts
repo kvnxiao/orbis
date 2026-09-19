@@ -1,10 +1,23 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import type { DocumentBlock } from "./document/blocks.ts";
+import type { PlanningFailure } from "./domain/errors.ts";
 import type { PlanRevision, Round, DraftAction, ResultAction } from "./domain/state.ts";
 import { registerPresenter } from "./pi/presenters.ts";
 
 type ReadonlyData<T> = { readonly [K in keyof T]: ReadonlyData<T[K]> };
+
+/** Restrict version 1 draft callback failures to corrections, conflicts, and expired input. */
+export type PlanPresentationErrorKind =
+  | "invalid-input"
+  | "rejected"
+  | "revision-conflict"
+  | "interaction-closed";
+
+/** Narrow callback failures by kind, including revision data for conflicts. */
+export type PlanPresentationError = Extract<PlanningFailure, { kind: PlanPresentationErrorKind }>;
+
+export { isPlanningError } from "./domain/errors.ts";
 
 /** Bind callbacks to one session, plan, and expiring interaction revision. */
 export interface PlanInteractionIdentity {
@@ -45,6 +58,15 @@ export interface PlanPresentationRequest {
   readonly identity: PlanInteractionIdentity;
   readonly snapshot: PlanPresentationSnapshot;
   readonly signal: AbortSignal;
+  /**
+   * Retain unsubmitted input and return its detached snapshot.
+   *
+   * @throws `invalid-input`: correct the payload before retrying.
+   * @throws `rejected`: correct the refused edit described by the message.
+   * @throws `revision-conflict`: reload current input before retrying; `data.expected` is the
+   *   supplied revision and `data.current` is the current revision.
+   * @throws `interaction-closed`: stop using this callback and await a new presentation request.
+   */
   readonly updateDraft: (update: PlanDraftUpdate) => PlanPresentationSnapshot;
 }
 

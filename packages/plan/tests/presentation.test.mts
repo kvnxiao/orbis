@@ -34,7 +34,7 @@ test("public snapshots expose detached targets for a first annotation and valida
     };
     expect(() =>
       request.updateDraft({ ...update, action: { ...update.action, excerpt: "Wrong source" } }),
-    ).toThrow("excerpt");
+    ).toThrow(expect.objectContaining({ kind: "rejected" }));
     const snapshot = request.updateDraft(update);
     request.updateDraft({
       identity: request.identity,
@@ -49,7 +49,7 @@ test("public snapshots expose detached targets for a first annotation and valida
         identity: request.identity,
         action: { type: "edit-note", blockId: "missing", excerpt: "Missing", text: "Invalid" },
       }),
-    ).toThrow("Unknown source block");
+    ).toThrow(expect.objectContaining({ kind: "rejected" }));
     await Promise.resolve();
     return { identity: request.identity, action: { type: "submit-feedback" } };
   });
@@ -138,12 +138,16 @@ test("registration is local to the Pi bus and rejects duplicate IDs", async ({
   const remove = registerPlanPresenter(f.api, definition);
   expect(availablePresenters(f.api.events).map((item) => item.id)).toEqual(["fixture"]);
   expect(availablePresenters(other.api.events)).toEqual([]);
-  expect(() => registerPlanPresenter(f.api, definition)).toThrow("already registered");
+  expect(() => registerPlanPresenter(f.api, definition)).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   expect(present).not.toHaveBeenCalled();
   remove();
   remove();
   expect(availablePresenters(f.api.events)).toEqual([]);
-  expect(() => registerPlanPresenter(f.api, { ...definition, id: "terminal" })).toThrow("requires");
+  expect(() => registerPlanPresenter(f.api, { ...definition, id: "terminal" })).toThrow(
+    expect.objectContaining({ kind: "invalid-input" }),
+  );
 });
 
 test("presenter registration owns bounded lifecycle hooks and unregister stays permanent", async ({
@@ -224,13 +228,15 @@ test("presenter snapshots are detached and draft callbacks expire after submissi
           identity: { ...input.identity, revision: 20 },
           action: { type: "edit", questionId: "scope", unfinished: "Wrong" },
         }),
-      ).toThrow("changed");
+      ).toThrow(
+        expect.objectContaining({ kind: "revision-conflict", data: { expected: 20, current: 1 } }),
+      );
       expect(() =>
         input.updateDraft({
           identity: input.identity,
           action: { type: "answer", questionId: "missing", answer: { custom: "Wrong" } },
         }),
-      ).toThrow("Unknown");
+      ).toThrow(expect.objectContaining({ kind: "rejected" }));
       await Promise.resolve();
       return { identity: input.identity, action: { type: "submit" } };
     }),
@@ -257,7 +263,7 @@ test("presenter snapshots are detached and draft callbacks expire after submissi
       identity: completed.identity,
       action: { type: "edit", questionId: "scope", unfinished: "Too late" },
     }),
-  ).toThrow("no longer active");
+  ).toThrow(expect.objectContaining({ kind: "interaction-closed" }));
 });
 
 test.each(["decline", "throw", "remove"])(
@@ -364,7 +370,9 @@ test.each([
     interactionId: "interaction",
     revision: 1,
   };
-  expect(() => presentationAction({ identity, ...payload }, identity, draft)).toThrow("Invalid");
+  expect(() => presentationAction({ identity, ...payload }, identity, draft)).toThrow(
+    expect.objectContaining({ kind: "invalid-input" }),
+  );
 });
 
 test("restoration rejects a pending presenter's late approval and draft update", async ({
@@ -396,7 +404,7 @@ test("restoration rejects a pending presenter's late approval and draft update",
       identity: request.identity,
       action: { type: "edit-feedback", text: "Late" },
     }),
-  ).toThrow("no longer active");
+  ).toThrow(expect.objectContaining({ kind: "interaction-closed" }));
   finish.resolve(undefined);
   await Promise.resolve();
   expect(f.runtime.active?.planId).toBe(restored);
@@ -449,7 +457,7 @@ test("Use terminal rejects a late presenter approval while terminal drafts remai
       identity: request.identity,
       action: { type: "edit-feedback", text: "Stale" },
     }),
-  ).toThrow("no longer active");
+  ).toThrow(expect.objectContaining({ kind: "interaction-closed" }));
   expect(f.runtime.active?.accepted).toBeUndefined();
   expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Terminal draft");
   back.resolve(undefined);

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
 
+import { describe, isPlanningError, PlanningError } from "../domain/errors.ts";
 import { sameRecord } from "../domain/record-equality.ts";
 import type { SessionFile } from "./session-file.ts";
 
@@ -11,13 +12,32 @@ export interface SaveResult {
   saved: boolean;
   deferred?: true;
   message: string;
+  cause?: unknown;
 }
 
 /** Report the last branch-compatible planning entry without modifying the session. */
 export type SavedRecord =
   | { status: "none" }
   | { status: "record"; entry: SessionEntry; records: SessionEntry[] }
-  | { status: "unreadable"; message: string };
+  | { status: "unreadable"; message: string; cause?: unknown };
+
+/** Recognize operating-system failures without classifying invalid API arguments as storage errors. */
+export function isFileError(error: unknown): error is Error & { code: string } {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    /^E[A-Z]+$/u.test(error.code)
+  );
+}
+
+/** Preserve save status and its cause when persistence prevents an operation. */
+export function saveFailure(result: SaveResult): PlanningError<"persistence"> {
+  return new PlanningError("persistence", result.message, {
+    cause: result,
+    ...(result.deferred === true ? { data: { deferred: true } } : {}),
+  });
+}
 
 /** Read the last planning record in the matching disk and memory branch prefix. */
 export function readSavedRecord(
@@ -34,12 +54,16 @@ export function readSavedRecord(
   try {
     disk = file?.read(path) ?? parseSessionEntries(readFileSync(path, "utf8"));
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+    if (!isFileError(error)) {
+      throw error;
+    }
+    if (error.code === "ENOENT") {
       return { status: "none" };
     }
     return {
       status: "unreadable",
-      message: error instanceof Error ? error.message : String(error),
+      message: describe(error),
+      cause: error,
     };
   }
   const entries = new Map(
@@ -77,9 +101,10 @@ export function saveRecord(
   try {
     persisted = file?.read(path) ?? parseSessionEntries(readFileSync(path, "utf8"));
   } catch (error) {
+    if (!isFileError(error)) {
+      throw error;
+    }
     if (
-      error instanceof Error &&
-      "code" in error &&
       error.code === "ENOENT" &&
       !branch.some((entry) => entry.type === "message" && entry.message.role === "assistant")
     ) {
@@ -93,7 +118,8 @@ export function saveRecord(
     }
     return {
       saved: false,
-      message: `Cannot read the Pi session file. Correct the storage error and reload Pi before retrying: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Cannot read the Pi session file: ${describe(error)}`,
+      cause: error,
     };
   }
   const entries = new Map(
@@ -102,8 +128,7 @@ export function saveRecord(
   if (branch.some((entry) => !sameRecord(entries.get(entry.id), entry))) {
     return {
       saved: false,
-      message:
-        "Pi memory differs from its session file. Reload the saved session before retrying; current unsaved changes remain in memory until reload.",
+      message: "Pi memory differs from its session file. Current unsaved changes remain in memory.",
     };
   }
   try {
@@ -114,7 +139,10 @@ export function saveRecord(
       disk.filter((item) => item.type !== "session").map((item) => [item.id, item]),
     );
     if (ctx.sessionManager.getBranch().some((item) => !sameRecord(confirmed.get(item.id), item))) {
-      throw new Error("Pi memory differs from its session file after append");
+      throw new PlanningError(
+        "persistence",
+        "Pi memory differs from its session file after append.",
+      );
     }
     const entry = leaf === null ? undefined : confirmed.get(leaf);
     if (
@@ -122,13 +150,17 @@ export function saveRecord(
       entry.customType !== customType ||
       !sameRecord(entry.data, data)
     ) {
-      throw new Error("Appended planning record was not found on disk");
+      throw new PlanningError("persistence", "Appended planning record was not found on disk.");
     }
     return { saved: true, message: "Planning state saved." };
   } catch (error) {
+    if (!isFileError(error) && !isPlanningError(error)) {
+      throw error;
+    }
     return {
       saved: false,
-      message: `Planning state is unsaved. Correct the storage error and reload Pi before retrying: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Planning state is unsaved: ${describe(error)}`,
+      cause: error,
     };
   }
 }

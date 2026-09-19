@@ -259,6 +259,41 @@ not display a model error. Other failures and interruptions remain visible. Pend
 flushed; persistence failures cannot be reported as saved drafts. Saved work requires explicit
 resume. Late callbacks cannot modify a replacement session or revision.
 
+When a session or interaction is replaced, the old operation returns cancellation without pausing
+replacement work. This also applies when user cancellation arrives before replacement but cleanup
+finishes afterward. Terminal error text describes the failed action without model-facing retry
+instructions.
+
+### Presenter callback failures
+
+Requirements: REQ-public-presentation-boundary, REQ-recoverable-failures.
+
+The version 1 draft callback reports machine-readable kinds. Invalid updates preserve current
+drafts. If a presenter cannot recover while its interaction remains active, terminal fallback
+preserves those drafts.
+
+| Failure              | Presenter response                                                             |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `invalid-input`      | Correct the malformed payload before retrying.                                 |
+| `rejected`           | Correct the refused edit described by the failure text.                        |
+| `revision-conflict`  | Read `data.expected` and `data.current`; reload current input before retrying. |
+| `interaction-closed` | Stop using the expired callback and wait for a new request.                    |
+
+```mermaid
+flowchart TD
+  U[Draft update] --> A{Callback still active?}
+  A -->|No| C[Stop using expired callback]
+  A -->|Yes| P{Payload matches the callback schema?}
+  P -->|No| E[Correct payload or refused edit]
+  P -->|Yes| I{Current interaction identity?}
+  I -->|No| C
+  I -->|Yes| R{Current revision?}
+  R -->|No| L[Reload current input before retrying]
+  R -->|Yes| V{Valid edit?}
+  V -->|No| E
+  V -->|Yes| S[Retain draft without submission]
+```
+
 ## Interaction scenarios
 
 | Scenario                                                       | Expected result                                                                                                                                                                                                                                                       | Requirements                                                                                              |
@@ -395,6 +430,17 @@ REQ-public-presentation-boundary.
 | An active presenter fails or unregisters.                             | The TUI restores the pending interaction with drafts preserved. Cancellation closes without reopening.                                  |
 | Persistence fails or a session is restored.                           | The UI reports the save state and restores only the applicable saved branch; it does not infer submission or replay approval.           |
 
+Failure and cancellation scenarios also cover the following orderings:
+
+| Situation                                                                                            | Observable outcome                                                                                                                               | Requirements                     |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| Cancel an interaction while its settings read is pending.                                            | The owning plan pauses and the operation returns cancellation without a failure notification.                                                    | REQ-interaction-cancellation     |
+| Replace a session while old interaction cleanup is pending, with or without prior user cancellation. | Cleanup returns cancellation and leaves replacement state and composer mode unchanged.                                                           | REQ-interaction-cancellation     |
+| Submit a draft with an expired session, plan, or interaction identity.                               | The callback throws `interaction-closed`; current drafts stay unchanged and the presenter waits for a new request.                               | REQ-public-presentation-boundary |
+| Submit a draft with the current identity but an old revision.                                        | The callback throws `revision-conflict` with supplied and current revisions; current drafts stay unchanged.                                      | REQ-public-presentation-boundary |
+| Fail a tool because settings, session storage, or artifact contents cannot be used.                  | The message identifies the failed action and its distinct repair once. Deferred saves report their deferred state without storage-repair advice. | REQ-recoverable-failures         |
+| Encounter an unexpected defect in a planning interaction.                                            | Tool failure text preserves the original message without retry advice. Commands notify and terminal components display the failure text.         | REQ-recoverable-failures         |
+
 These scenarios define checks to perform during implementation. They are not records of executed
 tests or proof that the current interface implements them.
 
@@ -443,11 +489,17 @@ callbacks.
 
 ## Tool retries
 
-Requirements: REQ-tool-idempotency, REQ-planning-entry.
+Requirements: REQ-tool-idempotency, REQ-planning-entry, REQ-recoverable-failures.
 
 `plan_open` displays “Open planning” and creates or reopens collaborative planning, questions, or
 review. An exact completed question, review, or replacement retry returns its recorded result and
 does not open a modal, selector, or confirmation. Explicit opening retains the normal controls.
+
+Failed tools render the failed action and one applicable recovery instruction. Revision conflicts
+include `Current revision: <number>.` Settings failures name the file to correct; artifact conflict
+messages instruct the caller to preserve the file and resolve the conflict. Storage failures call
+for repair and reload, while deferred saves retain their deferred status. Unexpected defects report
+their original message without retry advice.
 
 | Scenario                                                | Expected result                                                                              |
 | ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |

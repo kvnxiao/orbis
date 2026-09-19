@@ -9,6 +9,7 @@ import type {
 import { Marked } from "@earendil-works/pi-tui";
 import type { Tokens } from "@earendil-works/pi-tui";
 
+import { describe, PlanningError, superseded } from "../domain/errors.ts";
 import { approvalKey } from "../domain/state.ts";
 import type { PlanApproval, RuntimeResult } from "../domain/state.ts";
 import { launchEntryType, readLaunches, saveLaunch } from "../storage/launches.ts";
@@ -42,7 +43,7 @@ export class PlanHandoff {
 
   invalidate(): void {
     this.generation++;
-    this.controller?.abort();
+    this.controller?.abort(superseded);
     this.controller = undefined;
     this.pending = undefined;
   }
@@ -68,7 +69,10 @@ export class PlanHandoff {
       return previous;
     }
     if (this.controller !== undefined || this.pending !== undefined) {
-      throw new Error("An implementation selection or launch is already pending.");
+      throw new PlanningError(
+        "rejected",
+        "An implementation selection or launch is already pending.",
+      );
     }
     const generation = this.generation;
     const sessionId = ctx.sessionManager.getSessionId();
@@ -119,7 +123,8 @@ export class PlanHandoff {
         );
       const command = commands[0];
       if (commands.length !== 1 || command === undefined) {
-        throw new Error(
+        throw new PlanningError(
+          "rejected",
           "The planning command is missing or ambiguous. Resolve extension command registration before requesting implementation.",
         );
       }
@@ -216,7 +221,10 @@ export class PlanHandoff {
   async dispatch(token: string, ctx: ExtensionCommandContext): Promise<void> {
     const launch = this.pending;
     if (launch === undefined || launch.token !== token || launch.claimed) {
-      throw new Error("The implementation action is unavailable or already consumed.");
+      throw new PlanningError(
+        "rejected",
+        "The implementation action is unavailable or already consumed.",
+      );
     }
     launch.claimed = true;
     const current = () =>
@@ -233,14 +241,20 @@ export class PlanHandoff {
         return;
       }
       const approval = launch.approval;
-      if (
-        readFileSync(approval.planPath, "utf8") !== approval.planContent ||
-        (approval.notesPath !== undefined &&
-          readFileSync(approval.notesPath, "utf8") !== approval.notesContent)
-      ) {
-        throw new Error(
-          "Approved artifacts changed. Restore the reviewed bytes before requesting implementation.",
-        );
+      const artifacts = [
+        { path: approval.planPath, content: approval.planContent },
+        ...(approval.notesPath === undefined
+          ? []
+          : [{ path: approval.notesPath, content: approval.notesContent }]),
+      ];
+      for (const artifact of artifacts) {
+        if (readFileSync(artifact.path, "utf8") !== artifact.content) {
+          throw new PlanningError(
+            "artifact-conflict",
+            `Approved artifacts changed at ${artifact.path}.`,
+            { data: { path: artifact.path } },
+          );
+        }
       }
       const bootstrap = `Continue authorized implementation launch ${launch.record.id}. Call plan_implement with action "here" and planId ${JSON.stringify(approval.planId)} to obtain its execution instructions. This is the receiving session for an existing launch; do not request a restart or create another session.`;
       const message = {
@@ -273,7 +287,7 @@ export class PlanHandoff {
           try {
             await fresh.sendMessage(message, { triggerTurn: true });
           } catch (error) {
-            const failure = error instanceof Error ? error.message : String(error);
+            const failure = describe(error);
             try {
               const failed: LaunchRecord = {
                 ...launch.record,
@@ -293,7 +307,7 @@ export class PlanHandoff {
             } catch (recordError) {
               throw new AggregateError(
                 [error, recordError],
-                `Implementation startup failed: ${failure}. Failure recording also failed: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
+                `Implementation startup failed: ${failure}. Failure recording also failed: ${describe(recordError)}`,
                 { cause: recordError },
               );
             }
@@ -302,32 +316,28 @@ export class PlanHandoff {
         },
       });
       if (result.cancelled) {
-        throw new Error(
+        throw new PlanningError(
+          "rejected",
           "Session replacement was cancelled. Approval is preserved; explicitly request a restart for another attempt.",
         );
       }
       if (!submission.started) {
-        throw new Error(
-          "Session replacement completed without submitting implementation. Inspect the session before retrying.",
-        );
+        throw new Error("Session replacement completed without submitting implementation.");
       }
     } catch (error) {
       if (current()) {
-        const failure = error instanceof Error ? error.message : String(error);
+        const failure = describe(error);
         try {
           saveLaunch(this.pi, ctx, { ...launch.record, status: "failed", failure });
         } catch (recordError) {
           throw new AggregateError(
             [error, recordError],
-            `Implementation handoff failed: ${failure}. Failure recording also failed: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
+            `Implementation handoff failed: ${failure}. Failure recording also failed: ${describe(recordError)}`,
             { cause: recordError },
           );
         }
       }
-      throw new Error(
-        `Implementation handoff failed; approval is preserved. No automatic retry was made. ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
+      throw error;
     } finally {
       if (this.pending === launch) {
         this.pending = undefined;

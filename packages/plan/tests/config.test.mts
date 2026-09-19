@@ -101,8 +101,12 @@ test("malformed settings identify the file and preserve its bytes", async ({ onT
     ].map(async (content, index) => {
       const path = join(cwd, `invalid-${String(index)}.json`);
       await writeFile(path, content);
-      await expect(readSettingsFile(path)).rejects.toThrow(path);
-      await expect(writeSettings(path, { showHints: true })).rejects.toThrow("Correct this file");
+      await expect(readSettingsFile(path)).rejects.toThrow(
+        expect.objectContaining({ kind: "settings", data: { path } }),
+      );
+      await expect(writeSettings(path, { showHints: true })).rejects.toThrow(
+        expect.objectContaining({ kind: "settings", data: { path } }),
+      );
       expect(await readFile(path, "utf8")).toBe(content);
     }),
   );

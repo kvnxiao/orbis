@@ -9,7 +9,45 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
+import { describe, isPlanningError, PlanningError } from "../domain/errors.ts";
+import type { PlanningErrorKind } from "../domain/errors.ts";
 import type { Round, RuntimeResult } from "../domain/state.ts";
+
+const remediation = {
+  "invalid-input": "Correct the payload and retry.",
+  rejected: "",
+  "revision-conflict": "Reload this revision before retrying.",
+  "interaction-closed": "Stop using this interaction. Reopen current input with plan_open.",
+  persistence:
+    "Correct the storage error and reload Pi before retrying; preserve unsaved changes before reload.",
+  settings: "Correct the named settings file and retry.",
+  "artifact-conflict": "Preserve the file and resolve the conflict before retrying.",
+} satisfies Record<PlanningErrorKind, string>;
+
+function toolError(error: unknown): Error {
+  if (!isPlanningError(error)) {
+    return error instanceof Error ? error : new Error(describe(error), { cause: error });
+  }
+  let message = error.message;
+  switch (error.kind) {
+    case "revision-conflict":
+      message += ` Current revision: ${String(error.data.current)}.`;
+      break;
+    case "persistence":
+      if (error.data?.deferred === true) {
+        return new Error(message, { cause: error });
+      }
+      break;
+    case "settings":
+    case "artifact-conflict":
+    case "invalid-input":
+    case "rejected":
+    case "interaction-closed":
+      break;
+  }
+  const advice = remediation[error.kind];
+  return new Error(advice.length === 0 ? message : `${message} ${advice}`, { cause: error });
+}
 
 function submittedRound(round: Round): Round {
   return {
@@ -33,11 +71,19 @@ type ResultDetails =
 
 /** Project submitted state and spill oversized JSON without exposing local-only drafts. */
 export async function toolResult(
-  result: RuntimeResult,
+  pending: RuntimeResult | Promise<RuntimeResult>,
   instructions?: string,
 ): Promise<AgentToolResult<ResultDetails>> {
+  let result: RuntimeResult;
+  try {
+    result = await pending;
+  } catch (error) {
+    throw toolError(error);
+  }
   if (result.outcome === "error") {
-    throw new Error(result.message);
+    throw toolError(
+      "error" in result ? result.error : new PlanningError("rejected", result.message),
+    );
   }
   let projected = result;
   switch (result.outcome) {
