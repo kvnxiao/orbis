@@ -12,6 +12,13 @@ Develop the package with the user. When research is needed, persist its synthesi
 implementer. This workflow produces research and a specification; implementing the extension is a
 separate task unless the user explicitly includes it.
 
+When the global `brainstorm` skill is available, load its advertised `SKILL.md` and use it for the
+brainstorming interaction: decision-tree rounds, question format, factual research delegation, and
+confirmation of shared understanding. Resolve it through the host's available skills rather than a
+machine-specific path. Keep this skill's Orbis research, contract, and delivery responsibilities.
+If the global skill is unavailable or unreadable, state that limitation and use the interaction
+fallback below; do not require installation or stop package design.
+
 ## Establish context and research
 
 Follow the [development workflow](../../../docs/development-workflow.md). Read the wiki decision
@@ -67,6 +74,10 @@ Do not reconstruct missing evidence from memory or present retrospective researc
 existing spec.
 
 ## Work the design tree
+
+Use this section as the interaction fallback when the global `brainstorm` skill cannot be loaded.
+When it is loaded, follow its interaction instructions, including question presentation, rather than
+the fallback's choice of a structured question tool or chat format.
 
 Map decisions and their prerequisites. Keep user decisions, proposals, and open questions distinct.
 The frontier is the set of unresolved decisions the user can answer now without guessing an answer

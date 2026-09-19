@@ -85,7 +85,8 @@ Repository-local skills support package design, implementation planning, and rev
 
 - [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md) researches existing
   packages and Pi APIs, works through decision rounds, saves research synthesis, and writes a
-  specification.
+  specification. When the global `brainstorm` skill can be loaded, it defines the conversation
+  format; otherwise, the package skill uses its built-in interaction instructions.
 - [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md) turns an approved
   specification into issue implementation plans with concrete edits, dependencies, and verification
   against the current code.
