@@ -131,6 +131,12 @@ in the SPEC. Keep research and execution evidence separate from required behavio
 
 ## Write the specification
 
+Before drafting, apply the [reading-order guidance](../../../docs/specifications.md#avoid-forward-references)
+to the SPEC and its interaction contract, whether using the global brainstorming skill or the local
+fallback. Introduce shared domain concepts before dependent requirements, and define section-local
+terms at first use. Order the outline by what the reader needs to know; a link to a later definition
+does not supply prerequisite context.
+
 When research informed the design, confirm that its synthesis exists on disk and reflects the
 evidence used. Existing design approval does not waive persistence of research performed during the
 brainstorm. Keep the system and interaction contracts complete together; link supporting research

@@ -78,6 +78,12 @@ authorized set. Report the minted, amended, retired, and unchanged slugs.
 
 ## Resolve and amend behavior
 
+Before drafting any contract amendment, apply the
+[reading-order guidance](../../../docs/specifications.md#avoid-forward-references). Introduce new
+domain concepts before the requirements that depend on them. When a definition changes, inspect its
+earlier uses and affected interaction sections; an isolated replacement paragraph may leave those
+passages unexplained. Preserve requirement IDs and obligations when moving prerequisite context.
+
 Explicit user direction approves the behavior it specifies. Do not request the same approval again.
 Ask only about material unanswered decisions; continue independent inspection while waiting. A
 request to improve an experience does not settle its submission, cancellation, or persistence

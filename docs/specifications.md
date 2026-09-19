@@ -11,6 +11,12 @@ A specification must be understandable in document order without reading later s
 or implementation source to decode the current passage. Its opening states the package's purpose,
 audience, and scope in terms the audience already knows.
 
+Before drafting or amending a SPEC, identify the domain concepts each planned section assumes and
+place their introductions before the dependent sections. Establish shared terminology near the
+opening; define a term used in only one section at its first substantive use there. Draft in that
+order. When revising, check earlier passages affected by a new or changed definition as well as the
+edited section.
+
 Before using a package-specific term, acronym, actor, state, artifact, interface, or named approach,
 introduce its meaning and role. Define a local term at first use; put concepts shared by several
 sections in a short opening explanation. Introduce each approach and its relevant constraints before
