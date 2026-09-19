@@ -20,6 +20,10 @@ explicitly.
 
 ## Identify the affected contract
 
+Follow the [development workflow](../../../docs/development-workflow.md). Read the wiki decision
+index once per working session and open relevant records. Create or reuse the issue for the bounded
+revision; link its parent initiative when needed. Read its current plan, dependencies, and handoff.
+
 Read `AGENTS.md`, the [specification guidance](../../../docs/specifications.md), and the package's
 complete `SPEC.md`. Inspect relevant source, tests, README, and `docs/tui-interactions.md` when
 present. Establish the current Git revision and working-tree changes; preserve unrelated work. Treat
@@ -74,6 +78,12 @@ authorized set. Report the minted, amended, retired, and unchanged slugs.
 
 ## Resolve and amend behavior
 
+Before drafting any contract amendment, apply the
+[reading-order guidance](../../../docs/specifications.md#avoid-forward-references). Introduce new
+domain concepts before the requirements that depend on them. When a definition changes, inspect its
+earlier uses and affected interaction sections; an isolated replacement paragraph may leave those
+passages unexplained. Preserve requirement IDs and obligations when moving prerequisite context.
+
 Explicit user direction approves the behavior it specifies. Do not request the same approval again.
 Ask only about material unanswered decisions; continue independent inspection while waiting. A
 request to improve an experience does not settle its submission, cancellation, or persistence
@@ -106,9 +116,9 @@ the existing contract. Passing tests and current output do not authorize a contr
 
 Use [plan-orbis-implementation](../plan-orbis-implementation/SKILL.md) to derive tasks from the
 approved contract and current source. Keep a small, settled revision in a concise plan; do not
-restart full-package planning. Inspect existing plans before choosing a destination, preserve
-unrelated tasks, and revise affected dependencies and coverage claims. Keep plans and run evidence
-in the package's ignored `implementation/` directory unless the user requests another destination.
+restart full-package planning. Update the authoritative issue plans, preserving unrelated scope,
+contributor edits, and completed work. Revise affected dependencies and coverage claims. Keep raw
+run evidence in the package's ignored `implementation/` directory and concise results in the issue.
 Evidence for previous behavior does not verify a changed requirement.
 
 When code changes are authorized, continue through implementation and verification without stopping
@@ -133,3 +143,8 @@ amendments. A scoped review does not establish full-package conformance.
 Report changed requirement IDs, affected artifacts, executed checks, and remaining obligations. Keep
 saved evidence local and reusable checks available from a clone. For design-only or planning-only
 work, state that implementation remains pending.
+
+Update the issue handoff and publish approved consequential decisions to the wiki when the workflow's
+threshold applies. Prepare focused PRs with SPEC amendments, implementation, and tests together unless
+the design needs independent review. Follow the workflow's closing-link rules and leave merge to the
+developer; verified local work is not a delivered issue.

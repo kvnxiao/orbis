@@ -11,6 +11,12 @@ A specification must be understandable in document order without reading later s
 or implementation source to decode the current passage. Its opening states the package's purpose,
 audience, and scope in terms the audience already knows.
 
+Before drafting or amending a SPEC, identify the domain concepts each planned section assumes and
+place their introductions before the dependent sections. Establish shared terminology near the
+opening; define a term used in only one section at its first substantive use there. Draft in that
+order. When revising, check earlier passages affected by a new or changed definition as well as the
+edited section.
+
 Before using a package-specific term, acronym, actor, state, artifact, interface, or named approach,
 introduce its meaning and role. Define a local term at first use; put concepts shared by several
 sections in a short opening explanation. Introduce each approach and its relevant constraints before
@@ -49,7 +55,7 @@ gaps. Update the synthesis as research continues. Research informs the contract;
 independently define requirements.
 
 Package research documents cite external sources and their inspected versions. They do not reference
-Orbis implementation code. Implementation details belong in the package contract or local
+Orbis implementation code. Implementation details belong in the package contract or issue
 implementation plans.
 
 When needed, create the research directory directly. Write the specification before implementing a
@@ -175,18 +181,23 @@ Derive one implementation plan or several vertical tasks from that contract. Eac
 its requirements, dependencies, observable outcome, and verification. A vertical task delivers a
 behavior through the layers it needs; a list of modules alone does not define its completion.
 
-The planning skill saves local Markdown plans to `packages/<name>/implementation/PLAN.md` by
-default. Git ignores these directories. For large work, `PLAN.md` indexes dependency-ordered sibling
-plans and assigns requirement coverage across them. Each task states concrete edits, prerequisites,
-verification commands or interaction steps, and expected results. Follow the
-[plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md). The user can
-request another destination, tracked plans, or chat-only output.
+The planning skill keeps shared plans in GitHub initiative and work issue bodies. An initiative
+names a bounded delivery and links the relevant SPEC requirements; native sub-issues hold
+independent work. Requirements can contribute to several issues, and one issue can satisfy several
+requirements. Each issue states concrete edits, prerequisites, checks, and expected results. Follow
+the [issue plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md) and
+[development workflow](development-workflow.md).
 
-The package scaffold does not create plan directories. `SPEC.md` and its linked interaction document
-remain the tracked package contract; local implementation plans record proposed work and
-verification evidence. They are separate from the approved Markdown artifacts produced by
-`@orbis/plan`. The [format research](implementation-plan-research.md) compares host defaults,
-published recipes, and Pi package formats.
+Use a separate initial SPEC PR when a substantial design needs independent review. Later scoped
+changes normally keep the SPEC amendment, implementation, and tests together. An initiative can span
+several PRs; the final delivery PR closes it after integrated acceptance. Keep implementation
+availability explicit when merging a contract before its implementation.
+
+Local scratch work and detailed evidence can remain in ignored `packages/<name>/implementation/`
+directories; do not maintain a duplicate authoritative plan. Explicit requests can use local or
+chat-only plans. The scaffold preserves existing local artifacts without creating plan directories.
+This development convention is separate from `@orbis/plan`'s approved Markdown artifact contract.
+The [format research](implementation-plan-research.md) compares planning content across hosts.
 
 When implementation starts, run:
 
