@@ -19,7 +19,9 @@ test("current annotation and overall text submit directly or approve as suppleme
     text: "Auxiliary context",
   });
   state = transitionReview(state, 1, { type: "edit-feedback", text: "Overall context" });
-  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow("notes");
+  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   const approved = transitionReview(state, 1, { type: "approve-with-notes" });
   expect(approved.phase).toBe("saving");
   expect(approved.reviews?.[0]?.markdown).toBe("# Plan\n\nKeep the service.\n");

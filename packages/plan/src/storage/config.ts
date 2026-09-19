@@ -9,8 +9,10 @@ import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
+import { PlanningError, describe, isPlanningError } from "../domain/errors.ts";
 import { appearanceSchema, defaultAppearance } from "../tui/appearance.ts";
 import type { PlanAppearance } from "../tui/appearance.ts";
+import { isFileError } from "./persistence.ts";
 
 /** Use Shift+Tab until personal or trusted project settings override it. */
 export const defaultShortcut = "shift+tab";
@@ -83,40 +85,54 @@ export async function readSettingsFile(
   path: string,
   signal?: AbortSignal,
 ): Promise<SettingsFields> {
+  signal?.throwIfAborted();
   let text: string;
   try {
     text = await readFile(path, { encoding: "utf8", ...(signal === undefined ? {} : { signal }) });
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+    signal?.throwIfAborted();
+    if (!isFileError(error)) {
+      throw error;
+    }
+    if (error.code === "ENOENT") {
       return {};
     }
-    throw new Error(
-      `Cannot read planning settings ${path}: ${error instanceof Error ? error.message : String(error)}. Correct this file and retry.`,
-      { cause: error },
+    throw new PlanningError(
+      "settings",
+      `Cannot read planning settings ${path}: ${describe(error)}.`,
+      { cause: error, data: { path } },
     );
   }
+  signal?.throwIfAborted();
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch (cause) {
-    throw new Error(`Cannot parse planning settings ${path}. Correct this file and retry.`, {
+    throw new PlanningError("settings", `Cannot parse planning settings ${path}.`, {
       cause,
+      data: { path },
     });
   }
   if (!Value.Check(settingsSchema, value)) {
     const errors = Value.Errors(settingsSchema, value);
-    throw new Error(
-      `Invalid planning settings ${path}: ${errors.map((error) => `${error.instancePath.length === 0 ? "/" : error.instancePath}: ${error.message}`).join("; ")}. Correct this file and retry.`,
+    throw new PlanningError(
+      "settings",
+      `Invalid planning settings ${path}: ${errors.map((error) => `${error.instancePath.length === 0 ? "/" : error.instancePath}: ${error.message}`).join("; ")}.`,
+      { data: { path } },
     );
   }
   if (value.planDirectory?.includes("\0") === true) {
-    throw new Error(
-      `Invalid planning settings ${path}: planDirectory contains a null character. Correct this file and retry.`,
+    throw new PlanningError(
+      "settings",
+      `Invalid planning settings ${path}: planDirectory contains a null character.`,
+      { data: { path } },
     );
   }
   if (typeof value.shortcut === "string" && !isPlanShortcut(value.shortcut)) {
-    throw new Error(
-      `Invalid planning settings ${path}: shortcut must be a Pi special or modified key, or null to disable. Correct this file and retry.`,
+    throw new PlanningError(
+      "settings",
+      `Invalid planning settings ${path}: shortcut must be a Pi special or modified key, or null to disable.`,
+      { data: { path } },
     );
   }
   return value;
@@ -129,8 +145,11 @@ export async function readSettings(
   trusted: boolean,
   signal?: AbortSignal,
 ): Promise<PlanSettings> {
+  signal?.throwIfAborted();
   const personal = await readSettingsFile(join(agentDir, "orbis-plan.json"), signal);
+  signal?.throwIfAborted();
   const project = trusted ? await readSettingsFile(join(cwd, ".pi", "plan.json"), signal) : {};
+  signal?.throwIfAborted();
   const settings = {
     planDirectory: defaultPlanDirectory,
     ...defaultAppearance,
@@ -157,21 +176,35 @@ export async function writeSettings(path: string, fields: SettingsFields): Promi
     fields.planDirectory?.includes("\0") === true ||
     (typeof fields.shortcut === "string" && !isPlanShortcut(fields.shortcut))
   ) {
-    throw new Error(
-      `Invalid planning settings for ${path}. Correct the directory, symbols, border, showHints, or shortcut and retry.`,
-    );
+    throw new PlanningError("settings", `Invalid planning settings for ${path}.`, {
+      data: { path },
+    });
   }
-  await withFileMutationQueue(path, async () => {
-    const previous = await readSettingsFile(path);
-    await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, `${JSON.stringify({ ...previous, ...fields }, null, 2)}\n`, {
-        flag: "wx",
-      });
-      await rename(temporary, path);
-    } finally {
-      await rm(temporary, { force: true });
+  try {
+    await withFileMutationQueue(path, async () => {
+      const previous = await readSettingsFile(path);
+      await mkdir(dirname(path), { recursive: true });
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, `${JSON.stringify({ ...previous, ...fields }, null, 2)}\n`, {
+          flag: "wx",
+        });
+        await rename(temporary, path);
+      } finally {
+        await rm(temporary, { force: true });
+      }
+    });
+  } catch (error) {
+    if (isPlanningError(error)) {
+      throw error;
     }
-  });
+    if (isFileError(error)) {
+      throw new PlanningError(
+        "settings",
+        `Cannot write planning settings ${path}: ${describe(error)}`,
+        { data: { path }, cause: error },
+      );
+    }
+    throw error;
+  }
 }

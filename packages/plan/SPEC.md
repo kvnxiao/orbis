@@ -341,6 +341,10 @@ research or clarification leaves saved work paused. A later unrelated message ca
 Cancellation flushes pending draft saves and reports a persistence failure instead of claiming that
 unsaved drafts are durable.
 
+Session or interaction replacement returns cancellation without pausing replacement work. Explicit
+user cancellation pauses the owning plan. If cancellation precedes replacement but finishes after
+it, cleanup cannot pause or modify the replacement plan.
+
 Explicitly closing plan review without a matching approval reports cancellation. An empty abort
 response from the turn stopped by that closure must not appear as a model failure. Unrelated
 interruptions, provider failures, and assistant content remain unchanged.
@@ -535,6 +539,14 @@ The hook exposes only a pending planning interaction:
 | Lifetime     | A cancellation signal and cleanup on completion, replacement, unregistration, or session teardown.                                                                                                                              |
 | Fallback     | While the interaction remains active, presenter withdrawal, unavailability, failure, or removal returns it to the TUI with drafts preserved. Plan cancellation and session teardown close the interaction without reopening it. |
 
+The version 1 draft callback reports failures through documented string kinds and typed data that
+remain recognizable across separately loaded extensions. Invalid payloads report `invalid-input`;
+refused edits report `rejected`. An expired session, plan, or interaction reports
+`interaction-closed`, requiring the presenter to stop using that callback. A revision mismatch
+within the same interaction reports `revision-conflict` with the supplied and current revisions; the
+presenter reloads current input before retrying. Callback documentation lists each permitted kind
+and its recovery action. Consumers do not parse message text or depend on class identity.
+
 ### REQ-exclusive-interaction — Exclusive interaction
 
 The TUI is the default presenter. An explicit user selection can use a registered presenter for a
@@ -564,6 +576,15 @@ drafts and accepted plans. Errors identify the failed action and available retry
 cancellation. Timeouts never become answers. Unsupported noninteractive or remote procedure call
 (RPC) execution returns an explicit outcome instead of waiting for unavailable custom terminal
 components. Cleanup affects only the originating interaction's resources.
+
+Failure text identifies the failed action once. The model-facing boundary adds the applicable next
+step once: correct invalid input, reload a conflicting revision, reopen a closed interaction, repair
+session storage and reload Pi, correct the named settings file, or preserve a conflicting artifact
+and resolve its contents. Revision conflicts include the current revision in tool text. Deferred
+first-assistant saves retain their deferred status. Refusals include their specific correction
+without generic retry advice. Unexpected defects preserve their original message and cause and
+receive no remediation. Commands notify with the failure text; terminal components display that text
+without model-facing instructions.
 
 ### REQ-bounded-agent-results — Bounded agent results
 
@@ -598,6 +619,14 @@ quality also requires representative planning tasks.
 | Optional presenter           | A fake presenter receives the current interaction, updates answer and revision-feedback drafts, and returns validated input; withdrawal, failure, or removal restores active work to the TUI and rejects late results. Plan cancellation and session teardown close the interaction. | REQ-exclusive-interaction, REQ-public-presentation-boundary                    |
 | Invalid or unavailable input | Unknown identities and malformed outcomes fail without mutation; unsupported modes return explicitly and cleanup cannot affect newer work.                                                                                                                                           | REQ-typed-planning-outcomes, REQ-recoverable-failures                          |
 | Oversized outcome            | Agent output is bounded and identifies a readable full result; decisions and approved content remain unchanged.                                                                                                                                                                      | REQ-bounded-agent-results                                                      |
+
+Additional failure and cancellation scenarios:
+
+| Scenario                         | Expected outcome                                                                                                                                                                                                                                                                                                                                | Requirements                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Replace work during cancellation | The old operation returns cancellation; cleanup leaves the replacement's state and mode unchanged, including when user cancellation arrived first.                                                                                                                                                                                              | REQ-interaction-cancellation     |
+| Reject an external draft update  | Malformed input and refused edits report their documented kinds. Expired identities report `interaction-closed`; a revision mismatch within the same identity reports `revision-conflict` with supplied and current revisions. Drafts remain unchanged, and separately loaded consumers can identify the kind.                                  | REQ-public-presentation-boundary |
+| Render failures at Pi boundaries | Failed tools receive one applicable recovery instruction and include the current revision for conflicts. Settings and artifact failures require their distinct repairs. Deferred saves and unexpected defects receive no generic retry advice; defects preserve their message and cause. Commands and terminal components display failure text. | REQ-recoverable-failures         |
 
 Required interaction checks are defined in
 [the interaction contract](docs/tui-interactions.md#interaction-scenarios), including keyboard

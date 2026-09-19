@@ -201,8 +201,8 @@ terminal and SSH key behavior still requires verification.
 Plan review renders the full Markdown read-only under `Plan review · revision N · latest`, followed
 by a clickable path to its persisted revision file. The link targets an absolute file URL; its
 display path may use `~`. Terminals without hyperlink support retain readable path text. The file
-and session record must be saved before review opens; a write failure blocks display and reports
-retry or cancellation guidance.
+and session record must be saved before review opens; a write failure blocks display and reports the
+failed action. Failed tools include the applicable recovery instruction.
 
 The document renders without source-line numbers and preserves actual blank source lines. Equal
 outer margins surround the content; the left margin reserves space for `→` beside the selected
@@ -254,6 +254,10 @@ input. Selecting Terminal or cancelling the selector reopens the TUI with drafts
 saved hints default. Selecting an unavailable presenter also preserves drafts and reopens the TUI.
 During external input, Pi shows the presenter's label and controls to return to the terminal or
 cancel planning. Selection is not persisted.
+
+Unhandled presenter failures return active work to the terminal with drafts preserved. Presenter
+authors can find callback failure kinds and recovery actions in the
+[integration reference](integrations.md#optional-presenters).
 
 ## Settings
 

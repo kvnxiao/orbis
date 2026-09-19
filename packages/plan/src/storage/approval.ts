@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
+import { PlanningError, describe, errorResult } from "../domain/errors.ts";
 import { sameRecord } from "../domain/record-equality.ts";
 import {
   acceptApproval,
@@ -13,6 +14,7 @@ import {
 } from "../domain/state.ts";
 import type { PlanApproval, PlanningSession } from "../domain/state.ts";
 import { writeArtifact } from "./artifacts.ts";
+import { isFileError, saveFailure } from "./persistence.ts";
 import type { SaveResult } from "./persistence.ts";
 
 /** Verify the displayed revision and supplementary artifacts before recording acceptance. */
@@ -20,7 +22,7 @@ export function saveApproval(
   state: PlanningSession,
   directory: string,
   persist: (state: PlanningSession) => SaveResult,
-): { state: PlanningSession; outcome: "approval" | "error"; message: string } {
+): { state: PlanningSession; outcome: "approval" | "error"; message: string; error?: unknown } {
   const review = state.reviews?.at(-1);
   if (
     state.phase !== "saving" ||
@@ -70,17 +72,20 @@ export function saveApproval(
       intent.notesContent !== notesContent ||
       (intent.notes === undefined) !== (intent.notesPath === undefined)
     ) {
-      throw new Error(
+      throw new PlanningError(
+        "rejected",
         "An earlier approval needs reconciliation before changing its revision or notes.",
       );
     }
     const prepared = persist(pending);
     if (!prepared.saved) {
-      throw new Error(prepared.message);
+      throw saveFailure(prepared);
     }
     if (readFileSync(intent.planPath, "utf8") !== intent.planContent) {
-      throw new Error(
-        "Saved plan bytes differ from the reviewed revision. Preserve the file and resolve the conflict.",
+      throw new PlanningError(
+        "artifact-conflict",
+        `Saved plan bytes differ from the reviewed revision at ${intent.planPath}.`,
+        { data: { path: intent.planPath } },
       );
     }
     if (intent.notesPath !== undefined && intent.notesContent !== undefined) {
@@ -89,14 +94,18 @@ export function saveApproval(
     const accepted = acceptApproval(pending);
     const saved = persist(accepted);
     if (!saved.saved) {
-      throw new Error(saved.message);
+      throw saveFailure(saved);
     }
     return { state: accepted, outcome: "approval", message: `Plan approved: ${intent.planPath}` };
   } catch (error) {
+    const failure = isFileError(error)
+      ? new PlanningError("persistence", `Cannot save approval: ${describe(error)}`, {
+          cause: error,
+        })
+      : error;
     return {
       state: recoverReview(pending),
-      outcome: "error",
-      message: `${error instanceof Error ? error.message : String(error)} Use /plan to retry approval or close the planning interaction to pause.`,
+      ...errorResult(failure),
     };
   }
 }

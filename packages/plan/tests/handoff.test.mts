@@ -137,7 +137,9 @@ test.for(["here", "new"] as const)(
     expect(f.replace).toHaveBeenCalledTimes(destination === "here" ? 0 : 1);
     expect(f.send).toHaveBeenCalledTimes(1);
     expect(f.bootstrap).toHaveBeenCalledTimes(destination === "here" ? 1 : 0);
-    await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow("already consumed");
+    await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow(
+      expect.objectContaining({ kind: "rejected" }),
+    );
     expect(await f.handoff.request(f.ctx, f.approval, destination)).toMatchObject({
       id: stored.id,
     });
@@ -195,7 +197,9 @@ test("replacement cancellation preserves approval and allows an explicit later a
   onTestFinished(f.dispose);
   f.replace.mockResolvedValue({ cancelled: true });
   await f.handoff.request(f.ctx, f.approval, "new");
-  await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow("replacement was cancelled");
+  await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   expect(f.freshSend).not.toHaveBeenCalled();
   expect(f.send).toHaveBeenCalledTimes(1);
   expect(await readFile(f.approval.planPath, "utf8")).toBe(f.approval.planContent);
@@ -209,13 +213,16 @@ test.for(["replace", "prompt"] as const)(
   async (failure, { onTestFinished }) => {
     const f = await fixture(true);
     onTestFinished(f.dispose);
+    const defect = new Error("Injected launch failure");
     if (failure === "replace") {
-      f.replace.mockRejectedValue(new Error("Replacement failed"));
+      f.replace.mockRejectedValue(defect);
     } else {
-      f.freshSend.mockRejectedValue(new Error("Submission failed"));
+      f.freshSend.mockRejectedValue(defect);
     }
     await f.handoff.request(f.ctx, f.approval, "new");
-    await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow("No automatic retry");
+    const pending = f.handoff.dispatch(f.token(), f.ctx);
+    const aggregate: unknown = expect.objectContaining({ errors: [defect, defect], cause: defect });
+    await expect(pending).rejects.toEqual(failure === "replace" ? defect : aggregate);
     expect(f.replace).toHaveBeenCalledTimes(1);
     expect(f.send).toHaveBeenCalledTimes(1);
     expect(await readFile(f.approval.planPath, "utf8")).toBe(f.approval.planContent);
@@ -273,7 +280,9 @@ test.for(["plan", "notes"] as const)(
     const path = artifact === "plan" ? f.approval.planPath : (f.approval.notesPath ?? "");
     await f.handoff.request(f.ctx, f.approval, "new");
     await writeFile(path, "Changed");
-    await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow("artifacts changed");
+    await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow(
+      expect.objectContaining({ kind: "artifact-conflict", data: { path } }),
+    );
     expect(f.replace).not.toHaveBeenCalled();
     await writeFile(
       path,
@@ -294,7 +303,9 @@ test("duplicate command while waiting cannot claim the action twice", async ({
   f.wait.mockReturnValue(idle.promise);
   await f.handoff.request(f.ctx, f.approval, "new");
   const pending = f.handoff.dispatch(f.token(), f.ctx);
-  await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow("already consumed");
+  await expect(f.handoff.dispatch(f.token(), f.ctx)).rejects.toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   idle.resolve(undefined);
   await pending;
   expect(f.replace).toHaveBeenCalledTimes(1);
@@ -417,7 +428,7 @@ test("invalid saved launch records cannot authorize execution", async ({ onTestF
   onTestFinished(f.dispose);
   f.api.appendEntry("orbis-plan-launch", { version: 1, approval: f.approval });
   await expect(f.runtime.implement(f.ctx, "here", f.approval.planId)).rejects.toThrow(
-    "Invalid implementation launch record",
+    expect.objectContaining({ kind: "persistence" }),
   );
   expect(f.send).not.toHaveBeenCalled();
 });
@@ -465,7 +476,7 @@ test.for(["requested", "received"] as const)(
       await f.handoff.request(f.ctx, f.approval, "here");
       await f.handoff.dispatch(f.token(), f.ctx);
     };
-    await expect(action()).rejects.toThrow("Injected receipt persistence failure");
+    await expect(action()).rejects.toThrow(expect.objectContaining({ kind: "persistence" }));
     expect(f.send).toHaveBeenCalledTimes(status === "requested" ? 0 : 1);
     expect(readLaunches(f.ctx).at(-1)?.status).toBe(status === "requested" ? undefined : "failed");
     expect(f.bootstrap).not.toHaveBeenCalled();

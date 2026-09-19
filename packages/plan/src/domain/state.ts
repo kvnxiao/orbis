@@ -7,6 +7,7 @@ import { Value } from "typebox/value";
 
 import { documentBlocks } from "../document/blocks.ts";
 import { DocumentAnalysis } from "../document/document-analysis.ts";
+import { PlanningError } from "./errors.ts";
 import { sameRecord } from "./record-equality.ts";
 
 const identity = Type.String({
@@ -147,7 +148,7 @@ export type PlanApproval = Static<typeof approvalSchema>;
 /** Bind domain state to its plan, working directory, and session identity. */
 export type PlanningSession = Static<typeof sessionSchema>;
 /** Return detached planning outcomes to tool and command adapters. */
-export type RuntimeResult = Static<typeof runtimeResultSchema>;
+export type RuntimeResult = Static<typeof runtimeResultSchema> & { error?: unknown };
 
 /** Validate the expected revision and exact Markdown submitted for review. */
 export const reviewSchema = Type.Object(
@@ -586,20 +587,25 @@ export function validSession(plan: PlanningSession): boolean {
 /** Validate the expected predecessor and append a pending revision. */
 export function presentReview(state: RoundState, input: ReviewInput): RoundState {
   if (state.phase === "cancelled") {
-    throw new Error("Use /plan to explicitly resume cancelled planning before requesting review.");
+    throw new PlanningError(
+      "rejected",
+      "Use /plan to explicitly resume cancelled planning before requesting review.",
+    );
   }
   if (!Value.Check(reviewSchema, input)) {
-    throw new Error("Invalid review input. Supply exact Markdown and the current revision.");
+    throw new PlanningError("invalid-input", "Invalid review input.");
   }
   if (state.phase === "accepted" || state.phase === "saving") {
-    throw new Error("This plan cannot receive a new review.");
+    throw new PlanningError("rejected", "This plan cannot receive a new review.");
   }
   if (state.round !== undefined && !state.round.submitted) {
-    throw new Error("Submit the unresolved round before reviewing a plan.");
+    throw new PlanningError("rejected", "Submit the unresolved round before reviewing a plan.");
   }
   const latest = state.reviews?.at(-1);
   if (input.expectedRevision !== (latest?.revision ?? 0)) {
-    throw new Error("Plan revision changed. Reload before requesting review.");
+    throw new PlanningError("revision-conflict", "Plan revision changed.", {
+      data: { expected: input.expectedRevision, current: latest?.revision ?? 0 },
+    });
   }
   return {
     ...state,
@@ -624,22 +630,25 @@ export function transitionReview(
   analysis?: DocumentAnalysis,
 ): RoundState {
   const current = state.reviews?.at(-1);
-  if (
-    current === undefined ||
-    current.revision !== revision ||
-    state.phase !== "review" ||
-    current.status !== "pending"
-  ) {
-    throw new Error("Plan review changed. Reload the current revision.");
+  if (current === undefined || state.phase !== "review" || current.status !== "pending") {
+    throw new PlanningError("interaction-closed", "Plan review is no longer accepting input.");
+  }
+  if (current.revision !== revision) {
+    throw new PlanningError("revision-conflict", "Plan review changed.", {
+      data: { expected: revision, current: current.revision },
+    });
   }
   if (action.type === "cancel") {
     return { ...state, phase: "cancelled" };
   }
   if (action.type === "approve" && hasReviewNotes(current)) {
-    throw new Error("Choose Approve with notes or Request revision for these notes.");
+    throw new PlanningError(
+      "rejected",
+      "Choose Approve with notes or Request revision for these notes.",
+    );
   }
   if (action.type === "approve-with-notes" && !hasReviewNotes(current)) {
-    throw new Error("Use Approve when the review has no notes.");
+    throw new PlanningError("rejected", "Use Approve when the review has no notes.");
   }
   if (action.type === "approve" || action.type === "approve-with-notes") {
     return { ...state, phase: "saving" };
@@ -649,7 +658,10 @@ export function transitionReview(
   }
   if (action.type === "feedback" || action.type === "edit-feedback") {
     if (action.type === "feedback" && action.text.trim().length === 0) {
-      throw new Error("Describe the requested changes before sending feedback.");
+      throw new PlanningError(
+        "rejected",
+        "Describe the requested changes before sending feedback.",
+      );
     }
     const updated: PlanRevision =
       action.type === "feedback"
@@ -667,7 +679,7 @@ export function transitionReview(
       analysis?.markdown === current.markdown ? analysis : new DocumentAnalysis(current.markdown);
     const block = source.byId.get(action.blockId);
     if (block === undefined || block.excerpt !== action.excerpt) {
-      throw new Error("Unknown source block or changed excerpt.");
+      throw new PlanningError("rejected", "Unknown source block or changed excerpt.");
     }
     const note = {
       blockId: block.id,
@@ -685,7 +697,7 @@ export function transitionReview(
   }
   if (action.type === "remove-note") {
     if (review.notes?.some((note) => note.blockId === action.blockId) !== true) {
-      throw new Error("Unknown annotation.");
+      throw new PlanningError("rejected", "Unknown annotation.");
     }
     review = { ...current, notes: review.notes.filter((note) => note.blockId !== action.blockId) };
   }
@@ -706,7 +718,7 @@ export function transitionInteraction(
         return transitionRound(state, id, revision, action);
       }
       if (id !== "review") {
-        throw new Error("This action requires the current plan review.");
+        throw new PlanningError("rejected", "This action requires the current plan review.");
       }
       return transitionReview(state, revision, action, analysis);
     case "approve-with-notes":
@@ -717,7 +729,7 @@ export function transitionInteraction(
     case "feedback":
     case "edit-feedback":
       if (id !== "review") {
-        throw new Error("This action requires the current plan review.");
+        throw new PlanningError("rejected", "This action requires the current plan review.");
       }
       return transitionReview(state, revision, action, analysis);
     case "edit":
@@ -748,7 +760,7 @@ export function stampReviewPath(
     !validPath(path) ||
     (review.path !== undefined && review.path !== path)
   ) {
-    throw new Error("Artifact path requires the current pending review.");
+    throw new PlanningError("rejected", "Artifact path requires the current pending review.");
   }
   return { ...state, reviews: [...(state.reviews?.slice(0, -1) ?? []), { ...review, path }] };
 }
@@ -813,32 +825,47 @@ function normalizeQuestion(item: QuestionInput) {
 /** Validate frontier dependencies and preserve stable question numbers and detached history. */
 export function presentRound(state: RoundState, input: RoundInput): RoundState {
   if (state.phase === "cancelled") {
-    throw new Error(
+    throw new PlanningError(
+      "rejected",
       "Use /plan to explicitly resume unfinished work before changing its questions.",
     );
   }
   if (state.phase === "accepted" || state.phase === "saving") {
-    throw new Error("Start another plan explicitly before presenting more questions.");
+    throw new PlanningError(
+      "rejected",
+      "Start another plan explicitly before presenting more questions.",
+    );
   }
   if (!Value.Check(roundSchema, input)) {
-    throw new Error("Invalid round input; correct the fields and retry.");
+    throw new PlanningError("invalid-input", "Invalid round input.");
   }
   const previous = state.round;
   const same = previous?.id === input.roundId;
   if (input.expectedRevision !== (same ? previous.revision : 0)) {
-    throw new Error("Round changed; reload its current revision.");
+    throw new PlanningError("revision-conflict", "Round revision changed.", {
+      data: { expected: input.expectedRevision, current: same ? previous.revision : 0 },
+    });
   }
   if (!same && previous !== undefined && !previous.submitted) {
-    throw new Error("Resume or cancel the unfinished round before replacing it.");
+    throw new PlanningError(
+      "rejected",
+      "Resume or cancel the unfinished round before replacing it.",
+    );
   }
   if (!same && (state.history ?? []).some((entry) => entry.round.id === input.roundId)) {
-    throw new Error("Use a new round identity; historical frontiers are read-only.");
+    throw new PlanningError(
+      "rejected",
+      "Use a new round identity; historical frontiers are read-only.",
+    );
   }
   const pending = same
     ? previous.clarifications.find((item) => item.response === undefined)
     : undefined;
   if (pending !== undefined && input.clarification?.id !== pending.id) {
-    throw new Error("Resolve the pending clarification when updating its frontier.");
+    throw new PlanningError(
+      "rejected",
+      "Resolve the pending clarification when updating its frontier.",
+    );
   }
   const ids = new Set<string>();
   const questionNumbers = { ...state.questionNumbers };
@@ -846,27 +873,28 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   const drafts: Record<string, Draft> = {};
   const questions: Question[] = input.questions.map((question) => {
     if (ids.has(question.id)) {
-      throw new Error("Question identities must be unique.");
+      throw new PlanningError("rejected", "Question identities must be unique.");
     }
     ids.add(question.id);
     const unresolved = question.prerequisites.filter((id) => !Object.hasOwn(state.decisions, id));
     if (unresolved.length > 0) {
-      throw new Error(
+      throw new PlanningError(
+        "rejected",
         `Question ${question.id} has unresolved prerequisite IDs: ${unresolved.join(", ")}. Prerequisites must reference submitted decisions. Defer this question until those decisions are submitted; preserve their question IDs.`,
       );
     }
     const optionIds = new Set(question.options.map((option) => option.id));
     if (optionIds.size !== question.options.length) {
-      throw new Error("Option identities must be unique within a question.");
+      throw new PlanningError("rejected", "Option identities must be unique within a question.");
     }
     if (
       question.options.length === 1 ||
       (question.options.length > 0 && question.recommendation === undefined)
     ) {
-      throw new Error(questionGuidance);
+      throw new PlanningError("rejected", questionGuidance);
     }
     if (question.recommendation !== undefined && !optionIds.has(question.recommendation.optionId)) {
-      throw new Error("Recommendation references an unknown option.");
+      throw new PlanningError("rejected", "Recommendation references an unknown option.");
     }
     const old =
       previous?.questions.find((item) => item.id === question.id) ??
@@ -897,7 +925,10 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
   for (const retirement of input.retire ?? []) {
     const old = same ? previous.questions.find((item) => item.id === retirement.id) : undefined;
     if (old === undefined || ids.has(retirement.id) || retiredIds.has(retirement.id)) {
-      throw new Error("Retire each known question once and omit it from active questions.");
+      throw new PlanningError(
+        "rejected",
+        "Retire each known question once and omit it from active questions.",
+      );
     }
     retiredIds.add(retirement.id);
     questions.push({ ...old, ...retirement, revision: old.revision + 1 });
@@ -911,7 +942,7 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
         continue;
       }
       if (old.status === undefined) {
-        throw new Error("Explicitly retire omitted questions with a reason.");
+        throw new PlanningError("rejected", "Explicitly retire omitted questions with a reason.");
       }
       questions.push(structuredClone(old));
       drafts[old.id] = structuredClone(
@@ -944,13 +975,13 @@ export function presentRound(state: RoundState, input: RoundInput): RoundState {
         item.response === undefined,
     );
     if (request === undefined || request.response !== undefined) {
-      throw new Error("Clarification request is missing or already resolved.");
+      throw new PlanningError("rejected", "Clarification request is missing or already resolved.");
     }
     request.response = response.response;
   }
   const first = questions[0];
   if (first === undefined) {
-    throw new Error("A round requires questions.");
+    throw new PlanningError("rejected", "A round requires questions.");
   }
   const roundNumber = state.roundNumber + Number(!same);
   return {
@@ -996,8 +1027,13 @@ export function transitionRound(
   action: RoundAction,
 ): RoundState {
   const current = state.round;
-  if (current === undefined || current.id !== roundId || current.revision !== revision) {
-    throw new Error("Round changed; reload its current revision.");
+  if (current === undefined || current.id !== roundId) {
+    throw new PlanningError("interaction-closed", "Round identity changed.");
+  }
+  if (current.revision !== revision) {
+    throw new PlanningError("revision-conflict", "Round revision changed.", {
+      data: { expected: revision, current: current.revision },
+    });
   }
   if (
     (state.phase !== "round" &&
@@ -1009,7 +1045,7 @@ export function transitionRound(
       )) ||
     current.submitted
   ) {
-    throw new Error("This round is not accepting input.");
+    throw new PlanningError("interaction-closed", "This round is not accepting input.");
   }
   const round =
     action.type === "submit"
@@ -1031,7 +1067,10 @@ export function transitionRound(
       }
       const draft = round.drafts[question.id];
       if (draft?.answer === undefined || draft.revision !== question.revision) {
-        throw new Error(`Answer or reconfirm ${question.id} before submitting.`);
+        throw new PlanningError(
+          "rejected",
+          `Answer or reconfirm ${question.id} before submitting.`,
+        );
       }
       const selectedOption = question.options.find((item) => item.id === draft.answer?.optionId);
       decisions[question.id] = {
@@ -1049,10 +1088,10 @@ export function transitionRound(
   const question = round.questions.find((item) => item.id === action.questionId);
   const draft = structuredClone(round.drafts[action.questionId]);
   if (question === undefined || draft === undefined) {
-    throw new Error("Unknown question identity.");
+    throw new PlanningError("rejected", "Unknown question identity.");
   }
   if (question.status !== undefined) {
-    throw new Error("This question is inactive.");
+    throw new PlanningError("rejected", "This question is inactive.");
   }
   round.drafts[action.questionId] = draft;
   if (action.type === "focus") {
@@ -1069,7 +1108,7 @@ export function transitionRound(
   }
   if (action.type === "edit-option") {
     if (!question.options.some((item) => item.id === action.optionId)) {
-      throw new Error("Unknown option identity.");
+      throw new PlanningError("rejected", "Unknown option identity.");
     }
     draft.options ??= {};
     draft.options[action.optionId] = action.text;
@@ -1083,16 +1122,16 @@ export function transitionRound(
   if (action.type === "answer") {
     const answer = action.answer;
     if ((answer.optionId !== undefined) === (answer.custom !== undefined)) {
-      throw new Error("Choose an option or provide custom text, exclusively.");
+      throw new PlanningError("rejected", "Choose an option or provide custom text, exclusively.");
     }
     if (
       answer.optionId !== undefined &&
       !question.options.some((option) => option.id === answer.optionId)
     ) {
-      throw new Error("Unknown option identity.");
+      throw new PlanningError("rejected", "Unknown option identity.");
     }
     if (answer.custom?.trim().length === 0) {
-      throw new Error("Custom answers must contain text.");
+      throw new PlanningError("rejected", "Custom answers must contain text.");
     }
     if (answer.custom !== undefined) {
       draft.unfinished = answer.custom;
@@ -1110,7 +1149,7 @@ export function transitionRound(
       action.id.length === 0 ||
       round.clarifications.some((item) => item.id === action.id)
     ) {
-      throw new Error("Provide a clarification request with a new identity.");
+      throw new PlanningError("rejected", "Provide a clarification request with a new identity.");
     }
     round.clarifications.push({
       id: action.id,

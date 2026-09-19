@@ -245,9 +245,9 @@ test.for(["pending", "complete"] as const)(
       expectedRevision: 0,
       markdown: "# Original",
     };
-    await expect(
-      f.runtime.review(f.ctx, input).then(async (result) => await toolResult(result)),
-    ).rejects.toThrow("Injected receipt failure");
+    await expect(toolResult(f.runtime.review(f.ctx, input))).rejects.toMatchObject({
+      cause: { kind: "persistence" },
+    });
     expect(view).toHaveBeenCalledTimes(status === "pending" ? 0 : 1);
     save.mockRestore();
     const retried = await f.runtime.review(f.ctx, input);
@@ -267,7 +267,7 @@ test("malformed operation records cannot replay results", async ({ onTestFinishe
       expectedRevision: 0,
       markdown: "# Review",
     }),
-  ).rejects.toThrow("Invalid planning operation record");
+  ).rejects.toThrow(expect.objectContaining({ kind: "persistence" }));
 });
 
 test("clarification and its applied response replay without exposing unfinished drafts", async ({

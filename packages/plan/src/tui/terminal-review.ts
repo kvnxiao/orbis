@@ -16,6 +16,7 @@ import { DocumentAnalysis } from "../document/document-analysis.ts";
 import { documentLayout } from "../document/document-layout.ts";
 import type { DocumentLayout } from "../document/document-layout.ts";
 import { markdownLines } from "../document/markdown.ts";
+import { describe } from "../domain/errors.ts";
 import { hasReviewNotes } from "../domain/state.ts";
 import type { ReviewAction, RoundState } from "../domain/state.ts";
 import { defaultAppearance } from "./appearance.ts";
@@ -315,7 +316,7 @@ export class TerminalReview implements Component {
         }
       }
     } catch (error) {
-      this.error = error instanceof Error ? error.message : String(error);
+      this.error = describe(error);
     } finally {
       this.syncFocus();
     }

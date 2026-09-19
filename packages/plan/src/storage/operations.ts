@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
+import { PlanningError } from "../domain/errors.ts";
 import { sameRecord } from "../domain/record-equality.ts";
 import {
   runtimeResultSchema,
@@ -15,7 +16,7 @@ import {
 } from "../domain/state.ts";
 import type { PlanningSession, RuntimeResult } from "../domain/state.ts";
 import { readLaunches } from "./launches.ts";
-import { readSavedRecord, saveRecord } from "./persistence.ts";
+import { saveFailure, readSavedRecord, saveRecord } from "./persistence.ts";
 
 const entryType = "orbis-plan-operation";
 const base = {
@@ -78,7 +79,7 @@ export async function runPlanningOperation(
 ): Promise<RuntimeResult> {
   const saved = readSavedRecord(ctx, undefined, entryType);
   if (saved.status === "unreadable") {
-    throw new Error(saved.message);
+    throw new PlanningError("persistence", saved.message, { cause: saved });
   }
   const records = saved.status === "record" ? saved.records : [];
   const previous = records
@@ -90,9 +91,7 @@ export async function runPlanningOperation(
           ((data.state !== undefined && !validSession(data.state)) ||
             !validResult(data.result, data.state)))
       ) {
-        throw new Error(
-          "Invalid planning operation record. Preserve session history and resolve it before retrying.",
-        );
+        throw new PlanningError("persistence", "Invalid planning operation record.");
       }
       return data;
     })
@@ -174,7 +173,7 @@ export async function runPlanningOperation(
   const result = await perform(() => {
     const savedIntent = saveRecord(pi, ctx, intent, undefined, entryType);
     if (!savedIntent.saved) {
-      throw new Error(savedIntent.message);
+      throw saveFailure(savedIntent);
     }
     execution.begun = true;
   });
@@ -196,9 +195,7 @@ export async function runPlanningOperation(
       ? planning.entry.data.active
       : undefined;
   if (!sameRecord(confirmed, state)) {
-    throw new Error(
-      "Planning result is not confirmed on disk. Use plan_open to recover saved work.",
-    );
+    throw new PlanningError("persistence", "Planning result is not confirmed on disk.");
   }
   const complete = {
     ...intent,
@@ -207,13 +204,11 @@ export async function runPlanningOperation(
     result: structuredClone(result),
   };
   if (!Value.Check(recordSchema, complete) || !validResult(result, state)) {
-    throw new Error(
-      "Planning operation completed with inconsistent state. Use plan_open to recover saved work.",
-    );
+    throw new Error("Planning operation completed with inconsistent state.");
   }
   const persisted = saveRecord(pi, ctx, complete, undefined, entryType);
   if (!persisted.saved) {
-    throw new Error(persisted.message);
+    throw saveFailure(persisted);
   }
   return result;
 }

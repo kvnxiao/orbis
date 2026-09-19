@@ -176,7 +176,9 @@ test("missing checkpoints reject ordinary entry and permit explicit replacement 
   f.api.appendEntry("orbis-plan", { version: 999 });
   const leaf = f.manager.getLeafId();
   f.runtime.restore(f.ctx);
-  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow("No valid earlier");
+  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   expect(f.runtime.active).toBeUndefined();
   expect(
     (
@@ -224,7 +226,9 @@ test("recovery never selects a checkpoint from an abandoned sibling branch", asy
   f.manager.branch(root.id);
   f.api.appendEntry("orbis-plan", { version: 999 });
   f.runtime.restore(f.ctx);
-  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow("No valid earlier");
+  await expect(f.runtime.requestOpen(f.ctx, "", false)).rejects.toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   expect(f.runtime.active).toBeUndefined();
 });
 

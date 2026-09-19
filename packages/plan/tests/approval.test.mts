@@ -279,7 +279,7 @@ test("review opens only after exact file and session persistence succeed", async
       saved: false,
       message: "Cannot persist",
     })),
-  ).toThrow("Cannot persist");
+  ).toThrow(expect.objectContaining({ kind: "persistence" }));
   await expect(readdir(join(f.ctx.cwd, "blocked"))).rejects.toMatchObject({ code: "ENOENT" });
   await f.runtime.review(f.ctx, {
     planId: active.planId,

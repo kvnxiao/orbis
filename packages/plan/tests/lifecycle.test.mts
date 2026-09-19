@@ -207,7 +207,7 @@ test("review closure warns while idle and preserves persistence failure warnings
     expectedRevision: 0,
     markdown: "# Pending",
   });
-  await expect(result).rejects.toThrow("Planning result is not confirmed on disk");
+  await expect(result).rejects.toThrow(expect.objectContaining({ kind: "persistence" }));
   expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Unsent feedback");
   expect(notify).toHaveBeenCalledWith("Injected persistence failure", "warning");
   expect(notify).toHaveBeenLastCalledWith(
@@ -245,7 +245,7 @@ test("cancellation flushes pending drafts and reports a failing persistence back
       { id: "scope", prerequisites: [], context: "Known", prompt: "Scope?", options: [] },
     ],
   });
-  await expect(result).rejects.toThrow("Planning result is not confirmed on disk");
+  await expect(result).rejects.toThrow(expect.objectContaining({ kind: "persistence" }));
   expect(save.mock.calls.at(-1)?.slice(0, 2)).toEqual([f.api, f.ctx]);
   expect(save.mock.calls.findLast((call) => call[4] === undefined)?.[2]).toMatchObject({
     active: {

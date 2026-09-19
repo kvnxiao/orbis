@@ -66,6 +66,14 @@ clarification history and requires a current answer.
 When planning tool execution fails, Pi records a failed tool result. Cancellation and unsupported
 modes return explicit outcomes.
 
+Failed tool results contain message text and empty `details`; thrown error fields are not included.
+The message adds the applicable recovery instruction once. Revision conflicts include
+`Current revision: <number>. Reload this revision before retrying.` Settings failures identify the
+file to correct; artifact conflicts identify the file to preserve and reconcile. Session storage
+failures require repair and reload, preserving unsaved changes first. A deferred first-assistant
+save reports that deferred state without storage-repair advice. Refusals retain their specific
+correction, and unexpected defects retain their original message without retry advice.
+
 When a result exceeds Pi's default text byte or line limit, the tool saves the full JSON under
 `orbis-plan-result-*/result.json` in the operating system's temporary directory and returns a
 preview. Truncated tool details contain `outcome`, `truncated: true`, and `resultPath`. Read
@@ -122,6 +130,22 @@ not change the plan. Use `updateDraft` to apply draft changes.
 | `request.updateDraft({ identity, action })` | Synchronously validate a draft action and return the updated detached snapshot. Invalid or stale input throws without mutation.                                                                            |
 | `request.signal`                            | Abort signal for completion, transfer, cancellation, removal, or session teardown. Release the presenter's resources when it aborts.                                                                       |
 | `present()` result                          | `{ identity, action }` for explicit submission, clarification, revision feedback, approval with or without notes, or cancellation. Returning `undefined` declines the interaction.                         |
+
+The version 1 `updateDraft` callback throws errors with a string `kind`. Import
+`PlanPresentationErrorKind`, `PlanPresentationError`, and `isPlanningError` from
+`@orbis/plan/presentation` to inspect them. Validate the error structurally with `isPlanningError`
+and branch on `kind`; separate extension loaders need not share a class identity.
+
+| Callback kind        | Presenter action                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `invalid-input`      | Correct the update payload before retrying.                                                                                                |
+| `rejected`           | Correct the refused edit described by the message.                                                                                         |
+| `revision-conflict`  | Reload current input before retrying. `data.expected` identifies the supplied revision and `data.current` identifies the current revision. |
+| `interaction-closed` | Stop using the callback and wait for a new presentation request.                                                                           |
+
+Changed session, plan, or interaction identities close the callback. A revision mismatch within the
+same identity reports a revision conflict. Invalid updates preserve current drafts. On signal abort,
+close the presenter and discard late input.
 
 Every action has a `type` discriminator. Draft actions update local input without submitting it:
 

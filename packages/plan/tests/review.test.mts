@@ -13,7 +13,9 @@ test("feedback requires another exact revision and stale approval preserves curr
   expect(state.reviews?.at(-1)?.feedback).toBe("Include verification.");
   const revised = "# Objective\r\n\r\nSecond revision.\r\n\r\n## Verification\r\nRun tests.\r\n";
   state = presentReview(state, { planId: "plan", expectedRevision: 1, markdown: revised });
-  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow("Plan review changed");
+  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow(
+    expect.objectContaining({ kind: "revision-conflict", data: { expected: 1, current: 2 } }),
+  );
   expect(state.reviews?.at(-1)?.markdown).toBe(revised);
   expect(transitionReview(state, 2, { type: "approve" }).phase).toBe("saving");
 });
@@ -34,7 +36,7 @@ test("annotation validation rejects stale or malformed targets and includes curr
       excerpt: "Wrong",
       text: "note",
     }),
-  ).toThrow("excerpt");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
   state = transitionReview(state, 1, {
     type: "edit-note",
     blockId: block.id,
@@ -49,7 +51,9 @@ test("annotation validation rejects stale or malformed targets and includes curr
     text: "Clarify second occurrence",
   });
   state = transitionReview(state, 1, { type: "edit-feedback", text: "Private unfinished overall" });
-  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow("notes");
+  expect(() => transitionReview(state, 1, { type: "approve" })).toThrow(
+    expect.objectContaining({ kind: "rejected" }),
+  );
   const submitted = transitionReview(state, 1, { type: "submit-feedback" });
   expect(submitted.reviews?.[0]?.feedback).toContain(`block ${block.id}`);
   expect(submitted.reviews?.[0]?.feedback).toContain("Private unfinished");
@@ -59,7 +63,9 @@ test("annotation validation rejects stale or malformed targets and includes curr
     markdown: "Changed",
   });
   expect(next.reviews?.at(-1)?.notes).toBeUndefined();
-  expect(() => transitionReview(next, 1, { type: "approve-with-notes" })).toThrow("changed");
+  expect(() => transitionReview(next, 1, { type: "approve-with-notes" })).toThrow(
+    expect.objectContaining({ kind: "revision-conflict", data: { expected: 1, current: 2 } }),
+  );
   expect(transitionReview(next, 2, { type: "approve" }).phase).toBe("saving");
 });
 
@@ -80,7 +86,7 @@ test("blank feedback and cancellation do not approve the plan", () => {
     { planId: "plan", expectedRevision: 0, markdown: "# Plan" },
   );
   expect(() => transitionReview(state, 1, { type: "feedback", text: " " })).toThrow(
-    "Describe the requested changes",
+    expect.objectContaining({ kind: "rejected" }),
   );
   const draft = transitionReview(state, 1, { type: "edit-feedback", text: "Unfinished feedback" });
   const cancelled = transitionReview(draft, 1, { type: "cancel" });
@@ -89,5 +95,5 @@ test("blank feedback and cancellation do not approve the plan", () => {
   expect(cancelled.phase).toBe("cancelled");
   expect(() =>
     presentReview(cancelled, { planId: "plan", expectedRevision: 1, markdown: "Replacement" }),
-  ).toThrow("resume");
+  ).toThrow(expect.objectContaining({ kind: "rejected" }));
 });

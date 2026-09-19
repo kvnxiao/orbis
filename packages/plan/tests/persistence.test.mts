@@ -240,7 +240,7 @@ test("reopened questions supersede pending review and resume without approving o
   expect(f.runtime.active?.reviews?.at(-1)?.markdown).toBe("# Old plan");
   expect(f.runtime.active?.reviews?.at(-1)?.status).toBe("superseded");
   expect(() => transitionReview({ ...questions, phase: "review" }, 1, { type: "approve" })).toThrow(
-    "Plan review changed",
+    expect.objectContaining({ kind: "interaction-closed" }),
   );
 });
 

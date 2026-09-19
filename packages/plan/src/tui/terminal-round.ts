@@ -13,6 +13,7 @@ import {
 import type { Component, Editor } from "@earendil-works/pi-tui";
 
 import { markdownLines } from "../document/markdown.ts";
+import { describe } from "../domain/errors.ts";
 import type { Draft, RoundAction, RoundState, Question } from "../domain/state.ts";
 import { defaultAppearance } from "./appearance.ts";
 import type { PlanAppearance } from "./appearance.ts";
@@ -612,7 +613,7 @@ export class TerminalRound implements Component {
         }
       }
     } catch (error) {
-      this.error = error instanceof Error ? error.message : String(error);
+      this.error = describe(error);
     } finally {
       this.editor.focused = this.focused && this.mode === "edit";
     }
