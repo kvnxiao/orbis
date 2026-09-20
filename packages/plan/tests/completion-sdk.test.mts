@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
-import type { AssistantMessage, Context } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Context, JsonObject } from "@earendil-works/pi-ai";
+import { getCurrentSystemPrompt } from "@earendil-works/pi-ai/utils/transcript";
 import {
   createAgentSessionFromServices,
   createAgentSessionRuntime,
@@ -51,7 +52,7 @@ interface Options {
   rejectReplacement?: boolean;
   setup?: (pi: ExtensionAPI) => void;
   pauseContinuation?: boolean;
-  implementArguments?: Record<string, unknown>;
+  implementArguments?: JsonObject;
 }
 
 async function fixture(options: Options = {}) {
@@ -133,9 +134,7 @@ async function fixture(options: Options = {}) {
                   sessionId: args.sessionManager.getSessionId(),
                   context: {
                     messages: structuredClone(context.messages),
-                    ...(context.systemPrompt === undefined
-                      ? {}
-                      : { systemPrompt: context.systemPrompt }),
+                    systemPrompt: getCurrentSystemPrompt(context.messages),
                   },
                 });
                 if (contexts.length > 8) {
@@ -204,7 +203,7 @@ async function fixture(options: Options = {}) {
                         type: "toolCall",
                         id: "receive",
                         name: "plan_implement",
-                        arguments: { action: "here", planId },
+                        arguments: { action: "here", ...(planId === undefined ? {} : { planId }) },
                       },
                     ];
                   }
@@ -252,7 +251,7 @@ async function fixture(options: Options = {}) {
                       id: "review",
                       name: "plan_review",
                       arguments: {
-                        planId,
+                        ...(planId === undefined ? {} : { planId }),
                         expectedRevision: 0,
                         markdown: "# Approved\nImplementation awaits separate authorization.\n",
                       },

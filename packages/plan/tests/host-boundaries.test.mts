@@ -213,7 +213,11 @@ test("registered planning tools persist acceptance and emit once after the succe
               arguments:
                 calls === 1
                   ? { objective: "Scripted approval" }
-                  : { planId, expectedRevision: 0, markdown: "# Exact approved plan\n" },
+                  : {
+                      ...(planId === undefined ? {} : { planId }),
+                      expectedRevision: 0,
+                      markdown: "# Exact approved plan\n",
+                    },
             },
           ],
       usage: {
@@ -325,7 +329,11 @@ test("closing plan review warns without an error response or model continuation"
               arguments:
                 calls === 1
                   ? { objective: "Closure fixture" }
-                  : { planId, expectedRevision: 0, markdown: "# Pending plan\n" },
+                  : {
+                      ...(planId === undefined ? {} : { planId }),
+                      expectedRevision: 0,
+                      markdown: "# Pending plan\n",
+                    },
             },
           ],
       usage: {
