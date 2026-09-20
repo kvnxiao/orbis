@@ -71,7 +71,7 @@ with supplementary notes. Separately verify reload, branch navigation, unresolve
 storage failures, and retry. Scripted fixtures do not establish real-host usability or real-model
 research and frontier quality.
 
-Node.js 22.19.0 is the declared minimum. Pi 0.85.1 is the compatibility baseline; standalone Pi
+Node.js 22.19.0 is the declared minimum. Pi 0.86.0 is the compatibility baseline; standalone Pi
 binary support remains unverified.
 
 Real-model checks run separately under a live orchestrator during an explicit verification session.
