@@ -4,9 +4,9 @@ Memory quality depends on extraction, retrieval, and the acting model's use of e
 storage and deterministic lifecycle rules can limit operational failures; they cannot make weak and
 strong models preserve or interpret every fact equally well.
 
-Research date: 2026-09-12. Results below come from primary papers or identified vendor evaluations.
-They have not been reproduced for Orbis. Recent preprints retain that status, and reported hardware
-does not establish consumer-GPU performance.
+Research dates: 2026-09-12 and 2026-09-21. Results below come from primary papers or identified
+vendor evaluations. They have not been reproduced for Orbis. Recent preprints retain that status,
+and reported hardware does not establish consumer-GPU performance.
 
 ## Coding-task context reduction
 
@@ -114,16 +114,16 @@ Conversational benchmarks remain supporting diagnostics:
   recall; its small set of independent conversations and protocol variants limit generalization.
 - [LongMemEval](https://arxiv.org/html/2410.10813v2) adds updates, abstention, and cross-session
   synthesis; explicit memory questions differ from implicit coding decisions.
-- [Mem2ActBench](https://arxiv.org/abs/2601.19935), a January 2026 preprint, tests memory use in
-  tool actions; synthetic tools do not establish repository correctness.
+- [Mem2ActBench](https://arxiv.org/html/2601.19935v1), a January 2026 preprint, tests
+  memory-conditioned tool-call generation. Its main setup supplies the target tool; offline argument
+  generation does not establish successful repository execution.
 - [SWE-bench](https://www.swebench.com/) and controlled repository continuation fixtures test code
   outcomes. Exact-state, deletion, concurrency, and lifecycle cases need separate fixtures.
 
-Compare the selected observations/topics design with its protected current-work note against native
-Pi and observations/topics alone. A native-Pi-plus-recall variant isolates retrieval value. Compare
-observation masking separately when cost measurements justify it. Hold other settings constant when
-measuring the protected note's effect. Structured task state is a separate proposal, not the
-required next stage.
+The required comparison is native Pi with the extension unloaded versus the selected design enabled
+from the start of the session. Observations/topics alone can isolate the protected note's effect;
+native Pi plus recall can isolate retrieval value. These are optional diagnostic variants, not
+required production modes. Masking and structured task state remain separate experiments.
 
 | Scenario                                                        | Evidence to inspect                                                                                                         |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -137,15 +137,75 @@ required next stage.
 | User edits or deletes a note during consolidation               | The change survives; old source observations do not silently recreate the deleted note.                                     |
 | Cheap local writer or reader                                    | Measure omissions, irrelevant retrieval, incorrect evidence use, resource pressure, and total latency independently.        |
 
-When comparing memory policies, hold the acting model, repository revision, tools, task budget, and
-environment fixed. Vary writer and reader separately before comparing combined configurations. Score
-repository acceptance checks and actions taken during continuation, including violations that a
-later repair might conceal.
+### Paired runs and meaningful compaction
 
-Count acting, observer, consolidator, fallback, retrieval, retry, and cached-token usage. Include
-any embedding or additional classifier cost in experimental variants. Report total task time and
-foreground pauses separately. Correlated checkpoints from the same task are not independent trials;
-report variation across tasks and repeated runs.
+Pair runs by initial repository state, task, historical instructions, steering schedule, acting
+model, native compaction settings, tools, and environment. Keep session and memory stores isolated
+between arms and repetitions. The extension starts with the same declared prior knowledge and pays
+for constructing its notes. Prepared historical fixtures must replay observer work and count that
+cost; an ideal note supplied for free is an oracle diagnostic, not the treatment. Record exact Pi,
+extension, provider, model, serving, and quantization versions where available.
+
+Compare manual and automatic compaction separately. For manual compaction, disable automatic
+compaction in both configurations and compact at matched task milestones. For automatic compaction,
+use the same native settings and work horizon while allowing each configuration's compaction count
+and timing to differ. Record the discarded and retained source boundaries so a nominal compaction
+that retained every relevant fact is visible. Do not force equal automatic compaction counts: the
+count is an outcome.
+
+Fixtures should require historical information that the final prompt and current checkout do not
+already reveal. Variants with the same final prompt and checkout but different earlier instructions
+can test this dependence. Exercise old active prohibitions, superseding corrections, paused work,
+exact errors in long outputs, failed approaches, and verification state. Keep grader expectations
+outside the acting agent's files and score requirements actually given to the agent. Use repository
+checks and action traces; a model's proposed next step alone is not completed work.
+[Agent evaluation guidance](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents).
+
+### Outcomes and accounting
+
+| Axis                    | Report                                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Final correctness       | Required repository checks and task obligations satisfied; report partial completion separately and list critical constraint violations.                                                         |
+| Continuity              | Omitted obligations, revived superseded instructions, false completion, first required repair, and whether recall recovered useful progress.                                                     |
+| Total tokens and cost   | Acting, observer, consolidator, native-summary, fallback, retry, and repair usage, including failed runs and startup work; separate input, output, cache reads, and cache writes where reported. |
+| Compactions             | Attempts and outcomes by manual, threshold, or overflow origin; distinguish native summaries, custom replacements, fallback, failures, and cancellation without counting one attempt twice.      |
+| Time                    | End-to-end elapsed time, foreground waiting, and component durations; overlapping background work is not added again to wall time.                                                               |
+| Rework and intervention | Repeated failed approaches, redundant reads or edits, repairs, additional turns, and user prompts needed to restore direction.                                                                   |
+
+Attribute recalled text to the acting request that consumes it; a local read is not an additional
+model bill. Reconcile host usage with auxiliary worker usage so persisted summaries or tool usage
+are not counted twice. For seeded sessions, report the measured interval and subtract inherited
+usage already outside it. Record known monetary cost with pricing assumptions; mark unavailable
+usage or price as unknown, never zero. For local serving, token counts and elapsed time remain
+useful even without a per-token price. Pi's host session statistics alone do not include every
+independent worker call.
+[Pi usage accounting](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/core/agent-session.ts).
+
+Show paired task results, failures, timeouts, and cancellations alongside aggregates. Report cost
+and time across all attempts as well as successful ones. A cost-per-verified-success statistic uses
+all attempt cost and is undefined when no run succeeds. Vary writer and reader separately before
+attributing a combined change to either one. Randomize paired run order where practical and avoid
+concurrent runs contending for the same local model server.
+
+### Iteration and interpretation
+
+Before scoring a run set, record fixture versions, score definitions, run limits, repetition counts,
+stopping rules, and excluded-run policy. Sample size and resource budgets belong to the experiment
+protocol. A pilot estimates variability and expense; it does not supply a universal completion
+threshold. Tune on exploratory runs and disclose reused fixtures; reserve independent validation
+when making broader improvement claims.
+
+Report paired differences and variation across independent histories and repetitions. Checkpoints
+within one history are correlated. For binary final success, count extension-only wins, native-only
+wins, and ties; the paired rate difference divides wins minus losses by all pairs, including ties.
+Any interval or test must respect that pairing and the repeated-history structure.
+[Paired binary comparison](https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/mcnemar.htm).
+
+The experimental deliverable is reproducible comparison data and an interpretation of the observed
+trade-offs. Negative, mixed, or inconclusive results can direct the next change. Mechanical defects
+still require correction, but the package has no fixed success-rate, savings, latency, or
+superiority gate for MVP completeness. Improved usefulness is a hypothesis to evaluate over
+successive versions.
 
 Ordinary automated checks use local fixtures and scripted providers without network model calls.
 Live-model dogfooding runs separately under explicit supervision. No numerical quality target,

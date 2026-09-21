@@ -11,9 +11,11 @@ token cost, and foreground waiting are secondary. The selected design combines o
 topics with a protected current-work note. Its benefit remains unmeasured. The comparison defines
 the candidate approaches before assessing their trade-offs.
 
-Research date: 2026-09-12. The Pi baseline is **0.85.1**. External source inspection and published
-results are distinguished below from design recommendations. No Orbis memory implementation or
-live-model evaluation exists in this research.
+Research dates: 2026-09-12 and 2026-09-21. The Pi baseline is **0.87.0**. External source inspection
+and published results are distinguished below from design recommendations. No Orbis memory
+implementation or live-model evaluation exists in this research. Comparative evaluation records
+correctness, continuity, total usage and cost, compaction counts, elapsed time, and intervention.
+Those results guide iteration; the experimental package has no fixed numerical improvement gate.
 
 ## Reading map
 
@@ -65,7 +67,7 @@ topics, and original-history retrieval.
 | Approach                                                                 | Additional mechanism                                                                                                                          | Useful scenario                                                                                                                     | Cost or failure boundary                                                                                                          |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **A: observations/topics with a protected current-work note — selected** | The observer also updates a bounded note for the objective, active constraints, paused work, and continuation point in its existing response. | After many steering rounds, an old prohibition still governs the next repository edit.                                              | Reserved context and explicit freshness add cost; extraction can still miss a constraint.                                         |
-| **B: observations and topics — comparison baseline**                     | Automatic observation extraction, topic consolidation, and a bounded checkpoint                                                               | A long debugging session accumulates attempts and discoveries; the model recalls exact details when work returns to an older issue. | An extractor can omit a live commitment, and an index does not guarantee that the acting model recalls it.                        |
+| **B: observations and topics — optional comparison baseline**            | Automatic observation extraction, topic consolidation, and a bounded checkpoint                                                               | A long debugging session accumulates attempts and discoveries; the model recalls exact details when work returns to an older issue. | An extractor can omit a live commitment, and an index does not guarantee that the acting model recalls it.                        |
 | **C: structured task state**                                             | Explicit task identities, dependencies, statuses, and state transitions                                                                       | Several interdependent tasks require exact resumption and completion accounting.                                                    | Schema design, transition validation, and model maintenance calls add ceremony; an incorrect state transition can misdirect work. |
 
 Both A and B keep maintenance outside the acting agent's workflow. The extension schedules
@@ -74,9 +76,9 @@ relevant evidence. Topic bodies and historical observations remain outside the r
 initial design does not require a task-state tool or a separate learning-review model.
 
 The selected approach gives current work separate retention priority while retaining B as an
-evaluation baseline. Sharing an observation response avoids a required extra model call, but does
-not establish negligible token or latency cost. Approach C would require evidence that explicit task
-transitions solve an observed problem at an acceptable maintenance cost.
+optional evaluation baseline. Sharing an observation response avoids a required extra model call,
+but does not establish negligible token or latency cost. Approach C would require evidence that
+explicit task transitions solve an observed problem at an acceptable maintenance cost.
 
 ## Improvements to the reference approach
 
@@ -96,8 +98,8 @@ behavior from these recommendations:
   changes; extension code validates and commits them.
 - Default to the session model, allow independent observer and consolidator overrides, and avoid
   silent provider substitution. Serial inference is a useful starting point for a local GPU.
-- Make recall conditional. A compact index and explicit invocation guidance cost less than a
-  mandatory retrieval workflow on every turn.
+- Make recall conditional. A compact index and explicit invocation guidance let the acting agent
+  skip retrieval when visible evidence is sufficient.
 
 When observations are ready and no additional transformation is needed, deterministic checkpoint
 rendering saves a foreground summarization call. Extraction, consolidation, waiting for unfinished

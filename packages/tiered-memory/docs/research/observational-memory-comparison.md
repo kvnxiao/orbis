@@ -10,11 +10,11 @@ same repository name.
 
 ## Inspected versions
 
-| Label in this comparison                         | Inspected source                                                                                                                       | Version boundary                                                                                                                                                                                     |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pi-observational-memory`, topics implementation | [Commit `78a1efc`](https://github.com/amosblomqvist/pi-observational-memory/tree/78a1efcfdd46332253fb289724f05b26dfc7769e), 2026-08-24 | Current inspected HEAD; package version 0.1.0.                                                                                                                                                       |
-| `pi-observational-memory`, v3 implementation     | [Commit `9f1cf4e`](https://github.com/elpapi42/pi-observational-memory/tree/9f1cf4e2eeecd5bd1c49b8017d818e7cd07b65a0), 2026-09-11      | Manifest says 3.0.4, but HEAD contains changes after the [3.0.4 release tag](https://github.com/elpapi42/pi-observational-memory/releases/tag/3.0.4). The tag points to `e07d2b2`, dated 2026-08-11. |
-| Mastra observational memory                      | [Commit `253b501`](https://github.com/mastra-ai/mastra/tree/253b5012970f0cc6eab01916279d20376f457fe2), 2026-09-12, plus current docs   | The source manifest is `@mastra/memory` 1.30.0-alpha.2. Docs identify core OM as available since 1.1.0; that does not establish stable availability for every current-source feature.                |
+| Label in this comparison                         | Inspected source                                                                                                                       | Version boundary                                                                                                                                                                                        |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pi-observational-memory`, topics implementation | [Commit `78a1efc`](https://github.com/amosblomqvist/pi-observational-memory/tree/78a1efcfdd46332253fb289724f05b26dfc7769e), 2026-08-24 | Current inspected HEAD; package version 0.1.0.                                                                                                                                                          |
+| `pi-observational-memory`, v3 implementation     | [Commit `9f1cf4e`](https://github.com/elpapi42/pi-observational-memory/tree/9f1cf4e2eeecd5bd1c49b8017d818e7cd07b65a0), 2026-09-11      | Manifest says 3.0.4, but HEAD contains changes after the [3.0.4 release tag](https://github.com/elpapi42/pi-observational-memory/releases/tag/3.0.4). The tag points to `e07d2b2`, dated 2026-08-11.    |
+| Mastra observational memory                      | [Commit `253b501`](https://github.com/mastra-ai/mastra/tree/253b5012970f0cc6eab01916279d20376f457fe2), 2026-09-12, plus current docs   | The source manifest is `@mastra/memory` 1.30.0-alpha.2. Docs identify core observational memory as available since 1.1.0; that does not establish stable availability for every current-source feature. |
 
 The v3 release-tag hook lacks the empty-memory fallback found on its current HEAD. Findings about
 development source must not be attributed to the released version merely because both manifests show
@@ -126,7 +126,7 @@ Sharing an active summary and permitting lookup of other conversations are separ
 [Scope configuration](https://github.com/mastra-ai/mastra/blob/253b5012970f0cc6eab01916279d20376f457fe2/packages/memory/src/processors/observational-memory/observational-memory.ts).
 
 The alpha source also includes a separate `subconscious` knowledge subsystem. Its presence does not
-establish that the same subsystem was included in the published OM evaluation.
+establish that the same subsystem was included in the published observational-memory evaluation.
 [Knowledge scope](https://github.com/mastra-ai/mastra/blob/253b5012970f0cc6eab01916279d20376f457fe2/packages/memory/src/processors/observational-memory/subconscious/scope.ts).
 
 ## Recall and compaction

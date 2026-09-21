@@ -8,7 +8,7 @@ Research date: 2026-09-12. The inspected repository is
 [`pi-observational-memory`](https://github.com/amosblomqvist/pi-observational-memory/tree/78a1efcfdd46332253fb289724f05b26dfc7769e)
 at commit `78a1efcfdd46332253fb289724f05b26dfc7769e`, dated 2026-08-24. These are source findings,
 not results from running the package. Its dependency declaration targets an earlier Pi version than
-Orbis's 0.85.1 baseline.
+Orbis's 0.87.0 target.
 
 ## Capture and consolidation
 

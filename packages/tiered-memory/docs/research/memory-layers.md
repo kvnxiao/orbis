@@ -4,8 +4,9 @@ Observational memory is a construction and maintenance method that can span seve
 responsibilities. An observation pool is one representation produced by that method. The surveyed
 primary sources do not establish a universal industry-standard tier model.
 
-Research date: 2026-09-12. Framework documentation describes current concepts and capabilities; the
-Pi baseline is pinned to 0.85.1. These comparisons do not establish runtime compatibility or
+Research date: 2026-09-12. Framework documentation describes concepts and capabilities at that date;
+the Pi sources in this survey are pinned to 0.85.1. The [integration research](pi-compaction.md)
+covers the current 0.87.0 target. These comparisons do not establish runtime compatibility or
 comparative memory quality.
 
 ## Independent dimensions

@@ -5,9 +5,10 @@ reductions and user steering without losing applicable constraints, reviving sup
 mistaking incomplete work for completion. The objective is to minimize work-relevant loss within a
 bounded prompt. Exact reproduction of the entire conversation is neither attainable nor required.
 
-Research date: 2026-09-12. The evaluation design below is a proposal for this package, informed by
-primary engineering reports and the [model-quality evidence](evidence-and-evaluation.md). It does
-not report an implemented extension or measured improvement.
+Research dates: 2026-09-12 and 2026-09-21. The evaluation design below is a proposal for this
+package, informed by primary engineering reports and the
+[model-quality evidence](evidence-and-evaluation.md). It does not report an implemented extension or
+measured improvement.
 
 ## Priority order
 
@@ -20,9 +21,9 @@ calls, user intervention, and maintenance of competing representations. A field 
 existing observation call can add output tokens without adding a tool round for the acting agent.
 Whether that field improves continuation still needs measurement.
 
-The architecture should prefer the least costly mechanism that satisfies the evaluated continuity
-target. A tier count, compression ratio, or number of successful memory writes cannot substitute for
-the quality of the next action.
+The architecture should use comparative continuation and cost data to select the next experiment. A
+tier count, compression ratio, or number of successful memory writes cannot substitute for the
+quality of the next action.
 
 ## What continuation must retain
 
@@ -77,22 +78,21 @@ retrieval as complementary techniques. Those techniques reduce prompt pressure w
 access to relevant state; their combination still requires selection and validation.
 [Context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).
 
-## Qualification protocol
+## Comparative evaluation
 
 Before comparing implementations, declare the task set, continuation horizon, steering schedule,
-models, context budgets, scoring criteria, and acceptable regressions. The horizon includes multiple
+models, context budgets, scoring criteria, and run limits. The horizon includes multiple
 compactions, changes of direction, interruptions, and returns to paused work; it must not be
 represented as a proof about arbitrarily many future turns.
 
 Use paired tasks with the same acting model, repository revision, tools, and source history:
 
-- Native Pi establishes the baseline.
-- Native Pi plus original-source recall isolates retrieval value.
-- Observations and topics without a protected current-work note isolate the history policy.
-- An oracle-evidence condition supplies the small set of relevant original facts directly and
-  estimates how much error remains in the acting model after memory selection is corrected.
-- The selected design adds a protected current-work note to that observations/topics baseline. Its
-  extraction shares an existing call; count all added tokens and updates.
+- Native Pi with the extension unloaded establishes the required baseline.
+- The selected design runs from session start with isolated stores and all auxiliary work counted.
+- An optional native-Pi-plus-recall variant isolates retrieval value.
+- An optional observations/topics variant without the protected note isolates its contribution.
+- An optional oracle-evidence condition supplies the small set of relevant original facts directly
+  and estimates how much error remains in the acting model after memory selection is corrected.
 
 Score actual continuation actions and repository acceptance checks. A verbal answer about the next
 step is supporting evidence, not a substitute for taking that step correctly. Include silent drift,
@@ -109,15 +109,20 @@ models, record serving configuration and quantization as well as model identity.
 where the relevant constraint is old, phrased indirectly, corrected later, or separated from the
 action by unrelated work.
 
-Measure total task tokens, known cost, retrieval calls, redundant work, user intervention, and
-foreground pauses. Efficiency comparisons follow the continuity assessment; lower prompt size alone
-does not establish a better result. Report uncertainty across tasks and runs, rather than treating
-every checkpoint in one session as an independent trial.
+Measure total task tokens, known cost, compaction attempts and outcomes, total elapsed time,
+foreground pauses, retrieval calls, redundant work, and user intervention, including failed runs.
+Efficiency comparisons accompany the continuity assessment; lower prompt size alone does not
+establish a better result. Report uncertainty across tasks and runs, rather than treating every
+checkpoint in one session as an independent trial.
 
 An improvement claim requires comparative evidence over the declared horizon. A protocol, passing
 scripted providers, successful storage, or a vendor leaderboard is insufficient. When results are
-mixed or uncertain, report which conditions improved and which remain unresolved. Automated
-repository checks use scripted providers; live-model qualification requires separate supervision.
+mixed or uncertain, report which conditions improved and which remain unresolved. Comparison data
+guides iteration; positive results are not a prerequisite for completing an experimental version.
+There is no fixed numerical MVP quality or efficiency gate. The
+[evaluation design](evidence-and-evaluation.md#evaluation-design) defines paired runs and
+accounting. Automated repository checks use scripted providers; live-model evaluation requires
+separate supervision.
 
 ## Implications for the initial design
 
@@ -127,5 +132,6 @@ evidence. The observer updates the note alongside observations, and the writer r
 revisions. Newer visible user instructions remain authoritative while the note awaits an update.
 
 Freshness and budget failures still need explicit fallback. A protected note can omit an important
-constraint, so its benefit must be compared with observations/topics alone. A structured task-state
-system adds task transitions and dependencies and remains outside the initial design.
+constraint. An optional comparison with observations/topics alone can isolate the note's
+contribution; claims about that contribution require this comparison. A structured task-state system
+adds task transitions and dependencies and remains outside the initial design.
