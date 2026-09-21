@@ -10,7 +10,7 @@ entry points through Jiti; publication does not require a build step.
 | Node.js for development   | `26.9.0`, pinned in `.node-version` |
 | pnpm                      | `12.5.1`, pinned in `package.json`  |
 | TypeScript                | `7.0.2`, used for type checking     |
-| Pi coding agent           | `0.86.0`                            |
+| Pi coding agent           | `0.87.0`                            |
 | Oxfmt                     | `0.68.0`                            |
 | Oxlint                    | `1.83.0`                            |
 | Oxlint type-aware checker | `oxlint-tsgolint@7.0.2002`          |
@@ -23,9 +23,12 @@ minimum supported runtime.
 
 The workspace sets
 [`minimumReleaseAge: 1440`](https://pnpm.io/settings/dependency-resolution#minimumreleaseage) to
-delay new direct and transitive dependency releases for one day. Exact-version exemptions are listed
-in `minimumReleaseAgeExclude`. Once those releases qualify, toolchain updates remove the exemptions
-and verify locked and fresh installs.
+delay new direct and transitive dependency releases for one day. Exact package-name exclusions
+exempt `@earendil-works/chord`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
+`@earendil-works/pi-coding-agent`, `@earendil-works/pi-telemetry`, and `@earendil-works/pi-tui` from
+that delay. Each exclusion applies to every version of its package. Temporary exclusions use exact
+`package@version` entries. Toolchain updates retain the six package-name exclusions and remove
+temporary exact-version exclusions once their releases qualify.
 
 ## Local development
 
@@ -278,9 +281,9 @@ runtime verification. If the session does not discover local skills, ask it to r
 file.
 
 The skill runs [`scripts/update-toolchain.mts`](scripts/update-toolchain.mts) for dependency
-inventory, age-eligible release candidates, and installation, scaffolding, packaging, and Pi loading
-checks. Commands emit JSON reports; compatibility decisions and new compiler or lint checks remain
-agent tasks.
+inventory, release candidates selected under the workspace release-age policy, and installation,
+scaffolding, packaging, and Pi loading checks. Commands emit JSON reports; compatibility decisions
+and new compiler or lint checks remain agent tasks.
 
 ## References
 

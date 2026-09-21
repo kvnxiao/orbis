@@ -282,7 +282,7 @@ The defaults are shown above. Symbols can be `unicode` or `emoji`. Border styles
 `square`, `double`, `ascii`, and `none`; None omits the outer frame while retaining modal content
 and CTA dividers. Hints add their own divider only when enabled. Appearance settings apply to the
 outer Plan frame and Plan-owned dividers. Pi's native editor decorations retain their own style. The
-menu uses Pi's `SettingsList`; Pi 0.86.0 does not expose an extension API for adding rows to native
+menu uses Pi's `SettingsList`; Pi 0.87.0 does not expose an extension API for adding rows to native
 `/settings`.
 
 The Planning shortcut field accepts a Pi special or modified key, such as `shift+tab` or

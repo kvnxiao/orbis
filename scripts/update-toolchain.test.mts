@@ -9,6 +9,7 @@ import {
   packageProblems,
   parseArgs,
   releaseTargets,
+  selectPackageRelease,
   selectRelease,
   stableVersions,
 } from "./update-toolchain.mts";
@@ -44,6 +45,22 @@ test("restricts Node.js type candidates to the supported runtime generation", ()
     ),
     "22.20.0",
   );
+});
+
+test("package-name exclusions bypass release-age checks but exact-version exclusions do not", () => {
+  const now = Date.parse("2026-09-21T20:00:00Z");
+  const times = {
+    "0.86.0": "2026-09-19T20:00:00Z",
+    "0.87.0": "2026-09-21T16:00:00Z",
+  };
+  const exclusions = ["@earendil-works/pi-coding-agent"];
+
+  assert.equal(
+    selectPackageRelease(times, now, 1440, "@earendil-works/pi-coding-agent", exclusions),
+    "0.87.0",
+  );
+  assert.equal(selectPackageRelease(times, now, 1440, "other", exclusions), "0.86.0");
+  assert.equal(selectPackageRelease(times, now, 1440, "other", ["other@0.87.0"]), "0.86.0");
 });
 
 test("rejects invalid release cutoffs and major versions", () => {

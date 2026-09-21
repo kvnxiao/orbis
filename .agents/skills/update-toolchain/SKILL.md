@@ -38,18 +38,20 @@ toolchain and package `docs/development.md` files for compatibility checks. Pres
 
 Release discovery queries the configured npm registries through pnpm and the
 [official Node.js release index](https://nodejs.org/dist/index.json). It sorts stable versions
-numerically, excludes npm releases younger than 1440 minutes at the report's `asOf` time, and
-restricts `@types/node` to the declared runtime generation. It considers versions still listed in
-registry metadata, includes unused catalog entries, and reports exact release-age exclusions
-eligible for removal. Pattern exclusions require review. Local references appear in
-`localDependencies`; aliases, Git sources, and URLs appear in `manualDependencies` and require
-source-specific review.
+numerically and restricts `@types/node` to the declared runtime generation. It excludes npm releases
+younger than 1440 minutes at the report's `asOf` time unless the package name exactly matches a
+release-age exclusion. For an exact package-name exclusion, release discovery can select the newest
+stable release immediately. It considers versions still listed in registry metadata, includes unused
+catalog entries, and reports exact-version exclusions eligible for removal. Other exclusions require
+review. Local references appear in `localDependencies`; aliases, Git sources, and URLs appear in
+`manualDependencies` and require source-specific review.
 
-npm candidates satisfy the release-age policy; compatibility still requires review. The report
-includes dist-tags, engines, peers, dependencies, repository metadata, and tarball metadata for
-candidate review. It does not edit pins or install upgrades. For non-registry dependencies, renamed
-packages, or runtime ranges the script cannot interpret, inspect the source and resolve the
-unsupported case explicitly. Do not substitute guessed versions for failed queries.
+npm candidates either satisfy the release-age cutoff or match an exact package-name exclusion;
+compatibility still requires review. The report includes dist-tags, engines, peers, dependencies,
+repository metadata, and tarball metadata for candidate review. It does not edit pins or install
+upgrades. For non-registry dependencies, renamed packages, or runtime ranges the script cannot
+interpret, inspect the source and resolve the unsupported case explicitly. Do not substitute guessed
+versions for failed queries.
 
 ## Decide compatibility and checks
 
@@ -73,9 +75,9 @@ unsupported case explicitly. Do not substitute guessed versions for failed queri
   and independent package installation. Fix findings without blanket suppressions or disabling
   type-aware analysis.
 
-When a candidate is incompatible, select the newest age-eligible compatible version, record the
-blocker, and continue independent updates. Query metadata for any fallback version before selecting
-it. Previews require a user request.
+When a candidate is incompatible, select the newest compatible version permitted by that package's
+release-age rule, record the blocker, and continue independent updates. Query metadata for any
+fallback version before selecting it. Previews require a user request.
 
 ## Apply the selected versions
 
@@ -84,7 +86,10 @@ the `CONTRIBUTING.md` version table together. Update package runtime requirement
 documentation where affected; keep workspace development versions out of READMEs. Preserve
 `catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer
 contracts. Keep dependency build policies and `minimumReleaseAge: 1440`; remove exclusions marked
-`remove` in the release report. Do not add exceptions for younger releases.
+`remove` in the release report. Retain the exact package-name exclusions for
+`@earendil-works/chord`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
+`@earendil-works/pi-coding-agent`, `@earendil-works/pi-telemetry`, and
+`@earendil-works/pi-tui`. Do not add other exclusions for younger releases.
 
 Activate the selected development Node.js and pnpm, then run `pnpm install` to regenerate the
 lockfile. Review the catalog and lockfile diff. Installed versions alone do not establish that the
