@@ -96,9 +96,12 @@ retained while querying and can be reused when the author selects Supplied color
 Supplied color prevents a late query answer from replacing the supplied value. Switching to Query
 terminal starts a fresh query.
 
-When current inputs are complete and no edit or selector is active, Escape returns to the gallery.
-When preview is blocked, Escape closes the view. A visible Close action is available in either
-state. Cancelling a selector preserves its previously confirmed selection.
+Escape first cancels the focused edit or open selector without also leaving settings. When neither
+is active and unfinished fields remain, Escape resumes editing the first unfinished field in row
+order and preserves its draft. The author must confirm or cancel unfinished fields before Escape can
+leave settings. With no unfinished fields, Escape returns to the gallery when current inputs are
+complete, or closes the view when preview is blocked. The visible Close action remains available and
+discards unsaved values. Cancelling a selector preserves its previously confirmed selection.
 
 When required values are absent, Preview remains reachable and reports the missing inputs instead of
 opening the gallery. Save defaults may retain an incomplete foreground or palette set, but it cannot
@@ -113,6 +116,8 @@ stateDiagram-v2
     Editing --> Editing: Invalid field confirmation
     Editing --> Rows: Confirm valid value
     Editing --> Rows: Cancel and restore confirmed value
+    Editing --> Rows: Tab and preserve unfinished draft
+    Rows --> Editing: Escape with an unfinished draft
     Rows --> Rows: Save defaults succeeds or reports failure
     Rows --> Gallery: Preview with complete inputs
     Rows --> Rows: Preview finds missing input
@@ -122,16 +127,18 @@ stateDiagram-v2
     Gallery --> Closed: Close
 ```
 
-| Initial state and action                                              | Observable result                                                                                                          |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Required foreground is missing; enter `#d4d4d4` and confirm the field | Dependent tokens resolve locally; settings remains open and defaults remain unsaved.                                       |
-| Enter an alpha color or malformed hex and confirm                     | The input remains editable with an error; Preview cannot use it.                                                           |
-| Start editing a saved color, change it, then cancel the field         | The previous confirmed color returns.                                                                                      |
-| Finish an input, preview, close, and reopen without saving            | The saved defaults return; the temporary input is discarded.                                                               |
-| Save valid defaults, close, and invoke from another project           | The saved inputs load; a queried source obtains a new terminal answer.                                                     |
-| Save fails                                                            | The previous file remains intact, entered values remain visible, and the view does not display Saved.                      |
-| A loaded store is malformed                                           | Settings displays the load error. Temporary entries can enable preview; only an explicit Save defaults replaces the store. |
-| A theme refresh requires an additional palette index                  | Settings focuses its missing row and preserves entered values and gallery position.                                        |
+| Initial state and action                                                         | Observable result                                                                                                                                                                     |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required foreground is missing; enter `#d4d4d4` and confirm the field            | Dependent tokens resolve locally; settings remains open and defaults remain unsaved.                                                                                                  |
+| Enter an alpha color or malformed hex and confirm                                | The input remains editable with an error; Preview cannot use it.                                                                                                                      |
+| Start editing a saved color, change it, then cancel the field                    | The previous confirmed color returns.                                                                                                                                                 |
+| All confirmed colors resolve; edit a color, Tab away, then press Escape          | The field resumes editing with its draft intact; settings remains open. Confirm accepts the value; Escape cancels the edit and restores the confirmed value without leaving settings. |
+| Required input is missing; leave an unfinished field with Tab, then press Escape | The first unfinished field in row order resumes editing with its draft intact; the view does not close.                                                                               |
+| Finish an input, preview, close, and reopen without saving                       | The saved defaults return; the temporary input is discarded.                                                                                                                          |
+| Save valid defaults, close, and invoke from another project                      | The saved inputs load; a queried source obtains a new terminal answer.                                                                                                                |
+| Save fails                                                                       | The previous file remains intact, entered values remain visible, and the view does not display Saved.                                                                                 |
+| A loaded store is malformed                                                      | Settings displays the load error. Temporary entries can enable preview; only an explicit Save defaults replaces the store.                                                            |
+| A theme refresh requires an additional palette index                             | Settings focuses its missing row and preserves entered values and gallery position.                                                                                                   |
 
 ## Gallery
 
@@ -177,19 +184,20 @@ Pi keybindings manager; user overrides govern both input matching and displayed 
 remain reachable without modified Enter combinations. Input components preserve their normal editing
 and copy bindings.
 
-| Focus or context               | Host action                                      | Default key and result                                                          |
-| ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------- |
-| Document                       | `tui.select.up`, `tui.select.down`               | Up/Down scroll one rendered line                                                |
-| Document                       | `tui.altScreen.pageUp`, `tui.altScreen.pageDown` | Page Up/Page Down scroll one viewport, clamped to document boundaries           |
-| Document                       | `tui.altScreen.top`, `tui.altScreen.bottom`      | Home/End reach the document boundaries                                          |
-| Settings rows or open selector | `tui.select.up`, `tui.select.down`               | Up/Down move between rows or choices                                            |
-| Settings rows or open selector | `tui.select.pageUp`, `tui.select.pageDown`       | Page Up/Page Down move through the visible list                                 |
-| Control or selector            | `tui.select.confirm`                             | Enter activates the control or confirms the highlighted choice                  |
-| Text field                     | `tui.input.submit`                               | Enter validates and finishes only that field                                    |
-| Focus traversal                | `tui.input.tab`                                  | Tab advances between focus areas; within an edit, preserve its unfinished draft |
-| Active edit or selector        | `tui.select.cancel`                              | Escape cancels the local edit or selection                                      |
-| Settings outside editing       | `tui.select.cancel`                              | Escape returns to an available gallery, or closes when preview is blocked       |
-| Gallery outside a selector     | `tui.select.cancel`                              | Escape closes the view                                                          |
+| Focus or context                                             | Host action                                      | Default key and result                                                                 |
+| ------------------------------------------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Document                                                     | `tui.select.up`, `tui.select.down`               | Up/Down scroll one rendered line                                                       |
+| Document                                                     | `tui.altScreen.pageUp`, `tui.altScreen.pageDown` | Page Up/Page Down scroll one viewport, clamped to document boundaries                  |
+| Document                                                     | `tui.altScreen.top`, `tui.altScreen.bottom`      | Home/End reach the document boundaries                                                 |
+| Settings rows or open selector                               | `tui.select.up`, `tui.select.down`               | Up/Down move between rows or choices                                                   |
+| Settings rows or open selector                               | `tui.select.pageUp`, `tui.select.pageDown`       | Page Up/Page Down move through the visible list                                        |
+| Control or selector                                          | `tui.select.confirm`                             | Enter activates the control or confirms the highlighted choice                         |
+| Text field                                                   | `tui.input.submit`                               | Enter validates and finishes only that field                                           |
+| Focus traversal                                              | `tui.input.tab`                                  | Tab advances between focus areas; within an edit, preserve its unfinished draft        |
+| Active edit or selector                                      | `tui.select.cancel`                              | Escape cancels the local edit or selection                                             |
+| Settings outside an edit or selector, with unfinished fields | `tui.select.cancel`                              | Escape resumes editing the first unfinished field in row order and preserves its draft |
+| Settings without an edit, selector, or unfinished fields     | `tui.select.cancel`                              | Escape returns to an available gallery, or closes when preview is blocked              |
+| Gallery outside a selector                                   | `tui.select.cancel`                              | Escape closes the view                                                                 |
 
 Each focused action displays the key derived from its effective binding. A disabled binding is not
 advertised as available. While a field is active, the input handler must not intercept printable
