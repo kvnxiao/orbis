@@ -13,6 +13,10 @@ At the start of substantive repository work, read the
 records. Follow the [development workflow](docs/development-workflow.md) for shared work, approval,
 and delivery. If remote context is unavailable, report the gap and continue independent local work.
 
+Follow the [agent model policy](docs/development-workflow.md#agent-models) for software development,
+including direct specialist-skill invocations. Keep orchestration, design, planning, and review on
+Astra; delegate bounded approved implementation and fixes to the Sol implementer.
+
 Use the root `justfile` for common workspace commands. Run `just` to list the available recipes, and
 prefer `just install`, `just new <name>`, `just fix`, `just check`, and `just test` over their root
 `pnpm` scripts. Use `pnpm` directly for package-filtered commands, dependency-manifest changes,
@@ -28,16 +32,21 @@ commands.
 Use these skills at their stated triggers. When automatic discovery is unavailable, read the linked
 skill files.
 
-| Trigger                                               | Required skill                                                                 |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Before touching any package                           | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)         |
-| Start or resume tracked development                   | [work-orbis-issue](.agents/skills/work-orbis-issue/SKILL.md)                   |
-| Package design                                        | [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md)   |
-| Implementation planning                               | [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md) |
-| Package contract changes                              | [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md)           |
-| Dependency refreshes or newly supported strict checks | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                   |
-| Package conformance review                            | [verify-orbis-conformance](.agents/skills/verify-orbis-conformance/SKILL.md)   |
-| README creation or revision                           | [write-orbis-readme](.agents/skills/write-orbis-readme/SKILL.md)               |
+Route requests to resume, continue, or work on an issue or ticket through `work-issue`, including
+requests to take the next step in a delivery. Infer the current stage before choosing a specialist
+skill; do not require the user to name a skill or stage. Treat status questions and review-only
+requests according to their stated scope.
+
+| Trigger                                               | Required skill                                                         |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Before touching any package                           | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md) |
+| Start or resume tracked development                   | [work-issue](.agents/skills/work-issue/SKILL.md)                       |
+| Package design                                        | [design-package](.agents/skills/design-package/SKILL.md)               |
+| Implementation planning                               | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)     |
+| Package contract changes                              | [revise-package](.agents/skills/revise-package/SKILL.md)               |
+| Dependency refreshes or newly supported strict checks | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)           |
+| Package conformance review                            | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)       |
+| README creation or revision                           | [write-readme](.agents/skills/write-readme/SKILL.md)                   |
 
 ## Package requirements
 
@@ -110,18 +119,18 @@ skill files.
 - Before changing package code, read its SPEC and linked interaction contract and identify affected
   requirements, even when the request omits specifications. Distinguish fixes within the contract,
   permitted implementation choices, and contract changes. Before implementing contract changes,
-  update affected requirements and scenarios through `revise-orbis-package`. Keep the contract,
+  update affected requirements and scenarios through `revise-package`. Keep the contract,
   interaction documentation, code, and tests consistent within the same change set.
 - When iteration has already landed in code without a contract update, reconcile the drift through
-  `revise-orbis-package`. Enumerate current public behavior, then keep, amend, mint, or retire each
-  slug. Minting and retirement need a user decision; existing code is evidence of implementation,
-  not approval of behavior.
+  `revise-package`. Enumerate current public behavior, then keep, amend, mint, or retire each slug.
+  Minting and retirement need a user decision; existing code is evidence of implementation, not
+  approval of behavior.
 - Derive tasks from the approved contract and current source. Each task identifies requirements,
   dependencies, observable outcomes, and verification. Before implementing a change, state its
   behavior and verification. Keep the authoritative plan in initiative and work issue bodies using
-  the [issue plan format](.agents/skills/plan-orbis-implementation/references/plan-format.md). Use
-  native sub-issues for independent work and checklists for smaller steps. Keep scratch work and
-  detailed evidence in ignored local files; do not maintain duplicate authoritative plans.
+  the [issue plan format](.agents/skills/plan-implementation/references/plan-format.md). Use native
+  sub-issues for independent work and checklists for smaller steps. Keep scratch work and detailed
+  evidence in ignored local files; do not maintain duplicate authoritative plans.
 
 ## Implementation
 
@@ -173,10 +182,10 @@ skill files.
 - When available, run `verify-changes` once on the accumulated change set. Otherwise review the
   diff, update affected documentation, audit prose, and run repository checks. Report skipped or
   blocked checks.
-- Within `verify-changes`, use `verify-orbis-conformance` for affected package contracts and
-  interactions with unchanged behavior, including SPEC-only changes against available source and
-  tests. For an explicit package conformance review, use full-package scope; scoped review does not
-  establish full conformance.
+- Within `verify-changes`, use `verify-conformance` for affected package contracts and interactions
+  with unchanged behavior, including SPEC-only changes against available source and tests. For an
+  explicit package conformance review, use full-package scope; scoped review does not establish full
+  conformance.
 - Conformance reviewers use clone-available artifacts, exclude ignored plans, journals, and prior
   chat conclusions, and report without editing reviewed artifacts. Derive expected results from the
   approved contract, not current output. Required behavior must be implemented and verified; public
@@ -235,7 +244,7 @@ skill files.
   usage, integrations, and development in focused package docs when needed; preserve complete
   contracts in the SPEC and interaction document. Use the extension README template as an example,
   not a mandatory section list or word limit.
-- During `verify-changes`, apply `write-orbis-readme` to affected READMEs and review their links and
+- During `verify-changes`, apply `write-readme` to affected READMEs and review their links and
   published file inclusion. Conformance review checks behavioral claims; README review checks the
   path from installation to first use.
 

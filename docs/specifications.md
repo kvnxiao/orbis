@@ -185,7 +185,7 @@ The planning skill keeps shared plans in GitHub initiative and work issue bodies
 names a bounded delivery and links the relevant SPEC requirements; native sub-issues hold
 independent work. Requirements can contribute to several issues, and one issue can satisfy several
 requirements. Each issue states concrete edits, prerequisites, checks, and expected results. Follow
-the [issue plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md) and
+the [issue plan format](../.agents/skills/plan-implementation/references/plan-format.md) and
 [development workflow](development-workflow.md).
 
 Use a separate initial SPEC PR when a substantial design needs independent review. Later scoped
@@ -217,12 +217,12 @@ runtime example with package behavior.
 
 ## Maintain the contract
 
-Use [verify-orbis-conformance](../.agents/skills/verify-orbis-conformance/SKILL.md) to review the
-reference implementation against the SPEC and linked interaction contract and check that they
-describe its public behavior. An explicit full-package review covers every requirement;
-`verify-changes` reviews affected contracts and their interactions. Reviews use clone-available
-source, tests, and documentation. Ignored plans and verification journals do not supply missing
-requirements or establish conformance.
+Use [verify-conformance](../.agents/skills/verify-conformance/SKILL.md) to review the reference
+implementation against the SPEC and linked interaction contract and check that they describe its
+public behavior. An explicit full-package review covers every requirement; `verify-changes` reviews
+affected contracts and their interactions. Reviews use clone-available source, tests, and
+documentation. Ignored plans and verification journals do not supply missing requirements or
+establish conformance.
 
 Keep `SPEC.md` focused on architecture and system behavior and `docs/tui-interactions.md` on
 detailed UI behavior and appearance. State implementation availability in the SPEC; a specification
@@ -236,11 +236,11 @@ preserve its requirements. Changes within permitted implementation choices updat
 and any required documentation of those choices.
 
 When requested behavior changes the contract, use
-[revise-orbis-package](../.agents/skills/revise-orbis-package/SKILL.md) to amend the affected
-requirements and scenarios before implementation, then update the plan, code, tests, and usage
-documentation. Explicit user direction approves the behavior it specifies; material unanswered
-decisions still need resolution. For interactive changes, keep `docs/tui-interactions.md` consistent
-with the SPEC. Use version control for previous revisions.
+[revise-package](../.agents/skills/revise-package/SKILL.md) to amend the affected requirements and
+scenarios before implementation, then update the plan, code, tests, and usage documentation.
+Explicit user direction approves the behavior it specifies; material unanswered decisions still need
+resolution. For interactive changes, keep `docs/tui-interactions.md` consistent with the SPEC. Use
+version control for previous revisions.
 
 Within `verify-changes`, conformance reviewers report discrepancies without editing the contract or
 implementation. The coordinator resolves authorized findings, uses the revision workflow for
@@ -272,11 +272,11 @@ retired slug for different behavior.
 ### Reconcile an iterated implementation
 
 When iteration lands in code before the contract is updated, the SPEC describes an earlier package.
-When the user requests whole-package reconciliation, `revise-orbis-package` reviews the accumulated
-drift in one pass. Scoped revisions reconcile affected requirements and report unrelated drift
-separately. Enumerate current public behavior from source, tests, the README, and the interaction
-document. Map each behavior to every applicable requirement, then classify every requirement and
-uncovered behavior in scope:
+When the user requests whole-package reconciliation, `revise-package` reviews the accumulated drift
+in one pass. Scoped revisions reconcile affected requirements and report unrelated drift separately.
+Enumerate current public behavior from source, tests, the README, and the interaction document. Map
+each behavior to every applicable requirement, then classify every requirement and uncovered
+behavior in scope:
 
 | Finding                                                       | Action                                                                                          |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |

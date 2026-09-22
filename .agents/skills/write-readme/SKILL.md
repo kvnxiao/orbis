@@ -1,5 +1,5 @@
 ---
-name: write-orbis-readme
+name: write-readme
 description: Write or review Orbis repository and package READMEs for extension discovery, installation, and first use. Use when creating or revising a README or checking README changes before delivery.
 ---
 

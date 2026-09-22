@@ -1,5 +1,5 @@
 ---
-name: revise-orbis-package
+name: revise-package
 description:
   Revise an existing Orbis package's behavior while keeping its SPEC, interaction scenarios,
   implementation plans, code, and tests consistent. Use when user feedback or a code-change request
@@ -9,7 +9,10 @@ description:
 
 # Revise an Orbis package
 
-For affected READMEs, use [write-orbis-readme](../write-orbis-readme/SKILL.md). Keep installation
+Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for contract
+decisions, planning, implementation, and review.
+
+For affected READMEs, use [write-readme](../write-readme/SKILL.md). Keep installation
 and first use in the README; update linked usage, integration, and development documents for
 detailed behavior. Moving documentation does not change the package contract.
 
@@ -89,7 +92,7 @@ Ask only about material unanswered decisions; continue independent inspection wh
 request to improve an experience does not settle its submission, cancellation, or persistence
 behavior.
 
-When design decisions remain, use [brainstorm-orbis-package](../brainstorm-orbis-package/SKILL.md)
+When design decisions remain, use [design-package](../design-package/SKILL.md)
 for the affected design. Preserve settled requirements and keep research proportional to factual
 uncertainty. When research informs the revision, persist its synthesis before editing the SPEC as
 that workflow requires.
@@ -114,7 +117,7 @@ the existing contract. Passing tests and current output do not authorize a contr
 
 ## Plan and implement the revision
 
-Use [plan-orbis-implementation](../plan-orbis-implementation/SKILL.md) to derive tasks from the
+Use [plan-implementation](../plan-implementation/SKILL.md) to derive tasks from the
 approved contract and current source. Keep a small, settled revision in a concise plan; do not
 restart full-package planning. Update the authoritative issue plans, preserving unrelated scope,
 contributor edits, and completed work. Revise affected dependencies and coverage claims. Keep raw
@@ -125,12 +128,14 @@ When code changes are authorized, continue through implementation and verificati
 at the amended SPEC or plan. Update code, tests, package usage, and interaction scenarios within the
 same change set. Derive expected results from the approved requirements. Cover affected failure and
 ordering boundaries and interactions with preserved behavior; reproduce defects with failing tests.
+Delegate bounded implementation tasks after the contract and plan are approved. Keep contract
+decisions and accumulated verification with the orchestrator.
 
 ## Verify the accumulated revision
 
 When this skill resolves a finding within an active `verify-changes` run, return to that coordinator
 without starting a nested verification workflow. Otherwise, run `verify-changes` once on the
-accumulated change set. Include [verify-orbis-conformance](../verify-orbis-conformance/SKILL.md) for
+accumulated change set. Include [verify-conformance](../verify-conformance/SKILL.md) for
 affected requirements and their interactions with unchanged behavior. The conformance reviewer
 reports findings without editing source, tests, or the contract; the coordinator resolves authorized
 findings and reruns affected checks.

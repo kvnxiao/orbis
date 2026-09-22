@@ -8,6 +8,9 @@ description:
 
 # Update the Orbis toolchain
 
+Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for release
+research, version selection, implementation, and review.
+
 Use `scripts/update-toolchain.mts` from the repository root for inventory, release selection, and
 mechanical verification. Read its implementation only when a command fails or the repository
 contract changes. Reserve agent judgment for compatibility, package migrations, new correctness
@@ -80,6 +83,9 @@ release-age rule, record the blocker, and continue independent updates. Query me
 fallback version before selecting it. Previews require a user request.
 
 ## Apply the selected versions
+
+Delegate bounded, approved implementation and compatibility fixes. Keep version selection,
+compatibility decisions, and accumulated verification with the orchestrator.
 
 Update default and named catalog values, `.node-version`, `packageManager`, affected manifests, and
 the `CONTRIBUTING.md` version table together. Update package runtime requirements and compatibility

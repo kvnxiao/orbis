@@ -1,5 +1,5 @@
 ---
-name: plan-orbis-implementation
+name: plan-implementation
 description:
   Write GitHub issue implementation plans with concrete tasks and verification from an approved
   Orbis package SPEC.md. Use when planning implementation or vertical slices against an existing
@@ -11,7 +11,8 @@ description:
 Write an implementation plan grounded in the approved package contract and the current repository.
 Keep it in issue bodies by default. A planning request authorizes shared planning records, not
 execution of their tasks. Follow the [development workflow](../../../docs/development-workflow.md)
-and read the wiki decision index once per working session, opening relevant records.
+and its [agent model policy](../../../docs/development-workflow.md#agent-models) for planning and any
+later implementation. Read the wiki decision index once per working session, opening relevant records.
 
 ## Establish the approved baseline
 
@@ -23,7 +24,7 @@ specification does not establish approval.
 
 When the specification is missing or material design questions remain, research the current
 implementation and identify the missing contract. Use
-[brainstorm-orbis-package](../brainstorm-orbis-package/SKILL.md) for design work. When only approval
+[design-package](../design-package/SKILL.md) for design work. When only approval
 is missing, present the concrete specification for review and request that missing decision.
 Continue independent repository inspection while waiting; do not present dependent tasks as ready
 for implementation.
@@ -140,12 +141,12 @@ and the next action in the issue handoff. Keep reusable tests and instructions i
 This workflow does not change the `@orbis/plan` runtime's exact reviewed Markdown artifact contract.
 
 For affected READMEs, plan the purpose, installation, and first use through
-[write-orbis-readme](../write-orbis-readme/SKILL.md). When evidence invalidates an assumption, revise
+[write-readme](../write-readme/SKILL.md). When evidence invalidates an assumption, revise
 affected issue plans, dependencies, and coverage while preserving unaffected work. Resolve proposed
-behavioral changes through [revise-orbis-package](../revise-orbis-package/SKILL.md).
+behavioral changes through [revise-package](../revise-package/SKILL.md).
 
 Place `verify-changes` after accumulated implementation and before commit or PR delivery. Include
-[verify-orbis-conformance](../verify-orbis-conformance/SKILL.md) for affected contracts. Verification
+[verify-conformance](../verify-conformance/SKILL.md) for affected contracts. Verification
 and delivery usually belong in acceptance criteria, not separate issues. Follow the workflow's
 definitions of done and explicit PR closing links. A passing test suite or completed child count does
 not establish full conformance.

@@ -18,7 +18,7 @@ Create native sub-issues only for independently executable outcomes.
 | Baseline | SPEC and interaction-contract links and reviewed revision; repository baseline; developer approval reference or pending decisions |
 | Shared approach | Verified current behavior, proposed additions, selected approach, and shared constraints |
 | Coverage and integrated acceptance | Requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks |
-| Current handoff | Delivered outcomes, actual verification, unresolved decisions, and next unblocked action |
+| Current handoff | Derived stage and evidence, approval and authorization scope, delivered outcomes, active child or PR, actual verification, blocker, and next unblocked action |
 
 Use native child relationships rather than a duplicate child-status checklist. Record blocking links
 and the prerequisite's observable output. Issue numbers do not imply execution order. SPEC approval
@@ -35,10 +35,11 @@ Refer to the parent for shared context rather than copying its contract or cover
 | Prerequisites | Blocking issue links, required outputs, and unresolved decisions |
 | Implementation | Files or symbols, intended edits, existing behavior to reuse, constraints, and small-step checklists |
 | Acceptance | Working directory, command or interaction, inputs, expected results, and applicable failure or recovery cases |
-| Current handoff | Implemented behavior, observed verification, remaining checks or blockers, and next action |
+| Current handoff | Derived stage and evidence, approval and authorization scope, active branch or PR, implemented behavior, observed verification, blocker, and next action |
 
-Initially state that implementation has not started. Replace that handoff with observed results as
-work progresses. Keep expected checks separate from actual results. Identify plausible regressions
+Initially state that implementation has not started. Update the handoff from observed results and
+relevant contract and source revisions as work progresses. Keep expected checks separate from actual
+results. Identify plausible regressions
 that the checks must reject. Separate local automated checks from explicitly authorized real-model
 checks. Verification and PR delivery normally belong in acceptance criteria rather than separate
 issues. A completed slice establishes only its assigned contribution.

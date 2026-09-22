@@ -1,5 +1,5 @@
 ---
-name: verify-orbis-conformance
+name: verify-conformance
 description:
   Review an Orbis package's reference implementation against its SPEC.md using clone-available
   source, tests, and documentation. Use for full-package conformance reviews or the
@@ -8,6 +8,9 @@ description:
 ---
 
 # Verify an Orbis implementation against its specification
+
+Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for direct or
+delegated review.
 
 Assess whether the reference implementation satisfies the behavioral contract and whether that
 contract describes its public behavior. Review without editing source, tests, specifications, or
@@ -96,7 +99,7 @@ changing either artifact.
 
 For a proposed amendment, identify the affected requirement or undocumented public behavior, the
 discrepancy, and the decision needed. Hand approved revision work to the caller or `verify-changes`
-coordinator through [revise-orbis-package](../revise-orbis-package/SKILL.md). The coordinator
+coordinator through [revise-package](../revise-package/SKILL.md). The coordinator
 determines authorization from the user's request; this review neither approves nor applies
 amendments. After the coordinator resolves a finding, review the affected requirements and their
 interactions against the updated artifacts.
