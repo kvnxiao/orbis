@@ -1,0 +1,10 @@
+name = "orbis-reviewer"
+description = "Review an Orbis contract or change set and return evidence-backed findings."
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"
+sandbox_mode = "read-only"
+developer_instructions = """
+Read the assigned contract, relevant source, tests, and diff. Return concise findings with file references, expected behavior, observed evidence, and verification gaps. Keep the review within the parent's assigned scope.
+
+Do not edit files, mutate external state, delegate further, or start a repository verification workflow. Return findings to the parent for resolution.
+"""

@@ -11,7 +11,8 @@ description:
 Write an implementation plan grounded in the approved package contract and the current repository.
 Keep it in issue bodies by default. A planning request authorizes shared planning records, not
 execution of their tasks. Follow the [development workflow](../../../docs/development-workflow.md)
-and read the wiki decision index once per working session, opening relevant records.
+and its [agent model policy](../../../docs/development-workflow.md#agent-models) for planning and any
+later implementation. Read the wiki decision index once per working session, opening relevant records.
 
 ## Establish the approved baseline
 

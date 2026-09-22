@@ -101,6 +101,9 @@ For example, ask `$work-orbis-issue resume https://github.com/kvnxiao/orbis/issu
 agent inspects the issue and current repository, identifies the next unblocked action, and continues
 within the task's authorization. It leaves verified PRs for developer review and merge.
 
+Follow the [agent model policy](docs/development-workflow.md#agent-models) for model selection and
+implementation handoffs.
+
 In Codex, invoke `$work-orbis-issue`, `$brainstorm-orbis-package`, `$plan-orbis-implementation`, or
 `$revise-orbis-package`. In Pi, use `/skill:work-orbis-issue`, `/skill:brainstorm-orbis-package`,
 `/skill:plan-orbis-implementation`, or `/skill:revise-orbis-package`. After project trust is
@@ -114,6 +117,7 @@ packages/                 Package specifications and available implementations
 templates/extension/      Source-only package template and specification starter
 docs/specifications.md    Specification and implementation-planning workflow
 .agents/skills/           Repository-local design and development skills
+.codex/                   Codex session defaults and custom agents
 scripts/                  Scaffolding and verification scripts
 pnpm-workspace.yaml       Workspace discovery and dependency catalog
 tsconfig.base.json        Shared TypeScript constraints

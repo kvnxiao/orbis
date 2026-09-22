@@ -7,6 +7,9 @@ description:
 
 # Brainstorm an Orbis package
 
+Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for design and
+delegated research.
+
 Develop the package with the user. When research is needed, persist its synthesis in
 `packages/<name>/docs/research/` before producing `packages/<name>/SPEC.md` for an independent Pi
 implementer. This workflow produces research and a specification; implementing the extension is a

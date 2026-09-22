@@ -13,6 +13,10 @@ At the start of substantive repository work, read the
 records. Follow the [development workflow](docs/development-workflow.md) for shared work, approval,
 and delivery. If remote context is unavailable, report the gap and continue independent local work.
 
+Follow the [agent model policy](docs/development-workflow.md#agent-models) for software development,
+including direct specialist-skill invocations. Keep orchestration, design, planning, and review on
+Astra; delegate bounded approved implementation and fixes to the Sol implementer.
+
 Use the root `justfile` for common workspace commands. Run `just` to list the available recipes, and
 prefer `just install`, `just new <name>`, `just fix`, `just check`, and `just test` over their root
 `pnpm` scripts. Use `pnpm` directly for package-filtered commands, dependency-manifest changes,

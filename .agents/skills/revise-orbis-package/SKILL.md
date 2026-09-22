@@ -9,6 +9,9 @@ description:
 
 # Revise an Orbis package
 
+Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for contract
+decisions, planning, implementation, and review.
+
 For affected READMEs, use [write-orbis-readme](../write-orbis-readme/SKILL.md). Keep installation
 and first use in the README; update linked usage, integration, and development documents for
 detailed behavior. Moving documentation does not change the package contract.
@@ -125,6 +128,8 @@ When code changes are authorized, continue through implementation and verificati
 at the amended SPEC or plan. Update code, tests, package usage, and interaction scenarios within the
 same change set. Derive expected results from the approved requirements. Cover affected failure and
 ordering boundaries and interactions with preserved behavior; reproduce defects with failing tests.
+Delegate bounded implementation tasks after the contract and plan are approved. Keep contract
+decisions and accumulated verification with the orchestrator.
 
 ## Verify the accumulated revision
 

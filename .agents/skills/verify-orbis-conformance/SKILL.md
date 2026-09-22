@@ -9,6 +9,9 @@ description:
 
 # Verify an Orbis implementation against its specification
 
+Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for direct or
+delegated review.
+
 Assess whether the reference implementation satisfies the behavioral contract and whether that
 contract describes its public behavior. Review without editing source, tests, specifications, or
 configuration. A review request does not authorize fixes, contract amendments, commits, or

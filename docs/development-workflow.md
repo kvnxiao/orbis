@@ -18,6 +18,71 @@ to the affected package or mechanism. Compare historical constraints with curren
 versions before relying on them. If GitHub is unavailable, report the missing context and continue
 independent local work; do not claim that remote records were read or updated.
 
+## Agent models
+
+Use the following models for repository software development. The Astra orchestrator owns decisions
+and verification; the Sol implementer executes bounded work from approved plans.
+
+| Responsibility                                                                              | Model         | Selection                                                     |
+| ------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------- |
+| Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` | Main session or an explicitly selected Astra delegate         |
+| Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol`   | `orbis-implementer` custom agent                              |
+| Correctness, simplification, conformance, and other reviews that do not edit files          | `gpt-6-astra` | `orbis-reviewer` custom agent                                 |
+| Documentation updates and prose audits that may edit files                                  | `gpt-6-astra` | Explicit model selection with the skill's scoped write access |
+
+The repository [Codex configuration](../.codex/config.toml) selects Astra for new main sessions and
+as the default subagent model. The [implementer](../.codex/agents/orbis-implementer.toml) and
+[reviewer](../.codex/agents/orbis-reviewer.toml) definitions select their models and
+responsibilities. These defaults use `xhigh` reasoning for orchestration and review, and `high` for
+implementation. Keep model configuration in these files; specialist skills refer to this policy.
+
+Codex must trust the repository to load its project configuration. An explicit launch option or
+managed host can override the defaults. Configuration changes apply to new sessions and do not
+switch an existing orchestrator's model. Before starting software development, use an Astra session
+or explicitly delegate development decisions to Astra; do not claim that a skill changes the active
+model.
+
+When the host exposes custom agent selection, select the role for the task. When it exposes model
+overrides instead, pass the role's exact model and reasoning effort when spawning the delegate and
+include its responsibilities in the handoff. On hosts where a full-history fork inherits the parent
+model, use a fresh or bounded-history context for a model override. Do not rely on a role name in
+the prompt to select a model. If the required model or delegation is unavailable, report the
+limitation and obtain a developer choice before substituting another model for that role.
+
+### Implementation handoff
+
+Before delegating implementation, the Astra orchestrator resolves the contract and selects an
+authorized, unblocked issue. Give the Sol implementer:
+
+- The issue, repository baseline, approved scope, and execution authorization.
+- Relevant SPEC requirement IDs, interaction scenarios, and repository constraints; for workspace
+  work without a SPEC, provide the approved request and acceptance criteria.
+- The concrete plan, files it may edit, dependencies, and concurrent work it must preserve.
+- Observable outcomes, required checks, and the report needed for review.
+
+The implementer may make routine choices within the plan, write code and tests, run targeted checks,
+and repair accepted findings. Before dependent edits, the implementer returns unresolved behavior,
+material architectural choices, and scope changes to Astra. The implementer does not delegate
+further or take ownership of contract approval, final verification, commits, or PR delivery. Keep
+design-only and planning-only work with Astra until implementation is authorized.
+
+### Review and delivery
+
+The Astra orchestrator inspects the returned diff and runs `verify-changes` once on the accumulated
+change set. Select Astra for each review delegate, including the documentation and prose passes;
+give read-only reviewers the `orbis-reviewer` role. Pass scoped write permissions to documentation
+and prose delegates instead of using the read-only role. Reviewers follow their assigned skill and
+return findings without recursively delegating or coordinating another verification workflow.
+
+Resolve findings with Astra and send bounded implementation repairs to Sol. Recheck the affected
+behavior after repairs, then let Astra prepare the audited commit and PR drafts and complete
+delivery. Developer approval and merge checkpoints remain those defined in this workflow.
+
+Codex documents
+[custom agents and model selection](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+and
+[configuration precedence](https://learn.chatgpt.com/docs/config-file/config-basic#configuration-precedence).
+
 ## Work hierarchy
 
 An **initiative** is a bounded delivery represented by an ordinary issue. It can cover an
