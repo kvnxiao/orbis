@@ -49,6 +49,20 @@ model, use a fresh or bounded-history context for a model override. Do not rely 
 the prompt to select a model. If the required model or delegation is unavailable, report the
 limitation and obtain a developer choice before substituting another model for that role.
 
+### Skill handoffs
+
+For each delegate, name the applicable skills, their resolved `SKILL.md` locations, and the assigned
+scope. Select skills from the repository's triggers and the current workflow. Resolve shared skills
+through the host's skill catalog; do not assume another session has loaded their instructions.
+Delegates read the assigned skills and relevant references before starting dependent work. When
+automatic skill invocation is unavailable, read the files directly. If a required skill cannot be
+loaded, report the gap to the orchestrator, which supplies the missing instructions or resolves the
+blocker.
+
+Keep `work-orbis-issue` and `verify-changes` coordination with the orchestrator. Assign
+implementation rules and specialist review skills to delegates without restarting either
+coordinating workflow.
+
 ### Implementation handoff
 
 Before delegating implementation, the Astra orchestrator resolves the contract and selects an

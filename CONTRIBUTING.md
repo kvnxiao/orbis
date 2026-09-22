@@ -104,6 +104,18 @@ within the task's authorization. It leaves verified PRs for developer review and
 Follow the [agent model policy](docs/development-workflow.md#agent-models) for model selection and
 implementation handoffs.
 
+To start implementation, open a new Codex session in the updated, trusted repository and send:
+
+```text
+$work-orbis-issue implement https://github.com/kvnxiao/orbis/issues/<number>
+```
+
+This request authorizes implementation of that issue. The Astra orchestrator checks its contract and
+dependencies, assigns the required skills, delegates bounded implementation to Sol, and coordinates
+Astra reviews and PR delivery. The orchestrator launches the delegates; the developer reviews and
+merges the PR. For planning without implementation, invoke `$plan-orbis-implementation` with the
+package or issue instead.
+
 In Codex, invoke `$work-orbis-issue`, `$brainstorm-orbis-package`, `$plan-orbis-implementation`, or
 `$revise-orbis-package`. In Pi, use `/skill:work-orbis-issue`, `/skill:brainstorm-orbis-package`,
 `/skill:plan-orbis-implementation`, or `/skill:revise-orbis-package`. After project trust is
