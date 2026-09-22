@@ -42,16 +42,20 @@ cannot prove that its prose captures them correctly or that the acting model wil
 
 ## Mechanical invariants and semantic outcomes
 
-| Boundary          | Enforceable invariant                                                                                              | Remaining quality question                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Source processing | Only committed, complete jobs advance their assigned coverage; gaps remain visible.                                | Did the observer select the information needed later?                          |
-| Persistence       | Compaction and consolidation retain recorded originals and historical observations.                                | Can the agent find and interpret the relevant original?                        |
-| Consolidation     | Only a durable revision consumes an active batch; interruption preserves a complete revision.                      | Did consolidation preserve current commitments and distinguish obsolete facts? |
-| Scope             | Session state follows the selected lineage; project knowledge retains its separate scope.                          | Does a historical project fact still apply to the current checkout?            |
-| Curation          | Detected external changes invalidate stale proposals and prevent automatic restoration from the same old evidence. | Does the surviving note express the intended correction clearly?               |
-| Compaction        | Every native entry point uses the same candidate validation, fallback, and cancellation policy.                    | Does the accepted checkpoint support correct continuation?                     |
-| Budgets           | Calls, queues, waits, prompt additions, and recall results are bounded.                                            | Is the allocation large enough for useful continuity with the selected model?  |
-| Authority         | Retrieved material remains source data; it does not become a new instruction or permission.                        | Does the model recognize the distinction in a difficult continuation?          |
+The inspected [memory implementations](observational-memory-comparison.md) and
+[Pi lifecycle](pi-compaction.md) motivate the candidate mechanisms below. These are design
+implications of the source analysis, not additional package requirements or measured improvements.
+
+| Boundary          | Candidate mechanism                                                                     | Remaining quality question                                                     |
+| ----------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Source processing | Completion records distinguish committed spans from gaps.                               | Did the observer select the information needed later?                          |
+| Persistence       | Retained originals provide evidence beyond generated summaries.                         | Can the agent find and interpret the relevant original?                        |
+| Consolidation     | Durable revision boundaries separate accepted output from interrupted writes.           | Did consolidation preserve current commitments and distinguish obsolete facts? |
+| Scope             | Lineage-specific snapshots separate session state from project knowledge.               | Does a historical project fact still apply to the current checkout?            |
+| Curation          | Revision checks and deletion records expose stale proposals and old evidence.           | Does the surviving note express the intended correction clearly?               |
+| Compaction        | Shared preparation and outcome handling reduce differences between native entry points. | Does the accepted checkpoint support correct continuation?                     |
+| Budgets           | Finite input, output, queue, and wait limits bound auxiliary work.                      | Is the allocation large enough for useful continuity with the selected model?  |
+| Authority         | Attribution distinguishes recalled evidence from current instructions.                  | Does the model recognize the distinction in a difficult continuation?          |
 
 Passing invariant tests establishes the tested state transitions and protocol behavior. It does not
 establish lossless extraction, useful recall, or improved coding performance. Conversely, a good

@@ -165,10 +165,11 @@ measured total cost or suitable budgets for every local model.
 [v3 output budgets](https://github.com/elpapi42/pi-observational-memory/blob/9f1cf4e2eeecd5bd1c49b8017d818e7cd07b65a0/src/model-budget.ts).
 
 Mastra's inspected defaults use 30,000 message tokens and 40,000 observation tokens, with earlier
-buffering. Its retry wrapper permits eight retries with exponential backoff, roughly 247 seconds
-before jitter and inference time. A threshold reflection path can wait five seconds for in-flight
-work before proceeding to another path. These policies do not fit a general low-wait requirement
-without an outer deadline and model-specific budgets.
+buffering. Its retry wrapper permits eight retries. The configured pre-jitter delays are 1, 2, 4, 8,
+16, 32, 64, and 120 seconds: 247 seconds in total if all retries occur. This sum excludes jitter and
+inference time and is not measured latency. A threshold reflection path can wait five seconds for
+in-flight work before proceeding to another path. These policies do not fit a general low-wait
+requirement without an outer deadline and model-specific budgets.
 [Constants](https://github.com/mastra-ai/mastra/blob/253b5012970f0cc6eab01916279d20376f457fe2/packages/memory/src/processors/observational-memory/constants.ts),
 [retry policy](https://github.com/mastra-ai/mastra/blob/253b5012970f0cc6eab01916279d20376f457fe2/packages/memory/src/processors/observational-memory/retry.ts),
 [reflection runner](https://github.com/mastra-ai/mastra/blob/253b5012970f0cc6eab01916279d20376f457fe2/packages/memory/src/processors/observational-memory/reflector-runner.ts).

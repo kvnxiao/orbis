@@ -70,6 +70,12 @@ prepared boundary reduces the initial integration obligations. Every discarded s
 including a split-turn prefix, needs committed processing coverage or an equivalent prior
 checkpoint. A newer completion marker alone does not establish that intervening intervals completed.
 
+Pi's `appendCompaction` stores a supplied non-null retained-entry identifier without checking branch
+membership. If that identifier is absent from the selected path, context reconstruction includes the
+checkpoint and subsequent entries but none of the earlier retained tail. This source behavior makes
+boundary validation an extension responsibility; a successful append is not validation.
+[Compaction persistence and context reconstruction](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/core/session-manager.ts).
+
 **Cancellation and overflow.** Native manual compaction interrupts the active operation and does not
 automatically retry that turn. Recoverable overflow permits one compact-and-retry attempt. Disabling
 native automatic compaction also disables native overflow recovery. The memory extension should
@@ -91,8 +97,9 @@ Conversation navigation does not rewind repository files or project-wide knowled
 **Context budgets.** Pi checks the threshold before applying the `context` hook. Masking can reduce
 subsequent provider-reported usage without changing the current estimate of the untransformed tail.
 Retained action text can still grow. A custom checkpoint must fit the actual acting model alongside
-instructions, tools, retained messages, and generation headroom; a fixed 150,000-token trigger is
-unsuitable for a general local-model default.
+instructions, tools, retained messages, and generation headroom. The topics implementation's
+[150,000-token trigger](observational-memory.md#capture-and-consolidation) is a configured default,
+not a budget derived from the selected local model's context limit.
 
 **Custom instructions.** `/compact <instructions>` supplies user intent to the hook. A ready
 deterministic renderer cannot silently discard that intent. Instruction-aware processing or native
@@ -149,11 +156,14 @@ through the existing observer without an archive replay.
 
 Ordinary `context` handlers can change messages but cannot directly veto a request: handler errors
 are caught, and `continue: false` belongs to a different event and does not suppress a pending
-natural turn. The public abort path sets the active signal before waiting for the turn to unwind.
-The standard provider path checks that signal before dispatch. A capacity stop should initiate abort
-and let the callback return; awaiting completion inside the callback can wait on itself. Calling
-manual compaction there also waits for the active turn and cannot provide transparent resumption.
-These source findings need scripted provider-dispatch and cancellation tests in the implementation.
+natural turn. The public `ctx.abort()` method returns `void` and initiates host cancellation; the
+underlying session abort sets the active signal before waiting for the turn to unwind. The standard
+provider path checks that signal before dispatch. A capacity stop can use `ctx.abort()` and let the
+callback return; waiting for session idleness inside the callback can wait on itself. Calling manual
+compaction there also waits for the active turn and cannot provide transparent resumption. These
+source findings need scripted provider-dispatch and cancellation tests in the implementation. The
+same host abort path also handles user cancellation. A separate extension status cause can
+distinguish a capacity stop without changing Pi's abort event semantics.
 [Extension runner](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/core/extensions/runner.ts),
 [session lifecycle](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/core/agent-session.ts),
 [provider dispatch](https://github.com/earendil-works/pi/blob/v0.87.0/packages/ai/src/auth/resolve.ts).

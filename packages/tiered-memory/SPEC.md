@@ -1,19 +1,25 @@
 # Tiered memory
 
 `@orbis/tiered-memory` helps a Pi agent continue the intended work across repeated compactions and
-user steering while using bounded context. It retains detailed history outside the prompt and makes
-relevant recorded details retrievable. The same compaction policy applies to manual `/compact`,
-automatic threshold compaction, and automatic overflow compaction.
+user steering (instructions that refine or redirect ongoing work) while using bounded context. It
+retains detailed history outside the prompt and makes relevant recorded details retrievable. The
+same compaction policy applies to manual `/compact`, automatic threshold compaction, and automatic
+overflow compaction.
 
-**Status:** Experimental MVP design; implementation unavailable. This package contains a
-specification and research, without runtime code or an installable extension. The contract targets
-independent Pi extension implementers using the public capabilities inspected in **Pi 0.87.0**.
-Runtime and model-quality compatibility remain unverified.
+**Status:** Experimental minimum viable product (MVP) design; implementation unavailable. This
+package contains a specification and research, without runtime code or an installable extension. The
+contract targets independent Pi extension implementers using the public capabilities inspected in
+**Pi 0.87.0**. Runtime and model-quality compatibility remain unverified.
 
 The `REQ-*` requirements and their contract tables define conformance. Scenarios describe observable
 checks of those requirements. The [research synthesis](docs/research/README.md) and the evaluation
 variants section are informative. Commands execute actions or print text; the package does not
 require a custom terminal interaction document.
+
+Independent implementations must document their selections wherever this contract permits a choice,
+including storage records, source splitting or deferral, and search indexing. The documentation must
+describe the selected behavior and any consequences for usage, recovery, or compatibility. Permitted
+choices do not relax the requirements.
 
 ## Purpose and terms
 
@@ -46,27 +52,38 @@ future turn and model.
 | Observer, consolidator, and acting agent | The observer extracts evidence; the consolidator proposes note changes; the acting agent performs the user's work. Extension code commits accepted memory proposals.                                                                            |
 | Protected current-work note              | A bounded, source-linked summary of working state with reserved prompt space. It stays separate from historical topics and is updated in the observer's existing response. “Protected” describes retention priority, not infallible extraction. |
 
+When eligible, the extension supplies a **custom checkpoint** in place of Pi's generated summary.
+Otherwise it permits Pi's native summarizer to produce a **native checkpoint**; this delegation is
+**native fallback**. A **worker** runs an observer or consolidator model job. The **controlled
+writer** is extension code that validates and commits those workers' proposals.
+
 Memory purpose, persistence, scope, and prompt access are independent dimensions. An old session
 decision can remain durable session memory; it does not become a project learning through age. A
 project learning can remain in storage and enter context only when relevant.
 
 ### Session continuity — `REQ-session-continuity`
 
-A successful continuation after compaction or steering advances the latest operative objective,
-retains earlier requirements that still apply, respects active constraints, applies superseding
-corrections, and distinguishes pending work from confirmed completion. When the next action needs
-missing or conflicting historical evidence, the agent must recover that evidence or identify the gap
-before relying on an invented detail.
+**Continuation outcome.** A successful continuation after compaction or steering advances the latest
+operative objective, retains earlier requirements that still apply, respects active constraints,
+applies superseding corrections, and distinguishes pending work from confirmed completion. When the
+next action needs missing or conflicting historical evidence, the agent must recover that evidence
+or identify the gap before relying on an invented detail.
 
 Observation, consolidation, and recall instructions must prioritize these work-state facts over
 routine progress narration. Age alone must not be treated as evidence that a constraint or pending
 obligation is obsolete. The protected current-work note gives these facts separate retention
 priority without an additional acting-agent maintenance tool.
 
-Mechanical invariants and model-quality outcomes require distinct verification. Scripted tests
-verify source coverage, persistence, bounds, scope, cancellation, and revision checks. Supervised
-continuation evaluations verify whether the model uses the retained information correctly. A
-complete processing marker or a successfully stored note is not proof of semantic preservation.
+**Verification obligations.** Mechanical invariants and model-quality outcomes require distinct
+verification. Scripted tests verify source coverage, persistence, bounds, scope, cancellation, and
+revision checks. Supervised continuation evaluations verify whether the model uses the retained
+information correctly. A complete processing marker or a successfully stored note is not proof of
+semantic preservation.
+
+**Evaluation obligation.** The implementation must provide the reproducible comparison protocol and
+results described below. Missing protocol inputs, omitted required metrics, unreported failures, or
+an unreproducible comparison fail this obligation. Measured task failures remain results to report
+and investigate; no minimum success rate or improvement over native Pi is required.
 
 The experimental implementation must support reproducible comparison with native Pi, with the
 extension unloaded in the baseline and enabled from session start in the treatment. Paired runs
@@ -146,7 +163,7 @@ the acting agent to perform routine memory maintenance.
 | Acting agent        | Perform the user's work and invoke `recall` when relevant evidence is missing.                                      |
 | Observer            | Propose source-linked observations and the current-work note update from newly eligible session spans.              |
 | Consolidator        | Propose session-topic, journey, and project-learning changes from selected observations.                            |
-| Extension writer    | Validate proposals, scope, revisions, and cancellation before committing memory.                                    |
+| Controlled writer   | Validate proposals, scope, revisions, and cancellation before committing memory.                                    |
 | Checkpoint renderer | Compose a bounded snapshot from committed memory without another model call when the required inputs are ready.     |
 | Recall service      | Search and read allowed records with bounded output and explicit source references.                                 |
 
@@ -214,6 +231,11 @@ Session observations and checkpoint metadata may use Pi's persisted custom entri
 session files remain valid source storage; the extension need not duplicate the entire transcript
 under the project directory. It must retain resolvable references to the recorded source spans it
 processes and report unavailable sources explicitly.
+
+Pi's `pi.appendEntry` stores custom data outside model context; `pi.sendMessage` stores a custom
+message that can enter model context. The implementation must document its record selection and
+preserve the specified lifetime of each record: private metadata stays out of routine context, while
+durable continuation messages remain available to later native compaction.
 
 Source records may include references to non-text attachments. Retaining an attachment reference
 does not establish that a memory model interpreted its contents. When the selected worker cannot
@@ -320,12 +342,16 @@ configured bound invalidates the candidate checkpoint; rendering must not silent
 Before each acting request, account for the current model's context limit, instructions, tools,
 retained conversation, and generation headroom. Remove optional memory first. If the complete valid
 current-work note still cannot fit, preserve committed data and stop that acting request before
-provider dispatch. Report the capacity cause and recovery options, such as explicit compaction or
-selecting a model with sufficient context. Do not silently omit the note, discard retained
-conversation to make it fit, or start an automatic compaction or retry loop. The capacity stop is
-distinct from user cancellation. Inside an already prepared compaction, an oversized candidate uses
-native fallback under the compaction contract. The reserve remains finite, and model-generated
-omissions remain a continuity evaluation concern.
+provider dispatch. On Pi 0.87.0, record the capacity cause in extension status, call the public
+`ctx.abort()` method, and let the context callback return without waiting for the session to become
+idle. Pi reports this through its ordinary abort path; the extension's status record distinguishes
+the capacity stop from user cancellation. Preserve an already established user or host cancellation
+cause rather than relabeling it as a capacity stop. Report recovery options, such as explicit
+compaction or selecting a model with sufficient context. Do not silently omit the note, discard
+retained conversation to make it fit, or start an automatic compaction or retry loop. Inside an
+already prepared compaction, an oversized candidate uses native fallback under the compaction
+contract. The reserve remains finite, and model-generated omissions remain a continuity evaluation
+concern.
 
 Only the observer and the controlled writer update the note automatically. Topic consolidation does
 not rewrite the note or remove it from active context. User curation remains authoritative over
@@ -341,11 +367,13 @@ continuation until a valid note is available.
 
 When the active observation pool exceeds its configured consolidation threshold, the extension
 selects older observations for a bounded consolidation pass. The consolidator proposes session-topic
-updates, a short descriptive journey, and eligible project learnings in that same pass.
+updates, a journey that summarizes session progress, and eligible project learnings in that same
+pass.
 
 Topic notes preserve the subject's relevant decisions, attempts, outcomes, and source references.
 The journey describes progress; it is not a separate authoritative task list. The index exposes
-stable lookup references and concise topic descriptions without loading every topic body.
+stable lookup references and topic descriptions without loading every topic body. The journey and
+index count toward the checkpoint's documented size bound.
 
 Only after the proposed memory revision is committed may its selected batch leave the active pool. A
 successful model response alone does not establish a committed revision. Retain the batch's
@@ -383,9 +411,10 @@ generated text still requires the user's normal review before Git publication.
 ### Source recall — `REQ-source-recall`
 
 The extension registers one read-only model tool named `recall`. It supports a search query or a
-direct source reference, with bounded continuation through a returned cursor. A successful search
-returns useful excerpts directly; the agent need not perform another read when those excerpts
-suffice.
+direct source reference, with bounded continuation through a returned cursor. When a search returns
+matches, it includes recorded excerpts from the matched sources within the output bound, rather than
+only references that require another read. Excerpts preserve the recorded text and identify any
+truncation. Whether the model selected and used the right evidence remains an evaluation outcome.
 
 The default search scope contains the selected session lineage's eligible history and current
 project learnings. An explicit historical scope searches abandoned branches in the current session
@@ -415,8 +444,8 @@ or promote recalled text as new evidence.
 
 ### Recall guidance — `REQ-recall-guidance`
 
-When memory is enabled, the acting model receives a bounded memory index and concise instructions
-that name `recall` and its triggers:
+When memory is enabled, the acting model receives a memory index and instructions within the
+documented prompt-addition budget that name `recall` and its triggers:
 
 - The user refers to an earlier decision, attempt, or paused task that the visible context does not
   explain.
@@ -464,10 +493,19 @@ settings. When the user disables native auto-compaction, the extension must keep
 must not introduce a parallel overflow-retry loop. The MVP does not require an independent earlier
 compaction trigger or a replacement `/compact` command.
 
+Pi supplies `willRetry`, a boolean indicating whether the host plans to retry the acting request
+after compaction. Preserve that decision rather than deriving it from the compaction reason.
+
 The initial implementation must preserve Pi's prepared retained-message boundary and valid
-tool-call/result relationships. It must account for the complete discarded prefix, any split-turn
+tool-call/result relationships. A split turn has its earlier messages summarized while Pi retains
+its later messages. The extension must account for the complete discarded prefix, any split-turn
 prefix, and previously compacted context. An earlier valid memory snapshot or native checkpoint can
 supply the already-compacted portion; later custom checkpoints must not silently omit it.
+
+Before returning a custom checkpoint, validate that its `firstKeptEntryId` equals the prepared
+identifier and belongs to the selected lineage's retained boundary. Pi stores the supplied
+identifier without validating branch membership. An invalid identifier can omit the earlier retained
+tail from subsequent context; a successful append does not establish a valid boundary.
 
 For integration details, use the pinned
 [Pi compaction API](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/core/extensions/types.ts)
@@ -710,49 +748,62 @@ attribution, report the outcome as unverified instead of claiming success.
 
 ## Conformance scenarios
 
-The implementation must supply checks with expected outcomes derived from these requirements.
-Automated checks use local fixtures and scripted providers without external model traffic. Live Pi
-and model-quality checks run separately under supervision; passing scripted checks does not
-establish semantic retention quality.
+The implementation must supply checks with expected outcomes derived from these requirements. The
+harness column identifies the required verification methods:
 
-For `REQ-session-continuity`, use predeclared work histories with repeated compactions and steering.
-An old still-active constraint, a later correction, and paused work must each affect a subsequent
-repository action. Score the action and confirmed completion against the source history; do not
-infer success from a correct summary alone. Compare with native Pi under matched conditions and
-report the horizon, correctness, failures, user repair, uncertainty, total usage and known cost,
-compaction counts, elapsed time, and foreground waiting. Include negative and inconclusive results
-without turning an improvement hypothesis into a numerical completion gate. This scenario
-establishes only the measured outcomes for the evaluated configurations.
+| Harness  | Required environment and evidence                                                                                                                                                               |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixture  | Local source, storage, and model-output fixtures exercise deterministic assertions.                                                                                                             |
+| Pi       | The installed Pi host's actual session, extension, and provider-dispatch paths run with scripted in-process providers and blocked external network access. A mocked hook alone is insufficient. |
+| Terminal | A supervised real Pi terminal session verifies command routing or visible status. Scripted providers can supply model responses.                                                                |
+| Model    | Separately authorized and supervised real-model runs measure extraction, evidence use, or continuation quality.                                                                                 |
 
-| Requirements                                                                     | Initial state and action                                                                                                                                                                                     | Expected observation                                                                                                                                                                                                                                                                            |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REQ-memory-scopes`, `REQ-memory-storage`                                        | Resume a session, open an unrelated repository, and open another worktree with tracked learnings.                                                                                                            | Session records remain correctly scoped; only the selected root's learnings are indexed; unavailable private references are identified.                                                                                                                                                         |
-| `REQ-memory-storage`                                                             | Compact and consolidate repeatedly, then read an older observation and its source; remove the backing source separately.                                                                                     | Original retained records remain addressable until removed; a missing source returns unavailable rather than fabricated evidence.                                                                                                                                                               |
-| `REQ-session-observations`                                                       | Complete source batches containing a correction, a failed tool call, an oversized result, and an empty valid extraction; fail an intervening batch.                                                          | Source attribution and structural boundaries persist; unseen or failed spans remain gaps; retries do not duplicate records. Semantic extraction is evaluated separately against the source.                                                                                                     |
-| `REQ-current-work-note`, `REQ-resource-budgets`                                  | Observe a changed goal, an older active constraint, paused work, and an unverified completion claim; then accept an explicit unchanged note.                                                                 | One observer response supplies observations and the note; the committed revision includes their source boundary; the note has reserved context without duplicate injection. Scripted checks verify the prompt and transaction, and supervised runs score retained working state and total cost. |
-| `REQ-current-work-note`, `REQ-checkpoint-eligibility`                            | Add steering beyond the note's source boundary, then prepare manual, threshold, and overflow compactions with the steering retained or discarded; return invalid or oversized catch-up output.               | Visible newer instructions retain precedence. Before discarding newer working-state evidence, the extension commits a valid refresh or warns and delegates to native compaction; failed output preserves the previous revision without advancing coverage.                                      |
-| `REQ-current-work-note`, `REQ-user-curation`                                     | Edit or delete the work note during extraction, then attempt compaction and deliver the old proposal.                                                                                                        | External curation survives and the stale proposal is rejected. When a valid note is unavailable, native compaction supplies continuation and an outdated note is not injected as current.                                                                                                       |
-| `REQ-current-work-note`, `REQ-recall-guidance`, `REQ-user-curation`              | Commit a checkpoint containing one note revision, accept a newer note without compaction, then invalidate or delete the note before the next request.                                                        | Only the latest valid revision appears as current; older embedded revisions are suppressed or marked historical. Invalidation does not reactivate an older revision, and persisted checkpoint evidence remains unchanged.                                                                       |
-| `REQ-topic-consolidation`                                                        | Consolidate an overflowing pool, then repeat with invalid output and an interrupted write.                                                                                                                   | Only a complete committed revision consumes the selected pool batch; old observations remain retrievable; failure preserves the prior revision.                                                                                                                                                 |
-| `REQ-project-learnings`                                                          | Record a verified repository procedure, a speculative claim, and a later contradiction in another session.                                                                                                   | Verified and inferred status remain distinct; the current index reflects the correction or unresolved conflict, with applicable scope.                                                                                                                                                          |
-| `REQ-source-recall`                                                              | Search for an old error, follow a source reference and cursor, search an empty result, and submit a foreign-root reference.                                                                                  | Useful bounded excerpts carry source metadata; continuation is available; errors are distinct; foreign sources are rejected; no memory is mutated.                                                                                                                                              |
-| `REQ-recall-guidance`, `REQ-source-recall`                                       | Present an absent old decision, sufficient visible evidence, and hostile instructions inside a recalled source.                                                                                              | Guidance names the relevant trigger, permits skipping redundant lookup, and preserves instruction authority; scripted fixtures verify the prompt contract, supervised runs verify model behavior.                                                                                               |
-| `REQ-unified-compaction`, `REQ-checkpoint-eligibility`                           | Prepare equivalent manual, threshold, and overflow compactions, including a split turn, an earlier checkpoint, and overflow with each value of `willRetry`.                                                  | Each uses the same eligibility and memory-content policy, preserves the prepared boundary and prior continuity, and retains the host's supplied retry decision and bound.                                                                                                                       |
-| `REQ-unified-compaction`                                                         | Use `/compact` with custom instructions; disable native auto-compaction and exceed a memory threshold.                                                                                                       | Instructions are honored or delegated to native summarization; the extension does not override the user's native-auto setting or start its own retry loop.                                                                                                                                      |
-| `REQ-checkpoint-eligibility`, `REQ-compaction-fallback`                          | For every compaction reason, inject missing coverage, empty memory, stale state, malformed output, or an exhausted wait deadline.                                                                            | Custom replacement is declined, an explicit native-fallback warning is recorded, and the eventual native success/failure is reported accurately.                                                                                                                                                |
-| `REQ-compaction-fallback`                                                        | Cancel each compaction reason while a worker is pending; deliver its result late. Also cancel native automatic fallback while its summarizer is running.                                                     | The attempt remains cancelled, no new fallback or extra retry starts, and no late attempt-owned write commits; the captured signal and host outcome consistently classify native fallback as cancelled.                                                                                         |
-| `REQ-session-lineage`                                                            | Fork, navigate `/tree`, resume, and complete an old worker after a session switch; race project-learning updates.                                                                                            | Selected session snapshots match their lineage, stale results are rejected, and a losing writer preserves newer committed content.                                                                                                                                                              |
-| `REQ-user-curation`                                                              | Edit or delete a note during consolidation; resume with a missing expected directory; revisit an earlier conversation branch.                                                                                | Curated text and deletion exclusions survive; old evidence does not silently restore a live note; new evidence remains distinguishable.                                                                                                                                                         |
-| `REQ-controlled-writes`                                                          | Attempt direct acting-agent writes and edits through ordinary and aliased managed paths, then commit a valid observer proposal.                                                                              | Direct calls are blocked within the documented guard boundary; the controlled writer can commit valid data; shell-based changes receive the external-curation policy when detected.                                                                                                             |
-| `REQ-activation-controls`                                                        | Load with defaults, set a project default of disabled, override on/off, resume, reload invalid settings, and invoke an unknown subcommand.                                                                   | Precedence and persistence match the contract; disabled work stops without deleting records; invalid settings and arguments produce explicit output.                                                                                                                                            |
-| `REQ-model-selection`, `REQ-resource-budgets`                                    | Use the session model, independent local overrides, an unresolved model, a context limit smaller than configured work, and repeated provider failures.                                                       | Dispatch uses the selected model, inference remains serial by default, invalid work is bounded or suspended, and no silent cloud substitution occurs.                                                                                                                                           |
-| `REQ-status-reporting`                                                           | Complete custom compaction, succeed and fail native fallback, cancel, and lose reliable outcome attribution in interactive and noninteractive modes.                                                         | Reports distinguish origin, mechanism, reason, outcome, and known versus estimated usage; the latest report remains inspectable without a model call.                                                                                                                                           |
-| `REQ-session-observations`, `REQ-session-lineage`, `REQ-current-work-note`       | Replace or omit a source message through a context edit while its observer runs, then navigate before the edit.                                                                                              | Changed effective evidence rejects the pending proposal and invalidates affected current state; raw text remains historical evidence and does not restore instructions. Navigation selects the appropriate earlier effective context.                                                           |
-| `REQ-current-work-note`, `REQ-checkpoint-eligibility`, `REQ-compaction-fallback` | Fall back to native compaction with unprocessed source spans, refresh from its checkpoint and retained tail, then prepare a custom checkpoint.                                                               | The ordinary observer can carry checkpoint-derived claims with their provenance; unseen original spans remain unprocessed; the custom checkpoint retains required prior continuity.                                                                                                             |
-| `REQ-current-work-note`, `REQ-resource-budgets`, `REQ-status-reporting`          | Switch to a smaller acting model or grow retained context until the valid mandatory note cannot fit after optional memory is removed; repeat with native auto-compaction disabled.                           | No acting provider request is dispatched; committed data survives; capacity and recovery guidance are reported distinctly from cancellation. No silent note truncation, conversation discard, or automatic retry occurs.                                                                        |
-| `REQ-source-recall`, `REQ-memory-scopes`                                         | Search by default, request historical lookup on an abandoned current-session branch or retained deleted revision, follow a known older-session reference, and resolve inherited source entries after a fork. | Default search excludes abandoned or obsolete memory as current knowledge; historical lookup labels it; available same-project references resolve without requiring project-wide prior-session discovery; missing sources remain explicit.                                                      |
-| `REQ-activation-controls`, `REQ-user-curation`, `REQ-current-work-note`          | Commit a custom checkpoint, correct or invalidate its note, disable memory, perform native compaction, then re-enable.                                                                                       | Disabling stops new memory injection and auxiliary jobs without a model call; committed continuation and known corrections remain available to native compaction; re-enabling starts from its latest result and does not restore an obsolete note.                                              |
-| `REQ-activation-controls`, `REQ-status-reporting`                                | Load project overrides with host trust denied, granted, and temporarily granted, then reload settings.                                                                                                       | Only the host's effective trust result permits project overrides; status identifies ignored project settings and the actual source of each effective value.                                                                                                                                     |
+Fixture and Pi checks can run in ordinary automated test discovery without model charges. Terminal
+and Model checks run separately under supervision. Passing scripted checks does not establish
+semantic retention quality. Each listed method covers its part of a scenario; combined methods do
+not require replaying every deterministic assertion with a real model.
+
+For `REQ-session-continuity`, Fixture checks validate the protocol and result accounting, including
+missing metrics and failed runs; Model checks produce comparative measurements from predeclared work
+histories with repeated compactions and steering. An old still-active constraint, a later
+correction, and paused work must each affect a subsequent repository action. Score the action and
+confirmed completion against the source history; do not infer success from a correct summary alone.
+Compare with native Pi under matched conditions and report the horizon, correctness, failures, user
+repair, uncertainty, total usage and known cost, compaction counts, elapsed time, and foreground
+waiting. Include negative and inconclusive results without turning an improvement hypothesis into a
+numerical completion gate. This scenario establishes only the measured outcomes for the evaluated
+configurations.
+
+| Requirements                                                                     | Initial state and action                                                                                                                                                                                     | Expected observation                                                                                                                                                                                                                                                                                | Harness               |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `REQ-memory-scopes`, `REQ-memory-storage`                                        | Resume a session, open an unrelated repository, and open another worktree with tracked learnings.                                                                                                            | Session records remain correctly scoped; only the selected root's learnings are indexed; unavailable private references are identified.                                                                                                                                                             | Fixture; Pi           |
+| `REQ-memory-storage`                                                             | Compact and consolidate repeatedly, then read an older observation and its source; remove the backing source separately.                                                                                     | Original retained records remain addressable until removed; a missing source returns unavailable rather than fabricated evidence.                                                                                                                                                                   | Fixture; Pi           |
+| `REQ-session-observations`                                                       | Complete source batches containing a correction, a failed tool call, an oversized result, and an empty valid extraction; fail an intervening batch.                                                          | Source attribution and structural boundaries persist; unseen or failed spans remain gaps; retries do not duplicate records. Semantic extraction is evaluated separately against the source.                                                                                                         | Fixture; Model        |
+| `REQ-current-work-note`, `REQ-resource-budgets`                                  | Observe a changed goal, an older active constraint, paused work, and an unverified completion claim; then accept an explicit unchanged note.                                                                 | One observer response supplies observations and the note; the committed revision includes their source boundary; the note has reserved context without duplicate injection. Scripted checks verify the prompt and transaction, and supervised runs score retained working state and total cost.     | Fixture; Pi; Model    |
+| `REQ-current-work-note`, `REQ-checkpoint-eligibility`                            | Add steering beyond the note's source boundary, then prepare manual, threshold, and overflow compactions with the steering retained or discarded; return invalid or oversized catch-up output.               | Visible newer instructions retain precedence. Before discarding newer working-state evidence, the extension commits a valid refresh or warns and delegates to native compaction; failed output preserves the previous revision without advancing coverage.                                          | Fixture; Pi           |
+| `REQ-current-work-note`, `REQ-user-curation`                                     | Edit or delete the work note during extraction, then attempt compaction and deliver the old proposal.                                                                                                        | External curation survives and the stale proposal is rejected. When a valid note is unavailable, native compaction supplies continuation and an outdated note is not injected as current.                                                                                                           | Fixture; Pi           |
+| `REQ-current-work-note`, `REQ-recall-guidance`, `REQ-user-curation`              | Commit a checkpoint containing one note revision, accept a newer note without compaction, then invalidate or delete the note before the next request.                                                        | Only the latest valid revision appears as current; older embedded revisions are suppressed or marked historical. Invalidation does not reactivate an older revision, and persisted checkpoint evidence remains unchanged.                                                                           | Fixture; Pi           |
+| `REQ-topic-consolidation`                                                        | Consolidate an overflowing pool, then repeat with invalid output and an interrupted write.                                                                                                                   | Only a complete committed revision consumes the selected pool batch; old observations remain retrievable; failure preserves the prior revision.                                                                                                                                                     | Fixture               |
+| `REQ-project-learnings`                                                          | Record a verified repository procedure, a speculative claim, and a later contradiction in another session.                                                                                                   | Verified and inferred status remain distinct; the current index reflects the correction or unresolved conflict, with applicable scope.                                                                                                                                                              | Fixture; Model        |
+| `REQ-source-recall`                                                              | Search for an old error, follow a source reference and cursor, search an empty result, and submit a foreign-root reference.                                                                                  | Returned excerpts match fixture source text and carry source metadata; continuation is available; errors are distinct; foreign sources are rejected; no memory is mutated.                                                                                                                          | Fixture               |
+| `REQ-recall-guidance`, `REQ-source-recall`                                       | Present an absent old decision, sufficient visible evidence, and hostile instructions inside a recalled source.                                                                                              | Guidance names the relevant trigger, permits skipping redundant lookup, and preserves instruction authority; scripted fixtures verify the prompt contract, supervised runs verify model behavior.                                                                                                   | Fixture; Model        |
+| `REQ-unified-compaction`, `REQ-checkpoint-eligibility`                           | Prepare equivalent manual, threshold, and overflow compactions, including a split turn, an earlier checkpoint, and overflow with each value of `willRetry`.                                                  | Each uses the same eligibility and memory-content policy, preserves the prepared boundary and prior continuity, and retains the host's supplied retry decision and bound.                                                                                                                           | Pi                    |
+| `REQ-unified-compaction`                                                         | Use `/compact` with custom instructions; disable native auto-compaction and exceed a memory threshold.                                                                                                       | Instructions are honored or delegated to native summarization; the extension does not override the user's native-auto setting or start its own retry loop.                                                                                                                                          | Pi; Terminal          |
+| `REQ-checkpoint-eligibility`, `REQ-compaction-fallback`                          | For every compaction reason, inject missing coverage, empty memory, stale state, malformed output, or an exhausted wait deadline.                                                                            | Custom replacement is declined, an explicit native-fallback warning is recorded, and the eventual native success/failure is reported accurately.                                                                                                                                                    | Fixture; Pi           |
+| `REQ-compaction-fallback`                                                        | Cancel each compaction reason while a worker is pending; deliver its result late. Also cancel native automatic fallback while its summarizer is running.                                                     | The attempt remains cancelled, no new fallback or extra retry starts, and no late attempt-owned write commits; the captured signal and host outcome consistently classify native fallback as cancelled.                                                                                             | Pi                    |
+| `REQ-session-lineage`                                                            | Fork, navigate `/tree`, resume, and complete an old worker after a session switch; race project-learning updates.                                                                                            | Selected session snapshots match their lineage, stale results are rejected, and a losing writer preserves newer committed content.                                                                                                                                                                  | Fixture; Pi; Terminal |
+| `REQ-user-curation`                                                              | Edit or delete a note during consolidation; resume with a missing expected directory; revisit an earlier conversation branch.                                                                                | Curated text and deletion exclusions survive; old evidence does not silently restore a live note; new evidence remains distinguishable.                                                                                                                                                             | Fixture; Pi           |
+| `REQ-controlled-writes`                                                          | Attempt direct acting-agent writes and edits through ordinary and aliased managed paths, then commit a valid observer proposal.                                                                              | Direct calls are blocked within the documented guard boundary; the controlled writer can commit valid data; shell-based changes receive the external-curation policy when detected.                                                                                                                 | Fixture; Pi           |
+| `REQ-activation-controls`                                                        | Load with defaults, set a project default of disabled, override on/off, resume, reload invalid settings, and invoke an unknown subcommand.                                                                   | Precedence and persistence match the contract; disabled work stops without deleting records; invalid settings and arguments produce explicit output.                                                                                                                                                | Pi; Terminal          |
+| `REQ-model-selection`, `REQ-resource-budgets`                                    | Use the session model, independent local overrides, an unresolved model, a context limit smaller than configured work, and repeated provider failures.                                                       | Dispatch uses the selected model, inference remains serial by default, invalid work is bounded or suspended, and no silent cloud substitution occurs.                                                                                                                                               | Fixture; Pi           |
+| `REQ-status-reporting`                                                           | Complete custom compaction, succeed and fail native fallback, cancel, and lose reliable outcome attribution in interactive and noninteractive modes.                                                         | Reports distinguish origin, mechanism, reason, outcome, and known versus estimated usage; the latest report remains inspectable without a model call.                                                                                                                                               | Pi; Terminal          |
+| `REQ-session-observations`, `REQ-session-lineage`, `REQ-current-work-note`       | Replace or omit a source message through a context edit while its observer runs, then navigate before the edit.                                                                                              | Changed effective evidence rejects the pending proposal and invalidates affected current state; raw text remains historical evidence and does not restore instructions. Navigation selects the appropriate earlier effective context.                                                               | Fixture; Pi           |
+| `REQ-current-work-note`, `REQ-checkpoint-eligibility`, `REQ-compaction-fallback` | Fall back to native compaction with unprocessed source spans, refresh from its checkpoint and retained tail, then prepare a custom checkpoint.                                                               | The ordinary observer can carry checkpoint-derived claims with their provenance; unseen original spans remain unprocessed; the custom checkpoint retains required prior continuity.                                                                                                                 | Fixture; Pi           |
+| `REQ-current-work-note`, `REQ-resource-budgets`, `REQ-status-reporting`          | Switch to a smaller acting model or grow retained context until the valid mandatory note cannot fit after optional memory is removed; repeat with native auto-compaction disabled.                           | No acting provider request is dispatched; committed data survives; the extension records a capacity cause before invoking host abort and reports recovery guidance; a pre-existing user cancellation retains its cause. No silent note truncation, conversation discard, or automatic retry occurs. | Pi                    |
+| `REQ-source-recall`, `REQ-memory-scopes`                                         | Search by default, request historical lookup on an abandoned current-session branch or retained deleted revision, follow a known older-session reference, and resolve inherited source entries after a fork. | Default search excludes abandoned or obsolete memory as current knowledge; historical lookup labels it; available same-project references resolve without requiring project-wide prior-session discovery; missing sources remain explicit.                                                          | Fixture; Pi           |
+| `REQ-activation-controls`, `REQ-user-curation`, `REQ-current-work-note`          | Commit a custom checkpoint, correct or invalidate its note, disable memory, perform native compaction, then re-enable.                                                                                       | Disabling stops new memory injection and auxiliary jobs without a model call; committed continuation and known corrections remain available to native compaction; re-enabling starts from its latest result and does not restore an obsolete note.                                                  | Pi                    |
+| `REQ-activation-controls`, `REQ-status-reporting`                                | Load project overrides with host trust denied, granted, and temporarily granted, then reload settings.                                                                                                       | Only the host's effective trust result permits project overrides; status identifies ignored project settings and the actual source of each effective value.                                                                                                                                         | Pi                    |
+| `REQ-unified-compaction`, `REQ-checkpoint-eligibility`                           | Supply a custom checkpoint candidate whose retained-entry identifier differs from valid preparation or is absent from the selected path.                                                                     | The extension rejects the invalid candidate before Pi persists it; native fallback retains the valid prepared boundary.                                                                                                                                                                             | Fixture; Pi           |
 
 ## Evaluation variants
 
