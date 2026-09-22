@@ -11,11 +11,12 @@ token cost, and foreground waiting are secondary. The selected design combines o
 topics with a protected current-work note. Its benefit remains unmeasured. The comparison defines
 the candidate approaches before assessing their trade-offs.
 
-Research dates: 2026-09-12 and 2026-09-21. The Pi baseline is **0.87.0**. External source inspection
-and published results are distinguished below from design recommendations. No Orbis memory
-implementation or live-model evaluation exists in this research. Comparative evaluation records
-correctness, continuity, total usage and cost, compaction counts, elapsed time, and intervention.
-Those results guide iteration; the experimental package has no fixed numerical improvement gate.
+Research dates: 2026-09-12, 2026-09-21, and 2026-09-22. The Pi baseline is **0.87.0**. External
+source inspection and published results are distinguished below from design recommendations. No
+Orbis memory implementation or live-model evaluation exists in this research. Comparative evaluation
+records correctness, continuity, total usage and cost, compaction counts, elapsed time, and
+intervention. Those results guide iteration; the experimental package has no fixed numerical
+improvement gate.
 
 ## Reading map
 
@@ -25,6 +26,10 @@ compares current framework concepts and explains which responsibilities Pi and t
 [The implementation comparison](observational-memory-comparison.md) examines the topics and v3
 implementations of `pi-observational-memory` alongside Mastra, including version boundaries and
 continuity trade-offs.
+
+[Agent memory systems](agent-memory-systems.md) compares Hindsight, Honcho, Mem0, and Letta against
+the selected MVP. It maps the contract's source-search and source-time rules to supporting evidence,
+verification cases, and mechanisms to defer.
 
 | Document                                              | Questions answered                                                                                                                          |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
