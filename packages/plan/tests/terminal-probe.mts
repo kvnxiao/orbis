@@ -1,5 +1,5 @@
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, JsonObject } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Register scripted modal scenarios for an isolated interactive host. */
@@ -45,7 +45,7 @@ export default function terminalProbe(pi: ExtensionAPI): void {
           details = undefined;
         }
       }
-      let call: { name: string; arguments: Record<string, unknown> } | undefined;
+      let call: { name: string; arguments: JsonObject } | undefined;
       if (previous?.role === "user") {
         call = { name: "plan_open", arguments: { objective: "Scripted terminal verification" } };
       } else if (

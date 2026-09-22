@@ -7,14 +7,14 @@ entry points through Jiti; publication does not require a build step.
 
 | Component                 | Workspace version                   |
 | ------------------------- | ----------------------------------- |
-| Node.js for development   | `26.8.1`, pinned in `.node-version` |
-| pnpm                      | `12.3.4`, pinned in `package.json`  |
+| Node.js for development   | `26.9.0`, pinned in `.node-version` |
+| pnpm                      | `12.5.1`, pinned in `package.json`  |
 | TypeScript                | `7.0.2`, used for type checking     |
-| Pi coding agent           | `0.85.1`                            |
-| Oxfmt                     | `0.67.0`                            |
-| Oxlint                    | `1.82.0`                            |
-| Oxlint type-aware checker | `oxlint-tsgolint@7.0.2001`          |
-| Vitest                    | `5.0.0`                             |
+| Pi coding agent           | `0.87.0`                            |
+| Oxfmt                     | `0.68.0`                            |
+| Oxlint                    | `1.83.0`                            |
+| Oxlint type-aware checker | `oxlint-tsgolint@7.0.2002`          |
+| Vitest                    | `5.0.1`                             |
 | Extension runtime minimum | Node.js `22.19.0`                   |
 
 `pnpm-workspace.yaml` pins dependency versions in a shared catalog. Node.js 22 type definitions
@@ -23,9 +23,12 @@ minimum supported runtime.
 
 The workspace sets
 [`minimumReleaseAge: 1440`](https://pnpm.io/settings/dependency-resolution#minimumreleaseage) to
-delay new direct and transitive dependency releases for one day. Exact-version exemptions are listed
-in `minimumReleaseAgeExclude`. Once those releases qualify, toolchain updates remove the exemptions
-and verify locked and fresh installs.
+delay new direct and transitive dependency releases for one day. Exact package-name exclusions
+exempt `@earendil-works/chord`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
+`@earendil-works/pi-coding-agent`, `@earendil-works/pi-telemetry`, and `@earendil-works/pi-tui` from
+that delay. Each exclusion applies to every version of its package. Temporary exclusions use exact
+`package@version` entries. Toolchain updates retain the six package-name exclusions and remove
+temporary exact-version exclusions once their releases qualify.
 
 ## Local development
 
@@ -278,9 +281,9 @@ runtime verification. If the session does not discover local skills, ask it to r
 file.
 
 The skill runs [`scripts/update-toolchain.mts`](scripts/update-toolchain.mts) for dependency
-inventory, age-eligible release candidates, and installation, scaffolding, packaging, and Pi loading
-checks. Commands emit JSON reports; compatibility decisions and new compiler or lint checks remain
-agent tasks.
+inventory, release candidates selected under the workspace release-age policy, and installation,
+scaffolding, packaging, and Pi loading checks. Commands emit JSON reports; compatibility decisions
+and new compiler or lint checks remain agent tasks.
 
 ## References
 

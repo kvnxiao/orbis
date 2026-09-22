@@ -1,6 +1,6 @@
 # Pi theme rendering
 
-Research date: 2026-09-13. Inspected host: Pi 0.85.1, using installed declarations and JavaScript.
+Research date: 2026-09-22. Inspected host: Pi 0.87.0, using installed declarations and JavaScript.
 The findings are source checks; they do not establish terminal or runtime compatibility.
 
 ## Scope
@@ -11,7 +11,7 @@ feature comparisons with third-party theme packages.
 
 ## Inventory and effective colors
 
-Pi ships a JSON theme schema alongside its npm runtime. In 0.85.1, the schema declares 56 color
+Pi ships a JSON theme schema alongside its npm runtime. In 0.87.0, the schema declares 56 color
 properties and requires 51. Its optional properties are `scrollbarTrack`, `scrollbarThumb`,
 `searchMatchBg`, `searchMatchText`, and `thinkingMax`. The runtime applies these fallbacks:
 
@@ -32,9 +32,9 @@ the schema at `dist/modes/interactive/theme/theme-schema.json`; its standalone b
 different asset layout. Binary support has not been verified.
 
 Sources:
-[schema](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/theme/theme-schema.json),
-[theme implementation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/theme/theme.ts),
-[package asset commands](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/package.json).
+[schema](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/theme/theme-schema.json),
+[theme implementation](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/theme/theme.ts),
+[package asset commands](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/package.json).
 
 ## Isolated fixture rendering
 
@@ -55,9 +55,9 @@ prohibit reset bytes between styled spans. Padding, empty lines, and wrapped lin
 resolved surface background.
 
 Sources:
-[theme API and implementation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/theme/theme.ts),
-[message components](https://github.com/earendil-works/pi/tree/v0.85.1/packages/coding-agent/src/modes/interactive/components),
-[TUI documentation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/tui.md).
+[theme API and implementation](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/theme/theme.ts),
+[message components](https://github.com/earendil-works/pi/tree/v0.87.0/packages/coding-agent/src/modes/interactive/components),
+[TUI documentation](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/docs/tui.md).
 
 ## Terminal inputs and settings
 
@@ -69,14 +69,14 @@ query. Terminal foreground and palette indices 0-15 therefore need author-suppli
 Pi's environment background detection can use `COLORFGBG` with low confidence. Explicit input or the
 RGB query avoids inferring a measurement color from polarity or environment hints.
 
-Pi 0.85.1 does not expose extension rows in native `/settings`. A package can use `SettingsList` and
+Pi 0.87.0 does not expose extension rows in native `/settings`. A package can use `SettingsList` and
 input components inside its custom view. Public `getAgentDir()` identifies the personal Pi data
 directory, including an environment override.
 
 Sources:
-[terminal query implementation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/tui/src/tui.ts),
-[extension UI API](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/extensions/types.ts),
-[personal data directory](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/config.ts).
+[terminal query implementation](https://github.com/earendil-works/pi/blob/v0.87.0/packages/tui/src/tui.ts),
+[extension UI API](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/core/extensions/types.ts),
+[personal data directory](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/config.ts).
 
 ## Theme changes and disposal
 
@@ -91,12 +91,12 @@ discovered package or project theme path. A contract that follows themes Pi succ
 matches this behavior without requiring independent theme loading.
 
 Sources:
-[interactive host](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/interactive-mode.ts),
-[TUI invalidation](https://github.com/earendil-works/pi/blob/v0.85.1/packages/tui/src/tui.ts),
-[theme watcher](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/theme/theme.ts).
+[interactive host](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/interactive-mode.ts),
+[TUI invalidation](https://github.com/earendil-works/pi/blob/v0.87.0/packages/tui/src/tui.ts),
+[theme watcher](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/theme/theme.ts).
 
 ## Verification limits
 
 Terminal queries through SSH and multiplexers, resize behavior, custom-view lifecycle, and complete
-fixture parity require runtime checks. Source inspection supports the npm Pi 0.85.1 design; it does
+fixture parity require runtime checks. Source inspection supports the npm Pi 0.87.0 design; it does
 not establish compatibility with future schemas or the standalone binary.

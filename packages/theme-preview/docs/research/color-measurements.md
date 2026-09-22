@@ -1,7 +1,8 @@
 # Advisory color measurements
 
 Research date: 2026-09-13. The sources below were inspected as documentation and source code;
-measurement implementations have not been executed for this package.
+measurement implementations have not been executed for this package. Pi theme source was checked
+against 0.87.0 on 2026-09-22.
 
 ## Contrast calculation and interpretation
 
@@ -59,7 +60,7 @@ Sources:
 
 ## Built-in themes and semantic roles
 
-Pi 0.85.1's dark and light themes each assign the same color to `syntaxOperator` and
+Pi 0.87.0's dark and light themes each assign the same color to `syntaxOperator` and
 `syntaxPunctuation`. Both also reuse the selection background for search matches. Treating every
 equal color as a warning would flag these assignments. Role-aware reporting can warn about semantic
 state distinctions while reporting general syntax and surface similarities as information. Built-in
@@ -69,8 +70,8 @@ The installed built-in themes resolve `text` to explicit hex colors through vari
 still use empty values for terminal defaults; the built-in examples do not remove that input case.
 
 Sources:
-[dark theme](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/theme/dark.json),
-[light theme](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/modes/interactive/theme/light.json).
+[dark theme](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/theme/dark.json),
+[light theme](https://github.com/earendil-works/pi/blob/v0.87.0/packages/coding-agent/src/modes/interactive/theme/light.json).
 
 ## Color-vision simulation
 

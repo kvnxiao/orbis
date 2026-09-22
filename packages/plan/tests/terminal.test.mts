@@ -238,7 +238,7 @@ test.each([24, 90])(
       "1. Grandchild entry.",
       "2. Repeated entry.",
       "- [ ] Task child.\n\n    Another paragraph inside the task child.",
-      "Task child.",
+      "[ ] Task child.",
       "Another paragraph inside the task child.",
       "- Repeated entry.",
       "## Details",

@@ -74,6 +74,17 @@ export function selectRelease(
   );
 }
 
+export function selectPackageRelease(
+  times: Record<string, string>,
+  now: number,
+  ageMinutes: number,
+  packageName: string,
+  exclusions: string[],
+  major?: number,
+): string | null {
+  return selectRelease(times, now, exclusions.includes(packageName) ? 0 : ageMinutes, major);
+}
+
 export function collectDependencies(
   manifests: Record<string, JsonObject>,
   config: JsonObject,
@@ -289,6 +300,11 @@ async function inventory() {
 async function releases(state: Awaited<ReturnType<typeof inventory>>) {
   const now = Date.now();
   assert.equal(state.policies.minimumReleaseAge, 1440, "minimumReleaseAge must remain 1440");
+  const exclusions = state.policies.minimumReleaseAgeExclude ?? [];
+  assert.ok(
+    Array.isArray(exclusions) && exclusions.every((entry) => typeof entry === "string"),
+    "Expected release-age exclusion strings",
+  );
   const { packages, localDependencies, manualDependencies } = releaseTargets(state.dependencies);
   const candidates = packages.map((name) => {
     const metadata = jsonCommand(["view", name, "versions", "time", "dist-tags", "--json"]);
@@ -302,7 +318,7 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
     );
     const major =
       name === "@types/node" ? Number(state.node.runtimeMinimum.split(".")[0]) : undefined;
-    const selected = selectRelease(times, now, 1440, major);
+    const selected = selectPackageRelease(times, now, 1440, name, exclusions, major);
     const details =
       selected === null
         ? null
@@ -328,11 +344,6 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
       details,
     };
   });
-  const exclusions = state.policies.minimumReleaseAgeExclude ?? [];
-  assert.ok(
-    Array.isArray(exclusions) && exclusions.every((entry) => typeof entry === "string"),
-    "Expected release-age exclusion strings",
-  );
   const exclusionDecisions = exclusions.map((entry) => {
     const match = /^(.+)@(\d+\.\d+\.\d+)$/.exec(entry);
     if (match?.[1] === undefined || match[2] === undefined) {
