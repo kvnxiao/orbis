@@ -104,8 +104,8 @@ state.
 The [development workflow](development-workflow.md) applies this content to GitHub initiative and
 work issues. Issue bodies contain the current shared plan; native relationships express hierarchy
 and dependencies. The
-[issue plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md) defines
-their content.
+[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md) defines their
+content.
 
 Local files under `packages/<name>/implementation/` remain optional scratch work and detailed
 evidence, ignored by Git. The scaffold preserves that directory when adding runtime files to a

@@ -8,10 +8,29 @@ and the constraints behind them.
 
 ## Start or resume work
 
-Use [work-orbis-issue](../.agents/skills/work-orbis-issue/SKILL.md) with an issue URL or a concrete
-request. The skill finds existing work, inspects the current repository, and routes to design,
-planning, revision, implementation, or verification. Direct requests to the specialist skills use
-the same workflow.
+Ask to resume an issue, for example `Resume #<number>` or `Continue work on <issue URL>`. The
+[work-issue](../.agents/skills/work-issue/SKILL.md) skill is the entry point for the whole
+development workflow; the request does not need a skill name or lifecycle stage. Resolve bare issue
+numbers against the current repository and honor explicit repository references.
+
+Determine the current stage from the issue and related work, approval records, SPEC, source,
+verification evidence, and linked PRs. State the stage, supporting evidence, and next bounded action
+before proceeding. When an approved SPEC lacks executable plans, create or update issue plans; when
+plans exist, select the next eligible task; when work or a PR is underway, resume it. Reassess after
+each completed action instead of replaying a fixed sequence. Project status alone does not establish
+readiness or completion.
+
+A request to resume work authorizes ordinary continuation within the specified issue's approved
+scope, including implementation when its prerequisites are satisfied. Preserve applicable explicit
+design-only, planning-only, and review-only limits. Resolve missing design approval and material
+decisions before dependent work; retain separate authorization for merge, publication, and
+live-model checks. A status question requests a report, not execution. Direct requests to specialist
+skills retain their stated scope.
+
+Record the stage, approval and execution scope, active work, evidence, next action, and blockers in
+the issue's current handoff. At the start of a new session, verify that handoff against current
+artifacts before continuing. Keep the issue as the shared record; do not introduce a separate
+lifecycle-state file.
 
 At the start of substantive repository work, read the decision index once and open records relevant
 to the affected package or mechanism. Compare historical constraints with current source and runtime
@@ -59,9 +78,8 @@ automatic skill invocation is unavailable, read the files directly. If a require
 loaded, report the gap to the orchestrator, which supplies the missing instructions or resolves the
 blocker.
 
-Keep `work-orbis-issue` and `verify-changes` coordination with the orchestrator. Assign
-implementation rules and specialist review skills to delegates without restarting either
-coordinating workflow.
+Keep `work-issue` and `verify-changes` coordination with the orchestrator. Assign implementation
+rules and specialist review skills to delegates without restarting either coordinating workflow.
 
 ### Implementation handoff
 
@@ -120,10 +138,10 @@ decomposition and blocking relationships for prerequisites. Add each tracked iss
 parent membership and fields do not establish child membership or priority.
 
 Keep the current plan in issue bodies using the
-[issue plan format](../.agents/skills/plan-orbis-implementation/references/plan-format.md). Use
-comments for consequential updates or developer decisions, with links from the current body when
-needed. Preserve contributor text and reread an issue before editing it. After an uncertain write,
-check the remote state before retrying or creating another issue.
+[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md). Use comments
+for consequential updates or developer decisions, with links from the current body when needed.
+Preserve contributor text and reread an issue before editing it. After an uncertain write, check the
+remote state before retrying or creating another issue.
 
 ## Authorization and checkpoints
 
@@ -148,9 +166,9 @@ authorization and supervision requirements.
 
 When substantive package brainstorming begins, create or reuse an initiative once its intended
 outcome can be named. Research and resolve the design through
-[brainstorm-orbis-package](../.agents/skills/brainstorm-orbis-package/SKILL.md). Save the approved
-SPEC before implementing behavior. Plans can include bounded investigations while design decisions
-remain open; dependent implementation stays blocked.
+[design-package](../.agents/skills/design-package/SKILL.md). Save the approved SPEC before
+implementing behavior. Plans can include bounded investigations while design decisions remain open;
+dependent implementation stays blocked.
 
 For a substantial new extension, use an initial SPEC-only PR when shared design review or several
 implementation efforts need an agreed baseline. State implementation availability in the SPEC. Small

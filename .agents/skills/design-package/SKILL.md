@@ -1,5 +1,5 @@
 ---
-name: brainstorm-orbis-package
+name: design-package
 description:
   Research and collaboratively design an Orbis Pi extension, then write its package SPEC.md. Use
   when brainstorming a new package or revising its design before implementation.
@@ -36,7 +36,7 @@ and source when the request concerns that package. Preserve the user's settled r
 exclusions, and prior decisions.
 
 The repository README introduces the packages; `CONTRIBUTING.md` describes the development
-workflow. For README work, use [write-orbis-readme](../write-orbis-readme/SKILL.md) and keep design
+workflow. For README work, use [write-readme](../write-readme/SKILL.md) and keep design
 detail in the specification and research documents.
 
 Before proposing an architecture, research current relevant Pi packages and official Pi APIs when
@@ -183,5 +183,5 @@ limits. For an interactive package, check that `docs/tui-interactions.md` exists
 it, and its scenarios cover the agreed flows and match the requirements. Do not report a settled
 interaction design while required scenarios or material interaction decisions are missing. When the
 user requests implementation planning, continue with
-[plan-orbis-implementation](../plan-orbis-implementation/SKILL.md) against the approved
+[plan-implementation](../plan-implementation/SKILL.md) against the approved
 specification.

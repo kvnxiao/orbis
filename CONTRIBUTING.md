@@ -83,44 +83,45 @@ settings components, and command design.
 
 Repository-local skills support package design, implementation planning, and revision:
 
-- [work-orbis-issue](.agents/skills/work-orbis-issue/SKILL.md) starts or resumes work from an issue
-  or concrete request, reads relevant wiki decisions, and coordinates the specialist skills.
+- [work-issue](.agents/skills/work-issue/SKILL.md) starts or resumes work from an issue or concrete
+  request, reads relevant wiki decisions, and coordinates the specialist skills.
 
-- [brainstorm-orbis-package](.agents/skills/brainstorm-orbis-package/SKILL.md) researches existing
-  packages and Pi APIs, works through decision rounds, saves research synthesis, and writes a
-  specification. When the global `brainstorm` skill can be loaded, it defines the conversation
-  format; otherwise, the package skill uses its built-in interaction instructions.
-- [plan-orbis-implementation](.agents/skills/plan-orbis-implementation/SKILL.md) turns an approved
-  specification into issue implementation plans with concrete edits, dependencies, and verification
-  against the current code.
-- [revise-orbis-package](.agents/skills/revise-orbis-package/SKILL.md) coordinates approved behavior
-  changes across the SPEC, interaction scenarios, plans, code, and tests. Package code requests
-  require contract inspection even without an explicit skill invocation.
-
-For example, ask `$work-orbis-issue resume https://github.com/kvnxiao/orbis/issues/<number>`. The
-agent inspects the issue and current repository, identifies the next unblocked action, and continues
-within the task's authorization. It leaves verified PRs for developer review and merge.
+- [design-package](.agents/skills/design-package/SKILL.md) researches existing packages and Pi APIs,
+  works through decision rounds, saves research synthesis, and writes a specification. When the
+  global `brainstorm` skill can be loaded, it defines the conversation format; otherwise, the
+  package skill uses its built-in interaction instructions.
+- [plan-implementation](.agents/skills/plan-implementation/SKILL.md) turns an approved specification
+  into issue implementation plans with concrete edits, dependencies, and verification against the
+  current code.
+- [revise-package](.agents/skills/revise-package/SKILL.md) coordinates approved behavior changes
+  across the SPEC, interaction scenarios, plans, code, and tests. Package code requests require
+  contract inspection even without an explicit skill invocation.
 
 Follow the [agent model policy](docs/development-workflow.md#agent-models) for model selection and
 implementation handoffs.
 
-To start implementation, open a new Codex session in the updated, trusted repository and send:
+In a new Codex session in the updated, trusted repository, send:
 
 ```text
-$work-orbis-issue implement https://github.com/kvnxiao/orbis/issues/<number>
+Resume #<number>
 ```
 
-This request authorizes implementation of that issue. The Astra orchestrator checks its contract and
-dependencies, assigns the required skills, delegates bounded implementation to Sol, and coordinates
-Astra reviews and PR delivery. The orchestrator launches the delegates; the developer reviews and
-merges the PR. For planning without implementation, invoke `$plan-orbis-implementation` with the
-package or issue instead.
+An issue URL also works. The Astra orchestrator loads `work-issue`, checks the issue's contract and
+current work, and reports the stage and next action. When an approved SPEC lacks executable plans,
+the orchestrator creates issue plans; when implementation is ready, it delegates to Sol; when work
+is underway, it resumes the remaining checks or PR follow-up. The orchestrator assigns the skills
+and launches the delegates. The developer resolves pending design decisions and reviews and merges
+PRs.
 
-In Codex, invoke `$work-orbis-issue`, `$brainstorm-orbis-package`, `$plan-orbis-implementation`, or
-`$revise-orbis-package`. In Pi, use `/skill:work-orbis-issue`, `/skill:brainstorm-orbis-package`,
-`/skill:plan-orbis-implementation`, or `/skill:revise-orbis-package`. After project trust is
-established, Pi discovers the repository's `.agents/skills`. When a host does not discover these
-skills, ask it to read the linked `SKILL.md` directly.
+The request continues the specified issue's approved scope without requiring a skill name or an
+`implement` keyword. To limit the work, say `Resume #<number>, planning only`; to inspect without
+execution, ask `What is the status of #<number>?`.
+
+Explicit skill selection remains available. In Codex, invoke `$work-issue`, `$design-package`,
+`$plan-implementation`, or `$revise-package`. In Pi, use `/skill:work-issue`,
+`/skill:design-package`, `/skill:plan-implementation`, or `/skill:revise-package`. After project
+trust is established, Pi discovers the repository's `.agents/skills`. When a host does not discover
+these skills, ask it to read the linked `SKILL.md` directly.
 
 ## Repository layout
 
@@ -157,9 +158,9 @@ AGENTS.md                 Instructions for coding agents
 5. Add tests in `packages/<name>/tests/*.test.mts`. The scaffold includes a Pi loading test and a
    `vitest.config.mts` project named `@orbis/<name>`; the root Vitest configuration discovers it
    automatically.
-6. Use [write-orbis-readme](.agents/skills/write-orbis-readme/SKILL.md) to describe purpose,
-   installation, and first use. Keep material requirements and side effects visible; link detailed
-   usage and development documentation. The scaffold copies the repository license.
+6. Use [write-readme](.agents/skills/write-readme/SKILL.md) to describe purpose, installation, and
+   first use. Keep material requirements and side effects visible; link detailed usage and
+   development documentation. The scaffold copies the repository license.
 7. Run `just install`, `just fix`, and `just check`, then load the extension through Pi and exercise
    its commands or tools.
 

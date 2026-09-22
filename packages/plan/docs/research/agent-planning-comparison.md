@@ -62,9 +62,9 @@ in place of the skill's chat format, and plan review supplies the final confirma
 validates identities and submission but cannot establish research quality or decision-tree
 completeness from a tool call alone.
 
-The repository's [brainstorm skill](../../../../.agents/skills/brainstorm-orbis-package/SKILL.md)
-adapts that process to package design. The plan spec defines the intended runtime experience
-separately from this development-time skill.
+The repository's [brainstorm skill](../../../../.agents/skills/design-package/SKILL.md) adapts that
+process to package design. The plan spec defines the intended runtime experience separately from
+this development-time skill.
 
 **Design implication:** A frontier can contain related questions that users need to revisit.
 Whole-round navigation and explicit submission preserve that freedom. Per-question clarification
