@@ -21,6 +21,18 @@ including storage records, source splitting or deferral, and search indexing. Th
 describe the selected behavior and any consequences for usage, recovery, or compatibility. Permitted
 choices do not relax the requirements.
 
+**Contents**
+
+- [Purpose and terms](#purpose-and-terms)
+- [Architecture choices](#architecture-choices)
+- [Memory and persistence](#memory-and-persistence)
+- [Recall and authority](#recall-and-authority)
+- [Compaction contract](#compaction-contract)
+- [State ownership and curation](#state-ownership-and-curation)
+- [Activation, models, and costs](#activation-models-and-costs)
+- [Conformance scenarios](#conformance-scenarios)
+- [Evaluation variants](#evaluation-variants)
+
 ## Purpose and terms
 
 Effective continuation is the primary objective. The agent should retain the intended work, apply
