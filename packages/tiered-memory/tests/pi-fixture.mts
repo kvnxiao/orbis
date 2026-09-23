@@ -1,0 +1,197 @@
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import {
+  createAgentSessionFromServices,
+  createAgentSessionServices,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import type {
+  AgentSession,
+  CreateAgentSessionFromServicesOptions,
+  ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
+
+export const fixtureModel = {
+  id: "fixture",
+  name: "Fixture",
+  provider: "tiered-fixture",
+  api: "tiered-fixture-api",
+  baseUrl: "http://127.0.0.1",
+  reasoning: false,
+  input: ["text" as const],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 16000,
+  maxTokens: 4000,
+};
+
+export interface Fixture {
+  cwd: string;
+  agentDir: string;
+  session: AgentSession;
+  settings: SettingsManager;
+  notifications: { message: string; type: "info" | "warning" | "error" | undefined }[];
+  report: () => string;
+  command: (args: string) => Promise<void>;
+  reload: () => Promise<void>;
+  dispose: () => Promise<void>;
+}
+
+type FixtureModel = NonNullable<CreateAgentSessionFromServicesOptions["model"]>;
+
+export async function fixture(
+  options: {
+    trusted?: boolean;
+    personal?: unknown;
+    project?: unknown;
+    model?: FixtureModel;
+    models?: FixtureModel[];
+    noAuthModel?: FixtureModel;
+    credentialCommand?: string;
+    cwd?: string;
+    sessionFile?: string;
+  } = {},
+): Promise<Fixture> {
+  const cwd = options.cwd ?? (await mkdtemp(join(tmpdir(), "orbis-tiered-memory-pi-")));
+  const agentDir = process.env.PI_CODING_AGENT_DIR;
+  if (agentDir === undefined) {
+    throw new Error("Missing isolated agent directory.");
+  }
+  await mkdir(join(cwd, ".pi", "tiered-memory"), { recursive: true });
+  if (options.personal !== undefined) {
+    await writeFile(
+      join(agentDir, "tiered-memory.json"),
+      typeof options.personal === "string" ? options.personal : JSON.stringify(options.personal),
+    );
+  }
+  if (options.project !== undefined) {
+    await writeFile(
+      join(cwd, ".pi", "tiered-memory", "settings.json"),
+      typeof options.project === "string" ? options.project : JSON.stringify(options.project),
+    );
+  }
+  const settings = SettingsManager.inMemory(
+    { compaction: { enabled: false } },
+    { projectTrusted: options.trusted ?? true },
+  );
+  const model = options.model ?? fixtureModel;
+  const notifications: Fixture["notifications"] = [];
+  const services = await createAgentSessionServices({
+    cwd,
+    agentDir,
+    settingsManager: settings,
+    resourceLoaderOptions: {
+      noExtensions: true,
+      additionalExtensionPaths: [resolve(import.meta.dirname, "../src/index.ts")],
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      extensionFactories: [
+        (pi: ExtensionAPI) => {
+          pi.registerProvider(fixtureModel.provider, {
+            api: fixtureModel.api,
+            apiKey: "fixture",
+            baseUrl: fixtureModel.baseUrl,
+            models: [fixtureModel, ...(options.models ?? [])],
+            streamSimple(active, _context) {
+              const message: AssistantMessage = {
+                role: "assistant",
+                content: [{ type: "text", text: "Fixture response" }],
+                api: active.api,
+                provider: active.provider,
+                model: active.id,
+                stopReason: "stop",
+                timestamp: Date.now(),
+                usage: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0,
+                  totalTokens: 0,
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+                },
+              };
+              const stream = createAssistantMessageEventStream();
+              stream.push({ type: "done", reason: "stop", message });
+              return stream;
+            },
+          });
+          if (options.noAuthModel !== undefined) {
+            pi.registerProvider(options.noAuthModel.provider, {
+              api: fixtureModel.api,
+              apiKey: options.credentialCommand ?? "$ORBIS_TIERED_MEMORY_TEST_MISSING_KEY",
+              authHeader: true,
+              baseUrl: options.noAuthModel.baseUrl,
+              models: [options.noAuthModel],
+            });
+          }
+        },
+      ],
+    },
+  });
+  const manager =
+    options.sessionFile === undefined
+      ? SessionManager.create(cwd, join(cwd, "sessions"))
+      : SessionManager.open(options.sessionFile, join(cwd, "sessions"), cwd);
+  const created = await createAgentSessionFromServices({
+    services,
+    sessionManager: manager,
+    model,
+    noTools: "builtin",
+    sessionStartEvent: { type: "session_start", reason: "startup" },
+  });
+  const session = created.session;
+  await session.bindExtensions({
+    mode: "rpc",
+    uiContext: {
+      ...session.extensionRunner.createContext().ui,
+      notify(message, type) {
+        notifications.push({ message, type });
+      },
+    },
+  });
+  return {
+    cwd,
+    agentDir,
+    session,
+    settings,
+    notifications,
+    report() {
+      const reportEntry = session.sessionManager
+        .getBranch()
+        .findLast(
+          (candidate) =>
+            candidate.type === "custom" && candidate.customType === "orbis-tiered-memory-report",
+        );
+      if (
+        reportEntry?.type !== "custom" ||
+        typeof reportEntry.data !== "object" ||
+        reportEntry.data === null ||
+        !("text" in reportEntry.data) ||
+        typeof reportEntry.data.text !== "string"
+      ) {
+        throw new Error("Missing status report.");
+      }
+      return reportEntry.data.text;
+    },
+    async command(args) {
+      await session.prompt(`/tiered-memory${args === "" ? "" : ` ${args}`}`);
+    },
+    async reload() {
+      await session.reload();
+    },
+    async dispose() {
+      await session.abort();
+      session.dispose();
+      if (options.cwd === undefined) {
+        await rm(cwd, { recursive: true, force: true });
+      }
+      await rm(join(agentDir, "tiered-memory.json"), { force: true });
+    },
+  };
+}

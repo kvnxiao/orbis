@@ -1,0 +1,44 @@
+{
+  "name": "@orbis/tiered-memory",
+  "version": "0.1.0",
+  "description": "Activation and configuration controls for experimental Pi memory",
+  "keywords": [
+    "orbis",
+    "pi-package"
+  ],
+  "license": "MIT",
+  "files": [
+    "src",
+    "docs",
+    "SPEC.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "check": "pnpm run \"/^typecheck:.*/\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck:node": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "catalog:",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
