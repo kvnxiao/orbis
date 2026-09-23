@@ -225,10 +225,11 @@ documentation. Ignored plans and verification journals do not supply missing req
 establish conformance.
 
 Keep `SPEC.md` focused on architecture and system behavior and `docs/tui-interactions.md` on
-detailed UI behavior and appearance. State implementation availability in the SPEC; a specification
-does not establish that a feature is implemented or tested. Follow
-[README guidance](readme-guidelines.md) for package discovery, installation, and first use. Keep
-temporary publication and implementation-progress notices out of READMEs.
+detailed UI behavior and appearance. Exclude provenance, review history, and verification journals
+from both documents. State implementation availability in the SPEC; a specification does not
+establish that a feature is implemented or tested. Follow [README guidance](readme-guidelines.md)
+for package discovery, installation, and first use. Keep temporary publication and
+implementation-progress notices out of READMEs.
 
 Before changing package code, inspect the SPEC and linked interaction contract and identify affected
 requirements, including for requests that do not mention specifications. Fixes within the contract
