@@ -4,8 +4,60 @@ Keep current executable plans in GitHub issue bodies. The SPEC and interaction c
 behavior; issues select concrete edits and checks. Follow the
 [development workflow](../../../../docs/development-workflow.md) for hierarchy and completion.
 
-For a small change, cover the applicable information in a few paragraphs. Do not add empty sections
-or copy these tables into every issue.
+Start each initiative or work issue with the Current handoff block below. For a small change, cover
+the remaining plan information in a few paragraphs. Do not add empty plan sections or copy the
+section-guidance tables into issues.
+
+## Current handoff
+
+Use this Markdown table at the top of the body. Keep the heading, boundary markers, field labels,
+and row order fixed; replace the example values with current facts. Use one physical line per row.
+
+```markdown
+<!-- orbis:handoff:start -->
+## Current handoff
+
+| Field | Current value |
+| --- | --- |
+| Stage | Planning |
+| Authorization | Pending developer direction |
+| Work | Not started |
+| Verification | Not run |
+| Blocker | None |
+| Next action | Resolve the scope and execution authorization. |
+| Checkpoint | None |
+<!-- orbis:handoff:end -->
+```
+
+Keep these values concise:
+
+| Field | Contents |
+| --- | --- |
+| Stage | Current lifecycle stage, such as Planning, Implementation, Verification, or Review; derive it from observed work rather than copying Project status |
+| Authorization | Current approval and execution scope, including restrictions and an approval reference when available |
+| Work | Active child, branch or PR, and relevant source revision; state when work is uncommitted or has not started |
+| Verification | Concise actual result or remaining verification; keep commands and detailed findings in checkpoint comments |
+| Blocker | Current obstacle and the decision or prerequisite that resolves it, or None |
+| Next action | One bounded action and its responsible role when ownership matters |
+| Checkpoint | A direct link to the artifact needed for the current handoff, or None; do not accumulate links or replace the link for every new comment |
+
+Put the outcome, approved baseline, approach, and acceptance criteria below the block. Do not repeat
+the current handoff there. The approved baseline stays in the plan; the Work row records the current
+revision. Use explicit values such as Pending, Not run, None, or Not applicable instead of empty
+cells. Put recording timestamps in checkpoint comments.
+
+For a routine state update, reread the remote body and locate exactly one ordered marker pair around
+the top handoff block. Change only the affected value cells, preserving labels, row order, and all
+bytes outside the block. Skip publication when no value changes. GitHub still receives a whole-body
+update; inspect the draft diff before publishing and reconcile concurrent changes rather than
+overwriting them. Keep the workflow's batching rules: a new checkpoint alone does not trigger a body
+edit.
+
+When an existing issue needs a plan or handoff update, migrate its current handoff into this block and
+remove only the superseded handoff section. Preserve the remaining plan and contributor text; do
+not bulk-migrate idle or closed issues. If markers are missing, duplicated, or malformed, reconcile
+the structure explicitly before applying a routine block replacement. Treat changes to scope,
+approach, dependencies, acceptance criteria, or task checklists as separate plan edits.
 
 ## Initiative
 
@@ -18,7 +70,6 @@ Create native sub-issues only for independently executable outcomes.
 | Baseline | SPEC and interaction-contract links and reviewed revision; repository baseline; developer approval reference or pending decisions |
 | Shared approach | Verified current behavior, proposed additions, selected approach, and shared constraints |
 | Coverage and integrated acceptance | Requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks |
-| Current handoff | Current stage, approval and authorization scope, relevant revision, active child or PR, concise evidence with a checkpoint link when needed, blocker, and next unblocked action |
 
 Use native child relationships rather than a duplicate child-status checklist. Record blocking links
 and the prerequisite's observable output. Issue numbers do not imply execution order. SPEC approval
@@ -35,7 +86,6 @@ Refer to the parent for shared context rather than copying its contract or cover
 | Prerequisites | Blocking issue links, required outputs, and unresolved decisions |
 | Implementation | Files or symbols, intended edits, existing behavior to reuse, constraints, and small-step checklists |
 | Acceptance | Working directory, command or interaction, inputs, expected results, and applicable failure or recovery cases |
-| Current handoff | Current stage, approval and authorization scope, relevant revision and active branch or PR, concise evidence with a checkpoint link when needed, blocker, and next action |
 
 Initially state that implementation has not started. Update the handoff from observed results and
 relevant contract and source revisions as work progresses. Keep expected checks separate from actual

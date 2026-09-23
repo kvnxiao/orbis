@@ -33,9 +33,9 @@ live-model checks. A status question requests a report, not execution. Direct re
 skills retain their stated scope.
 
 Record the stage, approval and execution scope, active work, evidence, next action, and blockers in
-the issue's current handoff. At the start of a new session, verify that handoff against current
-artifacts before continuing. Keep the issue as the shared record; do not introduce a separate
-lifecycle-state file.
+the issue's Current handoff table at the top of its body. At the start of a new session, verify that
+handoff against current artifacts before continuing. Keep the issue as the shared record; do not
+introduce a separate lifecycle-state file.
 
 ### Retrieve current work before history
 
@@ -172,11 +172,15 @@ decomposition and blocking relationships for prerequisites. Add each tracked iss
 parent membership and fields do not establish child membership or priority.
 
 Keep the current plan in issue bodies using the
-[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md). Edit the body
-only when current scope, plan, acceptance criteria, authorization, stage, branch or revision,
-blockers, or next action changes. Update checklist completion at meaningful task boundaries. Keep
-only the checkpoint links needed to resume current work; do not grow a history index in the body.
-Record findings and progress in checkpoint comments even when the body needs no change.
+[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md). Begin each
+body with its fixed Current handoff table between the prescribed boundary markers. For routine state
+updates, change only affected table values and preserve all bytes outside that block. Keep the
+outcome, approved baseline, approach, and acceptance criteria below it; edit those sections only
+when the plan changes. Migrate older handoffs when a plan or handoff update is needed, preserving
+unrelated text and removing the superseded handoff. Edit the body only when the current plan or a
+handoff value changes. Update checklist completion at meaningful task boundaries. Keep only the
+checkpoint links needed to resume current work; do not grow a history index in the body. Record
+findings and progress in checkpoint comments even when the body needs no change.
 
 Batch pending body changes before a stage transition, pause, or delivery; update sooner when another
 worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to

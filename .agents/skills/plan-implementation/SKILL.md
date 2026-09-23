@@ -128,7 +128,11 @@ issue. Store shared scope, the SPEC baseline, coverage, and integrated acceptanc
 keep each child's concrete plan and handoff in its body. Use native blocking relationships and add
 every tracked issue to the Project. Do not mirror every requirement or checklist step as an issue.
 
-Use the issue plan format and the workflow's authorization boundaries. Reread issues before editing,
+Use the issue plan format's fixed Current handoff table at the top of each body, with the plan below
+it. Confine routine state updates to changed table values; preserve the rest of the body. Migrate
+legacy handoffs only when a plan or handoff update is needed.
+
+Use the workflow's authorization boundaries. Reread issues before editing,
 preserve contributor changes, and check remote state after an uncertain write before retrying.
 Publish current scope and decisions without uploading raw transcripts or old local plans. When
 resuming local plans, reconcile their baseline and publish the current executable work. Do not

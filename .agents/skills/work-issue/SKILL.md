@@ -92,6 +92,13 @@ requested target. Do not infer order from issue numbers or dispatch conflicting 
 
 ## Pause and deliver
 
+Use the fixed top-of-body Current handoff table from the
+[issue plan format](../plan-implementation/references/plan-format.md#current-handoff). For routine
+updates, reread the remote body, replace only changed value cells within its single marked block,
+and preserve all bytes outside it. Inspect the diff before publishing. Reconcile missing, duplicate,
+or malformed markers explicitly; migrate legacy handoffs only when a plan or handoff update is
+already needed. Keep plan edits separate from routine state updates.
+
 At a blocked or interrupted handoff, publish a checkpoint with unresolved obligations and the next
 action. At a stage transition, pause, or delivery, batch necessary body edits for the current plan,
 authorization, revision, active work, blocker, and next action. Include only the checkpoint links
