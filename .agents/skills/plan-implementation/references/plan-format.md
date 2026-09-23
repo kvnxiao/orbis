@@ -10,6 +10,39 @@ section-guidance tables into issues.
 
 ## Current handoff
 
+The Stage row records the issue's current required activity or a terminal outcome. Use exactly one of these
+case-sensitive values, with no aliases, annotations, or combined values:
+
+| Stage | Use when |
+| --- | --- |
+| Investigation | A bounded factual question or experiment still needs supported findings before the next decision or to deliver an investigation issue's outcome. |
+| Design | Behavior, scope, or a contract needs definition or revision, or a design decision or approval blocks later work within the issue's scope. |
+| Planning | Approved behavior or scope needs executable tasks, dependencies, or acceptance checks. |
+| Implementation | An approved plan still needs code, tests, documentation, or other scoped deliverables. Use this stage even when execution has not started or is blocked; record progress in Work and permission in Authorization. |
+| Verification | The accumulated deliverable needs checks or agent reviews, findings are being resolved, or verified delivery is being prepared for publication. |
+| Review | The issue's complete scoped deliverable is published and ready for developer review, approval, or merge, with no outstanding agent-owned delivery work. A draft PR alone does not qualify. |
+| Complete | Evidence establishes the workflow's definition of done for this issue's role. PR-delivered work must be merged; passing checks or finishing a child issue is insufficient. |
+| Abandoned | The issue is closed as not planned. Do not count it as delivered or as satisfying parent acceptance. |
+
+Use the stage of the issue's current required activity even when that activity has not started;
+record readiness in Work, permission in Authorization, and impediments in Blocker. An investigation
+or planning subtask within an ongoing activity does not by itself change Stage. These stages are not
+a mandatory linear sequence. Skip activities already satisfied and return to the appropriate stage
+when the issue's required activity changes. Agent review and fixes within an accumulated verification pass remain Verification;
+preparing a commit, publishing a PR, and writing its handoff also remain Verification until the
+complete delivery is ready for developer review.
+
+For a design-only issue, use Review once its complete deliverable is published and only developer
+approval remains. When design approval blocks later work within the same issue, retain Design.
+
+Keep the current stage while work is blocked or paused, and put the cause and resumption condition
+in Blocker and Next action. Do not use Blocked, Paused, Ready, In progress, In review, Done, or Handoff
+as Stage values. Project status is a separate coarse execution field. For an initiative, derive
+Stage from its remaining work and integrated acceptance; a child reaching Review or Complete does
+not move the whole initiative to that stage. A negative investigation result can be Complete when
+its supported findings answer the issue's question, the effect on dependent work is recorded, and
+the investigation's acceptance criteria are met.
+
 Use this Markdown table at the top of the body. Keep the heading, boundary markers, field labels,
 and row order fixed; replace the example values with current facts. Use one physical line per row.
 
@@ -19,7 +52,7 @@ and row order fixed; replace the example values with current facts. Use one phys
 
 | Field | Current value |
 | --- | --- |
-| Stage | Planning |
+| Stage | Design |
 | Authorization | Pending developer direction |
 | Work | Not started |
 | Verification | Not run |
@@ -33,7 +66,7 @@ Keep these values concise:
 
 | Field | Contents |
 | --- | --- |
-| Stage | Current lifecycle stage, such as Planning, Implementation, Verification, or Review; derive it from observed work rather than copying Project status |
+| Stage | One exact value from the Stage enum above, derived from current evidence |
 | Authorization | Current approval and execution scope, including restrictions and an approval reference when available |
 | Work | Active child, branch or PR, and relevant source revision; state when work is uncommitted or has not started |
 | Verification | Concise actual result or remaining verification; keep commands and detailed findings in checkpoint comments |
@@ -43,8 +76,8 @@ Keep these values concise:
 
 Put the outcome, approved baseline, approach, and acceptance criteria below the block. Do not repeat
 the current handoff there. The approved baseline stays in the plan; the Work row records the current
-revision. Use explicit values such as Pending, Not run, None, or Not applicable instead of empty
-cells. Put recording timestamps in checkpoint comments.
+revision. For rows other than Stage, use explicit values such as Pending, Not run, None, or Not
+applicable instead of empty cells.
 
 For a routine state update, reread the remote body and locate exactly one ordered marker pair around
 the top handoff block. Change only the affected value cells, preserving labels, row order, and all

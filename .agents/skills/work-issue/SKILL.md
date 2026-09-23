@@ -43,7 +43,9 @@ developer-approved behavior, execution authorization, and verification still req
 
 Derive the current stage from the issue relationships, dependencies, handoff, approval evidence,
 contract, source, tests, and linked PRs. Board status, checklists, and an old handoff alone do not
-prove readiness or completion. Before acting, briefly state the stage, supporting evidence, and
+prove readiness or completion. Use exactly one case-sensitive Stage value from the
+[issue plan format](../plan-implementation/references/plan-format.md#current-handoff); keep blockers,
+authorization, and Project status separate. Before acting, briefly state the stage, supporting evidence, and
 next bounded action; refresh that assessment when the contract, plan, implementation, or PR state
 changes.
 
@@ -81,7 +83,10 @@ the same files.
 Keep decisions, accumulated verification, and delivery with the orchestrator. After each completed
 assignment, including a review with no findings, author and publish its
 [checkpoint artifacts](../../../docs/development-workflow.md#publish-checkpoint-artifacts).
-Summarize verified results rather than copying the delegate's response.
+Use the [checkpoint packet format](references/checkpoint-format.md) for author and model metadata,
+assignment outcome, evidence, and next action. Distinguish the packet's author from the agent whose
+work it summarizes. Publish verified authored packets, not ordinary delegate replies. Use GitHub's
+comment creation timestamp for publication time; omit recording timestamps, work intervals, and durations.
 
 Update the issue's current plan when discoveries change the approach. Amend approved requirements
 before implementing changed behavior. Use native blocking links for prerequisite issues and state

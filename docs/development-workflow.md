@@ -56,7 +56,7 @@ decision needs its supporting evidence, or the developer requests a retrospectiv
 comment link or ID and request that comment alone:
 
 ```sh
-gh api repos/OWNER/REPO/issues/comments/COMMENT_ID --jq '{id,html_url,body,updated_at}'
+gh api repos/OWNER/REPO/issues/comments/COMMENT_ID --jq '{id,html_url,body,created_at,updated_at}'
 ```
 
 When the comment ID is unknown, request bounded pages of comment metadata through GraphQL without
@@ -196,24 +196,19 @@ status-only request does not authorize a checkpoint comment. Publish when the ch
 instead of deferring all records until the session ends. A sudden process termination may prevent
 publication; report any resulting gap when resuming.
 
-Author a summary from the work and verified results. Do not copy conversation turns, delegate
-responses, tool-call dumps, or raw JSONL into the journal. Record conclusions and their supporting
-rationale, not private deliberation. Scale detail to the work: a clean review may need only its
-scope, verdict, checks, and remaining obligations. Group related artifacts in one comment when
-practical, retaining each assignment's attribution and outcome.
+Author a summary from the work and verified results, or verify a separately authored delegate packet
+before publishing it. Do not copy ordinary conversation turns, delegate replies, tool-call dumps, or
+raw JSONL into the journal. Record conclusions and their supporting rationale, not private
+deliberation. Scale detail to the work: a clean review may need only its scope, verdict, checks, and
+remaining obligations. Group related artifacts in one comment when practical, retaining each
+packet's attribution and outcome.
 
-Each checkpoint records:
-
-- A stable checkpoint ID chosen before publication, the assignment, responsible agent or role, and
-  completion, blocked, or interrupted status.
-- UTC recording time, observed work interval or measured duration when available, and an explicit
-  unknown for unmeasured time. Do not reconstruct time spent from comment timestamps.
-- The source revision and scope examined or changed. Identify uncommitted work explicitly.
-- Work performed, findings, consequential choices and their rationale, and verification results.
-  Distinguish passed, failed, skipped, and unverified checks; include useful commands and
-  conditions.
-- Unresolved obligations, blockers, next action, and relevant issue, PR, commit, or artifact links.
-  Include enough evidence to understand the result without access to ignored local files.
+Use the [checkpoint packet format](../.agents/skills/work-issue/references/checkpoint-format.md): a
+stable identifier, a metadata table with Agent, Model, Assignment, Outcome, and Revision rows,
+followed by Result, Evidence, and Next action sections. When the author summarizes another agent's
+work, name that work agent and model separately. Use GitHub's comment creation timestamp for
+publication time; omit recording timestamps, work intervals, and durations. Record an observation
+time in Result or Evidence only when it affects the finding's meaning.
 
 Publish on the issue that owns the work. Link from a parent or related issue when needed instead of
 duplicating artifacts. Comments are append-only by workflow convention; GitHub still permits edits

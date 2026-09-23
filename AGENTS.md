@@ -212,7 +212,11 @@ requests according to their stated scope.
   `packages/<name>/implementation/` directories or `.artifacts/` for workspace work. Within
   authorized shared work, publish concise authored checkpoint artifacts in issue comments after
   every completed agent assignment, including reviews with no findings, and at blocked or
-  interrupted handoffs. Follow the
+  interrupted handoffs. Use the
+  [checkpoint packet format](.agents/skills/work-issue/references/checkpoint-format.md) to identify
+  each packet's authoring agent and model, with separate attribution for summarized delegate work.
+  Use GitHub's comment creation timestamp for publication time; omit recording timestamps, work
+  intervals, and durations. Follow the
   [checkpoint and retrieval workflow](docs/development-workflow.md): keep comments append-only,
   batch current plan and handoff edits, and fetch history only when needed. Raw logs require
   explicit user opt-in. Keep reusable tests and instructions available from a clone. Do not link
