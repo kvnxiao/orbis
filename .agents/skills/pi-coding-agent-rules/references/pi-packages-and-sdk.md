@@ -19,6 +19,11 @@ For Pi packages, declare imported host-provided Pi packages and TypeBox in `peer
 Pi's documented `"*"` range, and do not bundle those packages. Document and test the Pi versions the
 package supports; the peer range does not prove compatibility.
 
+Pin the `typebox` development dependency to the version that the supported Pi release bundles, so
+tests run against the same `typebox` copy that the host resolves through the `"*"` peer. Read that
+version from the `typebox` entry in the installed `@earendil-works/pi-coding-agent` package
+manifest.
+
 Put third-party runtime dependencies in `dependencies`. Production installation can omit
 `devDependencies`. When distributing another Pi package's resources inside the package, follow Pi's
 `bundledDependencies` convention and reference the bundled resource paths. Standalone SDK

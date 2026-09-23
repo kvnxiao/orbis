@@ -40,6 +40,14 @@ Name each test file for the contract it enforces and use one naming basis across
 that mixes module names with workflow names gives no rule for where a new test belongs. When a test
 file grows beyond the modules it covers, split it along the same module boundaries as the source.
 
+## Test boundary validation with rejected fixtures (Default)
+
+For each persisted or parsed record, keep one rejected fixture with a missing required property and
+one with a wrong-typed property. For a record whose schema has a `version` property, keep one with
+an unsupported `version`. Assert that the thrown error names the failing path. Do not build a test's
+expected record by calling the parser under test.
+[Boundary validation](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required).
+
 ## Test ordering, equality, and recovery at their boundaries (Default)
 
 When correctness depends on event delivery, resource cleanup, or storage commits, exercise the
@@ -71,6 +79,14 @@ recording completion. Verify that pending or unknown outcomes remain recoverable
 repetition. After reload or a related job's restart, failure, or destination change, check whether a
 cached result remains usable. Pass replayed results through the tool adapter and assert preserved
 draft privacy, submission state, output bounds, and failure status.
+
+## Inject faults through I/O capabilities (Required)
+
+For I/O fault injection, supply an injected I/O capability whose test implementation fails at the
+required boundary. For example, inject a storage capability that rejects a completion-record write
+after the mutation succeeds, then assert the recoverable outcome through public operations. Keep
+fault controls in the test implementation. Do not add test-only parameters, flags, or callbacks to
+production APIs.
 
 ## Exercise the lifecycle transitions the extension uses (Required)
 

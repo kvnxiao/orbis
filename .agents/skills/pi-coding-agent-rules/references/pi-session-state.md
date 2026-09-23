@@ -70,9 +70,11 @@ state rather than assume those orders match.
 
 ## Version persistent contracts (Conditional)
 
-When extension data persists across package upgrades, include a schema version and validate loaded
-entries before use. Migrate supported older shapes at the persistence boundary. Report unsupported
-versions explicitly; silently resetting state can discard user work.
+When extension data persists across package upgrades, put a literal `version` property in the
+record's schema and validate loaded entries with that schema, as the
+[boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required)
+requires. Migrate supported older shapes at the persistence boundary. Report unsupported versions
+explicitly; silently resetting state can discard user work.
 
 When a tool must accept a supported legacy argument shape, normalize it in `prepareArguments` before
 schema validation. Keep `parameters` strict; do not add deprecated fields to the public schema

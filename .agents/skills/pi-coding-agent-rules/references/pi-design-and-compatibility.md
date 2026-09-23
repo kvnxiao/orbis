@@ -26,9 +26,11 @@ minimum-version guarantee. The installed package is authoritative; upstream `mai
 unreleased behavior. Before using a named API on another version, check its availability and
 contract in that version.
 
-Current Pi packages use the `@earendil-works` scope and `typebox`. Keep imports consistent with the
-supported Pi version; do not mix old and new package identities in one extension. When supporting
-multiple versions, isolate compatibility code at the Pi adapter and test each claimed version.
+Current Pi packages use the `@earendil-works` scope and `typebox`, the schema library that the
+[boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required)
+requires. Keep imports consistent with the supported Pi version; do not mix old and new package
+identities in one extension. When supporting multiple versions, isolate compatibility code at the Pi
+adapter and test each claimed version.
 [Package names](https://pi.dev/news/2026/5/7/pi-has-a-new-home),
 [extension imports](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#available-imports).
 

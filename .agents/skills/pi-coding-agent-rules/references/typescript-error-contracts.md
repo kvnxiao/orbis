@@ -27,8 +27,10 @@ For shared callbacks and interfaces, document expected failure kinds, required d
 actions, and cancellation behavior. Export their failure types and structural validators through the
 public entry point and version changes to the contract. Across extension loaders, validate shape
 rather than relying solely on `instanceof` or message parsing; separately loaded classes need not
-share identity. Keep the type and validator together, deriving the type from a schema when the
-project already uses a schema library.
+share identity. Keep the type and validator together and derive the type from the schema, as the
+[boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required)
+requires. Because that rule exempts an error object crossing an extension-loader boundary, the
+`Conflict` example below has a hand-written validator.
 
 For example, recognize this conflict only when both revisions are nonnegative safe integers. Extend
 the contract with a discriminated union when additional recovery actions are needed, require each

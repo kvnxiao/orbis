@@ -3,10 +3,11 @@
 ## Keep one contract in one module (Default)
 
 A contract's TypeScript type, its runtime schema, its transitions, and its validity check belong in
-one module, with one encoding derived from the others. Where the schema library can produce the
-type, declare the schema and derive the type. Parallel hand-written encodings can diverge without a
-compiler error: adding a state or an action then requires a matching edit in every encoding, and a
-missed edit still compiles.
+one module, with one encoding derived from the others. Declare the schema and derive the type from
+it, as the
+[boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required)
+requires. Parallel hand-written encodings can diverge without a compiler error: adding a state or an
+action then requires a matching edit in every encoding, and a missed edit still compiles.
 
 Count the encodings before adding one. A union partitioned into subsets is itself a contract: the
 members one validator accepts, and the members another branch dispatches. Derive each subset from
@@ -24,6 +25,19 @@ already depend on, and keep file I/O with the code that owns the file.
 Apply the same test before splitting. When a typical change touches most of a module's exports,
 splitting adds edit sites without reducing coupling; keep that module whole. A generic `utils`
 module fails the test by construction, because its importers share no contract.
+
+## Report size, duplication, and test-coupling thresholds (Default)
+
+Report a review finding for each of these conditions:
+
+- A class has more than 8 mutable fields.
+- The same helper is present in two or more modules.
+- A test asserts an internal call ordinal, such as requiring a private dependency's third call to
+  receive a particular argument.
+
+Use these thresholds to request review of responsibilities, shared ownership, or observable test
+contracts. Apply the cohesion and helper-promotion rules when choosing a remedy; a finding does not
+require a mechanical split or extraction.
 
 ## Let the manifest define the public surface (Default)
 
@@ -72,6 +86,14 @@ A type that unions two implementations is evidence that the contract exists. Whe
 `A | B` and both supply the same fields in the same order, name that contract: declare the shared
 interface, or give both a single argument object so callers cannot transpose positional parameters.
 [Rule of three](https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming)).
+
+## Restrict raw parsing to the parse helper (Conditional)
+
+When the project's linter supports property restrictions, restrict `JSON.parse` in extension source
+to the parse helper module that the
+[boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required)
+requires, and name that module in the restriction message. The restriction cannot match a
+hand-written type predicate; report a review finding for a predicate on data a schema can describe.
 
 ## Name modules on one axis and keep the dependency direction visible (Default)
 

@@ -12,11 +12,13 @@ the tool's supported use on existing work.
 
 Use the TypeBox version supplied by the supported Pi release for parameter schemas. Use `StringEnum`
 from `@earendil-works/pi-ai` for string enums; Google providers reject the `Type.Union` of
-`Type.Literal` representation. For path arguments, normalize a leading `@` before resolving the
-path, matching Pi's built-in tools. After schema validation, check domain preconditions such as
-resource existence, permitted state transitions, and relationships between arguments. If the
-provider-compatible schema requires optional action-specific fields, validate those fields for the
-selected action before mutating state.
+`Type.Literal` representation. The `parameters` schema is a boundary schema under the
+[boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required);
+derive the argument type from it instead of writing an interface by hand. For path arguments,
+normalize a leading `@` before resolving the path, matching Pi's built-in tools. After schema
+validation, check domain preconditions such as resource existence, permitted state transitions, and
+relationships between arguments. If the provider-compatible schema requires optional action-specific
+fields, validate those fields for the selected action before mutating state.
 
 The model receives one constraint through the parameter schema, tool description, injected
 instructions, and rejection message. Name one owner for the wording and let the other surfaces
