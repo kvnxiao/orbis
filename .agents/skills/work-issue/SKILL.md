@@ -43,7 +43,9 @@ developer-approved behavior, execution authorization, and verification still req
 
 Derive the current stage from the issue relationships, dependencies, handoff, approval evidence,
 contract, source, tests, and linked PRs. Board status, checklists, and an old handoff alone do not
-prove readiness or completion. Before acting, briefly state the stage, supporting evidence, and
+prove readiness or completion. Use exactly one case-sensitive Stage value from the
+[issue plan format](../plan-implementation/references/plan-format.md#current-handoff); keep blockers,
+authorization, and Project status separate. Before acting, briefly state the stage, supporting evidence, and
 next bounded action; refresh that assessment when the contract, plan, implementation, or PR state
 changes.
 
@@ -81,7 +83,10 @@ the same files.
 Keep decisions, accumulated verification, and delivery with the orchestrator. After each completed
 assignment, including a review with no findings, author and publish its
 [checkpoint artifacts](../../../docs/development-workflow.md#publish-checkpoint-artifacts).
-Summarize verified results rather than copying the delegate's response.
+Use the [checkpoint packet format](references/checkpoint-format.md) for author and model metadata,
+assignment outcome, evidence, and next action. Distinguish the packet's author from the agent whose
+work it summarizes. Publish verified authored packets, not ordinary delegate replies. Use GitHub's
+comment creation timestamp for publication time; omit recording timestamps, work intervals, and durations.
 
 Update the issue's current plan when discoveries change the approach. Amend approved requirements
 before implementing changed behavior. Use native blocking links for prerequisite issues and state
@@ -91,6 +96,13 @@ duplicate current plans. State blockers and continue independent authorized work
 requested target. Do not infer order from issue numbers or dispatch conflicting edits concurrently.
 
 ## Pause and deliver
+
+Use the fixed top-of-body Current handoff table from the
+[issue plan format](../plan-implementation/references/plan-format.md#current-handoff). For routine
+updates, reread the remote body, replace only changed value cells within its single marked block,
+and preserve all bytes outside it. Inspect the diff before publishing. Reconcile missing, duplicate,
+or malformed markers explicitly; migrate legacy handoffs only when a plan or handoff update is
+already needed. Keep plan edits separate from routine state updates.
 
 At a blocked or interrupted handoff, publish a checkpoint with unresolved obligations and the next
 action. At a stage transition, pause, or delivery, batch necessary body edits for the current plan,

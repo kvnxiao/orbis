@@ -131,6 +131,10 @@ requests according to their stated scope.
   the [issue plan format](.agents/skills/plan-implementation/references/plan-format.md). Use native
   sub-issues for independent work and checklists for smaller steps. Keep scratch work and detailed
   evidence in ignored local files; do not maintain duplicate authoritative plans.
+- Start issue bodies with the issue plan format's fixed Current handoff table. For routine state
+  updates, change only affected values inside its boundary markers and preserve the rest of the
+  body. Edit plan sections only when the plan changes; migrate legacy handoffs when a plan or
+  handoff update is already needed.
 
 ## Implementation
 
@@ -208,7 +212,11 @@ requests according to their stated scope.
   `packages/<name>/implementation/` directories or `.artifacts/` for workspace work. Within
   authorized shared work, publish concise authored checkpoint artifacts in issue comments after
   every completed agent assignment, including reviews with no findings, and at blocked or
-  interrupted handoffs. Follow the
+  interrupted handoffs. Use the
+  [checkpoint packet format](.agents/skills/work-issue/references/checkpoint-format.md) to identify
+  each packet's authoring agent and model, with separate attribution for summarized delegate work.
+  Use GitHub's comment creation timestamp for publication time; omit recording timestamps, work
+  intervals, and durations. Follow the
   [checkpoint and retrieval workflow](docs/development-workflow.md): keep comments append-only,
   batch current plan and handoff edits, and fetch history only when needed. Raw logs require
   explicit user opt-in. Keep reusable tests and instructions available from a clone. Do not link
