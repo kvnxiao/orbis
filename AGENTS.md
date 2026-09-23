@@ -274,5 +274,4 @@ requests according to their stated scope.
 - Omit comments that repeat code. Add a comment only for an external contract, hazard, or ordering
   constraint that the code does not express.
 - Keep docstrings to required API contracts. Name tests for their assertions.
-- Use imperative commit subjects and concrete PR descriptions. Audit prose with
-  `audit-prose-via-codex` when available, or `audit-prose` otherwise.
+- Use imperative commit subjects and concrete PR descriptions. Audit prose with `audit-prose`.
