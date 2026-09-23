@@ -6,10 +6,13 @@ retains detailed history outside the prompt and makes relevant recorded details 
 same compaction policy applies to manual `/compact`, automatic threshold compaction, and automatic
 overflow compaction.
 
-**Status:** Experimental minimum viable product (MVP) design; implementation unavailable. This
-package contains a specification and research, without runtime code or an installable extension. The
-contract targets independent Pi extension implementers using the public capabilities inspected in
-**Pi 0.87.0**. Runtime and model-quality compatibility remain unverified.
+**Status:** Experimental minimum viable product (MVP) with partial implementation. The extension
+provides activation commands, trusted configuration loading, resource settings, memory-model
+resolution, and persisted status reports. The [usage guide](docs/usage.md) describes these controls.
+Automatic observation, consolidation, memory storage, recall, and custom compaction are unavailable.
+The requirements below define the complete intended system; the available controls do not establish
+full conformance or model quality. The contract targets independent Pi extension implementers using
+the public capabilities inspected in **Pi 0.87.0**.
 
 The `REQ-*` requirements and their contract tables define conformance. Scenarios describe observable
 checks of those requirements. The [research synthesis](docs/research/README.md) and the evaluation
