@@ -187,6 +187,22 @@ export function packageProblems(manifest: JsonObject, expectedName: string): str
   return problems;
 }
 
+export function typeboxPinProblems(
+  catalogVersion: string | undefined,
+  piManifest: JsonObject,
+): string[] {
+  const installed = strings(piManifest.dependencies ?? {}).typebox;
+  if (installed === undefined) {
+    return ["@earendil-works/pi-coding-agent does not declare a typebox dependency"];
+  }
+  if (catalogVersion !== installed) {
+    return [
+      `catalog typebox must equal the typebox dependency of @earendil-works/pi-coding-agent (${installed}), found ${catalogVersion ?? "no pin"}`,
+    ];
+  }
+  return [];
+}
+
 const root = resolve(import.meta.dirname, "..");
 const pnpm = process.env.ORBIS_PNPM ?? "pnpm";
 const checks: { cwd: string; command: string[]; milliseconds: number; passed: boolean }[] = [];
@@ -406,6 +422,15 @@ async function verify(state: Awaited<ReturnType<typeof inventory>>, minimumNode:
     }
   }
   command(pnpm, ["install", "--frozen-lockfile"]);
+  const piManifest = await jsonFile(
+    join(root, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"),
+  );
+  const catalogTypebox = object(state.policies.catalog ?? {}).typebox;
+  assert.deepEqual(
+    typeboxPinProblems(typeof catalogTypebox === "string" ? catalogTypebox : undefined, piManifest),
+    [],
+    "pnpm-workspace.yaml#catalog.typebox",
+  );
   command(pnpm, ["check"]);
   const compiler = jsonCommand(["exec", "tsc", "--showConfig"]);
   const options = object(compiler.compilerOptions);
@@ -447,9 +472,6 @@ async function verify(state: Awaited<ReturnType<typeof inventory>>, minimumNode:
   assert.ok(tarball !== undefined);
   const consumer = join(temporary, "consumer");
   await mkdir(consumer);
-  const piManifest = await jsonFile(
-    join(root, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"),
-  );
   assert.equal(typeof piManifest.version, "string");
   await writeFile(
     join(consumer, "package.json"),

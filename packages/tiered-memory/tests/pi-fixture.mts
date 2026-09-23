@@ -15,6 +15,11 @@ import type {
   CreateAgentSessionFromServicesOptions,
   ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
+import type { Static, TSchema } from "typebox";
+import { Value } from "typebox/value";
+import { test as base } from "vitest";
+
+import { reportEntrySchema } from "../src/domain/settings.ts";
 
 export const fixtureModel = {
   id: "fixture",
@@ -43,19 +48,36 @@ export interface Fixture {
 
 type FixtureModel = NonNullable<CreateAgentSessionFromServicesOptions["model"]>;
 
-export async function fixture(
-  options: {
-    trusted?: boolean;
-    personal?: unknown;
-    project?: unknown;
-    model?: FixtureModel;
-    models?: FixtureModel[];
-    noAuthModel?: FixtureModel;
-    credentialCommand?: string;
-    cwd?: string;
-    sessionFile?: string;
-  } = {},
-): Promise<Fixture> {
+export interface FixtureOptions {
+  trusted?: boolean;
+  personal?: unknown;
+  project?: unknown;
+  model?: FixtureModel;
+  models?: FixtureModel[];
+  noAuthModel?: FixtureModel;
+  credentialCommand?: string;
+  cwd?: string;
+  sessionFile?: string;
+}
+
+export function findEntry<T extends TSchema>(
+  session: AgentSession,
+  customType: string,
+  schema: T,
+): { id: string; data: Static<T> } {
+  const entry = session.sessionManager
+    .getBranch()
+    .findLast((candidate) => candidate.type === "custom" && candidate.customType === customType);
+  if (entry?.type !== "custom") {
+    throw new Error(`Missing ${customType} entry on the active branch.`);
+  }
+  if (!Value.Check(schema, entry.data)) {
+    throw new Error(`Invalid ${customType} entry on the active branch.`);
+  }
+  return { id: entry.id, data: entry.data };
+}
+
+export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
   const cwd = options.cwd ?? (await mkdtemp(join(tmpdir(), "orbis-tiered-memory-pi-")));
   const agentDir = process.env.PI_CODING_AGENT_DIR;
   if (agentDir === undefined) {
@@ -162,22 +184,7 @@ export async function fixture(
     settings,
     notifications,
     report() {
-      const reportEntry = session.sessionManager
-        .getBranch()
-        .findLast(
-          (candidate) =>
-            candidate.type === "custom" && candidate.customType === "orbis-tiered-memory-report",
-        );
-      if (
-        reportEntry?.type !== "custom" ||
-        typeof reportEntry.data !== "object" ||
-        reportEntry.data === null ||
-        !("text" in reportEntry.data) ||
-        typeof reportEntry.data.text !== "string"
-      ) {
-        throw new Error("Missing status report.");
-      }
-      return reportEntry.data.text;
+      return findEntry(session, "orbis-tiered-memory-report", reportEntrySchema).data.text;
     },
     async command(args) {
       await session.prompt(`/tiered-memory${args === "" ? "" : ` ${args}`}`);
@@ -195,3 +202,18 @@ export async function fixture(
     },
   };
 }
+
+export const test = base.extend("createFixture", ({ onTestFinished }) => {
+  const created: Fixture[] = [];
+  onTestFinished(async () => {
+    for (const opened of created.toReversed()) {
+      // oxlint-disable-next-line no-await-in-loop -- A later fixture can share an earlier fixture's cwd, which the earlier fixture removes on dispose.
+      await opened.dispose();
+    }
+  });
+  return async (options?: FixtureOptions): Promise<Fixture> => {
+    const opened = await fixture(options);
+    created.push(opened);
+    return opened;
+  };
+});

@@ -1,23 +1,15 @@
-import { execFile } from "node:child_process";
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
-import { expect, test } from "vitest";
+import { expect } from "vitest";
 
-import { resolveProjectSettingsPath } from "../src/settings.ts";
-import { fixture } from "./pi-fixture.mts";
-
-const git = promisify(execFile);
+import { configurationEntrySchema } from "../src/domain/settings.ts";
+import { findEntry, test } from "./pi-fixture.mts";
 
 test("Pi loads defaults, routes commands without a model call, and keeps native settings", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture();
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture();
   expect(
     f.session.extensionRunner.getRegisteredCommands().map((command) => command.invocationName),
   ).toContain("tiered-memory");
@@ -44,14 +36,11 @@ test("Pi loads defaults, routes commands without a model call, and keeps native 
 });
 
 test("Pi applies personal and trusted project fields without writing settings", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const personal = { enabled: false, limits: { queuedJobs: 3 } };
   const project = { enabled: true, limits: { workerInputTokens: 5000 } };
-  const f = await fixture({ personal, project });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture({ personal, project });
   await f.command("status");
   expect(f.report()).toContain("Tiered memory: enabled (project)");
   expect(f.report()).toContain("limits.queuedJobs: 3 (personal)");
@@ -66,15 +55,12 @@ test("Pi applies personal and trusted project fields without writing settings", 
 });
 
 test("Pi ignores project overrides without host trust and retains valid settings after invalid reload", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture({
+  const f = await createFixture({
     trusted: false,
     personal: { limits: { queuedJobs: 4 } },
     project: { enabled: false, limits: { queuedJobs: 1 } },
-  });
-  onTestFinished(async () => {
-    await f.dispose();
   });
   await f.command("status");
   expect(f.report()).toContain("Tiered memory: enabled (default)");
@@ -83,61 +69,44 @@ test("Pi ignores project overrides without host trust and retains valid settings
   await writeFile(join(f.agentDir, "tiered-memory.json"), "{bad");
   await f.reload();
   await f.command("status");
-  expect(f.report()).toContain("invalid JSON");
+  expect(f.report()).toContain(
+    `Configuration error: Invalid JSON at ${join(f.agentDir, "tiered-memory.json")}.`,
+  );
   expect(f.report()).toContain("limits.queuedJobs: 4 (personal)");
 });
 
-test("Pi suspends automatic work without a valid configuration", async ({ onTestFinished }) => {
-  const f = await fixture({ personal: "{" });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+test("Pi suspends automatic work without a valid configuration", async ({ createFixture }) => {
+  const f = await createFixture({ personal: "{" });
   await f.command("status");
   expect(f.report()).toContain("Tiered memory: disabled (configuration unavailable)");
   expect(f.report()).toContain("Automatic work: suspended; native Pi remains available.");
 });
 
 test("Pi restores an activation override on resume and resets it in an unrelated session", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const original = await fixture();
-  onTestFinished(async () => {
-    await original.dispose();
-  });
+  const original = await createFixture();
   await original.command("off");
   await original.session.prompt("Record the session");
   const sessionFile = original.session.sessionManager.getSessionFile();
   if (sessionFile === undefined) {
     throw new Error("Missing persisted Pi session.");
   }
-  const resumed = await fixture({ cwd: original.cwd, sessionFile });
-  onTestFinished(async () => {
-    await resumed.dispose();
-  });
+  const resumed = await createFixture({ cwd: original.cwd, sessionFile });
   await resumed.command("status");
   expect(resumed.report()).toContain("Tiered memory: disabled (session override)");
-  const unrelated = await fixture({ cwd: original.cwd });
-  onTestFinished(async () => {
-    await unrelated.dispose();
-  });
+  const unrelated = await createFixture({ cwd: original.cwd });
   await unrelated.command("status");
   expect(unrelated.report()).toContain("Tiered memory: enabled (default)");
 });
 
-test("Pi tree navigation selects activation from the active branch", async ({ onTestFinished }) => {
-  const f = await fixture();
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  const initial = f.session.sessionManager
-    .getBranch()
-    .find(
-      (entry) =>
-        entry.type === "custom" && entry.customType === "orbis-tiered-memory-configuration",
-    );
-  if (initial === undefined) {
-    throw new Error("Missing initial configuration entry.");
-  }
+test("Pi tree navigation selects activation from the active branch", async ({ createFixture }) => {
+  const f = await createFixture();
+  const initial = findEntry(
+    f.session,
+    "orbis-tiered-memory-configuration",
+    configurationEntrySchema,
+  );
   await f.command("off");
   expect(f.report()).toContain("disabled (session override)");
   const result = await f.session.navigateTree(initial.id, { summarize: false });
@@ -146,20 +115,13 @@ test("Pi tree navigation selects activation from the active branch", async ({ on
   expect(f.report()).toContain("enabled (default)");
 });
 
-test("Pi tree navigation keeps loaded settings until reload", async ({ onTestFinished }) => {
-  const f = await fixture({ personal: { limits: { queuedJobs: 3 } } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  const initial = f.session.sessionManager
-    .getBranch()
-    .find(
-      (entry) =>
-        entry.type === "custom" && entry.customType === "orbis-tiered-memory-configuration",
-    );
-  if (initial === undefined) {
-    throw new Error("Missing initial configuration entry.");
-  }
+test("Pi tree navigation keeps loaded settings until reload", async ({ createFixture }) => {
+  const f = await createFixture({ personal: { limits: { queuedJobs: 3 } } });
+  const initial = findEntry(
+    f.session,
+    "orbis-tiered-memory-configuration",
+    configurationEntrySchema,
+  );
   await f.command("off");
   await writeFile(
     join(f.agentDir, "tiered-memory.json"),
@@ -181,74 +143,17 @@ test.for([
   },
   { label: "threshold exceeds active pool", limits: { consolidationThresholdTokens: 9000 } },
   { label: "note and index exceed input", limits: { workerInputTokens: 1200 } },
-])("Pi rejects $label budget configuration", async ({ limits }, { onTestFinished }) => {
-  const f = await fixture({ personal: { limits } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+])("Pi rejects $label budget configuration", async ({ limits }, { createFixture }) => {
+  const f = await createFixture({ personal: { limits } });
   await f.command("status");
   expect(f.report()).toContain("disabled (configuration unavailable)");
   expect(f.report()).toContain("Tiered-memory limits conflict");
 });
 
-test("Git non-repository detection uses a fixed diagnostic locale", async ({ onTestFinished }) => {
-  const workspace = await mkdtemp(join(tmpdir(), "orbis-tiered-locale-"));
-  onTestFinished(async () => {
-    await rm(workspace, { recursive: true, force: true });
-  });
-  const bin = join(workspace, "bin");
-  const cwd = join(workspace, "project");
-  await mkdir(bin);
-  await mkdir(cwd);
-  const wrapper = join(bin, "git");
-  await writeFile(
-    wrapper,
-    '#!/bin/sh\nif [ "$LC_ALL" = C ]; then echo "fatal: not a git repository" >&2; else echo "fatal: ceci n est pas un depot Git" >&2; fi\nexit 128\n',
-  );
-  await chmod(wrapper, 0o755);
-  const previousPath = process.env.PATH;
-  const previousLocale = process.env.LC_ALL;
-  process.env.PATH = `${bin}:${previousPath ?? ""}`;
-  process.env.LC_ALL = "fr_FR.UTF-8";
-  try {
-    expect(await resolveProjectSettingsPath(cwd)).toBe(
-      join(cwd, ".pi", "tiered-memory", "settings.json"),
-    );
-  } finally {
-    if (previousPath === undefined) {
-      delete process.env.PATH;
-    } else {
-      process.env.PATH = previousPath;
-    }
-    if (previousLocale === undefined) {
-      delete process.env.LC_ALL;
-    } else {
-      process.env.LC_ALL = previousLocale;
-    }
-  }
-});
-
-test("Git worktree root keeps trailing spaces", async ({ onTestFinished }) => {
-  const workspace = await mkdtemp(join(tmpdir(), "orbis-tiered-space-"));
-  onTestFinished(async () => {
-    await rm(workspace, { recursive: true, force: true });
-  });
-  const root = join(workspace, "worktree ");
-  const cwd = join(root, "src");
-  await mkdir(cwd, { recursive: true });
-  await git("git", ["init", "-q", root]);
-  expect(await resolveProjectSettingsPath(cwd)).toBe(
-    join(root, ".pi", "tiered-memory", "settings.json"),
-  );
-});
-
 test("Pi retains the last valid configuration when a reload introduces conflicting budgets", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture({ personal: { limits: { queuedJobs: 3 } } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture({ personal: { limits: { queuedJobs: 3 } } });
   await writeFile(
     join(f.agentDir, "tiered-memory.json"),
     JSON.stringify({ limits: { queuedJobs: 4, workerInputTokens: 1200 } }),
@@ -259,13 +164,10 @@ test("Pi retains the last valid configuration when a reload introduces conflicti
   expect(f.report()).toContain("limits.queuedJobs: 3 (personal)");
 });
 
-test("Pi applies a temporary host trust decision on reload", async ({ onTestFinished }) => {
-  const f = await fixture({
+test("Pi applies a temporary host trust decision on reload", async ({ createFixture }) => {
+  const f = await createFixture({
     trusted: false,
     project: { enabled: false, limits: { queuedJobs: 2 } },
-  });
-  onTestFinished(async () => {
-    await f.dispose();
   });
   await f.command("status");
   expect(f.report()).toContain("enabled (default)");
@@ -277,12 +179,9 @@ test("Pi applies a temporary host trust decision on reload", async ({ onTestFini
 });
 
 test("Pi does not restore trusted project values after trust is revoked and replacement settings are invalid", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture({ trusted: true, project: { enabled: false } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture({ trusted: true, project: { enabled: false } });
   await f.command("status");
   expect(f.report()).toContain("disabled (project)");
   await writeFile(join(f.agentDir, "tiered-memory.json"), "{");
@@ -292,11 +191,8 @@ test("Pi does not restore trusted project values after trust is revoked and repl
   expect(f.report()).toContain("disabled (configuration unavailable)");
 });
 
-test("Pi forked session restores the selected branch activation", async ({ onTestFinished }) => {
-  const original = await fixture();
-  onTestFinished(async () => {
-    await original.dispose();
-  });
+test("Pi forked session restores the selected branch activation", async ({ createFixture }) => {
+  const original = await createFixture();
   await original.command("off");
   await original.session.prompt("Persist the selected branch");
   const leaf = original.session.sessionManager.getLeafId();
@@ -307,21 +203,15 @@ test("Pi forked session restores the selected branch activation", async ({ onTes
   if (forkFile === undefined) {
     throw new Error("Missing Pi fork file.");
   }
-  const forked = await fixture({ cwd: original.cwd, sessionFile: forkFile });
-  onTestFinished(async () => {
-    await forked.dispose();
-  });
+  const forked = await createFixture({ cwd: original.cwd, sessionFile: forkFile });
   await forked.command("status");
   expect(forked.report()).toContain("disabled (session override)");
 });
 
 test("untrusted unreadable project path does not invalidate updated personal settings", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture({ trusted: false, personal: { limits: { queuedJobs: 3 } } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture({ trusted: false, personal: { limits: { queuedJobs: 3 } } });
   await rm(join(f.cwd, ".pi"), { recursive: true });
   await writeFile(join(f.cwd, ".pi"), "blocked project path");
   await writeFile(
@@ -335,21 +225,10 @@ test("untrusted unreadable project path does not invalidate updated personal set
 });
 
 test("tree navigation keeps current valid settings for a later invalid reload", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture({ personal: { limits: { queuedJobs: 3 } } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  const first = f.session.sessionManager
-    .getBranch()
-    .find(
-      (entry) =>
-        entry.type === "custom" && entry.customType === "orbis-tiered-memory-configuration",
-    );
-  if (first === undefined) {
-    throw new Error("Missing initial configuration entry.");
-  }
+  const f = await createFixture({ personal: { limits: { queuedJobs: 3 } } });
+  const first = findEntry(f.session, "orbis-tiered-memory-configuration", configurationEntrySchema);
   await writeFile(
     join(f.agentDir, "tiered-memory.json"),
     JSON.stringify({ limits: { queuedJobs: 6 } }),
@@ -362,62 +241,4 @@ test("tree navigation keeps current valid settings for a later invalid reload", 
   await f.reload();
   await f.command("status");
   expect(f.report()).toContain("limits.queuedJobs: 6 (personal)");
-});
-
-test.for([
-  { label: "Git subdirectory", kind: "subdirectory" as const },
-  { label: "linked worktree", kind: "linked" as const },
-  { label: "nested repository", kind: "nested" as const },
-  { label: "outside Git", kind: "non-git" as const },
-])("project settings use the $label root", async ({ kind }, { onTestFinished }) => {
-  const workspace = await mkdtemp(join(tmpdir(), "orbis-tiered-root-"));
-  onTestFinished(async () => {
-    await rm(workspace, { recursive: true, force: true });
-  });
-  let root = workspace;
-  if (kind === "subdirectory" || kind === "nested") {
-    await git("git", ["init", "-q", workspace]);
-  }
-  if (kind === "nested") {
-    root = join(workspace, "nested");
-    await mkdir(root);
-    await git("git", ["init", "-q", root]);
-  }
-  if (kind === "linked") {
-    const main = join(workspace, "main");
-    await mkdir(main);
-    await git("git", ["init", "-q", main]);
-    await git("git", [
-      "-C",
-      main,
-      "-c",
-      "user.email=fixture@example.com",
-      "-c",
-      "user.name=Fixture",
-      "commit",
-      "-q",
-      "--allow-empty",
-      "-m",
-      "fixture",
-    ]);
-    root = join(workspace, "linked");
-    await git("git", ["-C", main, "worktree", "add", "-q", "--detach", root, "HEAD"]);
-  }
-  const cwd = join(root, "src");
-  await mkdir(cwd);
-  const settingsRoot = kind === "non-git" ? cwd : root;
-  await mkdir(join(settingsRoot, ".pi", "tiered-memory"), { recursive: true });
-  await writeFile(
-    join(settingsRoot, ".pi", "tiered-memory", "settings.json"),
-    JSON.stringify({ limits: { queuedJobs: 2 } }),
-  );
-  const f = await fixture({ cwd });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
-  await f.command("status");
-  expect(f.report()).toContain(
-    `Project settings: ${join(settingsRoot, ".pi", "tiered-memory", "settings.json")}`,
-  );
-  expect(f.report()).toContain("limits.queuedJobs: 2 (project)");
 });

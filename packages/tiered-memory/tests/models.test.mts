@@ -1,11 +1,28 @@
-import { expect, test, vi } from "vitest";
+import { expect, vi } from "vitest";
 
-import { resolveModel } from "../src/models.ts";
-import { defaultLimits } from "../src/settings.ts";
-import { fixture, fixtureModel } from "./pi-fixture.mts";
+import { modelCapacity } from "../src/domain/models.ts";
+import { defaultLimits } from "../src/domain/settings.ts";
+import { resolveModel } from "../src/pi/models.ts";
+import { fixtureModel, test } from "./pi-fixture.mts";
+
+test("capacity caps output to the model maximum and input to the remaining context window", () => {
+  expect(
+    modelCapacity("local/model", defaultLimits, { contextWindow: 3200, maxTokens: 1500 }),
+  ).toEqual({ state: "ready", id: "local/model", inputTokens: 1700, outputTokens: 1500 });
+});
+
+test("capacity suspends when the input cap cannot hold the work note and index", () => {
+  expect(
+    modelCapacity("local/model", defaultLimits, { contextWindow: 2000, maxTokens: 1500 }),
+  ).toEqual({
+    state: "suspended",
+    id: "local/model",
+    reason: "Model capacity is smaller than mandatory memory budgets.",
+  });
+});
 
 test("Pi resolves independent role overrides and caps work to each model", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const observer = {
     ...fixtureModel,
@@ -21,15 +38,12 @@ test("Pi resolves independent role overrides and caps work to each model", async
     contextWindow: 12000,
     maxTokens: 3000,
   };
-  const f = await fixture({
+  const f = await createFixture({
     models: [observer, consolidator],
     personal: {
       observerModel: "tiered-fixture/observer/nested",
       consolidatorModel: "tiered-fixture/consolidator",
     },
-  });
-  onTestFinished(async () => {
-    await f.dispose();
   });
   await f.command("status");
   expect(f.report()).toContain(
@@ -40,11 +54,8 @@ test("Pi resolves independent role overrides and caps work to each model", async
   );
 });
 
-test("Pi suspends only the unresolved role", async ({ onTestFinished }) => {
-  const f = await fixture({ personal: { observerModel: "unknown/missing" } });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+test("Pi suspends only the unresolved role", async ({ createFixture }) => {
+  const f = await createFixture({ personal: { observerModel: "unknown/missing" } });
   await f.command("status");
   expect(f.report()).toContain(
     "observer model: unknown/missing (personal); unknown/missing; suspended: Model identifier is unresolved.",
@@ -55,12 +66,12 @@ test("Pi suspends only the unresolved role", async ({ onTestFinished }) => {
 });
 
 test("Pi suspends a worker whose output cannot hold the mandatory note", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const tiny = { ...fixtureModel, id: "tiny", name: "Tiny", maxTokens: 512 };
-  const f = await fixture({ models: [tiny], personal: { observerModel: "tiered-fixture/tiny" } });
-  onTestFinished(async () => {
-    await f.dispose();
+  const f = await createFixture({
+    models: [tiny],
+    personal: { observerModel: "tiered-fixture/tiny" },
   });
   await f.command("status");
   expect(f.report()).toContain(
@@ -69,19 +80,16 @@ test("Pi suspends a worker whose output cannot hold the mandatory note", async (
 });
 
 test("Pi reports acting model capacity independently from worker capacity", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const tiny = { ...fixtureModel, id: "acting-tiny", name: "Tiny actor", contextWindow: 512 };
-  const f = await fixture({ model: tiny });
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture({ model: tiny });
   await f.command("status");
   expect(f.report()).toContain("Acting model: mandatory work note does not fit remaining context");
 });
 
 test("Pi reports missing credentials without substituting the session provider", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const noAuth = {
     ...fixtureModel,
@@ -89,12 +97,9 @@ test("Pi reports missing credentials without substituting the session provider",
     id: "observer",
     name: "No credentials",
   };
-  const f = await fixture({
+  const f = await createFixture({
     noAuthModel: noAuth,
     personal: { observerModel: "tiered-noauth/observer" },
-  });
-  onTestFinished(async () => {
-    await f.dispose();
   });
   await f.command("status");
   expect(f.report()).toContain(
@@ -106,12 +111,10 @@ test("Pi reports missing credentials without substituting the session provider",
 });
 
 test("omitted override uses the exact active SDK model outside the registry", async ({
+  createFixture,
   onTestFinished,
 }) => {
-  const f = await fixture();
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture();
   const active = { ...fixtureModel, id: "session-only", contextWindow: 3200, maxTokens: 1500 };
   const ctx = { ...f.session.extensionRunner.createContext(), model: active };
   const authentication = vi.spyOn(ctx.modelRegistry, "getApiKeyAndHeaders");
@@ -125,23 +128,20 @@ test("omitted override uses the exact active SDK model outside the registry", as
     { enabled: true, limits: { ...defaultLimits } },
     "observer",
   );
-  expect(result).toMatchObject({
+  expect(result).toEqual({
     state: "ready",
     id: "tiered-fixture/session-only",
     inputTokens: 1700,
     outputTokens: 1500,
   });
-  expect(authentication.mock.calls[0]?.[0]).toBe(active);
+  expect(authentication).toHaveBeenCalledWith(active);
   expect(lookup).not.toHaveBeenCalled();
 });
 
 test("omitted override keeps active model capacities when registry metadata differs", async ({
-  onTestFinished,
+  createFixture,
 }) => {
-  const f = await fixture();
-  onTestFinished(async () => {
-    await f.dispose();
-  });
+  const f = await createFixture();
   const active = { ...fixtureModel, contextWindow: 4000, maxTokens: 1500 };
   const ctx = { ...f.session.extensionRunner.createContext(), model: active };
   const result = await resolveModel(
@@ -149,7 +149,7 @@ test("omitted override keeps active model capacities when registry metadata diff
     { enabled: true, limits: { ...defaultLimits } },
     "observer",
   );
-  expect(result).toMatchObject({
+  expect(result).toEqual({
     state: "ready",
     id: "tiered-fixture/fixture",
     inputTokens: 2500,
@@ -158,15 +158,12 @@ test("omitted override keeps active model capacities when registry metadata diff
 });
 
 test("Pi model selection updates the omitted role without changing an explicit override", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const other = { ...fixtureModel, id: "other", name: "Other", maxTokens: 1500 };
-  const f = await fixture({
+  const f = await createFixture({
     models: [other],
     personal: { observerModel: "tiered-fixture/fixture" },
-  });
-  onTestFinished(async () => {
-    await f.dispose();
   });
   await f.session.setModel(other);
   await f.command("status");
@@ -179,7 +176,7 @@ test("Pi model selection updates the omitted role without changing an explicit o
 });
 
 test("credential-command errors never enter status or persisted reports", async ({
-  onTestFinished,
+  createFixture,
 }) => {
   const sentinel = "ORBIS_CREDENTIAL_SENTINEL";
   const noAuth = {
@@ -188,13 +185,10 @@ test("credential-command errors never enter status or persisted reports", async 
     id: "observer",
     name: "Credential command",
   };
-  const f = await fixture({
+  const f = await createFixture({
     noAuthModel: noAuth,
     credentialCommand: `!node -e "process.stderr.write('${sentinel}');process.exit(1)"`,
     personal: { observerModel: "tiered-noauth/observer" },
-  });
-  onTestFinished(async () => {
-    await f.dispose();
   });
   await f.command("status");
   expect(f.report()).toContain(

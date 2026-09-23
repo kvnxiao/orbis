@@ -1,7 +1,7 @@
 {
   "name": "@orbis/tiered-memory",
   "version": "0.1.0",
-  "description": "Activation and configuration controls for experimental Pi memory",
+  "description": "Tiered memory for Pi sessions with activation, configuration, and memory-model controls",
   "keywords": [
     "orbis",
     "pi-package"
@@ -14,6 +14,9 @@
     "LICENSE"
   ],
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -27,11 +30,13 @@
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@types/node": "catalog:",
+    "typebox": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
   },
   "engines": {
     "node": ">=22.19.0"
