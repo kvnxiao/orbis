@@ -205,10 +205,14 @@ requests according to their stated scope.
 ### Evidence and publication
 
 - Keep detailed run evidence, including real-agent checks, in ignored
-  `packages/<name>/implementation/` directories or `.artifacts/` for workspace work. Publish concise
-  verification summaries and handoffs in issues and PRs; raw logs require explicit user opt-in. Keep
-  reusable tests and instructions available from a clone. Do not link package documentation to local
-  evidence or include session logs in package contracts.
+  `packages/<name>/implementation/` directories or `.artifacts/` for workspace work. Within
+  authorized shared work, publish concise authored checkpoint artifacts in issue comments after
+  every completed agent assignment, including reviews with no findings, and at blocked or
+  interrupted handoffs. Follow the
+  [checkpoint and retrieval workflow](docs/development-workflow.md): keep comments append-only,
+  batch current plan and handoff edits, and fetch history only when needed. Raw logs require
+  explicit user opt-in. Keep reusable tests and instructions available from a clone. Do not link
+  package documentation to local evidence or include session logs in package contracts.
 - Before publication, use `pnpm pack` and test the tarball outside the workspace. Check that runtime
   imports resolve without workspace symlinks or development dependencies and that Pi registers the
   expected behavior.
@@ -221,6 +225,12 @@ requests according to their stated scope.
   closes the initiative after integrated acceptance; do not infer completion from child counts.
 
 ## Writing
+
+- For GitHub issue and PR bodies and comments, keep each prose paragraph or list item on one
+  physical line so the browser controls wrapping. Preserve Markdown structure and code blocks. Keep
+  drafts in ignored `.artifacts/`, exclude them from formatter reflow, and pass this rule to prose
+  auditors. Publish with `--body-file` and verify the stored body. See
+  [GitHub Markdown](docs/development-workflow.md#write-github-markdown).
 
 - Avoid forward references in documentation, skills, and design discussions. Before using a
   package-specific term, acronym, state, interface, or named approach, introduce its meaning and

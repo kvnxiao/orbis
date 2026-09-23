@@ -18,7 +18,7 @@ Create native sub-issues only for independently executable outcomes.
 | Baseline | SPEC and interaction-contract links and reviewed revision; repository baseline; developer approval reference or pending decisions |
 | Shared approach | Verified current behavior, proposed additions, selected approach, and shared constraints |
 | Coverage and integrated acceptance | Requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks |
-| Current handoff | Derived stage and evidence, approval and authorization scope, delivered outcomes, active child or PR, actual verification, blocker, and next unblocked action |
+| Current handoff | Current stage, approval and authorization scope, relevant revision, active child or PR, concise evidence with a checkpoint link when needed, blocker, and next unblocked action |
 
 Use native child relationships rather than a duplicate child-status checklist. Record blocking links
 and the prerequisite's observable output. Issue numbers do not imply execution order. SPEC approval
@@ -35,7 +35,7 @@ Refer to the parent for shared context rather than copying its contract or cover
 | Prerequisites | Blocking issue links, required outputs, and unresolved decisions |
 | Implementation | Files or symbols, intended edits, existing behavior to reuse, constraints, and small-step checklists |
 | Acceptance | Working directory, command or interaction, inputs, expected results, and applicable failure or recovery cases |
-| Current handoff | Derived stage and evidence, approval and authorization scope, active branch or PR, implemented behavior, observed verification, blocker, and next action |
+| Current handoff | Current stage, approval and authorization scope, relevant revision and active branch or PR, concise evidence with a checkpoint link when needed, blocker, and next action |
 
 Initially state that implementation has not started. Update the handoff from observed results and
 relevant contract and source revisions as work progresses. Keep expected checks separate from actual
@@ -53,10 +53,17 @@ Compare the recorded baseline with current SPEC and source changes before resumi
 tasks and coverage; unrelated commits do not invalidate the whole plan. Preserve completed work and
 contributor edits. Check remote state before retrying an uncertain write.
 
+Keep the body compact and current. Batch edits when the executable plan or handoff changes; skip
+unchanged writes and per-agent progress narratives. Publish authored checkpoint artifacts in
+append-only issue comments under the
+[checkpoint policy](../../../../docs/development-workflow.md#publish-checkpoint-artifacts).
+Keep only links needed for current execution in the body; do not accumulate a history index.
+
 Keep raw logs and scratch files in ignored `packages/<name>/implementation/`, or `.artifacts/` for
-workspace work. Issue handoffs contain concise results and next actions, not local file links or
-transcripts. Keep reusable tests and instructions in the repository. Do not maintain a second
-authoritative local plan.
+workspace work. Checkpoint summaries must be understandable without local file links or transcripts.
+Keep reusable tests and instructions in the repository. Do not maintain a second authoritative local
+plan. For GitHub bodies and comments, write each prose paragraph or list item on one physical line,
+preserve Markdown structure, and prohibit formatter or audit reflow of publication drafts.
 
 For explicit local or chat-only requests, preserve the same outcome, approach, acceptance, and
 handoff information in that destination. Local drafts during a GitHub outage remain unpublished

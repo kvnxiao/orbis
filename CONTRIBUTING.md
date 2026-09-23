@@ -70,8 +70,12 @@ derive implementation tasks from the approved contract. The
 [specification guide](docs/specifications.md) defines this workflow and how to write
 package-specific contracts. Follow the [development workflow](docs/development-workflow.md) to
 create a bounded initiative, plan work through GitHub sub-issues, and deliver focused PRs. Issue
-bodies contain the authoritative implementation plans. Local scratch work and detailed evidence
-remain optional and ignored.
+bodies contain the authoritative implementation plans and compact current handoffs. Authored
+checkpoint artifacts in issue comments preserve completed assignments, findings, and blocked or
+interrupted handoffs. Routine resumption reads current bodies; checkpoint history is retrieved only
+when needed. Local scratch work and raw logs remain optional and ignored. Follow the workflow's
+[checkpoint policy](docs/development-workflow.md#publish-checkpoint-artifacts) and
+[GitHub Markdown rules](docs/development-workflow.md#write-github-markdown) when publishing records.
 
 For packages that own prompts, menus, forms, modals, or interactive terminal views, explore the user
 flows before approving the design and document them in `docs/tui-interactions.md`, linked from the
