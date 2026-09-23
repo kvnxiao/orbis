@@ -6,6 +6,11 @@ behavior; issues contain implementation plans. The
 [wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) links consequential choices
 and the constraints behind them.
 
+A **checkpoint** records a completed agent assignment or a blocked or interrupted handoff. Each
+checkpoint contains one or more authored artifacts summarizing the work and its results, published
+as issue comments. The issue body contains the compact current plan and handoff; checkpoint comments
+preserve the work history.
+
 ## Start or resume work
 
 Ask to resume an issue, for example `Resume #<number>` or `Continue work on <issue URL>`. The
@@ -31,6 +36,34 @@ Record the stage, approval and execution scope, active work, evidence, next acti
 the issue's current handoff. At the start of a new session, verify that handoff against current
 artifacts before continuing. Keep the issue as the shared record; do not introduce a separate
 lifecycle-state file.
+
+### Retrieve current work before history
+
+For routine discovery, request issue metadata, then read the selected issue's body and relevant
+relationships with explicit fields. For example:
+
+```sh
+gh issue list -R OWNER/REPO --state open --json number,title,state,url --limit 30
+gh issue view NUMBER -R OWNER/REPO --json number,title,state,body,parent,subIssues,blockedBy,blocking
+```
+
+Do not request comments during routine task selection or resumption. Bare `gh issue view` can fetch
+the latest comment; use explicit `--json` fields instead. Read linked PR state and review decisions
+as needed without loading unrelated comment history.
+
+Fetch a checkpoint only when current records leave a specific question unanswered, a finding or
+decision needs its supporting evidence, or the developer requests a retrospective. Follow a direct
+comment link or ID and request that comment alone:
+
+```sh
+gh api repos/OWNER/REPO/issues/comments/COMMENT_ID --jq '{id,html_url,body,updated_at}'
+```
+
+When the comment ID is unknown, request bounded pages of comment metadata through GraphQL without
+the `body` field, then fetch selected bodies. Filtering `--json comments` with `--jq` still fetches
+comment bodies. For a retrospective, set the issue and time scope before paging through its
+comments; report incomplete coverage. GitHub issue search returns matching issues, not individual
+comment records, and does not establish an exhaustive history.
 
 At the start of substantive repository work, read the decision index once and open records relevant
 to the affected package or mechanism. Compare historical constraints with current source and runtime
@@ -127,6 +160,7 @@ Checklists hold smaller steps that do not need separate ownership or delivery.
 | Package SPEC and linked interaction contract | Current approved behavior and conformance scenarios                                                        |
 | Initiative issue                             | Outcome, approved scope and SPEC baseline, requirement coverage, shared constraints, integrated acceptance |
 | Work issue                                   | Requirement contribution, concrete approach, dependencies, acceptance checks, current handoff              |
+| Checkpoint comments                          | Authored work summaries, findings, verification, and unresolved obligations                                |
 | Project item                                 | Priority and coarse execution status                                                                       |
 | Wiki decision record                         | Choice, constraints, alternatives, consequences, and reconsideration conditions                            |
 | Optional local files                         | Scratch work, detailed logs, and run evidence                                                              |
@@ -138,10 +172,75 @@ decomposition and blocking relationships for prerequisites. Add each tracked iss
 parent membership and fields do not establish child membership or priority.
 
 Keep the current plan in issue bodies using the
-[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md). Use comments
-for consequential updates or developer decisions, with links from the current body when needed.
-Preserve contributor text and reread an issue before editing it. After an uncertain write, check the
-remote state before retrying or creating another issue.
+[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md). Edit the body
+only when current scope, plan, acceptance criteria, authorization, stage, branch or revision,
+blockers, or next action changes. Update checklist completion at meaningful task boundaries. Keep
+only the checkpoint links needed to resume current work; do not grow a history index in the body.
+Record findings and progress in checkpoint comments even when the body needs no change.
+
+Batch pending body changes before a stage transition, pause, or delivery; update sooner when another
+worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to
+refresh a timestamp. Reread before editing, preserve contributor text, and skip unchanged writes.
+After an uncertain write, check remote state before retrying or creating another issue.
+
+## Publish checkpoint artifacts
+
+Within authorized shared work, the orchestrator publishes a checkpoint after every completed agent
+assignment, including its own bounded work and reviews with no findings, and at blocked or
+interrupted handoffs. Preserve explicit local-only, chat-only, and read-only publication limits. A
+status-only request does not authorize a checkpoint comment. Publish when the checkpoint is reached
+instead of deferring all records until the session ends. A sudden process termination may prevent
+publication; report any resulting gap when resuming.
+
+Author a summary from the work and verified results. Do not copy conversation turns, delegate
+responses, tool-call dumps, or raw JSONL into the journal. Record conclusions and their supporting
+rationale, not private deliberation. Scale detail to the work: a clean review may need only its
+scope, verdict, checks, and remaining obligations. Group related artifacts in one comment when
+practical, retaining each assignment's attribution and outcome.
+
+Each checkpoint records:
+
+- A stable checkpoint ID chosen before publication, the assignment, responsible agent or role, and
+  completion, blocked, or interrupted status.
+- UTC recording time, observed work interval or measured duration when available, and an explicit
+  unknown for unmeasured time. Do not reconstruct time spent from comment timestamps.
+- The source revision and scope examined or changed. Identify uncommitted work explicitly.
+- Work performed, findings, consequential choices and their rationale, and verification results.
+  Distinguish passed, failed, skipped, and unverified checks; include useful commands and
+  conditions.
+- Unresolved obligations, blockers, next action, and relevant issue, PR, commit, or artifact links.
+  Include enough evidence to understand the result without access to ignored local files.
+
+Publish on the issue that owns the work. Link from a parent or related issue when needed instead of
+duplicating artifacts. Comments are append-only by workflow convention; GitHub still permits edits
+and deletion. Correct or supersede a finding in a new comment linking the earlier record and stating
+what changes. Edit or delete historical records only on explicit developer instruction.
+
+After publication, retain the returned comment ID and URL and verify the stored body. If a write has
+an uncertain result, locate the stable checkpoint ID before retrying; do not append duplicates. Use
+bounded metadata retrieval to locate candidate comments, then fetch their bodies as needed. During
+an outage, retain an unpublished draft locally and report the publication gap. Publish it when
+access returns without inventing missing evidence. An unpublished draft is not a shared handoff, and
+a checkpoint does not transfer unpushed code to another machine.
+
+## Write GitHub Markdown
+
+For issue bodies, issue comments, PR bodies, and PR comments, write each prose paragraph or list
+item on one physical line and let the browser wrap it. Preserve structural newlines for headings,
+lists, tables, and code blocks. Do not insert column-width breaks, trailing double spaces, or HTML
+breaks to wrap prose.
+
+Prepare publication drafts in ignored `.artifacts/` files. Pass the destination and this no-reflow
+rule to every prose auditor. Do not run Markdown reflow or a width-enforcing formatter on these
+drafts. Oxfmt excludes `.artifacts/**` and wraps Markdown in the files it formats. When adapting
+tracked prose for GitHub, join its artificial line breaks without flattening Markdown structure or
+changing code blocks.
+
+For commits and PRs, complete repository verification before preparing and auditing delivery drafts.
+Review ordinary checkpoint prose within the publishing assignment; a separate audit assignment is
+not required. Publish issue and PR bodies and comments with `--body-file`, preserving the draft's
+bytes. Verify the stored body after publication. Correct current bodies when needed; do not
+bulk-reformat historical comments.
 
 ## Authorization and checkpoints
 
@@ -221,7 +320,8 @@ delivery links rather than replaying completed work.
 
 Write a wiki decision record when a choice creates or replaces a lasting constraint and its
 consequential rationale would be lost from the current SPEC or code. Routine task adjustments stay
-in issue handoffs. Record observed failed attempts separately from untested alternatives.
+in checkpoint comments, with current plan changes reflected in the issue body. Record observed
+failed attempts separately from untested alternatives.
 
 Keep each record concise: decision and status, affected scope, constraints, meaningful alternatives,
 consequences, reconsideration conditions, and relevant issue or PR links. Use descriptive page
@@ -233,12 +333,17 @@ The wiki has its own Git repository. Refresh it before editing, inspect the diff
 and push only the intended pages and index changes. On a concurrent update, reconcile the changes;
 do not force-push. Wiki publication of approved decision summaries is authorized within the task.
 
+After a retrospective, put reusable conclusions and approved consequential decisions in the wiki,
+linking the checkpoint evidence and stating the history examined and its gaps. Keep the checkpoint
+artifacts on their work issues. A retrospective does not authorize new package requirements.
+
 Detailed execution logs and scratch files can remain in ignored `packages/<name>/implementation/`
 directories, or `.artifacts/` for repository-wide work. Do not maintain a second authoritative local
-plan or publish raw logs by default. Concise verification summaries belong in issues and PRs;
-reusable tests and instructions remain available from a clone. Explicit requests can retain local or
-chat-only planning. When resuming older local plans, use them as input and reconcile current scope
-before publishing issue plans; do not bulk-upload historical files.
+plan or publish raw logs without explicit developer opt-in. Authored checkpoint artifacts belong in
+issue comments, and PRs summarize delivery verification; reusable tests and instructions remain
+available from a clone. Explicit requests can retain local or chat-only planning. When resuming
+older local plans, use them as input and reconcile current scope before publishing issue plans; do
+not bulk-upload historical files.
 
 ## GitHub setup
 

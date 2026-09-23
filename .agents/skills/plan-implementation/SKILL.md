@@ -136,8 +136,11 @@ maintain two authoritative copies. Explicit local or chat-only requests override
 If GitHub is unavailable, save a local draft and report that publication remains pending.
 
 Keep detailed run evidence in ignored `packages/<name>/implementation/` directories. Check ignore
-and tracking status before writing local evidence. Put concise check results, remaining obligations,
-and the next action in the issue handoff. Keep reusable tests and instructions in the repository.
+and tracking status before writing local evidence. Publish authored results through the workflow's
+[checkpoint policy](../../../docs/development-workflow.md#publish-checkpoint-artifacts). Keep the
+body's current handoff compact and batch necessary edits; put findings and verification details in
+append-only comments. Apply the [GitHub Markdown rules](../../../docs/development-workflow.md#write-github-markdown)
+to every body and comment draft, including prose audits. Keep reusable tests and instructions in the repository.
 This workflow does not change the `@orbis/plan` runtime's exact reviewed Markdown artifact contract.
 
 For affected READMEs, plan the purpose, installation, and first use through

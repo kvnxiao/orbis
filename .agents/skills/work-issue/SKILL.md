@@ -29,6 +29,13 @@ independent execution or delivery. Add each issue to
 [Project 1](https://github.com/users/kvnxiao/projects/1) owned by `kvnxiao` and verify membership.
 Discover field and option IDs from the project rather than embedding them in plans.
 
+Use explicit `--json` fields for routine issue discovery and resume; omit comments and avoid bare
+`gh issue view`. Read checkpoint comments only to resolve a specific gap, inspect supporting
+evidence, or conduct a requested retrospective. Follow the workflow's
+[retrieval rules](../../../docs/development-workflow.md#retrieve-current-work-before-history) for
+targeted comment IDs and bounded metadata discovery. Filtering fetched comment bodies with `--jq`
+does not avoid fetching them.
+
 Read the affected SPEC and interaction contract, then inspect current source and tests. For workspace
 work without a package SPEC, use the approved request and repository constraints. Compare the issue's
 recorded baseline against relevant changes. Preserve unrelated files and concurrent work. Distinguish
@@ -71,7 +78,10 @@ For delegated implementation or review, pass the applicable skill names, resolve
 and assigned scope. For implementation, also pass the approved contract, task boundary, expected
 checks, and file ownership. Integrate the returned work before starting another task that touches
 the same files.
-Keep decisions, accumulated verification, and delivery with the orchestrator.
+Keep decisions, accumulated verification, and delivery with the orchestrator. After each completed
+assignment, including a review with no findings, author and publish its
+[checkpoint artifacts](../../../docs/development-workflow.md#publish-checkpoint-artifacts).
+Summarize verified results rather than copying the delegate's response.
 
 Update the issue's current plan when discoveries change the approach. Amend approved requirements
 before implementing changed behavior. Use native blocking links for prerequisite issues and state
@@ -82,11 +92,13 @@ requested target. Do not infer order from issue numbers or dispatch conflicting 
 
 ## Pause and deliver
 
-At a material pause or completed outcome, update the current handoff with the derived stage,
-approval and authorization scope, evidence and relevant revisions, active child or PR, completed
-work, verification performed, blockers, and the next unblocked action. Keep raw
-evidence local. Reread remote records before edits and preserve contributor additions. After a write
-times out, inspect remote state before retrying. Report writes that could not be completed.
+At a blocked or interrupted handoff, publish a checkpoint with unresolved obligations and the next
+action. At a stage transition, pause, or delivery, batch necessary body edits for the current plan,
+authorization, revision, active work, blocker, and next action. Include only the checkpoint links
+needed to resume; keep historical findings in comments. Skip unchanged bodies and routine per-agent
+body rewrites. Reread before edits and preserve contributor additions. Keep comments append-only;
+publish corrections as new linked comments. After an uncertain write, inspect remote state before
+retrying. Report unpublished drafts and other publication gaps.
 
 Publish a wiki record only when an approved decision creates or replaces a lasting constraint and
 its consequential rationale would be lost from the current SPEC or code. Link relevant records from
@@ -95,7 +107,10 @@ no longer applies.
 
 Prepare source delivery on a work branch. Complete repository verification, then write commit and
 PR copy to draft files and audit them before committing, pushing, or creating the PR. Use
-`--body-file` for issue and PR bodies. Use the repository's default branch as the delivery target.
+`--body-file` for issue and PR bodies and comments. Keep each paragraph or list item on one physical
+line in GitHub drafts, preserve Markdown structure, and prohibit reflow during prose audits and
+formatting. Follow the workflow's [GitHub Markdown rules](../../../docs/development-workflow.md#write-github-markdown).
+Use the repository's default branch as the delivery target.
 Developers review and merge; leave the PR open for that decision.
 
 Before requesting merge, check the acceptance criteria for every issue linked for automatic closure. Use
