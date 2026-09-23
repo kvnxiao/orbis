@@ -150,6 +150,8 @@ requests according to their stated scope.
   depends on settlement, use `return await`.
 - Throw and reject with `Error` objects; direct rethrows of caught values are allowed. Avoid
   deprecated APIs and remove unnecessary conditions.
+- Keep each file within 500 lines and each function within 80 lines. Files under `tests/`
+  directories and `*.test.mts` files are exempt.
 - Defer background processes and watchers to a session event or explicit command. Release session
   resources in a shutdown handler.
 - Write local scripts, tests, and Vitest configuration as `.mts` files; include them in workspace

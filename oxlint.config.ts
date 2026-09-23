@@ -162,6 +162,8 @@ export default defineConfig({
     "typescript/prefer-string-starts-ends-with": "error",
     "typescript/prefer-readonly": "error",
     "typescript/explicit-module-boundary-types": "error",
+    "max-lines": ["error", { max: 500 }],
+    "max-lines-per-function": ["error", { max: 80 }],
   },
   ignorePatterns: ["node_modules/**", ".artifacts/**"],
   overrides: [
@@ -169,6 +171,20 @@ export default defineConfig({
       files: ["packages/**/*.ts", "templates/**/*.ts"],
       rules: {
         "no-console": "error",
+      },
+    },
+    {
+      files: ["**/tests/**", "**/*.test.mts"],
+      rules: {
+        "max-lines": "off",
+        "max-lines-per-function": "off",
+      },
+    },
+    {
+      files: ["packages/plan/**", "scripts/**"],
+      rules: {
+        "max-lines": "off",
+        "max-lines-per-function": "off",
       },
     },
   ],

@@ -236,6 +236,8 @@ imports, braces, strict equality, and constant declarations where possible.
 - When local error handling depends on promise settlement, use `return await`.
 - Throw and reject with `Error` objects. Direct rethrows of caught values are allowed; empty
   rejections and newly thrown or rejected `any` or `unknown` values are rejected.
+- Keep each file within 500 lines and each function within 80 lines; both counts include blank and
+  comment lines. Files under `tests/` directories and `*.test.mts` files are exempt.
 
 Extensions must use Pi's UI or messaging APIs instead of writing to the console. CLI scripts may
 print results and errors. Lint checks reject unused suppression directives. Keep exceptions limited
