@@ -150,6 +150,8 @@ requests according to their stated scope.
   depends on settlement, use `return await`.
 - Throw and reject with `Error` objects; direct rethrows of caught values are allowed. Avoid
   deprecated APIs and remove unnecessary conditions.
+- Keep each file within 500 lines and each function within 80 lines. Files under `tests/`
+  directories and `*.test.mts` files are exempt.
 - Defer background processes and watchers to a session event or explicit command. Release session
   resources in a shutdown handler.
 - Write local scripts, tests, and Vitest configuration as `.mts` files; include them in workspace
@@ -272,5 +274,4 @@ requests according to their stated scope.
 - Omit comments that repeat code. Add a comment only for an external contract, hazard, or ordering
   constraint that the code does not express.
 - Keep docstrings to required API contracts. Name tests for their assertions.
-- Use imperative commit subjects and concrete PR descriptions. Audit prose with
-  `audit-prose-via-codex` when available, or `audit-prose` otherwise.
+- Use imperative commit subjects and concrete PR descriptions. Audit prose with `audit-prose`.
