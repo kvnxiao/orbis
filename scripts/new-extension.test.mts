@@ -35,7 +35,17 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
   );
   assert.equal(manifest.name, "@orbis/review");
   assert.deepEqual(manifest.pi, { extensions: ["./src/index.ts"] });
+  assert.ok("peerDependencies" in manifest && "devDependencies" in manifest);
+  assert.deepEqual(
+    [manifest.peerDependencies, manifest.devDependencies].map((dependencies) =>
+      typeof dependencies === "object" && dependencies !== null && "typebox" in dependencies
+        ? dependencies.typebox
+        : undefined,
+    ),
+    ["*", "catalog:"],
+  );
   const source = await readFile(join(destination, "src", "index.ts"), "utf8");
+  assert.match(source, /from "typebox"/);
   assert.match(source, /registerCommand\("orbis-review"/);
   assert.match(source, /@orbis\/review is loaded/);
   assert.match(await readFile(join(destination, "SPEC.md"), "utf8"), /@orbis\/review/);

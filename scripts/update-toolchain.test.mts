@@ -12,6 +12,7 @@ import {
   selectPackageRelease,
   selectRelease,
   stableVersions,
+  typeboxPinProblems,
 } from "./update-toolchain.mts";
 
 test("selects the newest stable release eligible at the exact age boundary", () => {
@@ -195,4 +196,18 @@ test("invalid CLI input exits nonzero with a JSON failure before running command
   assert.ok(typeof output === "object" && output !== null && "ok" in output && "checks" in output);
   assert.equal(output.ok, false);
   assert.deepEqual(output.checks, []);
+});
+
+test("requires the catalog typebox pin to match Pi's typebox dependency", () => {
+  const pi = { dependencies: { typebox: "1.3.27" } };
+  assert.deepEqual(typeboxPinProblems("1.3.27", pi), []);
+  assert.deepEqual(typeboxPinProblems("1.3.34", pi), [
+    "catalog typebox must equal the typebox dependency of @earendil-works/pi-coding-agent (1.3.27), found 1.3.34",
+  ]);
+  assert.deepEqual(typeboxPinProblems(undefined, pi), [
+    "catalog typebox must equal the typebox dependency of @earendil-works/pi-coding-agent (1.3.27), found no pin",
+  ]);
+  assert.deepEqual(typeboxPinProblems("1.3.27", {}), [
+    "@earendil-works/pi-coding-agent does not declare a typebox dependency",
+  ]);
 });

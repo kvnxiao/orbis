@@ -13,6 +13,9 @@
     "LICENSE"
   ],
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "publishConfig": {
     "access": "public"
   },

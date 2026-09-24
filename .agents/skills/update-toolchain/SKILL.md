@@ -103,8 +103,9 @@ node scripts/update-toolchain.mts verify /absolute/path/to/minimum-node > .artif
 ```
 
 `verify` requires the pinned development Node.js and pnpm and an executable matching the exact root
-`engines.node` minimum. It checks package publication contracts, frozen installation, `pnpm check`,
-effective compiler settings, and Oxlint type-aware configuration. It creates an isolated workspace
+`engines.node` minimum. It checks package publication contracts, frozen installation, the catalog
+`typebox` pin against the installed Pi release's `typebox` dependency, `pnpm check`, effective
+compiler settings, and Oxlint type-aware configuration. It creates an isolated workspace
 without a lockfile or shared `node_modules`, scaffolds an extension, resolves fresh dependencies,
 and runs workspace and package checks.
 

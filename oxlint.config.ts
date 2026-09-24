@@ -174,10 +174,39 @@ export default defineConfig({
       },
     },
     {
+      files: ["packages/**/src/**", "templates/**/src/**"],
+      rules: {
+        "no-restricted-properties": [
+          "error",
+          {
+            object: "JSON",
+            property: "parse",
+            message: "Parse boundary data through parseRecord in the package's records.ts module.",
+          },
+        ],
+      },
+    },
+    {
+      files: ["packages/**/src/**/records.ts", "templates/**/src/**/records.ts"],
+      rules: {
+        "no-restricted-properties": "off",
+      },
+    },
+    {
+      files: ["packages/plan/src/**"],
+      rules: {
+        "no-restricted-properties": "off",
+      },
+    },
+    {
       files: ["**/tests/**", "**/*.test.mts"],
       rules: {
         "max-lines": "off",
         "max-lines-per-function": "off",
+        "vitest/no-standalone-expect": [
+          "error",
+          { additionalTestBlockFunctions: ["test", "test.for"] },
+        ],
       },
     },
     {

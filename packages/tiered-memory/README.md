@@ -6,7 +6,7 @@ consolidation, storage, recall, and custom compaction are unavailable in this ve
 
 ## Install
 
-Requires Node.js `>=22.19.0`, Pi `0.87.0`, and Git on `PATH` for project-root discovery.
+Requires Node.js `>=22.19.0` and Pi `0.87.0`.
 
 ```sh
 pi install npm:@orbis/tiered-memory

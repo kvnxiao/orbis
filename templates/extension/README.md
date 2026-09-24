@@ -18,7 +18,8 @@ Start Pi, or run `/reload` in an existing session.
 /orbis-example
 ```
 
-Pi displays `@orbis/example is loaded`. The command has no configuration.
+Pi displays `@orbis/example is loaded`. When `orbis-example.json` exists in Pi's agent directory and
+contains `{ "version": 1, "message": "..." }`, the command displays that `message` instead.
 
 ## Development
 

@@ -18,8 +18,9 @@ Subcommands are case-sensitive and reject additional arguments. Surrounding whit
 Unknown arguments print usage without changing activation. Commands do not edit settings files or
 Pi's native auto-compaction setting.
 
-Pi session entries retain the activation override on the selected conversation branch. Resume and
-fork restore the override present on that branch; tree navigation selects the override at the
+Pi session entries retain the activation override on the selected conversation branch, in an
+`orbis-tiered-memory-activation` custom entry, which Pi excludes from model context. Resume and fork
+restore the override present on that branch; tree navigation selects the override at the
 destination. A new unrelated session uses configured defaults.
 
 An in-memory session does not save the override after exit; Pi may defer writing a new session until
@@ -36,9 +37,9 @@ The project settings file is `.pi/tiered-memory/settings.json` inside the curren
 or the session's working directory outside Git. Nested repositories and separate worktrees use
 separate settings files. Missing settings files do not override values.
 
-Git must be available on `PATH`, including outside a repository. During session start or reload,
-project-root discovery has a two-second timeout. If discovery fails, configuration is unavailable
-and native Pi remains usable. Restore Git access and run `/reload` to retry.
+Project-root discovery checks the session's working directory and then each of its ancestors for a
+`.git` file or directory; the first directory that has one is the project root. Without one, the
+working directory is the project root. Discovery does not invoke Git.
 
 Configuration applies in this order:
 
@@ -68,8 +69,9 @@ Settings load on session start and `/reload`; file edits take effect on the next
 settings do not add rows to Pi's native `/settings` command.
 
 After a successful load, Pi's session retains a snapshot of the effective settings and their
-sources, including the personal settings path, project settings path, and host trust state. While
-those paths and trust state still match the current session, tree navigation preserves the loaded
+sources, including the personal settings path, project settings path, and host trust state, in an
+`orbis-tiered-memory-configuration` custom entry, which Pi excludes from model context. While those
+paths and trust state still match the current session, tree navigation preserves the loaded
 configuration and saves it on the destination branch. Tree navigation does not reload files.
 
 If a replacement file is invalid or unreadable and a saved configuration's paths and trust state

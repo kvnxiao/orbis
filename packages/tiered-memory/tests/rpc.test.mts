@@ -4,15 +4,20 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, test } from "vitest";
+import { beforeAll, expect, test } from "vitest";
 
 type RecordValue = Record<string, unknown>;
+
+interface RpcRun {
+  records: RecordValue[];
+  stderr: string;
+}
 
 function isRecord(value: unknown): value is RecordValue {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-test("Pi RPC sends status notifications and saves reports without starting an agent turn", async () => {
+async function runRpc(commands: readonly RecordValue[]): Promise<RpcRun> {
   const packageRoot = resolve(
     dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))),
     "..",
@@ -21,22 +26,11 @@ test("Pi RPC sends status notifications and saves reports without starting an ag
   if (!isRecord(manifest) || !isRecord(manifest.bin) || typeof manifest.bin.pi !== "string") {
     throw new Error("Installed Pi package does not declare a CLI binary.");
   }
-
   const root = await mkdtemp(join(tmpdir(), "orbis-tiered-memory-rpc-"));
   try {
     const inputPath = join(root, "commands.jsonl");
     const outputPath = join(root, "events.jsonl");
-    await writeFile(
-      inputPath,
-      [
-        { id: "status", type: "prompt", message: "/tiered-memory status" },
-        { id: "unknown", type: "prompt", message: "/tiered-memory unexpected" },
-        { id: "entries", type: "get_entries" },
-        { id: "messages", type: "get_messages" },
-      ]
-        .map((command) => JSON.stringify(command))
-        .join("\n") + "\n",
-    );
+    await writeFile(inputPath, commands.map((command) => `${JSON.stringify(command)}\n`).join(""));
     const input = await open(inputPath, "r");
     const output = await open(outputPath, "w");
     let result;
@@ -84,10 +78,15 @@ test("Pi RPC sends status notifications and saves reports without starting an ag
       await input.close();
       await output.close();
     }
-
     const stderr = result.stderr;
-    expect(result.error, `Pi RPC failed. stderr: ${stderr}`).toBeUndefined();
-    expect(result.status, `Pi RPC exited unsuccessfully. stderr: ${stderr}`).toBe(0);
+    if (result.error !== undefined || result.status !== 0) {
+      throw new Error(
+        `Pi RPC exited unsuccessfully (${String(result.status)}). stderr: ${stderr}`,
+        {
+          cause: result.error,
+        },
+      );
+    }
     const lines = (await readFile(outputPath, "utf8")).trimEnd().split("\n");
     const records = lines.map((line): RecordValue => {
       const value: unknown = JSON.parse(line);
@@ -96,53 +95,70 @@ test("Pi RPC sends status notifications and saves reports without starting an ag
       }
       return value;
     });
-    for (const id of ["status", "unknown", "entries", "messages"]) {
-      expect(
-        records.find((record) => record.type === "response" && record.id === id)?.success,
-        `Pi RPC ${id} response failed. stderr: ${stderr}`,
-      ).toBe(true);
-    }
-
-    const status = records.find(
-      (record) =>
-        record.type === "extension_ui_request" &&
-        record.method === "notify" &&
-        typeof record.message === "string" &&
-        record.message.startsWith("Tiered memory:"),
-    );
-    expect(status?.notifyType).toBe("info");
-    const usage = records.find(
-      (record) =>
-        record.type === "extension_ui_request" &&
-        record.method === "notify" &&
-        record.message === "Usage: /tiered-memory [on|off|status]",
-    );
-    expect(usage?.notifyType).toBe("warning");
-
-    const entriesResponse = records.find(
-      (record) => record.type === "response" && record.id === "entries",
-    );
-    if (!isRecord(entriesResponse?.data) || !Array.isArray(entriesResponse.data.entries)) {
-      throw new Error(`Pi RPC did not return session entries. stderr: ${stderr}`);
-    }
-    const entries = entriesResponse.data.entries.filter((value: unknown): value is RecordValue =>
-      isRecord(value),
-    );
-    const reports = entries.filter(
-      (entry: RecordValue) => entry.customType === "orbis-tiered-memory-report",
-    );
-    expect(reports).toHaveLength(1);
-    expect(reports[0]?.data).toEqual({ version: 1, text: status?.message });
-    expect(
-      entries.some((entry: RecordValue) => entry.customType === "orbis-tiered-memory-activation"),
-    ).toBe(false);
-
-    const messagesResponse = records.find(
-      (record) => record.type === "response" && record.id === "messages",
-    );
-    expect(isRecord(messagesResponse?.data) && messagesResponse.data.messages).toEqual([]);
-    expect(records.some((record) => record.type === "agent_start")).toBe(false);
+    return { records, stderr };
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+}
+
+let run: RpcRun;
+
+beforeAll(async () => {
+  run = await runRpc([
+    { id: "commands", type: "get_commands" },
+    { id: "status", type: "prompt", message: "/tiered-memory status" },
+    { id: "unknown", type: "prompt", message: "/tiered-memory unexpected" },
+    { id: "entries", type: "get_entries" },
+    { id: "messages", type: "get_messages" },
+  ]);
 }, 20_000);
+
+function succeeded(id: string): boolean {
+  return run.records.some(
+    (record) => record.type === "response" && record.id === id && record.success === true,
+  );
+}
+
+function responseData(id: string): RecordValue {
+  const found = run.records.find((record) => record.type === "response" && record.id === id);
+  if (found?.success !== true || !isRecord(found.data)) {
+    throw new Error(`Pi RPC ${id} response failed or has no data. stderr: ${run.stderr}`);
+  }
+  return found.data;
+}
+
+function notification(matches: (message: string) => boolean): RecordValue | undefined {
+  return run.records.find(
+    (record) =>
+      record.type === "extension_ui_request" &&
+      record.method === "notify" &&
+      typeof record.message === "string" &&
+      matches(record.message),
+  );
+}
+
+test("Pi RPC registers the tiered-memory command", () => {
+  const commands = responseData("commands").commands;
+  expect(Array.isArray(commands) ? commands : []).toContainEqual(
+    expect.objectContaining({ name: "tiered-memory", source: "extension" }),
+  );
+});
+
+test("Pi RPC notifies status and usage and saves one report matching the status text", () => {
+  const status = notification((message) => message.startsWith("Tiered memory:"));
+  expect(status?.notifyType).toBe("info");
+  const usage = notification((message) => message === "Usage: /tiered-memory [on|off|status]");
+  expect(usage?.notifyType).toBe("warning");
+  expect(succeeded("status") && succeeded("unknown")).toBe(true);
+  const entries = responseData("entries").entries;
+  const custom = (Array.isArray(entries) ? entries : []).filter((entry) => isRecord(entry));
+  const reports = custom.filter((entry) => entry.customType === "orbis-tiered-memory-report");
+  expect(reports).toHaveLength(1);
+  expect(reports[0]?.data).toEqual({ version: 1, text: status?.message });
+  expect(custom.some((entry) => entry.customType === "orbis-tiered-memory-activation")).toBe(false);
+});
+
+test("Pi RPC status commands start no agent turn and add no messages", () => {
+  expect(responseData("messages").messages).toEqual([]);
+  expect(run.records.some((record) => record.type === "agent_start")).toBe(false);
+});

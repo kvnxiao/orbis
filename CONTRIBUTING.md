@@ -147,6 +147,8 @@ these skills, ask it to read the linked `SKILL.md` directly.
    peer with a `catalog:` development dependency and validate that data with typebox schemas through
    one per-package parse helper. Pin the catalog `typebox` to the `typebox` dependency version in
    the supported Pi release's `package.json`. Put ordinary runtime dependencies in `dependencies`.
+   The scaffold's `src/records.ts` is that helper: it exports `parseRecord` and `readOptional`. Keep
+   each package's copy identical to the template; the root convention test compares them.
 5. Add tests in `packages/<name>/tests/**/*.test.mts`. The scaffold includes a Pi loading test and a
    `vitest.config.mts` project named `@orbis/<name>`; the root Vitest configuration discovers it
    automatically.
@@ -220,6 +222,9 @@ imports, braces, strict equality, and constant declarations where possible.
 - Keep each file within 500 lines and each function within 80 lines; both counts include blank and
   comment lines. Files under `tests/` directories, `*.test.mts` files, `scripts/`, and
   `packages/plan` are exempt.
+- Parse JSON boundary data through the package's `records.ts`. `JSON.parse` elsewhere under a
+  package's `src/` is a lint error; `@orbis/plan` is exempt until it adopts the module, which
+  [#41](https://github.com/kvnxiao/orbis/issues/41) tracks.
 
 Extensions must use Pi's UI or messaging APIs instead of writing to the console. CLI scripts may
 print results and errors. Lint checks reject unused suppression directives. Keep exceptions limited
@@ -235,7 +240,11 @@ Run `just` to list common workspace commands. Use its recipes for root workspace
 stops before formatting; correct them and rerun `just fix`.
 
 `just check` checks formatting with Oxfmt, lints with Oxlint, checks types, and runs Vitest across
-the workspace scripts, extension template, and extension packages. Local scripts use `.mts` and run
+the workspace scripts, extension template, and extension packages. The workspace project includes
+`scripts/package-conventions.test.mts`. It requires every package manifest to declare
+`pi.extensions` as `./src/index.ts` and an `exports` field, requires `typebox` as a peer and
+development dependency when the package source imports it or reads or writes boundary data, and
+requires each package's `records.ts` to equal the template copy. Local scripts use `.mts` and run
 directly with Node.js native type stripping. Vitest runs `.test.mts` files; test execution does not
 emit files for publication.
 
