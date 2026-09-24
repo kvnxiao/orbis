@@ -17,9 +17,10 @@ documentation does not change the package contract.
 
 ## Identify the affected contract
 
-A fix within the contract takes the workflow's
+A direct fix within the contract that has no issue takes the workflow's
 [PR-only path](../../../docs/development-workflow.md#work-hierarchy); a contract change gets an
-issue for the bounded revision, linked to its parent initiative when one exists. Read the
+issue for the bounded revision, linked to its parent initiative when one exists. Resume work
+already tracked by an issue on that issue. Read the
 [specification guidance](../../../docs/specifications.md) and the package's complete `SPEC.md`.
 Inspect relevant source, tests, README, and `docs/tui-interactions.md` when present. Establish the
 current Git revision and working-tree changes; preserve unrelated work. Treat current code as
@@ -102,17 +103,22 @@ the existing contract. Passing tests and current output do not authorize a contr
 
 ## Plan and implement the revision
 
-Use [plan-implementation](../plan-implementation/SKILL.md) to derive tasks from the approved
-contract and current source. Keep a small, settled revision in a concise plan; do not restart
-full-package planning. Update the authoritative issue plans, preserving unrelated scope, contributor
+For work tracked by an issue, use
+[plan-implementation](../plan-implementation/SKILL.md) to derive tasks from the approved contract
+and current source. Keep a small, settled revision in a concise issue plan; do not restart
+full-package planning. Update authoritative issue plans, preserving unrelated scope, contributor
 edits, and completed work. Revise affected dependencies and coverage claims. Evidence for previous
-behavior does not verify a changed requirement.
+behavior does not verify a changed requirement. For a direct fix or permitted choice within the
+contract that has no issue,
+use the [PR-only path](../../../docs/development-workflow.md#work-hierarchy): work from the approved
+request and current source without creating an issue plan.
 
 When code changes are authorized, continue through implementation and verification without stopping
 at the amended SPEC or plan. Update code, tests, package usage, and interaction scenarios within the
 same change set. Derive expected results from the approved requirements. Cover affected failure and
 ordering boundaries and interactions with preserved behavior; reproduce defects with failing tests.
-Delegate bounded implementation tasks after the contract and plan are approved.
+Delegate bounded implementation tasks after the contract and, for issue-backed work, plan are
+approved.
 
 ## Verify the accumulated revision
 

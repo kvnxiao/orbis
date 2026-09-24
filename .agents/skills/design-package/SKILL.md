@@ -29,8 +29,9 @@ open after design approval; a design-only initiative has its own design delivera
 implementation children for unsettled behavior.
 
 Read the [specification guidance](../../../docs/specifications.md) and the repository `README.md`.
-When the request concerns an existing package, inspect its specification and source and read its
-`Explored alternatives` section and do not propose an idea it records. Preserve the user's
+When the request concerns an existing package, inspect its specification and source. Read its
+`Explored alternatives` section when present and apply the guide's
+[reconsideration rule](../../../docs/specifications.md#explored-alternatives). Preserve the user's
 settled requirements, exclusions, and prior decisions.
 
 Before proposing an architecture, research current relevant Pi packages and official Pi APIs when

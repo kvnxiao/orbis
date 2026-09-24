@@ -111,15 +111,17 @@ Run `verify-changes` once on the accumulated change set before a commit or PR, a
 `verify-conformance` for affected contracts and `write-readme` for affected READMEs. Reviewers
 report without editing; the coordinator resolves findings within authorized scope and reruns the
 affected checks. Do not weaken a SPEC to make code pass; material contract changes need user
-direction.
+direction. Review agent instruction and configuration changes that affect routing, authorization,
+delegation, checkpoints, or execution for correctness under the workflow's
+[review rules](docs/development-workflow.md#review-and-delivery).
 
 Within authorized work, create and update issues and Project items, and record decisions where the
 workflow's [decision rules](docs/development-workflow.md#decisions-and-local-evidence) place them;
 prepare verified commits on a work branch, push that branch, and open focused PRs. Developers review
 and merge. Do not merge, push to the default branch, publish packages, or create releases without
-separate explicit authorization. Honor requests limited to local or chat-only work. Publish a
-checkpoint comment at each stage transition, blocked or interrupted handoff, and delivery, as
-described in the workflow's
+separate explicit authorization. Honor requests limited to local or chat-only work. For issue-backed
+work, publish a checkpoint comment at each stage transition, blocked or interrupted handoff, and
+delivery, as described in the workflow's
 [checkpoint policy](docs/development-workflow.md#publish-checkpoint-artifacts).
 
 ## Writing

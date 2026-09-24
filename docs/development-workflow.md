@@ -12,16 +12,20 @@ delegate that owns decisions, coordination, and verification. A **delegate** exe
 that the orchestrator assigns: implementation from an approved plan, or a review that returns
 findings. [Agent models](#agent-models) maps the roles to models per host.
 
-A **checkpoint** records the assignments completed since the previous checkpoint, or a blocked or
-interrupted handoff, as authored artifacts published in issue comments. The issue body contains the
-compact current plan and handoff; checkpoint comments preserve the work history.
+A **checkpoint** records assignments completed since the previous checkpoint, or a blocked or
+interrupted handoff, as authored artifacts published on issue-backed work. The issue body contains
+the compact current plan and handoff; checkpoint comments preserve the work history.
 
 ## Work hierarchy
 
-Work that introduces, improves, or changes package behavior is tracked in issues. A fix within a
-package's existing contract, a documentation change, or a workspace tooling change takes the
-**PR-only path**: no issue and no handoff table. The PR body records the outcome, acceptance, and
-verification, and the PR is the shared record another session resumes from.
+Work that introduces, improves, or changes package behavior is tracked in issues. A direct request
+for a fix within a package's existing contract, a documentation change, or a workspace tooling
+change takes the **PR-only path**: use the approved request, current source, and any existing PR as
+inputs; do not create an issue, issue plan, or handoff table. The PR body records the outcome,
+acceptance, and verification, and the PR is the shared record another session resumes from. If
+PR-only work is interrupted before a PR exists, report the branch and next action in chat. Resume
+work already tracked by an issue on that issue, even when its remaining change would otherwise
+qualify for the PR-only path.
 
 An **initiative** is a bounded delivery represented by an ordinary issue. It can cover an
 extension's initial delivery or a functionality facet. A **work issue** is an independently
@@ -89,16 +93,17 @@ Ask to resume an issue, for example `Resume #<number>` or `Continue work on <iss
 development workflow; the request does not need a skill name or lifecycle stage. Resolve bare issue
 numbers against the current repository and honor explicit repository references.
 
-Determine the current stage from the issue and related work, approval records, SPEC, source,
-verification evidence, and linked PRs. State the stage, supporting evidence, and next bounded action
-before proceeding. When an approved SPEC lacks executable plans, create or update issue plans; when
-plans exist, select the next eligible task; when work or a PR is underway, resume it. Reassess after
-each completed action instead of replaying a fixed sequence. Project status alone does not establish
-readiness or completion.
+For issue-backed work, determine the current stage from the issue and related work, approval
+records, SPEC, source, verification evidence, and linked PRs. State the stage, supporting evidence,
+and next bounded action before proceeding. When an approved SPEC lacks executable plans, create or
+update issue plans; when plans exist, select the next eligible task; when work or a PR is underway,
+resume it. Reassess after each completed action instead of replaying a fixed sequence. Project
+status alone does not establish readiness or completion. For PR-only work, resume from the approved
+request, current source, and existing PR without assigning an issue stage.
 
-At the start of a new session, verify the issue's Current handoff table against current artifacts
-before continuing. Keep the issue as the shared record; do not introduce a separate lifecycle-state
-file.
+At the start of a new session on issue-backed work, verify the issue's Current handoff table against
+current artifacts before continuing. Keep the issue as the shared record; do not introduce a
+separate lifecycle-state file.
 
 ### Retrieve current work before history
 
@@ -175,21 +180,23 @@ rules and specialist review skills to delegates without restarting either coordi
 
 ### Implementation handoff
 
-Before delegating implementation, the orchestrator resolves the contract and selects an authorized,
-unblocked issue. Give the implementer:
+Before delegating implementation, the orchestrator resolves the contract and selects authorized,
+unblocked work. Give the implementer:
 
-- The issue, repository baseline, approved scope, and execution authorization.
+- The issue for issue-backed work, or the approved request and any existing PR for PR-only work;
+  include the repository baseline, approved scope, and execution authorization.
 - Relevant SPEC requirement IDs, interaction scenarios, and repository constraints; for workspace
   work without a SPEC, provide the approved request and acceptance criteria.
-- The concrete plan, files it may edit, dependencies, and concurrent work it must preserve.
+- The issue plan for issue-backed work, or concrete task for PR-only work; include files it may
+  edit, dependencies, and concurrent work it must preserve.
 - Observable outcomes, required checks, and the report needed for review.
 
-The implementer may make routine choices within the plan, write code and tests, run targeted checks,
-and repair accepted findings. Before dependent edits, the implementer returns unresolved behavior,
-material architectural choices, and scope changes to the orchestrator. The implementer does not
-delegate further or take ownership of contract approval, final verification, commits, or PR
-delivery. Keep design-only and planning-only work with the orchestrator until implementation is
-authorized.
+The implementer may make routine choices within the assigned work, write code and tests, run
+targeted checks, and repair accepted findings. Before dependent edits, the implementer returns
+unresolved behavior, material architectural choices, and scope changes to the orchestrator. The
+implementer does not delegate further or take ownership of contract approval, final verification,
+commits, or PR delivery. Keep design-only and planning-only work with the orchestrator until
+implementation is authorized.
 
 ### Review and delivery
 
@@ -198,6 +205,10 @@ set before requesting merge. Give read-only reviewers the reviewer roles from th
 pass scoped write permissions to documentation and prose delegates instead of a read-only role.
 Reviewers follow their assigned skill and return findings without recursively delegating or
 coordinating another verification workflow.
+
+Review agent instructions and configuration for correctness when changes affect routing,
+authorization, delegation, checkpoints, or execution. These files govern agent behavior regardless
+of their Markdown or configuration extension.
 
 Resolve findings with the orchestrator and send bounded implementation repairs to the implementer.
 Recheck the affected behavior after repairs. Then write the commit and PR drafts, audit them, and
@@ -211,8 +222,8 @@ and
 
 ## Publish checkpoint artifacts
 
-Within authorized shared work, the orchestrator publishes a checkpoint at each stage transition, at
-a blocked or interrupted handoff, and at delivery. The checkpoint summarizes every assignment
+For authorized issue-backed work, the orchestrator publishes a checkpoint at each stage transition,
+at a blocked or interrupted handoff, and at delivery. The checkpoint summarizes every assignment
 completed since the previous checkpoint, including the orchestrator's own bounded work and reviews
 with no findings; an intermediate assignment does not get its own comment. Preserve explicit
 local-only, chat-only, and read-only publication limits. A status-only request does not authorize a

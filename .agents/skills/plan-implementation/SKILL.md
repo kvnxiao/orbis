@@ -29,7 +29,8 @@ present dependent tasks as ready for implementation.
 Inspect the package source, tests, dependencies, scaffold, and relevant Pi APIs. When package
 research exists, read the findings relevant to the planned behavior and verify assumptions that
 affect feasibility; research recommendations do not add requirements. Read the SPEC's
-`Explored alternatives` section when present and do not propose an idea it records. Distinguish
+`Explored alternatives` section when present and apply the guide's
+[reconsideration rule](../../../docs/specifications.md#explored-alternatives). Distinguish
 implemented and verified behavior from absent, partial, or unverified requirements. A
 specification-only directory is a valid starting point. Do not assume the reference implementation
 already conforms to its specification.
