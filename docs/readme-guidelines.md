@@ -28,16 +28,14 @@ actual example command. Replace the example behavior as implementation changes. 
 instructions into package READMEs or pad a small extension with empty sections.
 
 A screenshot or short recording is optional when it explains an interaction faster than prose. Keep
-a text-based quick start usable without the media. Use plain Markdown and verify links, images, and
-code blocks in npm and pi.dev when a published preview is available. For repository-only documents
+a text-based quick start usable without the media. Use plain Markdown. For repository-only documents
 and assets, use absolute GitHub URLs; relative links must resolve from the package and its published
 contents.
 
 Judge concision by the reader's path to first use, not a word count or required section count. Avoid
 provider catalogs, exhaustive option tables, contributor instructions, verification journals, and
-implementation progress in the README. Keep npm commands in the authored README; do not add
-temporary publication or repository-visibility notices. Release preparation verifies that the
-published package and linked resources exist.
+implementation progress in the README. Keep npm install commands in the authored README without
+temporary publication or repository-visibility notices.
 
 ## Repository README
 
@@ -64,7 +62,11 @@ behavior; it does not replace the specification.
 ## Review
 
 Check that a reader can identify the purpose, satisfy prerequisites, install, and complete the first
-example without reading a specification or contributor guide. Compare commands and claims with the
-implementation and contract. Check package names, link targets and anchors, template substitutions,
-published file inclusion, and the package description used by the catalog. Report unavailable
-rendering or installation checks without inserting session results into public docs.
+example without reading a specification or contributor guide. Read the install-to-first-use path
+without following forward links, and explain a missing prerequisite before the step that needs it.
+Compare commands and claims with the implementation and contract. Check package names, link targets
+and anchors, template substitutions, published file inclusion, and the npm description and
+`pi-package` keyword the catalog uses. When a published preview is available, verify links, images,
+and code blocks on npm and pi.dev; release preparation verifies that the published package and
+linked resources exist. Report unavailable rendering or installation checks without inserting
+session results into public docs.

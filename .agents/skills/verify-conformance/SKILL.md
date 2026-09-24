@@ -9,9 +9,6 @@ description:
 
 # Verify an Orbis implementation against its specification
 
-Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for direct or
-delegated review.
-
 Assess whether the reference implementation satisfies the behavioral contract and whether that
 contract describes its public behavior. Review without editing source, tests, specifications, or
 configuration. A review request does not authorize fixes, contract amendments, commits, or
@@ -19,9 +16,9 @@ publication.
 
 ## Establish scope and evidence
 
-Read project `AGENTS.md`, the [specification guidance](../../../docs/specifications.md), and the
-target package's complete `SPEC.md`. Identify the package, specification and implementation
-revisions, and requested scope:
+Read the [specification guidance](../../../docs/specifications.md) and the target package's
+complete `SPEC.md` with its linked interaction document. Identify the package, specification and
+implementation revisions, and requested scope:
 
 - For a full-package review, account for every mandatory requirement and its conformance scenarios,
   including required interfaces and compatibility claims.
@@ -54,22 +51,20 @@ check. An ordinal identifier, a duplicate slug, a dangling reference left by a r
 and a requirement with no check are each review findings. Cross-package references name their
 package.
 
-Check documentation order with the
-[forward-reference checks](../../../docs/specifications.md#avoid-forward-references).
-Read the affected contract in order without following forward links. For an unexplained term,
-approach, state, or interface, report the earliest dependent passage and the missing or later
-introduction. Classify a reading-order defect separately from an implementation deviation; moving
-an unchanged requirement does not amend its behavior. Check that reordered text preserves IDs,
-obligations, exceptions, and linked heading anchors.
+Read the affected contract in order without following forward links, applying the guide's
+[forward-reference checks](../../../docs/specifications.md#avoid-forward-references). For an
+unexplained term, approach, state, or interface, report the earliest dependent passage and the
+missing or later introduction. Classify a reading-order defect separately from an implementation
+deviation; moving an unchanged requirement does not amend its behavior. Check that reordered text
+preserves IDs, obligations, exceptions, and linked heading anchors.
 
 ## Compare the contract and implementation
 
 Derive expected behavior from the SPEC's system requirements and its linked normative
-`docs/tui-interactions.md` before examining current output. Verify detailed UI behavior and
-appearance against the interaction document under the same requirement IDs. UI details do not need
-to be duplicated in the SPEC. Check that moving rules between documents preserves obligations and
-that both documents agree on state, submission, cancellation, and recovery. Treat recommendations,
-research, and explicitly illustrative examples as informative.
+`docs/tui-interactions.md` before examining current output, verifying detailed UI behavior and
+appearance against the interaction document under the same requirement IDs. Check that both
+documents agree on state, submission, cancellation, and recovery. Treat recommendations, research,
+the `Explored alternatives` section, and explicitly illustrative examples as informative.
 
 For each requirement in scope, identify:
 
@@ -99,10 +94,10 @@ changing either artifact.
 
 For a proposed amendment, identify the affected requirement or undocumented public behavior, the
 discrepancy, and the decision needed. Hand approved revision work to the caller or `verify-changes`
-coordinator through [revise-package](../revise-package/SKILL.md). The coordinator
-determines authorization from the user's request; this review neither approves nor applies
-amendments. After the coordinator resolves a finding, review the affected requirements and their
-interactions against the updated artifacts.
+coordinator through [revise-package](../revise-package/SKILL.md). The coordinator determines
+authorization from the user's request; this review neither approves nor applies amendments. After
+the coordinator resolves a finding, review the affected requirements and their interactions against
+the updated artifacts.
 
 ## Obtain reproducible evidence
 
@@ -115,13 +110,9 @@ source. Historical success claims do not replace reproducible checks.
 Keep verification non-mutating apart from disposable test outputs. Do not install dependencies,
 generate fixtures, update snapshots, or run commands that modify tracked files without the caller's
 authorization. If a check needs those actions, report the prerequisite and continue independent
-inspection.
-
-Automated tests must use local fixtures or scripted providers without real-model charges. Real-model
-checks require separate explicit authorization and live orchestrator supervision. When terminal
-interaction, supported-runtime testing, or package installation checks cannot run, retain the
-corresponding verification gap. Do not substitute type checking for host import or lifecycle
-verification.
+inspection. When terminal interaction, supported-runtime testing, or package installation checks
+cannot run, retain the corresponding verification gap. Do not substitute type checking for host
+import or lifecycle verification.
 
 ## Report the verdict
 
@@ -148,6 +139,4 @@ a guarantee over all possible inputs or environments.
 
 Return the report in chat or to the coordinating reviewer. If the caller requests a saved report,
 use the package's ignored `implementation/` directory unless the caller explicitly requests
-tracking. Do not link public documentation to local reports. Required tests and reusable
-verification instructions must be available from a clone; local reports may record results but
-cannot be prerequisites for future conformance reviews.
+tracking; a local report may record results but cannot be a prerequisite for a future review.

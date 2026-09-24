@@ -7,45 +7,39 @@ description:
 
 # Brainstorm an Orbis package
 
-Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for design and
-delegated research.
-
-Develop the package with the user. When research is needed, persist its synthesis in
-`packages/<name>/docs/research/` before producing `packages/<name>/SPEC.md` for an independent Pi
-implementer. This workflow produces research and a specification; implementing the extension is a
-separate task unless the user explicitly includes it.
+Develop the package with the user and write `packages/<name>/SPEC.md` for an independent Pi
+implementer, persisting any research synthesis in `packages/<name>/docs/research/` first. This
+workflow produces research and a specification; implementing the extension is a separate task unless
+the user explicitly includes it.
 
 When the global `brainstorm` skill is available, load its advertised `SKILL.md` and use it for the
 brainstorming interaction: decision-tree rounds, question format, factual research delegation, and
 confirmation of shared understanding. Resolve it through the host's available skills rather than a
-machine-specific path. Keep this skill's Orbis research, contract, and delivery responsibilities.
-If the global skill is unavailable or unreadable, state that limitation and use the interaction
-fallback below; do not require installation or stop package design.
+machine-specific path, and keep this skill's Orbis research, contract, and delivery
+responsibilities. If the global skill is unavailable or unreadable, state that limitation and use
+the fallback in [Work the design tree](#work-the-design-tree); do not require installation or stop
+package design.
 
 ## Establish context and research
 
-Follow the [development workflow](../../../docs/development-workflow.md). Read the wiki decision
-index once per working session and open relevant records. When the intended outcome can be named,
-create or reuse a bounded initiative and add it to the Project. Keep unresolved decisions visible
-there. A package-delivery initiative remains open after design approval; a design-only initiative
-has its own design deliverable. Do not create implementation children for unsettled behavior.
+When the intended outcome can be named, create or reuse a bounded initiative under the workflow's
+[design and PR boundaries](../../../docs/development-workflow.md#design-and-pr-boundaries) and add
+it to the Project. Keep unresolved decisions visible there. A package-delivery initiative remains
+open after design approval; a design-only initiative has its own design deliverable. Do not create
+implementation children for unsettled behavior.
 
-Read the repository's `AGENTS.md`, `README.md`, and
-[specification guidance](../../../docs/specifications.md). Inspect an existing package specification
-and source when the request concerns that package. Preserve the user's settled requirements,
-exclusions, and prior decisions.
-
-The repository README introduces the packages; `CONTRIBUTING.md` describes the development
-workflow. For README work, use [write-readme](../write-readme/SKILL.md) and keep design
-detail in the specification and research documents.
+Read the [specification guidance](../../../docs/specifications.md) and the repository `README.md`.
+When the request concerns an existing package, inspect its specification and source. Read its
+`Explored alternatives` section when present and apply the guide's
+[reconsideration rule](../../../docs/specifications.md#explored-alternatives). Preserve the user's
+settled requirements, exclusions, and prior decisions.
 
 Before proposing an architecture, research current relevant Pi packages and official Pi APIs when
-those facts can affect the design. A simple, settled package may not need research docs; do not
-create an empty folder or ceremonial report. Use primary documentation and source to compare actual
-behavior, installation requirements, maintenance signals, integration boundaries, and missing
-capabilities. Distinguish a shipped feature from an example or proposal, and source inspection from
-runtime verification. Download counts are dated adoption signals, not evidence of quality or
-community consensus.
+those facts can affect the design. Use primary documentation and source to compare actual behavior,
+installation requirements, maintenance signals, integration boundaries, and missing capabilities.
+Distinguish a shipped feature from an example or proposal, and source inspection from runtime
+verification. Download counts are dated adoption signals, not evidence of quality or community
+consensus.
 
 Compare other coding agents when the user's requested experience makes them relevant. Do not turn
 every brainstorm into an exhaustive market survey. Focus research on facts that can change the
@@ -60,7 +54,8 @@ defer decisions that require missing evidence.
 When the session conducts research, save its synthesis as Markdown in
 `packages/<name>/docs/research/` before writing any `SPEC.md`, including a draft or starter. Create
 that directory directly without scaffolding runtime files. If the package name is undecided, settle
-it before choosing the package path or writing the spec.
+it before choosing the package path or writing the spec. A simple, settled package may not need
+research documents; do not create an empty folder or ceremonial report.
 
 Use descriptive topic filenames and a structure appropriate to the research. Record the research
 date, questions investigated, source links and relevant versions, verified findings, comparisons,
@@ -68,7 +63,7 @@ implications for this package, and remaining gaps. Synthesize the evidence; do n
 list or raw tool output. Distinguish observed behavior, author claims, inference, and design
 recommendations. When research includes papers, identify publication status and evaluation limits.
 When online access is unavailable, persist the local evidence and limitations before drafting the
-spec.
+spec. Research documents cite external sources, not Orbis implementation code.
 
 As later rounds resolve factual gaps, update the synthesis before incorporating those findings into
 the spec. When revising an existing spec, read and verify the relevant research first; if research
@@ -84,12 +79,8 @@ the fallback's choice of a structured question tool or chat format.
 
 Map decisions and their prerequisites. Keep user decisions, proposals, and open questions distinct.
 The frontier is the set of unresolved decisions the user can answer now without guessing an answer
-to another open question.
-
-Before comparing approaches or presenting a decision, introduce the terminology, each approach,
-and the constraints needed to assess it. Do not rely on an explanation in a later question or
-SPEC section. Apply the [forward-reference checks](../../../docs/specifications.md#avoid-forward-references)
-to the research synthesis, design discussion, and specification.
+to another open question. Before comparing approaches or presenting a decision, introduce the
+terminology, each approach, and the constraints needed to assess it.
 
 Present the whole frontier in one numbered round. Explain the trade-offs, offer two to four
 meaningful options when alternatives exist, and put the recommended option first with its reason.
@@ -108,80 +99,43 @@ consumers are secondary unless the user asks for them.
 
 ## Explore terminal interactions
 
-When the package owns prompts, menus, forms, modals, or interactive terminal views, require
-`packages/<name>/docs/tui-interactions.md`. A command that only executes an action or prints output
-does not require an empty interaction document.
+When the package owns prompts, menus, forms, modals, or interactive terminal views, it requires
+`docs/tui-interactions.md` as the guide's
+[terminal interaction document](../../../docs/specifications.md#terminal-interaction-document)
+section defines it. Before confirming the design, walk through its user interactions with the user.
+Resolve focus, navigation, text entry, confirmation versus submission, back and cancel behavior,
+recovery, and relevant narrow-terminal, resize, and SSH behavior. Distinguish highlighted controls,
+local drafts, submitted input, and completed actions. Explore failure and interruption paths as well
+as successful completion; do not infer an interaction merely from a proposed widget or hotkey.
 
-Before confirming the design, walk through its user interactions with the user. Resolve focus,
-navigation, text entry, confirmation versus submission, back and cancel behavior, recovery, and
-relevant narrow-terminal, resize, and SSH behavior. Distinguish highlighted controls, local drafts,
-submitted input, and completed actions. Explore failure and interruption paths as well as successful
-completion; do not infer an interaction merely from a proposed widget or hotkey.
-
-After shared design confirmation, write the auxiliary document with concrete initial states, user
-actions, and observable outcomes. Include Mermaid diagrams for branching or multistep flows and link
-scenarios to package requirement IDs. Name the interaction area alone in each heading and list its
-requirement IDs in a `Requirements:` line inside the section body; when a section gains or loses a
-requirement, a heading that embeds requirement IDs breaks inbound SPEC links. Scale detail to the
-package. Use the agreed interaction in examples; do not impose another package's keybindings, modal
-layout, or approval workflow.
-
-Link `docs/tui-interactions.md` from `SPEC.md` as the normative interaction contract. Keep system
-responsibilities, interfaces, state, persistence, and ordering guarantees in the SPEC. Put detailed
-layout, appearance, labels, key mappings, and user flows in the interaction document under the same
-requirement IDs. The linked documents form the complete package contract; avoid duplicating UI rules
-in the SPEC. Keep research and execution evidence separate from required behavior.
+After shared design confirmation, write the document with the agreed interaction in its examples;
+do not impose another package's keybindings, modal layout, or approval workflow. Before reporting
+completion, check that the document exists, the SPEC links to it, and its scenarios cover the agreed
+flows and match the requirements.
 
 ## Write the specification
 
-Before drafting, apply the [reading-order guidance](../../../docs/specifications.md#avoid-forward-references)
-to the SPEC and its interaction contract, whether using the global brainstorming skill or the local
-fallback. Introduce shared domain concepts before dependent requirements, and define section-local
-terms at first use. Order the outline by what the reader needs to know; a link to a later definition
-does not supply prerequisite context.
-
 When research informed the design, confirm that its synthesis exists on disk and reflects the
 evidence used. Existing design approval does not waive persistence of research performed during the
-brainstorm. Keep the system and interaction contracts complete together; link supporting research
-without making it an additional source of requirements.
+brainstorm.
 
 Once the decisions are settled, summarize the resulting contract and confirm shared understanding.
 Existing explicit agreement is sufficient; do not ask for the same decision again. When uncertainty
 remains, mark the document as a draft and name the unresolved questions instead of claiming an
 approved contract.
 
-Write `packages/<name>/SPEC.md` using headings appropriate to the package. Define observable
-requirements, applicable interfaces, ordering and failure behavior, implementation choices, and
-conformance scenarios. Assign stable package-local requirement IDs in the form
-`REQ-<behavior-slug>`: kebab-case, two to four words, matching the requirement's title and naming
-the behavior rather than its mechanism, as in `REQ-planning-entry`, `REQ-approval-event`, or
-`REQ-recoverable-failures`. Reject ordinals, obligation verbs, library names, and the package name;
-prefix with an area only to separate siblings. These identify requirements, not vertical tasks; task
-names remain separate. Link every requirement to a conformance check with observable expected
-results.
+Write `packages/<name>/SPEC.md` as the guide's
+[Specify a package](../../../docs/specifications.md#specify-a-package) section requires, with
+headings appropriate to the package, requirements identified by `REQ-<behavior-slug>`, and every
+requirement linked to a conformance check. Record each option the brainstorm rejected in the SPEC's
+[Explored alternatives](../../../docs/specifications.md#explored-alternatives) section with the
+reason. Write original prose under the repository license and cite external contracts that
+implementers need. Describe implementation availability separately from intended behavior. Do not
+create runtime stubs or package-local plan directories merely to store a specification.
 
-Because slugs have no position, section headings and document order define the reading path, and
-the requirement headings index the package. Order requirements by prerequisite knowledge and group
-related responsibilities within that order. Apply the specification guide's distinctions between mandatory text,
-examples, permitted choices, and unresolved decisions. Readers must be able to implement the package
-without reading the reference source.
-
-Use the repository's specification starter as guidance, not a mandatory outline. Write original
-prose under the repository license and cite external contracts that implementers need. Describe
-implementation availability separately from intended behavior. Do not create runtime stubs or
-package-local plan directories merely to store a specification.
-
-Link the SPEC and approved scope from the initiative. Use a SPEC-only PR when a substantial design
-needs independent review or a shared implementation baseline; small deliveries can combine design
-and implementation. Later focused revisions can amend the SPEC alongside code and tests. Reference
-an implementation initiative without closing it from a design-only PR. Publish approved consequential
-decisions in the wiki when they meet the development workflow's decision-record threshold.
-
+Link the SPEC and approved scope from the initiative, and record decisions where the workflow's
+[decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place them.
 Follow the repository verification requirements for changed files. Report the research,
-specification, and applicable interaction-document paths, any unresolved decisions, and verification
-limits. For an interactive package, check that `docs/tui-interactions.md` exists, the SPEC links to
-it, and its scenarios cover the agreed flows and match the requirements. Do not report a settled
-interaction design while required scenarios or material interaction decisions are missing. When the
-user requests implementation planning, continue with
-[plan-implementation](../plan-implementation/SKILL.md) against the approved
-specification.
+specification, and applicable interaction-document paths, any unresolved decisions, and
+verification limits. When the user requests implementation planning, continue with
+[plan-implementation](../plan-implementation/SKILL.md) against the approved specification.

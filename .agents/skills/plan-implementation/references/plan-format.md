@@ -1,8 +1,9 @@
 # Issue implementation plans
 
 Keep current executable plans in GitHub issue bodies. The SPEC and interaction contract define
-behavior; issues select concrete edits and checks. Follow the
-[development workflow](../../../../docs/development-workflow.md) for hierarchy and completion.
+behavior; issues select concrete edits and checks. The development workflow's
+[work hierarchy](../../../../docs/development-workflow.md#work-hierarchy) defines which work gets an
+issue, how body edits are batched, and where evidence lives.
 
 Start each initiative or work issue with the Current handoff block below. For a small change, cover
 the remaining plan information in a few paragraphs. Do not add empty plan sections or copy the
@@ -83,8 +84,7 @@ For a routine state update, reread the remote body and locate exactly one ordere
 the top handoff block. Change only the affected value cells, preserving labels, row order, and all
 bytes outside the block. Skip publication when no value changes. GitHub still receives a whole-body
 update; inspect the draft diff before publishing and reconcile concurrent changes rather than
-overwriting them. Keep the workflow's batching rules: a new checkpoint alone does not trigger a body
-edit.
+overwriting them.
 
 When an existing issue needs a plan or handoff update, migrate its current handoff into this block and
 remove only the superseded handoff section. Preserve the remaining plan and contributor text; do
@@ -117,15 +117,21 @@ Refer to the parent for shared context rather than copying its contract or cover
 | --- | --- |
 | Outcome | Observable result, requirement contribution, and obligations left to other work |
 | Prerequisites | Blocking issue links, required outputs, and unresolved decisions |
+| Design | Required when the plan introduces a persisted format, a new module boundary, or more than one new module: modules with one-line ownership and the permitted import direction; each persisted record with its schema, atomic unit, and owner; each multi-step lifecycle as a state table; for each mechanism, the requirement that forces it and the simpler mechanism that fails that requirement |
 | Implementation | Files or symbols, intended edits, existing behavior to reuse, constraints, and small-step checklists |
 | Acceptance | Working directory, command or interaction, inputs, expected results, and applicable failure or recovery cases |
 
+When the Design section is present, drop a mechanism with no forcing requirement during planning,
+and the developer approves the section before implementation authorization. Record each persisted
+format as a decision where the workflow's
+[decision rules](../../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
+
 Initially state that implementation has not started. Update the handoff from observed results and
 relevant contract and source revisions as work progresses. Keep expected checks separate from actual
-results. Identify plausible regressions
-that the checks must reject. Separate local automated checks from explicitly authorized real-model
-checks. Verification and PR delivery normally belong in acceptance criteria rather than separate
-issues. A completed slice establishes only its assigned contribution.
+results. Identify plausible regressions that the checks must reject. Separate local automated checks
+from explicitly authorized real-model checks. Verification and PR delivery normally belong in
+acceptance criteria rather than separate issues. A completed slice establishes only its assigned
+contribution.
 
 For an investigation, state the question, bounded experiment, and result needed to unblock dependent
 work. A negative finding can complete the investigation without making the dependent design viable.
@@ -134,22 +140,8 @@ work. A negative finding can complete the investigation without making the depen
 
 Compare the recorded baseline with current SPEC and source changes before resuming. Revise affected
 tasks and coverage; unrelated commits do not invalidate the whole plan. Preserve completed work and
-contributor edits. Check remote state before retrying an uncertain write.
-
-Keep the body compact and current. Batch edits when the executable plan or handoff changes; skip
-unchanged writes and per-agent progress narratives. Publish authored checkpoint artifacts in
-append-only issue comments under the
-[checkpoint policy](../../../../docs/development-workflow.md#publish-checkpoint-artifacts).
-Keep only links needed for current execution in the body; do not accumulate a history index.
-
-Keep raw logs and scratch files in ignored `packages/<name>/implementation/`, or `.artifacts/` for
-workspace work. Checkpoint summaries must be understandable without local file links or transcripts.
-Keep reusable tests and instructions in the repository. Do not maintain a second authoritative local
-plan. For GitHub bodies and comments, write each prose paragraph or list item on one physical line,
-preserve Markdown structure, and prohibit formatter or audit reflow of publication drafts.
-
-For explicit local or chat-only requests, preserve the same outcome, approach, acceptance, and
-handoff information in that destination. Local drafts during a GitHub outage remain unpublished
-until the issue update succeeds. Reconcile old local plans against current scope before publication.
-
-This format governs repository development, not the exact reviewed Markdown saved by `@orbis/plan`.
+contributor edits. For explicit local or chat-only requests, preserve the same outcome, approach,
+acceptance, and handoff information in that destination. Local drafts during a GitHub outage remain
+unpublished until the issue update succeeds; reconcile old local plans against current scope before
+publication. This format governs repository development, not the exact reviewed Markdown saved by
+`@orbis/plan`.

@@ -2,14 +2,113 @@
 
 Orbis tracks shared work in [GitHub Issues](https://github.com/kvnxiao/orbis/issues) and the
 [Orbis Project](https://github.com/users/kvnxiao/projects/1). Package SPECs define approved
-behavior; issues contain implementation plans. The
-[wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) links consequential choices
-and the constraints behind them.
+behavior, issues contain implementation plans, and the
+[wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) links repository-wide
+constraints and the rationale behind them.
 
-A **checkpoint** records a completed agent assignment or a blocked or interrupted handoff. Each
-checkpoint contains one or more authored artifacts summarizing the work and its results, published
-as issue comments. The issue body contains the compact current plan and handoff; checkpoint comments
-preserve the work history.
+Three roles appear throughout this document. The **developer** approves designs, resolves material
+decisions, and merges PRs. The **orchestrator** is the main agent session or an explicitly selected
+delegate that owns decisions, coordination, and verification. A **delegate** executes bounded work
+that the orchestrator assigns: implementation from an approved plan, or a review that returns
+findings. [Agent models](#agent-models) maps the roles to models per host.
+
+A **checkpoint** records assignments completed since the previous checkpoint, or a blocked or
+interrupted handoff, as authored artifacts published on issue-backed work. The issue body contains
+the compact current plan and handoff; checkpoint comments preserve the work history.
+
+## Lightweight path
+
+Use this path for small changes with settled scope and local effects that are straightforward to
+verify, such as documentation corrections and narrow fixes within approved behavior. Choose by risk,
+not file count. Use the full workflow when the user requests it or the work involves unresolved
+design, contract changes, behavior across packages, persisted formats, dependencies, security or
+compatibility changes, or substantial runtime risk.
+
+The main agent makes the edits, reviews the complete diff for correctness and prose, and runs
+focused checks. For documentation, check changed references and formatting; for runtime fixes,
+retain the required regression tests. Review changes to agent instructions for their effect on
+routing, authorization, and execution in the main session.
+
+This path overrides procedural requirements in this workflow, `AGENTS.md`, and repository skills: do
+not require subagents, issues, plans, checkpoints, wiki reads or decision records, separate prose
+audits, commit-copy drafts, `verify-changes`, or full repository checks. Read only the context
+needed to establish the scope and verify the change. Keep existing issue associations without
+creating additional tracking artifacts. When publishing GitHub bodies, retain `--body-file` and the
+no-reflow rule.
+
+Preserve package contracts, authorization limits, and explicit delivery scope. For a local edit or
+commit request, stop there. Report the changed behavior and checks briefly. If investigation reveals
+one of the risks above, use the full workflow for the affected work.
+
+## Work hierarchy
+
+Work that introduces, improves, or changes package behavior is tracked in issues. A direct request
+for a fix within a package's existing contract, a documentation change, or a workspace tooling
+change takes the **PR-only path**: use the approved request, current source, and any existing PR as
+inputs; do not create an issue, issue plan, or handoff table. The PR body records the outcome,
+acceptance, and verification, and the PR is the shared record another session resumes from. If
+PR-only work is interrupted before a PR exists, report the branch and next action in chat. Resume
+work already tracked by an issue on that issue, even when its remaining change would otherwise
+qualify for the PR-only path.
+
+An **initiative** is a bounded delivery represented by an ordinary issue. It can cover an
+extension's initial delivery or a functionality facet. A **work issue** is an independently
+executable outcome within that initiative. Small changes can use one issue without children.
+Checklists hold smaller steps that do not need separate ownership or delivery.
+
+| Record                                       | Contents                                                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Package SPEC and linked interaction contract | Current approved behavior and conformance scenarios                                                        |
+| Initiative issue                             | Outcome, approved scope and SPEC baseline, requirement coverage, shared constraints, integrated acceptance |
+| Initiative decision comments                 | Decision records for a package before its first stable release                                             |
+| Work issue                                   | Requirement contribution, design, concrete approach, dependencies, acceptance checks, current handoff      |
+| Checkpoint comments                          | Authored work summaries, findings, verification, and unresolved obligations                                |
+| Project item                                 | Priority and coarse execution status                                                                       |
+| Wiki decision record                         | Repository-wide constraints and decisions for released packages                                            |
+| PR                                           | Delivery summary and verification; the whole record for PR-only work                                       |
+| Optional local files                         | Scratch work, detailed logs, and run evidence                                                              |
+
+The SPEC belongs to the package and can support successive initiatives. Link its relevant
+requirements from each issue; requirements and implementation work can have many-to-many coverage.
+Distinguish partial contributions from full coverage. Use native sub-issue relationships for
+decomposition and blocking relationships for prerequisites; issue numbers do not imply execution
+order. Add each tracked issue to the Project; parent membership and fields do not establish child
+membership or priority.
+
+Keep the current plan in issue bodies using the
+[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md), which defines
+the fixed Current handoff table at the top of each body and its editing rules. Edit plan sections
+only when the plan changes, and confine routine state updates to the handoff table. Keep only the
+checkpoint links needed to resume current work; record findings and progress in checkpoint comments
+even when the body needs no change.
+
+Batch pending body changes before a stage transition, pause, or delivery; update sooner when another
+worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to
+refresh a timestamp. Reread before editing, preserve contributor text, and skip unchanged writes.
+After an uncertain write, check remote state before retrying or creating another issue.
+
+## Authorization
+
+Within an authorized task, agents may create and update relevant issues, Project items, concise
+handoffs, and decision records. Implementation authorization includes preparing commits on a work
+branch, pushing that branch, and opening PRs after repository verification. Developers review and
+merge PRs. Agents do not merge, push directly to the default branch, publish packages, or create
+releases without separate explicit authorization.
+
+A request to resume, continue, or work on an issue authorizes ordinary continuation within that
+issue's approved scope, including implementation when its prerequisites are satisfied. Preserve
+applicable explicit design-only, planning-only, and review-only limits. A design-only or
+planning-only request authorizes its shared deliverables and, when useful, a design-only PR; it does
+not authorize runtime implementation. SPEC approval, permission to implement, and readiness to merge
+remain distinct, and design approval does not approve code added later. A status question requests a
+report, not execution. Direct requests to specialist skills retain their stated scope.
+
+Record the scope and source of existing developer approval; an agent-written summary, issue
+assignment, Project status, or community suggestion does not grant additional authority. Resolve
+routine implementation choices and fix verification failures autonomously. Ask about material
+unresolved behavior, conflicting requirements, or scope changes before dependent work, and continue
+unaffected work while waiting. Live-model checks retain their explicit authorization and supervision
+requirements.
 
 ## Start or resume work
 
@@ -18,24 +117,17 @@ Ask to resume an issue, for example `Resume #<number>` or `Continue work on <iss
 development workflow; the request does not need a skill name or lifecycle stage. Resolve bare issue
 numbers against the current repository and honor explicit repository references.
 
-Determine the current stage from the issue and related work, approval records, SPEC, source,
-verification evidence, and linked PRs. State the stage, supporting evidence, and next bounded action
-before proceeding. When an approved SPEC lacks executable plans, create or update issue plans; when
-plans exist, select the next eligible task; when work or a PR is underway, resume it. Reassess after
-each completed action instead of replaying a fixed sequence. Project status alone does not establish
-readiness or completion.
+For issue-backed work, determine the current stage from the issue and related work, approval
+records, SPEC, source, verification evidence, and linked PRs. State the stage, supporting evidence,
+and next bounded action before proceeding. When an approved SPEC lacks executable plans, create or
+update issue plans; when plans exist, select the next eligible task; when work or a PR is underway,
+resume it. Reassess after each completed action instead of replaying a fixed sequence. Project
+status alone does not establish readiness or completion. For PR-only work, resume from the approved
+request, current source, and existing PR without assigning an issue stage.
 
-A request to resume work authorizes ordinary continuation within the specified issue's approved
-scope, including implementation when its prerequisites are satisfied. Preserve applicable explicit
-design-only, planning-only, and review-only limits. Resolve missing design approval and material
-decisions before dependent work; retain separate authorization for merge, publication, and
-live-model checks. A status question requests a report, not execution. Direct requests to specialist
-skills retain their stated scope.
-
-Record the stage, approval and execution scope, active work, evidence, next action, and blockers in
-the issue's Current handoff table at the top of its body. At the start of a new session, verify that
-handoff against current artifacts before continuing. Keep the issue as the shared record; do not
-introduce a separate lifecycle-state file.
+At the start of a new session on issue-backed work, verify the issue's Current handoff table against
+current artifacts before continuing. Keep the issue as the shared record; do not introduce a
+separate lifecycle-state file.
 
 ### Retrieve current work before history
 
@@ -65,41 +157,37 @@ comment bodies. For a retrospective, set the issue and time scope before paging 
 comments; report incomplete coverage. GitHub issue search returns matching issues, not individual
 comment records, and does not establish an exhaustive history.
 
-At the start of substantive repository work, read the decision index once and open records relevant
-to the affected package or mechanism. Compare historical constraints with current source and runtime
-versions before relying on them. If GitHub is unavailable, report the missing context and continue
-independent local work; do not claim that remote records were read or updated.
-
 ## Agent models
 
-Use the following models for repository software development. The Astra orchestrator owns decisions
-and verification; the Sol implementer executes bounded work from approved plans.
+The orchestrator runs on the host's strongest reasoning model and every delegate runs on the host's
+delegate model. Both hosts set reasoning effort per agent, so effort follows the role.
 
-| Responsibility                                                                              | Model         | Selection                                                     |
-| ------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------- |
-| Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` | Main session or an explicitly selected Astra delegate         |
-| Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol`   | `orbis-implementer` custom agent                              |
-| Correctness, simplification, conformance, and other reviews that do not edit files          | `gpt-6-astra` | `orbis-reviewer` custom agent                                 |
-| Documentation updates and prose audits that may edit files                                  | `gpt-6-astra` | Explicit model selection with the skill's scoped write access |
+| Responsibility                                                                              | Codex model and effort                               | Claude Code model and effort                               |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
+| Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` at `xhigh`, the main session           | `claude-fable-5-1` at `xhigh`, the main session            |
+| Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol` at `high`, `orbis-implementer`           | `claude-opus-5-5` at `high`, `orbis-implementer`           |
+| Conformance review, which reads the contract and does not edit files                        | `gpt-6-sol` at `xhigh`, `orbis-conformance-reviewer` | `claude-opus-5-5` at `xhigh`, `orbis-conformance-reviewer` |
+| Correctness, simplification, and other reviews that do not edit files                       | `gpt-6-sol` at `high`, `orbis-reviewer`              | `claude-opus-5-5` at `high`, `orbis-reviewer`              |
+| Documentation updates and prose audits that may edit files                                  | `gpt-6-sol` at `high`, explicit model selection      | `claude-opus-5-5` at `high`, explicit model selection      |
 
-The repository [Codex configuration](../.codex/config.toml) selects Astra for new main sessions and
-as the default subagent model. The [implementer](../.codex/agents/orbis-implementer.toml) and
-[reviewer](../.codex/agents/orbis-reviewer.toml) definitions select their models and
-responsibilities. These defaults use `xhigh` reasoning for orchestration and review, and `high` for
-implementation. Keep model configuration in these files; specialist skills refer to this policy.
+The [Codex configuration](../.codex/config.toml) selects Astra at `xhigh` for new main sessions and
+Sol at `high` as the default subagent model; the definitions under
+[`.codex/agents/`](../.codex/agents/) select each custom agent's model, effort, and sandbox. The
+[Claude Code settings](../.claude/settings.json) select the main session's model and effort, and the
+definitions under [`.claude/agents/`](../.claude/agents/) select each Claude Code agent's model,
+effort, and tool access. Keep model configuration in these files; `AGENTS.md` refers to this policy.
 
 Codex must trust the repository to load its project configuration. An explicit launch option or
 managed host can override the defaults. Configuration changes apply to new sessions and do not
-switch an existing orchestrator's model. Before starting software development, use an Astra session
-or explicitly delegate development decisions to Astra; do not claim that a skill changes the active
-model.
+switch an existing orchestrator's model. Do not claim that a skill changes the active model.
 
 When the host exposes custom agent selection, select the role for the task. When it exposes model
-overrides instead, pass the role's exact model and reasoning effort when spawning the delegate and
-include its responsibilities in the handoff. On hosts where a full-history fork inherits the parent
-model, use a fresh or bounded-history context for a model override. Do not rely on a role name in
-the prompt to select a model. If the required model or delegation is unavailable, report the
-limitation and obtain a developer choice before substituting another model for that role.
+overrides instead, pass the role's exact model and, where the host supports it, reasoning effort
+when spawning the delegate, and include its responsibilities in the handoff. On hosts where a
+full-history fork inherits the parent model, use a fresh or bounded-history context for a model
+override. Do not rely on a role name in the prompt to select a model. If the required model or
+delegation is unavailable, report the limitation and obtain a developer choice before substituting
+another model for that role.
 
 ### Skill handoffs
 
@@ -116,99 +204,65 @@ rules and specialist review skills to delegates without restarting either coordi
 
 ### Implementation handoff
 
-Before delegating implementation, the Astra orchestrator resolves the contract and selects an
-authorized, unblocked issue. Give the Sol implementer:
+Before delegating implementation, the orchestrator resolves the contract and selects authorized,
+unblocked work. Give the implementer:
 
-- The issue, repository baseline, approved scope, and execution authorization.
+- The issue for issue-backed work, or the approved request and any existing PR for PR-only work;
+  include the repository baseline, approved scope, and execution authorization.
 - Relevant SPEC requirement IDs, interaction scenarios, and repository constraints; for workspace
   work without a SPEC, provide the approved request and acceptance criteria.
-- The concrete plan, files it may edit, dependencies, and concurrent work it must preserve.
+- The issue plan for issue-backed work, or concrete task for PR-only work; include files it may
+  edit, dependencies, and concurrent work it must preserve.
 - Observable outcomes, required checks, and the report needed for review.
 
-The implementer may make routine choices within the plan, write code and tests, run targeted checks,
-and repair accepted findings. Before dependent edits, the implementer returns unresolved behavior,
-material architectural choices, and scope changes to Astra. The implementer does not delegate
-further or take ownership of contract approval, final verification, commits, or PR delivery. Keep
-design-only and planning-only work with Astra until implementation is authorized.
+The implementer may make routine choices within the assigned work, write code and tests, run
+targeted checks, and repair accepted findings. Before dependent edits, the implementer returns
+unresolved behavior, material architectural choices, and scope changes to the orchestrator. The
+implementer does not delegate further or take ownership of contract approval, final verification,
+commits, or PR delivery. Keep design-only and planning-only work with the orchestrator until
+implementation is authorized.
 
 ### Review and delivery
 
-The Astra orchestrator inspects the returned diff and runs `verify-changes` once on the accumulated
-change set. Select Astra for each review delegate, including the documentation and prose passes;
-give read-only reviewers the `orbis-reviewer` role. Pass scoped write permissions to documentation
-and prose delegates instead of using the read-only role. Reviewers follow their assigned skill and
-return findings without recursively delegating or coordinating another verification workflow.
+The orchestrator inspects the returned diff and runs `verify-changes` once on the accumulated change
+set before requesting merge. Give read-only reviewers the reviewer roles from the model table, and
+pass scoped write permissions to documentation and prose delegates instead of a read-only role.
+Reviewers follow their assigned skill and return findings without recursively delegating or
+coordinating another verification workflow.
 
-Resolve findings with Astra and send bounded implementation repairs to Sol. Recheck the affected
-behavior after repairs, then let Astra prepare the audited commit and PR drafts and complete
-delivery. Developer approval and merge checkpoints remain those defined in this workflow.
+Review agent instructions and configuration for correctness when changes affect routing,
+authorization, delegation, checkpoints, or execution. These files govern agent behavior regardless
+of their Markdown or configuration extension.
+
+Resolve findings with the orchestrator and send bounded implementation repairs to the implementer.
+Recheck the affected behavior after repairs. Then write the commit and PR drafts, audit them, and
+complete delivery. Match each PR to a coherent reviewable outcome; developer approval and merge
+remain the developer's decisions.
 
 Codex documents
 [custom agents and model selection](https://learn.chatgpt.com/docs/agent-configuration/subagents)
 and
 [configuration precedence](https://learn.chatgpt.com/docs/config-file/config-basic#configuration-precedence).
 
-## Work hierarchy
-
-An **initiative** is a bounded delivery represented by an ordinary issue. It can cover an
-extension's initial delivery or a functionality facet. A **work issue** is an independently
-executable outcome within that initiative. Small changes can use one issue without children.
-Checklists hold smaller steps that do not need separate ownership or delivery.
-
-| Record                                       | Contents                                                                                                   |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Package SPEC and linked interaction contract | Current approved behavior and conformance scenarios                                                        |
-| Initiative issue                             | Outcome, approved scope and SPEC baseline, requirement coverage, shared constraints, integrated acceptance |
-| Work issue                                   | Requirement contribution, concrete approach, dependencies, acceptance checks, current handoff              |
-| Checkpoint comments                          | Authored work summaries, findings, verification, and unresolved obligations                                |
-| Project item                                 | Priority and coarse execution status                                                                       |
-| Wiki decision record                         | Choice, constraints, alternatives, consequences, and reconsideration conditions                            |
-| Optional local files                         | Scratch work, detailed logs, and run evidence                                                              |
-
-The SPEC belongs to the package and can support successive initiatives. Link its relevant
-requirements from each issue; requirements and implementation work can have many-to-many coverage.
-Distinguish partial contributions from full coverage. Use native sub-issue relationships for
-decomposition and blocking relationships for prerequisites. Add each tracked issue to the Project;
-parent membership and fields do not establish child membership or priority.
-
-Keep the current plan in issue bodies using the
-[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md). Begin each
-body with its fixed Current handoff table between the prescribed boundary markers. For routine state
-updates, change only affected table values and preserve all bytes outside that block. Keep the
-outcome, approved baseline, approach, and acceptance criteria below it; edit those sections only
-when the plan changes. Migrate older handoffs when a plan or handoff update is needed, preserving
-unrelated text and removing the superseded handoff. Edit the body only when the current plan or a
-handoff value changes. Update checklist completion at meaningful task boundaries. Keep only the
-checkpoint links needed to resume current work; do not grow a history index in the body. Record
-findings and progress in checkpoint comments even when the body needs no change.
-
-Batch pending body changes before a stage transition, pause, or delivery; update sooner when another
-worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to
-refresh a timestamp. Reread before editing, preserve contributor text, and skip unchanged writes.
-After an uncertain write, check remote state before retrying or creating another issue.
-
 ## Publish checkpoint artifacts
 
-Within authorized shared work, the orchestrator publishes a checkpoint after every completed agent
-assignment, including its own bounded work and reviews with no findings, and at blocked or
-interrupted handoffs. Preserve explicit local-only, chat-only, and read-only publication limits. A
-status-only request does not authorize a checkpoint comment. Publish when the checkpoint is reached
-instead of deferring all records until the session ends. A sudden process termination may prevent
-publication; report any resulting gap when resuming.
+For authorized issue-backed work, the orchestrator publishes a checkpoint at each stage transition,
+at a blocked or interrupted handoff, and at delivery. The checkpoint summarizes every assignment
+completed since the previous checkpoint, including the orchestrator's own bounded work and reviews
+with no findings; an intermediate assignment does not get its own comment. Preserve explicit
+local-only, chat-only, and read-only publication limits. A status-only request does not authorize a
+checkpoint comment. Publish when the checkpoint is reached instead of deferring all records until
+the session ends. A sudden process termination may prevent publication; report any resulting gap
+when resuming.
 
 Author a summary from the work and verified results, or verify a separately authored delegate packet
 before publishing it. Do not copy ordinary conversation turns, delegate replies, tool-call dumps, or
 raw JSONL into the journal. Record conclusions and their supporting rationale, not private
 deliberation. Scale detail to the work: a clean review may need only its scope, verdict, checks, and
 remaining obligations. Group related artifacts in one comment when practical, retaining each
-packet's attribution and outcome.
-
-Use the [checkpoint packet format](../.agents/skills/work-issue/references/checkpoint-format.md): a
-stable identifier, a metadata table with Agent, Model, Assignment, Outcome, and Revision rows,
-followed by Result, Evidence, and Next action sections. When the author summarizes another agent's
-work, name that work agent and model separately. Use GitHub's comment creation timestamp for
-publication time; omit recording timestamps, work intervals, and durations. Record an observation
-time in Result or Evidence only when it affects the finding's meaning.
+packet's attribution and outcome. Use the
+[checkpoint packet format](../.agents/skills/work-issue/references/checkpoint-format.md), which
+defines the packet's identifier, metadata table, sections, and attribution rules.
 
 Publish on the issue that owns the work. Link from a parent or related issue when needed instead of
 duplicating artifacts. Comments are append-only by workflow convention; GitHub still permits edits
@@ -235,30 +289,10 @@ drafts. Oxfmt excludes `.artifacts/**` and wraps Markdown in the files it format
 tracked prose for GitHub, join its artificial line breaks without flattening Markdown structure or
 changing code blocks.
 
-For commits and PRs, complete repository verification before preparing and auditing delivery drafts.
-Review ordinary checkpoint prose within the publishing assignment; a separate audit assignment is
-not required. Publish issue and PR bodies and comments with `--body-file`, preserving the draft's
-bytes. Verify the stored body after publication. Correct current bodies when needed; do not
+Publish issue and PR bodies and comments with `--body-file`, preserving the draft's bytes, and
+verify the stored body after publication. Review ordinary checkpoint prose within the publishing
+assignment; a separate audit assignment is not required. Correct current bodies when needed; do not
 bulk-reformat historical comments.
-
-## Authorization and checkpoints
-
-Within an authorized task, agents may create and update relevant issues, project items, concise
-handoffs, and wiki records of approved decisions. Implementation authorization includes preparing
-commits on a work branch, pushing that branch, and opening PRs after repository verification.
-Developers review and merge PRs. Agents do not merge, push directly to the default branch, publish
-packages, or create releases without separate explicit authorization.
-
-A design-only or planning-only request authorizes its shared deliverables and, when useful, a
-design-only PR. It does not authorize runtime implementation. SPEC approval, permission to
-implement, and readiness to merge remain distinct. Record the scope and source of existing developer
-approval; an agent-written summary, issue assignment, Project status, or community suggestion does
-not grant additional authority.
-
-Resolve routine implementation choices and fix verification failures autonomously. Ask about
-material unresolved behavior, conflicting requirements, or scope changes before dependent work.
-Continue unaffected work while waiting. Separate live-model checks retain their explicit
-authorization and supervision requirements.
 
 ## Design and PR boundaries
 
@@ -272,11 +306,7 @@ For a substantial new extension, use an initial SPEC-only PR when shared design 
 implementation efforts need an agreed baseline. State implementation availability in the SPEC. Small
 deliveries can combine the SPEC and implementation in one PR. Later scoped revisions normally
 combine approved SPEC amendments, code, and tests. Use a separate design PR when the decision needs
-independent review. The initiative persists across these PRs.
-
-Draft PRs share unfinished work. Design approval does not approve code added later. Before
-requesting merge, run `verify-changes` on the accumulated change set, resolve scoped findings, and
-audit the commit and PR drafts. Match each PR to a coherent reviewable outcome.
+independent review. The initiative persists across these PRs. Draft PRs share unfinished work.
 
 ## Status and completion
 
@@ -309,32 +339,45 @@ implementation initiative without closing it. The final delivery PR closes the i
 all required child outcomes are already delivered or land in that PR and integrated acceptance
 passes. List each delivered issue explicitly; do not rely on parent or child closure cascading.
 
-Keep repository auto-closing enabled and the Project's **Item closed → Done** workflow enabled.
-Merging into the default branch then closes the linked issues and updates their Project status. Do
-not manually close implementation issues before merge. For a completed investigation without a PR,
-close its issue after recording the accepted outcome. On resumption, reconcile issue state and
-delivery links rather than replaying completed work.
+Merging into the default branch closes the linked issues and updates their Project status through
+the automation that [GitHub setup](#github-setup) enables. Do not manually close implementation
+issues before merge. For a completed investigation without a PR, close its issue after recording the
+accepted outcome. On resumption, reconcile issue state and delivery links rather than replaying
+completed work.
 
 ## Decisions and local evidence
 
-Write a wiki decision record when a choice creates or replaces a lasting constraint and its
-consequential rationale would be lost from the current SPEC or code. Routine task adjustments stay
-in checkpoint comments, with current plan changes reflected in the issue body. Record observed
-failed attempts separately from untested alternatives.
+A decision record preserves a choice, its status and scope, the constraints behind it, the
+meaningful alternatives, its consequences, its reconsideration conditions, and relevant issue or PR
+links. Write one when a choice creates or replaces a lasting constraint and its rationale would be
+lost from the current SPEC or code. Routine task adjustments stay in checkpoint comments, with
+current plan changes reflected in the issue body. Record observed failed attempts separately from
+untested alternatives.
 
-Keep each record concise: decision and status, affected scope, constraints, meaningful alternatives,
-consequences, reconsideration conditions, and relevant issue or PR links. Use descriptive page
-names. The Decisions index contains scope, a one-sentence choice or constraint, status, and a page
-link. Preserve superseded records with replacement links. A historical choice does not override the
-current approved contract or authorize a new requirement.
+The record's location depends on its scope. A package without a stable release, meaning no published
+version at 1.0.0 or later, keeps its decision records as comments on its initiative issue, because
+implementation and dogfooding are expected to change them. The SPEC states only the current approved
+behavior; its optional [Explored alternatives](specifications.md#explored-alternatives) section
+lists each abandoned idea with the reason; later planning reads it before proposing approaches.
+Repository-wide constraints, and decisions for a package with a stable release, go to the wiki.
+Comments and wiki records are append-only by convention: supersede a record with a new one that
+links the earlier record and states what changes, and move the superseded approach into the record's
+explored alternatives.
+
+Use descriptive wiki page names. The Decisions index contains scope, a one-sentence choice or
+constraint, status, and a page link. Preserve superseded records with replacement links. A
+historical choice does not override the current approved contract or authorize a new requirement. At
+the start of substantive repository work, read the index once, open the records for the affected
+package or mechanism, and compare their constraints with current source and runtime versions before
+relying on them.
 
 The wiki has its own Git repository. Refresh it before editing, inspect the diff, audit the prose,
 and push only the intended pages and index changes. On a concurrent update, reconcile the changes;
 do not force-push. Wiki publication of approved decision summaries is authorized within the task.
 
-After a retrospective, put reusable conclusions and approved consequential decisions in the wiki,
-linking the checkpoint evidence and stating the history examined and its gaps. Keep the checkpoint
-artifacts on their work issues. A retrospective does not authorize new package requirements.
+After a retrospective, put reusable conclusions in the record location its scope requires, linking
+the checkpoint evidence and stating the history examined and its gaps. Keep the checkpoint artifacts
+on their work issues. A retrospective does not authorize new package requirements.
 
 Detailed execution logs and scratch files can remain in ignored `packages/<name>/implementation/`
 directories, or `.artifacts/` for repository-wide work. Do not maintain a second authoritative local

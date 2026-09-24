@@ -1,9 +1,9 @@
 # Checkpoint packets
 
-A checkpoint packet is an authored summary of one agent assignment or handoff. Within authorized
-shared work, publish it as an issue comment, or group related packets in one comment. Keep each packet's identifier and author
-metadata separate. Follow the [development workflow](../../../../docs/development-workflow.md)
-for publication, append-only corrections, and selective retrieval.
+A checkpoint packet is an authored summary of the assignments completed since the previous
+checkpoint, or of a blocked or interrupted handoff. The development workflow's
+[checkpoint policy](../../../../docs/development-workflow.md#publish-checkpoint-artifacts) defines
+when to publish a packet and how to correct or retrieve one; this reference defines the packet.
 
 Start each packet with `## Checkpoint: <stable-id>`. Choose the identifier before publication and
 reuse it when checking an uncertain write. Use a metadata table with these required rows in order:
@@ -19,11 +19,11 @@ reuse it when checking an uncertain write. Use a metadata table with these requi
 Resolve Model before drafting the packet. Read the active host's session or turn metadata, or use
 the explicit model selection for the delegate that authored it. On Codex hosts with local session
 records, use `CODEX_THREAD_ID` to locate the matching session under `CODEX_HOME` (normally
-`~/.codex`), then read `payload.model` from the authoring turn's `turn_context` record. For retrospective
-packets, use that turn's model rather than a later selection. Inspect only the identity metadata;
-do not publish session logs. Use `Unknown` only when the relevant metadata and explicit selection
-cannot be obtained, and state the lookup gap in Evidence. A repository default alone does not
-establish the model used for a turn.
+`~/.codex`), then read `payload.model` from the authoring turn's `turn_context` record. For
+retrospective packets, use that turn's model rather than a later selection. Inspect only the
+identity metadata; do not publish session logs. Use `Unknown` only when the relevant metadata and
+explicit selection cannot be obtained, and state the lookup gap in Evidence. A repository default
+alone does not establish the model used for a turn.
 
 Agent and Model identify who authored the packet, not the account that posted the comment. When an
 orchestrator summarizes a delegate's work, the orchestrator is the author; append Work agent and Work
@@ -33,7 +33,8 @@ from who ran the GitHub command or substitute an ordinary conversation reply for
 
 Follow the table with these sections:
 
-- **Result:** work performed, findings, consequential choices, and their supporting rationale.
+- **Result:** work performed since the previous checkpoint, findings, consequential choices, and
+  their supporting rationale. A review with no findings states its scope and verdict here.
 - **Evidence:** relevant checks and conditions, distinguishing passed, failed, skipped, and
   unverified results. Include useful commands and shared links; make the result understandable
   without ignored local files.
@@ -41,12 +42,9 @@ Follow the table with these sections:
 
 GitHub's comment creation timestamp records publication time. Do not add a recording timestamp, work
 interval, or duration to the packet. When an observation's time affects its meaning, state that time
-in Result or Evidence. For delayed publication, distinguish a relevant observation time from the
-comment's publication time; do not reconstruct elapsed work from either. Packets grouped in one
-comment share its publication timestamp.
+in Result or Evidence. Packets grouped in one comment share its publication timestamp.
 
-Use this structure, replacing the example values with observed facts. Keep each table row and prose
-paragraph on one physical line in the publication draft.
+Use this structure, replacing the example values with observed facts.
 
 ```markdown
 ## Checkpoint: example-review-1
