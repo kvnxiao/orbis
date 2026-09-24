@@ -8,18 +8,11 @@ description:
 
 # Update the Orbis toolchain
 
-Follow the [agent model policy](../../../docs/development-workflow.md#agent-models) for release
-research, version selection, implementation, and review.
-
 Use `scripts/update-toolchain.mts` from the repository root for inventory, release selection, and
 mechanical verification. Read its implementation only when a command fails or the repository
 contract changes. Reserve agent judgment for compatibility, package migrations, new correctness
-checks, and code fixes.
-
-In compatibility proposals and documentation, introduce runtime targets, package roles, and
-migration approaches before comparing or selecting them. Avoid forward references; explain each
-prerequisite before the command or decision that depends on it. Before delivery, check the
-changed prose in reading order under the repository's writing rules.
+checks, and code fixes. In compatibility proposals, introduce runtime targets, package roles, and
+migration approaches before comparing or selecting them.
 
 ## Capture the baseline
 
@@ -35,9 +28,9 @@ baseline facts without running `pnpm check`. Use it only when the session alread
 baseline or explicitly skips checks.
 
 The baseline records Node.js and pnpm versions, root/package/template manifests, all default and
-named catalog entries, release-age and build policies, and files requiring review. Read `AGENTS.md`
-and the reported `reviewFiles` relevant to the update. Also read `CONTRIBUTING.md` for the workspace
-toolchain and package `docs/development.md` files for compatibility checks. Preserve existing user changes.
+named catalog entries, release-age and build policies, and files requiring review. Read the reported
+`reviewFiles` relevant to the update, `CONTRIBUTING.md` for the workspace toolchain, and package
+`docs/development.md` files for compatibility checks. Preserve existing user changes.
 
 Release discovery queries the configured npm registries through pnpm and the
 [official Node.js release index](https://nodejs.org/dist/index.json). It sorts stable versions
@@ -84,18 +77,16 @@ fallback version before selecting it. Previews require a user request.
 
 ## Apply the selected versions
 
-Delegate bounded, approved implementation and compatibility fixes. Keep version selection,
-compatibility decisions, and accumulated verification with the orchestrator.
+Delegate bounded, approved implementation and compatibility fixes under the workflow's
+[implementation handoff](../../../docs/development-workflow.md#implementation-handoff). Keep version
+selection, compatibility decisions, and accumulated verification with the orchestrator.
 
 Update default and named catalog values, `.node-version`, `packageManager`, affected manifests, and
 the `CONTRIBUTING.md` version table together. Update package runtime requirements and compatibility
 documentation where affected; keep workspace development versions out of READMEs. Preserve
-`catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer
-contracts. Keep dependency build policies and `minimumReleaseAge: 1440`; remove exclusions marked
-`remove` in the release report. Retain the exact package-name exclusions for
-`@earendil-works/chord`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
-`@earendil-works/pi-coding-agent`, `@earendil-works/pi-telemetry`, and
-`@earendil-works/pi-tui`. Do not add other exclusions for younger releases.
+`catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep `minimumReleaseAge: 1440`
+and the package-name exclusions listed in `pnpm-workspace.yaml`; remove exclusions the release
+report marks `remove`, and do not add exclusions for younger releases.
 
 Activate the selected development Node.js and pnpm, then run `pnpm install` to regenerate the
 lockfile. Review the catalog and lockfile diff. Installed versions alone do not establish that the
@@ -103,11 +94,11 @@ catalogs were updated.
 
 ## Verify the update
 
-Run the repository's `verify-changes` workflow once for the accumulated change set. Use these
-commands for its mechanical verification:
+Run `verify-changes` once for the accumulated change set. Use these commands for its mechanical
+verification:
 
 ```sh
-pnpm format
+just fix
 node scripts/update-toolchain.mts verify /absolute/path/to/minimum-node > .artifacts/toolchain-after.json
 ```
 
@@ -130,5 +121,5 @@ describe the update as fully verified. Never add a build step to satisfy loading
 
 Report old and selected versions, retained versions and blockers, new checks, primary sources, and
 verification results. Distinguish measured command timings from upstream performance claims. State
-skipped checks and unverified runtime or distribution support. Follow repository authorization rules
-for publication.
+skipped checks and unverified runtime or distribution support. Publication requires its own
+authorization.

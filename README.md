@@ -1,7 +1,7 @@
 # Orbis
 
-Modular extensions for [Pi](https://pi.dev/). Install the packages you need to add planning, review,
-and terminal commands to your coding agent.
+Modular extensions for [Pi](https://pi.dev/). Install the packages you need to add planning, memory
+settings, and terminal commands to your coding agent.
 
 Orbis takes its name from Latin _orbis_, a circle or orb, and the circle constant pi.
 

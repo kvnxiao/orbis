@@ -12,9 +12,8 @@ the affected package or mechanism. If GitHub is unavailable, report the gap and 
 local work.
 
 The [development workflow](docs/development-workflow.md) defines shared work, authorization,
-checkpoints, and delivery. Its [agent model policy](docs/development-workflow.md#agent-models)
-assigns orchestration, design, planning, and review to Astra and bounded approved implementation to
-the Sol implementer.
+checkpoints, and delivery. Its [agent model policy](docs/development-workflow.md#agent-models) maps
+each role to a model and effort per host.
 
 Route requests to resume, continue, work on, or take the next step on an issue through `work-issue`,
 and infer the current stage instead of asking the user to name a skill. Treat status questions and
@@ -23,19 +22,20 @@ review-only requests according to their stated scope. When a host does not disco
 when they are unavailable, review the diff, update affected documentation, audit prose, run
 repository checks, and report what was skipped.
 
-| Trigger                                                             | Read or invoke                                                         |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Before touching any package                                         | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md) |
-| Start or resume tracked development                                 | [work-issue](.agents/skills/work-issue/SKILL.md)                       |
-| Package design                                                      | [design-package](.agents/skills/design-package/SKILL.md)               |
-| Implementation planning                                             | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)     |
-| Package contract changes, or code that drifted from its SPEC        | [revise-package](.agents/skills/revise-package/SKILL.md)               |
-| Package conformance review, including the pass in `verify-changes`  | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)       |
-| README creation or revision, including the pass in `verify-changes` | [write-readme](.agents/skills/write-readme/SKILL.md)                   |
-| Dependency refreshes or newly supported strict checks               | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)           |
-| Writing or amending a SPEC or interaction contract                  | [specification guidance](docs/specifications.md)                       |
-| Workspace setup, toolchain, publication, and lint rule details      | [CONTRIBUTING.md](CONTRIBUTING.md)                                     |
-| Issue bodies, PR bodies, and comments                               | [GitHub Markdown](docs/development-workflow.md#write-github-markdown)  |
+| Trigger                                                             | Read or invoke                                                                            |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Before touching any package                                         | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)                    |
+| Start or resume tracked development                                 | [work-issue](.agents/skills/work-issue/SKILL.md)                                          |
+| Package design                                                      | [design-package](.agents/skills/design-package/SKILL.md)                                  |
+| Implementation planning                                             | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)                        |
+| Package contract changes, or code that drifted from its SPEC        | [revise-package](.agents/skills/revise-package/SKILL.md)                                  |
+| Package conformance review, including the pass in `verify-changes`  | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)                          |
+| README creation or revision, including the pass in `verify-changes` | [write-readme](.agents/skills/write-readme/SKILL.md)                                      |
+| Dependency refreshes or newly supported strict checks               | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                              |
+| Writing or amending a SPEC or interaction contract                  | [specification guidance](docs/specifications.md)                                          |
+| Recording a design decision                                         | [Decisions and local evidence](docs/development-workflow.md#decisions-and-local-evidence) |
+| Workspace setup, toolchain, publication, and lint rule details      | [CONTRIBUTING.md](CONTRIBUTING.md)                                                        |
+| Issue bodies, PR bodies, and comments                               | [GitHub Markdown](docs/development-workflow.md#write-github-markdown)                     |
 
 ## Commands
 
@@ -86,10 +86,12 @@ the superseded code, settings, aliases, migrations, and tests. Keep tests for cu
 its failure paths. Add backward compatibility only for an explicit released contract or user
 requirement.
 
-Keep the authoritative plan in initiative and work issue bodies in the
-[issue plan format](.agents/skills/plan-implementation/references/plan-format.md). Keep scratch work
-and run evidence in ignored `packages/<name>/implementation/` or `.artifacts/`; do not maintain a
-second authoritative plan.
+Work that introduces, improves, or changes package behavior is tracked in an issue whose body
+contains the plan in the
+[issue plan format](.agents/skills/plan-implementation/references/plan-format.md). A fix within the
+contract, a documentation change, or a workspace tooling change goes straight to a PR whose body
+records the outcome, acceptance, and verification. Keep scratch work and run evidence in ignored
+`packages/<name>/implementation/` or `.artifacts/`; do not maintain a second authoritative plan.
 
 ## Tests
 
@@ -111,12 +113,13 @@ report without editing; the coordinator resolves findings within authorized scop
 affected checks. Do not weaken a SPEC to make code pass; material contract changes need user
 direction.
 
-Within authorized work, create and update issues, Project items, and wiki records of approved
-consequential decisions; prepare verified commits on a work branch, push that branch, and open
-focused PRs. Developers review and merge. Do not merge, push to the default branch, publish
-packages, or create releases without separate explicit authorization. Honor requests limited to
-local or chat-only work. Publish a checkpoint comment after each completed assignment, including a
-review with no findings, and at a blocked or interrupted handoff, as described in the workflow's
+Within authorized work, create and update issues and Project items, and record decisions where the
+workflow's [decision rules](docs/development-workflow.md#decisions-and-local-evidence) place them;
+prepare verified commits on a work branch, push that branch, and open focused PRs. Developers review
+and merge. Do not merge, push to the default branch, publish packages, or create releases without
+separate explicit authorization. Honor requests limited to local or chat-only work. Publish a
+checkpoint comment at each stage transition, blocked or interrupted handoff, and delivery, as
+described in the workflow's
 [checkpoint policy](docs/development-workflow.md#publish-checkpoint-artifacts).
 
 ## Writing

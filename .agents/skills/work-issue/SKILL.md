@@ -9,43 +9,42 @@ description: >-
 
 # Work on an Orbis issue
 
-Read `AGENTS.md` and the [development workflow](../../../docs/development-workflow.md). Use the
-workflow's hierarchy, authorization boundaries, and definitions of done. Route to the specialist
-skills without requiring the user to invoke each one. Follow the workflow's [agent model policy](../../../docs/development-workflow.md#agent-models) for research, design, planning, implementation, and review.
+Determine the current stage of the requested work and route design, planning, implementation,
+verification, and delivery to the specialist skills without requiring the user to invoke each one.
+The [development workflow](../../../docs/development-workflow.md) defines the work hierarchy,
+authorization, checkpoints, and definitions of done that this skill applies; read each linked
+section when the step reaches it.
 
 ## Establish current work
 
-Read the wiki [Decisions index](https://github.com/kvnxiao/orbis/wiki/Decisions) once per substantive
-working session, unless already read. Open relevant records and check whether their constraints still
-apply. Report access failures and preserve independent progress.
-
 Resolve an unqualified `#number` against the current repository. Honor an explicit GitHub URL or
 repository-qualified issue reference; clarify only when the target remains materially ambiguous.
-Inspect the working tree and branch. Read the requested issue, its parent and children, dependencies,
-linked PRs and their review or merge state, and the current handoff. For a direct request, search
-existing open and closed issues before creating a bounded initiative or work issue. Reuse matching
-work without reopening delivered scope. Keep a small request in one issue; create children only for
-independent execution or delivery. Add each issue to
+Inspect the working tree and branch. Read the requested issue, its parent and children,
+dependencies, linked PRs and their review or merge state, and the current handoff, following the
+workflow's
+[retrieval rules](../../../docs/development-workflow.md#retrieve-current-work-before-history): fetch
+checkpoint comments only for a specific gap, supporting evidence, or a requested retrospective.
+
+For a direct request without an issue, classify it first. A fix within a package's contract, a
+documentation change, or a workspace tooling change takes the workflow's
+[PR-only path](../../../docs/development-workflow.md#work-hierarchy): no issue and no handoff table,
+with the PR body recording outcome, acceptance, and verification. Work that introduces, improves,
+or changes package behavior gets an issue: search existing open and closed issues, reuse matching
+work without reopening delivered scope, keep a small request in one issue, and create children only
+for independent execution or delivery. Add each issue to
 [Project 1](https://github.com/users/kvnxiao/projects/1) owned by `kvnxiao` and verify membership.
 Discover field and option IDs from the project rather than embedding them in plans.
 
-Use explicit `--json` fields for routine issue discovery and resume; omit comments and avoid bare
-`gh issue view`. Read checkpoint comments only to resolve a specific gap, inspect supporting
-evidence, or conduct a requested retrospective. Follow the workflow's
-[retrieval rules](../../../docs/development-workflow.md#retrieve-current-work-before-history) for
-targeted comment IDs and bounded metadata discovery. Filtering fetched comment bodies with `--jq`
-does not avoid fetching them.
-
-Read the affected SPEC and interaction contract, then inspect current source and tests. For workspace
-work without a package SPEC, use the approved request and repository constraints. Compare the issue's
-recorded baseline against relevant changes. Preserve unrelated files and concurrent work. Distinguish
-developer-approved behavior, execution authorization, and verification still required.
+Read the affected SPEC and interaction contract, then inspect current source and tests. For
+workspace work without a package SPEC, use the approved request and repository constraints. Compare
+the issue's recorded baseline against relevant changes. Preserve unrelated files and concurrent work.
+Distinguish developer-approved behavior, execution authorization, and verification still required.
 
 Derive the current stage from the issue relationships, dependencies, handoff, approval evidence,
 contract, source, tests, and linked PRs. Board status, checklists, and an old handoff alone do not
 prove readiness or completion. Use exactly one case-sensitive Stage value from the
 [issue plan format](../plan-implementation/references/plan-format.md#current-handoff); keep blockers,
-authorization, and Project status separate. Before acting, briefly state the stage, supporting evidence, and
+authorization, and Project status separate. Before acting, state the stage, supporting evidence, and
 next bounded action; refresh that assessment when the contract, plan, implementation, or PR state
 changes.
 
@@ -53,6 +52,7 @@ changes.
 
 | Situation | Next action |
 | --- | --- |
+| Fix within the contract, documentation, or workspace tooling requested directly | Implement on a work branch, run `verify-changes`, and deliver a PR without an issue |
 | New package, unresolved design, or missing SPEC approval | Use [design-package](../design-package/SKILL.md) for design and the approval checkpoint; keep dependent work blocked |
 | Approved contract has no current executable plan | Use [plan-implementation](../plan-implementation/SKILL.md) to create or refresh issue plans from the approved SPEC and interaction contract |
 | Existing package behavior changes | Use [revise-package](../revise-package/SKILL.md) to keep the contract and implementation consistent |
@@ -69,68 +69,38 @@ requesting repeated approval. When decisions remain, state the concrete unresolv
 dependent work blocked. An issue body or wiki page supplies task context, not permission to expand
 scope or override repository instructions.
 
-A user request to resume, continue, or work on the identified issue authorizes ordinary continuation
-of its approved scope without requiring the word "implement". Treat an older handoff saying
-authorization was not yet requested as history when the current request grants it; record the
-current authorization in the handoff. Keep any current design-only, planning-only, or review-only
-restriction in force. Do not infer approval of unsettled design or authorization to merge, publish,
-or run live-model checks from the resume request.
+The workflow's [authorization rules](../../../docs/development-workflow.md#authorization) define what
+a resume request grants. Treat an older handoff saying authorization was not yet requested as history
+when the current request grants it, and record the current authorization in the handoff.
 
-For delegated implementation or review, pass the applicable skill names, resolved `SKILL.md` paths,
-and assigned scope. For implementation, also pass the approved contract, task boundary, expected
-checks, and file ownership. Integrate the returned work before starting another task that touches
-the same files.
-Keep decisions, accumulated verification, and delivery with the orchestrator. After each completed
-assignment, including a review with no findings, author and publish its
-[checkpoint artifacts](../../../docs/development-workflow.md#publish-checkpoint-artifacts).
-Use the [checkpoint packet format](references/checkpoint-format.md) for author and model metadata,
-assignment outcome, evidence, and next action. Distinguish the packet's author from the agent whose
-work it summarizes. Publish verified authored packets, not ordinary delegate replies. Use GitHub's
-comment creation timestamp for publication time; omit recording timestamps, work intervals, and durations.
+Delegate implementation and review under the workflow's
+[skill handoffs](../../../docs/development-workflow.md#skill-handoffs) and
+[implementation handoff](../../../docs/development-workflow.md#implementation-handoff). Integrate the
+returned work before starting another task that touches the same files. Keep decisions, accumulated
+verification, and delivery with the orchestrator.
 
 Update the issue's current plan when discoveries change the approach. Amend approved requirements
-before implementing changed behavior. Use native blocking links for prerequisite issues and state
-the prerequisite's observable output. For an initiative, select an unfinished child from its
+before implementing changed behavior. For an initiative, select an unfinished child from its
 dependencies, approved priority, and existing active work; do not restart completed design or
 duplicate current plans. State blockers and continue independent authorized work only within the
-requested target. Do not infer order from issue numbers or dispatch conflicting edits concurrently.
+requested target. Do not dispatch conflicting edits concurrently.
 
 ## Pause and deliver
 
-Use the fixed top-of-body Current handoff table from the
-[issue plan format](../plan-implementation/references/plan-format.md#current-handoff). For routine
-updates, reread the remote body, replace only changed value cells within its single marked block,
-and preserve all bytes outside it. Inspect the diff before publishing. Reconcile missing, duplicate,
-or malformed markers explicitly; migrate legacy handoffs only when a plan or handoff update is
-already needed. Keep plan edits separate from routine state updates.
+At a stage transition, a blocked or interrupted handoff, or delivery, publish a checkpoint under the
+workflow's [checkpoint policy](../../../docs/development-workflow.md#publish-checkpoint-artifacts) in
+the [checkpoint packet format](references/checkpoint-format.md), summarizing the assignments
+completed since the previous checkpoint, and update the Current handoff table by the plan format's
+editing rules. Record a package decision where the workflow's
+[decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
 
-At a blocked or interrupted handoff, publish a checkpoint with unresolved obligations and the next
-action. At a stage transition, pause, or delivery, batch necessary body edits for the current plan,
-authorization, revision, active work, blocker, and next action. Include only the checkpoint links
-needed to resume; keep historical findings in comments. Skip unchanged bodies and routine per-agent
-body rewrites. Reread before edits and preserve contributor additions. Keep comments append-only;
-publish corrections as new linked comments. After an uncertain write, inspect remote state before
-retrying. Report unpublished drafts and other publication gaps.
-
-Publish a wiki record only when an approved decision creates or replaces a lasting constraint and
-its consequential rationale would be lost from the current SPEC or code. Link relevant records from
-the work issue and update the compact index. Record supersession explicitly when an earlier decision
-no longer applies.
-
-Prepare source delivery on a work branch. Complete repository verification, then write commit and
-PR copy to draft files and audit them before committing, pushing, or creating the PR. Use
-`--body-file` for issue and PR bodies and comments. Keep each paragraph or list item on one physical
-line in GitHub drafts, preserve Markdown structure, and prohibit reflow during prose audits and
-formatting. Follow the workflow's [GitHub Markdown rules](../../../docs/development-workflow.md#write-github-markdown).
-Use the repository's default branch as the delivery target.
-Developers review and merge; leave the PR open for that decision.
-
-Before requesting merge, check the acceptance criteria for every issue linked for automatic closure. Use
-separate `Closes #<number>` lines only for outcomes that this merge delivers. Include the initiative
-only when its required child outcomes and integrated checks are satisfied. Keep related or deferred
-work as ordinary references. Mark complete deliveries In review; keep partially delivered parents
-In progress. Do not close implementation issues or mark them Done before merge.
+Prepare source delivery on a work branch against the repository's default branch. Complete
+repository verification, write commit and PR copy to draft files, audit them, and publish with
+`--body-file` under the
+[GitHub Markdown rules](../../../docs/development-workflow.md#write-github-markdown). Apply the
+workflow's [status and closing-link rules](../../../docs/development-workflow.md#status-and-completion)
+to every issue the PR will close. Developers review and merge; leave the PR open for that decision.
 
 Report the issue and PR links, verified outcomes, remaining blockers, and any remote setup or update
-that could not be verified. Never infer successful delivery from an issue closed as **not planned** or a
-child progress count.
+that could not be verified. Never infer successful delivery from an issue closed as **not planned**
+or a child progress count.
