@@ -6,6 +6,10 @@ introductions; keep operational documentation concrete.
 
 ## Start a session
 
+For small changes with settled scope, use the
+[lightweight path](docs/development-workflow.md#lightweight-path). It overrides the procedural
+requirements below and in repository skills; preserve contracts and authorization boundaries.
+
 At the start of substantive repository work, read the
 [wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) once and open the records for
 the affected package or mechanism. If GitHub is unavailable, report the gap and continue independent
@@ -19,7 +23,7 @@ Route requests to resume, continue, work on, or take the next step on an issue t
 and infer the current stage instead of asking the user to name a skill. Treat status questions and
 review-only requests according to their stated scope. When a host does not discover
 `.agents/skills`, read the linked `SKILL.md`. `verify-changes` and `audit-prose` are global skills;
-when they are unavailable, review the diff, update affected documentation, audit prose, run
+when required but unavailable, review the diff, update affected documentation, audit prose, run
 repository checks, and report what was skipped.
 
 | Trigger                                                             | Read or invoke                                                                            |

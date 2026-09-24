@@ -16,6 +16,30 @@ A **checkpoint** records assignments completed since the previous checkpoint, or
 interrupted handoff, as authored artifacts published on issue-backed work. The issue body contains
 the compact current plan and handoff; checkpoint comments preserve the work history.
 
+## Lightweight path
+
+Use this path for small changes with settled scope and local effects that are straightforward to
+verify, such as documentation corrections and narrow fixes within approved behavior. Choose by risk,
+not file count. Use the full workflow when the user requests it or the work involves unresolved
+design, contract changes, behavior across packages, persisted formats, dependencies, security or
+compatibility changes, or substantial runtime risk.
+
+The main agent makes the edits, reviews the complete diff for correctness and prose, and runs
+focused checks. For documentation, check changed references and formatting; for runtime fixes,
+retain the required regression tests. Review changes to agent instructions for their effect on
+routing, authorization, and execution in the main session.
+
+This path overrides procedural requirements in this workflow, `AGENTS.md`, and repository skills: do
+not require subagents, issues, plans, checkpoints, wiki reads or decision records, separate prose
+audits, commit-copy drafts, `verify-changes`, or full repository checks. Read only the context
+needed to establish the scope and verify the change. Keep existing issue associations without
+creating additional tracking artifacts. When publishing GitHub bodies, retain `--body-file` and the
+no-reflow rule.
+
+Preserve package contracts, authorization limits, and explicit delivery scope. For a local edit or
+commit request, stop there. Report the changed behavior and checks briefly. If investigation reveals
+one of the risks above, use the full workflow for the affected work.
+
 ## Work hierarchy
 
 Work that introduces, improves, or changes package behavior is tracked in issues. A direct request

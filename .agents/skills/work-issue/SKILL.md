@@ -9,6 +9,9 @@ description: >-
 
 # Work on an Orbis issue
 
+First apply the workflow's [lightweight path](../../../docs/development-workflow.md#lightweight-path).
+When the request qualifies, complete it in the main session and skip the remaining procedure.
+
 Determine the current state of the requested work and route design, planning, implementation,
 verification, and delivery to the specialist skills without requiring the user to invoke each one.
 The [development workflow](../../../docs/development-workflow.md) defines the work hierarchy,
