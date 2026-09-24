@@ -1,14 +1,23 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 
 import { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
 import type { StatusReport } from "../src/pi/status.ts";
+import { MemoryStore } from "../src/storage/store.ts";
 import { fixtureModel, test } from "./pi-fixture.mts";
 import type { Fixture, FixtureOptions } from "./pi-fixture.mts";
+import {
+  committedId,
+  noteContent,
+  runtimeFor,
+  sourceReference,
+  storageOf,
+  storeFor,
+} from "./store-fixture.mts";
 
 const limitOrder = [
   "queuedJobs",
@@ -86,14 +95,16 @@ test("status omits configuration and reports unavailable activation without vali
   createFixture,
 }) => {
   const { f, runtime, ctx } = await started(createFixture, { personal: "{" });
-  expect(buildStatus(runtime, ctx)).toEqual({
+  const { storage, ...report } = buildStatus(runtime, ctx);
+  expect(report).toEqual({
     enabled: false,
     activationSource: "unavailable",
     configurationRevision: 0,
     error: `Invalid JSON at ${join(f.agentDir, "tiered-memory.json")}.`,
     configuration: undefined,
-    unavailable: ["workers", "memory", "compaction"],
+    unavailable: ["workers", "pool", "compaction"],
   });
+  expect(storage.state).toBe("open");
 });
 
 test("status reports the ignored project flag for an untrusted project", async ({
@@ -206,14 +217,16 @@ test("status lists every limit in schema order with its source", async ({ create
   expect(configured(buildStatus(runtime, ctx)).limits.map(({ key }) => key)).toEqual(limitOrder);
 });
 
-test("status lists workers, memory, and compaction as unavailable", async ({ createFixture }) => {
+test("status lists workers, the active pool, and compaction as unavailable", async ({
+  createFixture,
+}) => {
   const { runtime, ctx } = await started(createFixture);
-  expect(buildStatus(runtime, ctx).unavailable).toEqual(["workers", "memory", "compaction"]);
+  expect(buildStatus(runtime, ctx).unavailable).toEqual(["workers", "pool", "compaction"]);
 });
 
 const unavailableLines = [
   "Observer and consolidator jobs: unavailable in this version.",
-  "Memory paths, revisions, source coverage, active pool, pending work, and recall: unavailable in this version.",
+  "Active pool, pending worker jobs, and recall: unavailable in this version.",
   "Custom compaction and usage reports: unavailable in this version; Pi native compaction remains available.",
 ];
 
@@ -255,13 +268,34 @@ test("renders the full wording of a configured report", () => {
         { key: "retries", value: 0, source: "personal" },
       ],
     },
-    unavailable: ["workers", "memory", "compaction"],
+    storage: {
+      state: "open",
+      projectRoot: "/project",
+      selected: {
+        state: "selected",
+        revisionId: "revision-1",
+        sessionId: "session-1",
+        invalidNotes: ["current-work.md"],
+        invalidReason: "curation",
+      },
+      latestRevision: "revision-2",
+      registration: { sources: 3, curatedNotes: 1, event: "session_tree" },
+      error: "Refresh failed.",
+    },
+    unavailable: ["workers", "pool", "compaction"],
   };
   expect(renderStatus(report)).toBe(
     [
       "Tiered memory: disabled (session override)",
       "Configuration revision: 3",
       "Configuration error: Settings need a reload for this project or trust state.",
+      "Memory project root: /project",
+      "Selected memory revision: revision-1",
+      "Selected memory validity: invalid: Selected revision contains an externally curated note. Invalid notes: current-work.md.",
+      "Latest durable revision: revision-2",
+      "Registered original sources: 3 (session_tree)",
+      "Curated session notes: 1 (session_tree)",
+      "Storage error: Refresh failed.",
       "Personal settings: /agent/tiered-memory.json",
       "Project settings: /project/.pi/tiered-memory/settings.json (ignored: project is untrusted)",
       "observer model: local/observer (personal); local/observer; suspended: No credentials.",
@@ -282,13 +316,16 @@ test("renders the wording of a report without configuration", () => {
       configurationRevision: 0,
       error: "Invalid JSON at /agent/tiered-memory.json.",
       configuration: undefined,
-      unavailable: ["workers", "memory", "compaction"],
+      storage: { state: "unavailable", error: "Invalid JSON at /project/identity.json." },
+      unavailable: ["workers", "pool", "compaction"],
     }),
   ).toBe(
     [
       "Tiered memory: disabled (configuration unavailable)",
       "Configuration revision: 0",
       "Configuration error: Invalid JSON at /agent/tiered-memory.json.",
+      "Memory storage: unavailable",
+      "Storage error: Invalid JSON at /project/identity.json.",
       "Automatic work: suspended; native Pi remains available.",
       ...unavailableLines,
     ].join("\n"),
@@ -328,10 +365,139 @@ test.for([
       actingModel: acting,
       limits: [],
     },
+    storage: { state: "unavailable", error: undefined },
     unavailable: [],
   });
   expect(text.split("\n")).toContain(line);
   expect(text.split("\n")).toContain(
     "observer model: active session model (default); not resolved",
   );
+});
+
+test("status reports storage unavailable with the error that stopped opening", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const sessionDir = join(
+    f.cwd,
+    ".pi",
+    "tiered-memory",
+    "sessions",
+    f.session.sessionManager.getSessionId(),
+  );
+  await mkdir(sessionDir, { recursive: true });
+  await writeFile(join(sessionDir, "identity.json"), "damaged");
+  const runtime = new MemoryRuntime({ appendEntry: () => undefined });
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  expect(buildStatus(runtime, ctx).storage).toEqual({
+    state: "unavailable",
+    error: `Invalid JSON at ${join(sessionDir, "identity.json")}.`,
+  });
+});
+
+test("status reports the project root, selected and latest revisions, cached counts, and their event", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Status evidence.");
+  const runtime = runtimeFor(f);
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  const revisionId = committedId(
+    await runtime.commitProposal(
+      ctx,
+      runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [
+        await sourceReference(f, "Status evidence."),
+      ]),
+    ),
+  );
+  expect(buildStatus(runtime, ctx).storage).toEqual({
+    state: "open",
+    projectRoot: await realpath(f.cwd),
+    selected: {
+      state: "selected",
+      revisionId,
+      sessionId: f.session.sessionManager.getSessionId(),
+      invalidNotes: [],
+    },
+    latestRevision: revisionId,
+    registration: { sources: 2, curatedNotes: 0, event: "commit" },
+    error: undefined,
+  });
+});
+
+test("status reports an invalid selected revision with its invalid notes and reason", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Status evidence.");
+  const runtime = runtimeFor(f);
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  committedId(
+    await runtime.commitProposal(
+      ctx,
+      runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [
+        await sourceReference(f, "Status evidence."),
+      ]),
+    ),
+  );
+  const store = await storeFor(f);
+  await writeFile(join(store.sessionDir, "current", "current-work.md"), "User edit\n");
+  await runtime.selectBranch(ctx);
+  const storage = buildStatus(runtime, ctx).storage;
+  expect(storage.state === "open" ? storage.selected : undefined).toMatchObject({
+    state: "selected",
+    invalidNotes: ["current-work.md"],
+    invalidReason: "curation",
+  });
+});
+
+test("status reports an unavailable selected revision with its reason", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const store = await storeFor(f);
+  f.session.sessionManager.appendCustomEntry("orbis-tiered-memory-revision", {
+    version: 1,
+    projectId: store.projectId,
+    sessionId: store.sessionId,
+    revisionId: "missing-revision",
+  });
+  await f.session.prompt("Persist the reference.");
+  const runtime = runtimeFor(f);
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  const storage = buildStatus(runtime, ctx).storage;
+  expect(storage.state === "open" ? storage.selected : undefined).toEqual({
+    state: "unavailable",
+    reason: "Selected revision missing-revision is unavailable.",
+  });
+});
+
+test("status reports the latest refresh error while storage stays open", async ({
+  createFixture,
+  onTestFinished,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Status evidence.");
+  const runtime = runtimeFor(f);
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [
+    await sourceReference(f, "Status evidence."),
+  ]);
+  const inspect = vi
+    .spyOn(MemoryStore.prototype, "inspectCuration")
+    .mockRejectedValueOnce(new Error("Curation unreadable."));
+  onTestFinished(() => {
+    inspect.mockRestore();
+  });
+  expect((await runtime.commitProposal(ctx, proposal)).kind).toBe("committed");
+  expect(storageOf(runtime).error).toBe("Curation unreadable.");
+  expect(buildStatus(runtime, ctx).storage).toMatchObject({
+    state: "open",
+    error: "Curation unreadable.",
+  });
 });

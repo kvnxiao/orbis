@@ -8,11 +8,12 @@ overflow compaction.
 
 **Status:** Experimental minimum viable product (MVP) with partial implementation. The extension
 provides activation commands, trusted configuration loading, resource settings, memory-model
-resolution, and persisted status reports. The [usage guide](docs/usage.md) describes these controls.
-Automatic observation, consolidation, memory storage, recall, and custom compaction are unavailable.
-The requirements below define the complete intended system; the available controls do not establish
-full conformance or model quality. The contract targets independent Pi extension implementers using
-the public capabilities inspected in **Pi 0.87.0**.
+resolution, persisted status reports, and storage with source registration and curation protection.
+The [usage guide](docs/usage.md) describes these controls; the [storage guide](docs/storage.md)
+documents persistence and filesystem boundaries. Automatic observation, consolidation, recall, and
+custom compaction are unavailable. The requirements below define the complete intended system; the
+available controls do not establish full conformance or model quality. The contract targets
+independent Pi extension implementers using the public capabilities inspected in **Pi 0.87.0**.
 
 The `REQ-*` requirements and their contract tables define conformance. Scenarios describe observable
 checks of those requirements. The [research synthesis](docs/research/README.md) and the evaluation

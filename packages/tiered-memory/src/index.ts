@@ -1,7 +1,9 @@
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { MemoryRuntime } from "./pi/runtime.ts";
 import { buildStatus, renderStatus } from "./pi/status.ts";
+import { guardManagedWrite } from "./pi/write-guard.ts";
 
 /** Register tiered-memory session handlers and the `/tiered-memory` command. */
 export default function extension(pi: ExtensionAPI): void {
@@ -17,6 +19,12 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.on("model_select", async (_event, ctx) => {
     await runtime.refreshRoles(ctx);
+  });
+  pi.on("tool_call", async (event, ctx) => {
+    if (isToolCallEventType("write", event) || isToolCallEventType("edit", event)) {
+      return await guardManagedWrite(ctx.cwd, event.input.path);
+    }
+    return undefined;
   });
   pi.registerCommand("tiered-memory", {
     description: "Show or change tiered memory activation for this session",

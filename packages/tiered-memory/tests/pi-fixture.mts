@@ -58,6 +58,12 @@ export interface FixtureOptions {
   credentialCommand?: string;
   cwd?: string;
   sessionFile?: string;
+  inMemory?: boolean;
+  builtinTools?: boolean;
+  toolCalls?: {
+    name: "write" | "edit";
+    arguments: Extract<AssistantMessage["content"][number], { type: "toolCall" }>["arguments"];
+  }[];
 }
 
 export function findEntry<T extends TSchema>(
@@ -102,6 +108,7 @@ export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
   );
   const model = options.model ?? fixtureModel;
   const notifications: Fixture["notifications"] = [];
+  let nextToolCall = 0;
   const services = await createAgentSessionServices({
     cwd,
     agentDir,
@@ -121,13 +128,27 @@ export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
             baseUrl: fixtureModel.baseUrl,
             models: [fixtureModel, ...(options.models ?? [])],
             streamSimple(active, _context) {
+              const requested = options.toolCalls?.[nextToolCall];
+              if (requested !== undefined) {
+                nextToolCall++;
+              }
               const message: AssistantMessage = {
                 role: "assistant",
-                content: [{ type: "text", text: "Fixture response" }],
+                content:
+                  requested === undefined
+                    ? [{ type: "text", text: "Fixture response" }]
+                    : [
+                        {
+                          type: "toolCall",
+                          id: `fixture-${String(nextToolCall)}`,
+                          name: requested.name,
+                          arguments: requested.arguments,
+                        },
+                      ],
                 api: active.api,
                 provider: active.provider,
                 model: active.id,
-                stopReason: "stop",
+                stopReason: requested === undefined ? "stop" : "toolUse",
                 timestamp: Date.now(),
                 usage: {
                   input: 0,
@@ -139,7 +160,11 @@ export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
                 },
               };
               const stream = createAssistantMessageEventStream();
-              stream.push({ type: "done", reason: "stop", message });
+              stream.push({
+                type: "done",
+                reason: requested === undefined ? "stop" : "toolUse",
+                message,
+              });
               return stream;
             },
           });
@@ -156,15 +181,19 @@ export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
       ],
     },
   });
-  const manager =
-    options.sessionFile === undefined
-      ? SessionManager.create(cwd, join(cwd, "sessions"))
-      : SessionManager.open(options.sessionFile, join(cwd, "sessions"), cwd);
+  let manager: SessionManager;
+  if (options.inMemory === true) {
+    manager = SessionManager.inMemory(cwd);
+  } else if (options.sessionFile === undefined) {
+    manager = SessionManager.create(cwd, join(cwd, "sessions"));
+  } else {
+    manager = SessionManager.open(options.sessionFile, join(cwd, "sessions"), cwd);
+  }
   const created = await createAgentSessionFromServices({
     services,
     sessionManager: manager,
     model,
-    noTools: "builtin",
+    ...(options.builtinTools === true ? {} : { noTools: "builtin" as const }),
     sessionStartEvent: { type: "session_start", reason: "startup" },
   });
   const session = created.session;

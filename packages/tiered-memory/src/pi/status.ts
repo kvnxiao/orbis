@@ -1,10 +1,12 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import type { InvalidReason } from "../domain/evidence.ts";
 import { memoryRoles } from "../domain/models.ts";
 import type { ModelResolution, Role } from "../domain/models.ts";
 import { limitKeys } from "../domain/settings.ts";
 import type { EffectiveSettings, Limits, SettingSource } from "../domain/settings.ts";
-import type { MemoryRuntime, RuntimeSnapshot } from "./runtime.ts";
+import type { Registration, SelectedRevision } from "./lineage.ts";
+import type { MemoryRuntime, RuntimeSnapshot, StorageSnapshot } from "./runtime.ts";
 
 /**
  * Describe tiered-memory status as data.
@@ -17,7 +19,10 @@ import type { MemoryRuntime, RuntimeSnapshot } from "./runtime.ts";
  * `actingModel` is `none` without an active model, `insufficient` when the work-note reserve
  * exceeds the context window or the estimated remaining context, and `available` otherwise, where
  * `remainingTokens` is undefined while Pi has no context-usage estimate. `limits` is in `limitKeys`
- * order. `unavailable` lists the capabilities this version does not provide.
+ * order. `storage` is `unavailable` until the store opens, carrying the error that stopped opening;
+ * `open` carries the canonical project root, the selected revision, the latest durable revision,
+ * the counts cached by the latest registration with the event that produced them, and the error of
+ * the latest failed refresh. `unavailable` lists the capabilities this version does not provide.
  */
 export interface StatusReport {
   enabled: boolean;
@@ -49,7 +54,17 @@ export interface StatusReport {
         limits: readonly { key: keyof Limits; value: number; source: SettingSource }[];
       }
     | undefined;
-  unavailable: readonly ("workers" | "memory" | "compaction")[];
+  storage:
+    | { state: "unavailable"; error: string | undefined }
+    | {
+        state: "open";
+        projectRoot: string;
+        selected: SelectedRevision;
+        latestRevision: string | null;
+        registration: Registration | undefined;
+        error: string | undefined;
+      };
+  unavailable: readonly ("workers" | "pool" | "compaction")[];
 }
 
 type ConfigurationStatus = NonNullable<StatusReport["configuration"]>;
@@ -64,18 +79,24 @@ const activationLabels = {
 
 const unavailableNotes = {
   workers: "Observer and consolidator jobs: unavailable in this version.",
-  memory:
-    "Memory paths, revisions, source coverage, active pool, pending work, and recall: unavailable in this version.",
+  pool: "Active pool, pending worker jobs, and recall: unavailable in this version.",
   compaction:
     "Custom compaction and usage reports: unavailable in this version; Pi native compaction remains available.",
 } satisfies Record<StatusReport["unavailable"][number], string>;
+
+const invalidReasons = {
+  "note-evidence": "Selected revision evidence changed in effective context.",
+  curation: "Selected revision contains an externally curated note.",
+  "assigned-evidence": "Selected revision assigned evidence changed in effective context.",
+} satisfies Record<InvalidReason, string>;
 
 /**
  * Collect status from the runtime snapshot and the acting model's context usage; writes nothing and
  * starts no model call.
  */
 export function buildStatus(runtime: MemoryRuntime, ctx: ExtensionContext): StatusReport {
-  const { configuration, override, error, configurationRevision, roles } = runtime.snapshot;
+  const { configuration, override, error, configurationRevision, roles, storage } =
+    runtime.snapshot;
   return {
     enabled: runtime.enabled,
     activationSource:
@@ -84,7 +105,22 @@ export function buildStatus(runtime: MemoryRuntime, ctx: ExtensionContext): Stat
     error,
     configuration:
       configuration === undefined ? undefined : configurationStatus(configuration, roles, ctx),
-    unavailable: ["workers", "memory", "compaction"],
+    storage: storageStatus(storage),
+    unavailable: ["workers", "pool", "compaction"],
+  };
+}
+
+function storageStatus(storage: StorageSnapshot): StatusReport["storage"] {
+  if (storage.state !== "open") {
+    return { state: "unavailable", error: storage.state === "failed" ? storage.error : undefined };
+  }
+  return {
+    state: "open",
+    projectRoot: storage.projectRoot,
+    selected: storage.lineage.selected,
+    latestRevision: storage.latestRevision,
+    registration: storage.registration,
+    error: storage.error,
   };
 }
 
@@ -149,6 +185,7 @@ export function renderStatus(report: StatusReport): string {
   if (report.error !== undefined) {
     lines.push(`Configuration error: ${report.error}`);
   }
+  lines.push(...storageLines(report.storage));
   if (report.configuration === undefined) {
     lines.push("Automatic work: suspended; native Pi remains available.");
   } else {
@@ -156,6 +193,49 @@ export function renderStatus(report: StatusReport): string {
   }
   lines.push(...report.unavailable.map((capability) => unavailableNotes[capability]));
   return lines.join("\n");
+}
+
+function selectedLines(selected: SelectedRevision): string[] {
+  if (selected.state === "none") {
+    return ["Selected memory revision: none"];
+  }
+  if (selected.state === "unavailable") {
+    return [`Selected memory revision: unavailable (${selected.reason})`];
+  }
+  const validity =
+    selected.invalidReason === undefined
+      ? "current"
+      : `invalid: ${invalidReasons[selected.invalidReason]}`;
+  const notes =
+    selected.invalidNotes.length === 0
+      ? ""
+      : ` Invalid notes: ${selected.invalidNotes.join(", ")}.`;
+  return [
+    `Selected memory revision: ${selected.revisionId}`,
+    `Selected memory validity: ${validity}${notes}`,
+  ];
+}
+
+function storageLines(storage: StatusReport["storage"]): string[] {
+  const error = storage.error === undefined ? [] : [`Storage error: ${storage.error}`];
+  if (storage.state === "unavailable") {
+    return ["Memory storage: unavailable", ...error];
+  }
+  const registration = storage.registration;
+  const counts =
+    registration === undefined
+      ? ["Registered original sources: not registered", "Curated session notes: not inspected"]
+      : [
+          `Registered original sources: ${String(registration.sources)} (${registration.event})`,
+          `Curated session notes: ${String(registration.curatedNotes)} (${registration.event})`,
+        ];
+  return [
+    `Memory project root: ${storage.projectRoot}`,
+    ...selectedLines(storage.selected),
+    `Latest durable revision: ${storage.latestRevision ?? "none"}`,
+    ...counts,
+    ...error,
+  ];
 }
 
 function configurationLines(configuration: ConfigurationStatus): string[] {

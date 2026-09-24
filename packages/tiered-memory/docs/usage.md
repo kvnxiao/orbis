@@ -2,8 +2,9 @@
 
 The extension currently provides configuration and activation controls. The observer, which will
 extract session evidence, and the consolidator, which will organize older observations, have
-independent model settings. Neither worker runs in this version. Memory storage, recall, and custom
-compaction are also unavailable.
+independent model settings. Neither worker runs in this version. Storage records source identities
+and supports controlled memory revisions; recall and custom compaction remain unavailable. The
+[storage guide](storage.md) describes saved files, external curation, and recovery.
 
 ## Commands and session state
 
@@ -23,8 +24,20 @@ Pi session entries retain the activation override on the selected conversation b
 restore the override present on that branch; tree navigation selects the override at the
 destination. A new unrelated session uses configured defaults.
 
-An in-memory session does not save the override after exit; Pi may defer writing a new session until
-its first assistant response.
+Storage adds two custom entry types, which Pi also excludes from model context. An
+`orbis-tiered-memory-project` entry binds the session's branch to its canonical project root,
+project identifier, and memory session identifier. An `orbis-tiered-memory-revision` entry
+references a committed memory revision by project, session, and revision identifier; it selects that
+revision once Pi has written the entry to the session file.
+
+At session start, the extension writes identity and source records for every persisted Pi session in
+the project, including while memory is disabled. Disabling memory preserves stored records and
+cancels pending memory writes. Source registration at session start and tree navigation,
+session-note curation checks, and managed-file write guards remain active.
+
+An in-memory session does not save the override after exit and gets no memory storage; status
+reports that storage needs a persisted session, and the write guard still applies. Pi may defer
+writing a new session until its first assistant response.
 
 ## Settings files
 
@@ -148,8 +161,11 @@ requests and requests to the acting model.
 ## Status and recovery
 
 Status identifies activation and its source, effective model and limit sources, model suspension
-reasons, and settings paths. It marks memory paths and revisions, observations, worker accounting,
-and compaction outcomes unavailable while those capabilities are unimplemented.
+reasons, settings paths, the memory project root, the selected and latest durable memory revisions,
+and storage errors. It reports the registered-source and curated-note counts cached by the latest
+registration, labeled with the event that produced them: `session_start`, `session_tree`, or
+`commit`. Status reads that cached state and writes no memory files. Observations, worker
+accounting, recall, and custom compaction remain unavailable.
 
 In the terminal, commands display a notification. RPC clients receive Pi's `extension_ui_request`
 event with `method: "notify"`, `notifyType: "info"`, and the report in `message`. Each report is
