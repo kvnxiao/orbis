@@ -8,15 +8,17 @@ measured improvement for Orbis.
 Effective continuation is the primary objective: the agent should retain the intended work and
 applicable constraints across compaction and steering. Simplicity, acting-agent ceremony, total
 token cost, and foreground waiting are secondary. The selected design combines observations and
-topics with a protected current-work note. Its benefit remains unmeasured. The comparison defines
-the candidate approaches before assessing their trade-offs.
+topics with a protected current-work note. For prompt representation, the MVP appends complete
+revisions of changed notes and indexes through an internal strategy module, resetting memory
+presentation when accumulated revisions exceed its budget. The continuation and cost benefits remain
+unmeasured. The comparison defines the candidate approaches before assessing their trade-offs.
 
-Research dates: 2026-09-12, 2026-09-21, and 2026-09-22. The Pi baseline is **0.87.0**. External
-source inspection and published results are distinguished below from design recommendations. No
-Orbis memory implementation or live-model evaluation exists in this research. Comparative evaluation
-records correctness, continuity, total usage and cost, compaction counts, elapsed time, and
-intervention. Those results guide iteration; the experimental package has no fixed numerical
-improvement gate.
+Research dates: 2026-09-12, 2026-09-21, 2026-09-22, and 2026-09-24. The Pi baseline is **0.87.0**.
+External source inspection and published results are distinguished below from design
+recommendations. No Orbis memory implementation or live-model evaluation exists in this research.
+Comparative evaluation records correctness, continuity, total usage and cost, compaction counts,
+elapsed time, and intervention. Those results guide iteration; the experimental package has no fixed
+numerical improvement gate.
 
 ## Reading map
 
@@ -31,11 +33,13 @@ continuity trade-offs.
 the selected MVP. It maps the contract's source-search and source-time rules to supporting evidence,
 verification cases, and mechanisms to defer.
 
-| Document                                              | Questions answered                                                                                                                          |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Pi compaction](pi-compaction.md)                     | How do manual and automatic compaction work? Which public APIs can replace checkpoint content, and what must an extension preserve?         |
-| [Observational memory](observational-memory.md)       | What does `pi-observational-memory` actually record, when does it consolidate, and what explains its simplicity and its failure boundaries? |
-| [Evidence and evaluation](evidence-and-evaluation.md) | Which findings transfer to coding sessions, where does model quality matter, and how should dogfooding compare alternatives?                |
+| Document                                                          | Questions answered                                                                                                                                  |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Pi compaction](pi-compaction.md)                                 | How do manual and automatic compaction work? Which public APIs can replace checkpoint content, and what must an extension preserve?                 |
+| [Observational memory](observational-memory.md)                   | What does `pi-observational-memory` actually record, when does it consolidate, and what explains its simplicity and its failure boundaries?         |
+| [Evidence and evaluation](evidence-and-evaluation.md)             | Which findings transfer to coding sessions, where does model quality matter, and how should dogfooding compare alternatives?                        |
+| [Prompt caching and compaction](prompt-caching-and-compaction.md) | How do provider caches, Claude Code, Codex, and `pi-cache-compact` treat summary generation and later continuation? What is the selected MVP scope? |
+| [Pi caching ecosystem](pi-cache-compaction-ecosystem.md)          | Which Pi packages preserve prefixes, render checkpoints, or warm caches, and what evidence supports their claims?                                   |
 
 These documents contain the research synthesis and direct external references. Research is
 informative; the package SPEC defines behavior.
@@ -67,7 +71,9 @@ after a branch switch, worktree change, dependency update, or user correction.
 ## Architecture alternatives
 
 The alternatives differ in what receives special preservation treatment. Each can use observations,
-topics, and original-history retrieval.
+topics, and original-history retrieval. These A/B/C labels describe memory responsibilities; the
+[prompt-representation comparison](prompt-caching-and-compaction.md#design-implications) uses the
+same letters for a separate choice.
 
 | Approach                                                                 | Additional mechanism                                                                                                                          | Useful scenario                                                                                                                     | Cost or failure boundary                                                                                                          |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
