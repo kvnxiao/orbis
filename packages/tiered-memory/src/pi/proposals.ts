@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { assessRevision, evidenceMatches, sourceFingerprint } from "../domain/evidence.ts";
+import { assessRevision, evidenceMatches, sourceReferences } from "../domain/evidence.ts";
 import { validateProposal } from "../domain/proposal.ts";
 import type { CommitResult, ConflictReason, MemoryProposal } from "../domain/proposal.ts";
 import { cancelledBy } from "../storage/files.ts";
@@ -36,13 +36,14 @@ export function captureProposal(
   if (binding.dependencyFingerprint === undefined || anchorId === null) {
     throw new Error("Memory storage cannot capture a proposal without a configuration and leaf.");
   }
-  const evidenceFingerprint = sourceFingerprint(storage.sources.sources, sourceIds);
+  const registered = storage.sources.sources;
+  const { references, evidenceFingerprint } = sourceReferences(registered, sourceIds);
   return validateProposal({
     ...structuredClone(content),
     sessionId: storage.store.sessionId,
     projectId: storage.store.projectId,
     anchorId,
-    sourceIds: [...sourceIds],
+    sourceIds: references,
     evidenceFingerprint,
     dependencyFingerprint: binding.dependencyFingerprint,
     configurationRevision: binding.configurationRevision,
@@ -51,7 +52,7 @@ export function captureProposal(
     noteDependencies: Object.fromEntries(
       Object.keys(content.notes).map((name) => [
         name,
-        { sourceIds: [...sourceIds], evidenceFingerprint },
+        { sourceIds: [...references], evidenceFingerprint },
       ]),
     ),
     excludedInheritedNotes: selected.state === "selected" ? [...selected.invalidNotes] : [],
@@ -62,31 +63,37 @@ async function evidenceStillValid(
   storage: StorageSession,
   ctx: Pick<ExtensionContext, "sessionManager">,
   proposal: MemoryProposal,
-  sources: readonly SourceRecord[],
+  sources?: readonly SourceRecord[],
 ): Promise<boolean> {
   const projectId = storage.store.projectId;
+  const base =
+    proposal.baseRevision === null
+      ? undefined
+      : await storage.store.inheritRevision(proposal.baseRevision);
+  const current = sources ?? (await storage.sources.current(ctx.sessionManager));
   if (
     !ctx.sessionManager.getBranch().some((entry) => entry.id === proposal.anchorId) ||
-    !evidenceMatches(sources, proposal, projectId)
+    !evidenceMatches(current, proposal, projectId)
   ) {
     return false;
   }
   if (proposal.baseRevision === null) {
     return true;
   }
-  const base = await storage.store.inheritRevision(proposal.baseRevision);
   const excluded = new Set(proposal.excludedInheritedNotes);
   return (
     base !== undefined &&
-    assessRevision(sources, {}, base, projectId).invalidNotes.every((name) => excluded.has(name))
+    assessRevision(current, {}, base, projectId, storage.store.sessionId).invalidNotes.every(
+      (name) => excluded.has(name),
+    )
   );
 }
 
 /**
  * Register sources once, commit the proposal, and append and confirm its branch reference.
  *
- * Registration writes `sources.json` before the lock is taken; the store's `validate` callback then
- * compares the evidence checked at that registration and the current `binding()` without writing.
+ * Registration writes `sources.json` before the lock is taken; the store's `validate` callback
+ * projects current effective sources without writing and compares them with the captured evidence.
  * An abort of `storage.signal` or `ctx.signal` yields `cancelled` with that signal's reason and is
  * never reported as a conflict. `records` holds the registration's sources for the refresh that
  * follows, and is `undefined` when cancellation came first. After a commit, a failed or cancelled
@@ -126,7 +133,8 @@ export async function commitProposal(
     }
     throw error;
   }
-  const validate = (): ConflictReason | undefined => {
+  const validate = async (): Promise<ConflictReason | undefined> => {
+    const stillValid = evidenceValid && (await evidenceStillValid(storage, ctx, captured));
     const current = binding();
     if (
       current.configurationRevision !== captured.configurationRevision ||
@@ -134,7 +142,7 @@ export async function commitProposal(
     ) {
       return "configuration";
     }
-    return evidenceValid ? undefined : "evidence";
+    return stillValid ? undefined : "evidence";
   };
   const result = await store.commit(captured, { validate, signal });
   if (result.kind !== "committed" || signal.aborted) {

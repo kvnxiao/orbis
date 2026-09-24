@@ -1,12 +1,17 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { expect, vi } from "vitest";
 
 import { projectEntrySchema, referencesIn, revisionReferenceSchema } from "../src/pi/lineage.ts";
+import {
+  captureProposal as captureStorageProposal,
+  commitProposal as commitStorageProposal,
+} from "../src/pi/proposals.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
+import { StorageSession } from "../src/pi/storage-session.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { fixtureModel } from "./pi-fixture.mts";
 import type { Fixture } from "./pi-fixture.mts";
@@ -493,6 +498,136 @@ test("a context edit between capture and commit conflicts on evidence", async ({
     kind: "conflict",
     reason: "evidence",
   });
+});
+
+test("captureProposal stores a canonical reference for a registered bare entry id", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Bare entry evidence.");
+  const { runtime, ctx } = await started(f);
+  const entryId = sourceEntry(f, "Bare entry evidence.").id;
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [
+    entryId,
+  ]);
+  const registeredReference = await sourceReference(f, "Bare entry evidence.");
+  expect(proposal.sourceIds).toEqual([registeredReference]);
+  expect(proposal.noteDependencies["current-work.md"]?.sourceIds).toEqual([registeredReference]);
+});
+
+test.for(["waiting for lock", "before head publication"] as const)(
+  "a context edit $0 rejects a pending proposal without another source registration",
+  async (stage, { createFixture, onTestFinished }) => {
+    const f = await createFixture();
+    await f.session.prompt("Captured evidence.");
+    const manager = f.session.sessionManager;
+    const storage = await StorageSession.open(
+      { cwd: f.cwd, sessionManager: manager },
+      new AbortController(),
+    );
+    await storage.sources.register(manager);
+    const binding = {
+      configurationRevision: 1,
+      dependencyFingerprint: "d".repeat(64),
+      lineage: { selected: { state: "none" as const }, pending: { state: "none" as const } },
+      latestRevision: null,
+    };
+    const proposal = captureStorageProposal(
+      storage,
+      { sessionManager: manager },
+      binding,
+      noteContent({ "current-work.md": "Old\n" }),
+      [await sourceReference(f, "Captured evidence.")],
+    );
+    const store = storage.store;
+    const write = store.access.write;
+    let edited = false;
+    store.access.write = async (path, content) => {
+      await write(path, content);
+      const timing =
+        stage === "waiting for lock"
+          ? path.includes(`${sep}private${sep}`)
+          : path.includes(`${sep}revisions${sep}`);
+      if (!edited && timing) {
+        edited = true;
+        f.session.sessionManager.appendContextEdit(sourceEntry(f, "Captured evidence.").id, {
+          content: "Replacement evidence.",
+        });
+      }
+    };
+    const register = vi.spyOn(SourceRegistry.prototype, "register");
+    onTestFinished(() => {
+      store.access.write = write;
+      register.mockRestore();
+    });
+    const pi = {
+      appendEntry: (type: string, data: unknown) => {
+        manager.appendCustomEntry(type, data);
+      },
+    };
+    const outcome = await commitStorageProposal(
+      pi,
+      storage,
+      { sessionManager: manager, signal: undefined },
+      () => binding,
+      proposal,
+    );
+    expect(outcome.result).toMatchObject({ kind: "conflict", reason: "evidence" });
+    expect(edited).toBe(true);
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(await store.currentHead()).toBeNull();
+  },
+);
+
+test("a configuration change during the final source check rejects the proposal", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Stable evidence.");
+  const manager = f.session.sessionManager;
+  const storage = await StorageSession.open(
+    { cwd: f.cwd, sessionManager: manager },
+    new AbortController(),
+  );
+  await storage.sources.register(manager);
+  let binding = {
+    configurationRevision: 1,
+    dependencyFingerprint: "d".repeat(64),
+    lineage: { selected: { state: "none" as const }, pending: { state: "none" as const } },
+    latestRevision: null,
+  };
+  const proposal = captureStorageProposal(
+    storage,
+    { sessionManager: manager },
+    binding,
+    noteContent({ "current-work.md": "Old\n" }),
+    [await sourceReference(f, "Stable evidence.")],
+  );
+  const project = storage.sources.current.bind(storage.sources);
+  let checks = 0;
+  storage.sources.current = async (session) => {
+    const records = await project(session);
+    checks++;
+    if (checks === 2) {
+      binding = { ...binding, configurationRevision: 2 };
+    }
+    return records;
+  };
+  const pi = {
+    appendEntry: (type: string, data: unknown) => {
+      manager.appendCustomEntry(type, data);
+    },
+  };
+  const outcome = await commitStorageProposal(
+    pi,
+    storage,
+    { sessionManager: manager, signal: undefined },
+    () => binding,
+    proposal,
+  );
+  expect(outcome.result).toMatchObject({ kind: "conflict", reason: "configuration" });
+  expect(checks).toBe(2);
+  expect(await storage.store.currentHead()).toBeNull();
 });
 
 test("commitProposal registers sources once and its validate callback writes nothing", async ({

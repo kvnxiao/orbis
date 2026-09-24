@@ -1,11 +1,19 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { Value } from "typebox/value";
 import { expect } from "vitest";
 
 import type { CommitResult, MemoryProposal } from "../src/domain/proposal.ts";
 import { encodeReference } from "../src/domain/references.ts";
-import { curationSchema, projectCurationSchema } from "../src/storage/curation.ts";
+import {
+  curationSchema,
+  learningConflict,
+  projectCurationSchema,
+  publishProjectGenerated,
+  readProjectCuration,
+} from "../src/storage/curation.ts";
+import { revisionSchema } from "../src/storage/revisions.ts";
 import type { MemoryStore } from "../src/storage/store.ts";
 import {
   baseProposal,
@@ -76,6 +84,27 @@ test("a deleted note is recreated only from evidence it did not consume", async 
   expect(await readFile(note(store), "utf8")).toBe("again\n");
 });
 
+test.for(["reference-first", "entry-first"] as const)(
+  "a deleted note cannot be recreated through its %s source alias",
+  async (order, { makeRoot }) => {
+    const store = await openStore(await makeRoot());
+    const encoded = reference(store, store.sessionId);
+    const initial = order === "reference-first" ? encoded : "entry-1";
+    const alias = order === "reference-first" ? "entry-1" : encoded;
+    const first = committedId(
+      await commit(store, { sourceIds: [initial], notes: { "current-work.md": "generated\n" } }),
+    );
+    await rm(note(store));
+    expect(
+      await commit(store, {
+        expectedRevision: first,
+        sourceIds: [alias],
+        notes: { "current-work.md": "same evidence\n" },
+      }),
+    ).toMatchObject({ kind: "conflict", reason: "curation" });
+  },
+);
+
 test("a deleted note's old evidence stays excluded after new evidence regenerates it", async ({
   makeRoot,
 }) => {
@@ -115,6 +144,113 @@ test("a project learning deletion excludes regeneration by another session", asy
   };
   expect(await commit(second, regenerate)).toMatchObject({ kind: "conflict", reason: "curation" });
   committedId(await commit(second, { ...regenerate, sourceIds: ["source-2"] }));
+});
+
+test("a learning check without foreign exclusions does not traverse ancestry", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  const proposal = baseProposal(store, {
+    ...learning,
+    baseRevision: { sessionId: "unavailable", revisionId: "missing" },
+  });
+  expect(
+    await learningConflict(
+      store.baseDir,
+      proposal,
+      () => {
+        throw new Error("Unexpected ancestor read.");
+      },
+      store.access,
+    ),
+  ).toBeUndefined();
+});
+
+test("a deleted project learning cannot be recreated through a source alias", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  const first = committedId(
+    await commit(store, { ...learning, sourceIds: [reference(store, store.sessionId)] }),
+  );
+  await rm(join(store.baseDir, "learnings", "index.md"));
+  expect(
+    await commit(store, {
+      ...learning,
+      expectedRevision: first,
+      sourceIds: ["entry-1"],
+      expectedLearnings: { "index.md": { digest: null, sequence: 1 } },
+    }),
+  ).toMatchObject({ kind: "conflict", reason: "curation" });
+});
+
+test("a deleted project learning allows an independent session with the same entry id", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const first = await openStore(root, { sessionId: "first" });
+  committedId(await commit(first, { ...learning, sourceIds: [reference(first, "first")] }));
+  await rm(join(first.baseDir, "learnings", "index.md"));
+  const second = await openStore(root, { sessionId: "second" });
+  expect(
+    await commit(second, {
+      ...learning,
+      sourceIds: [reference(second, "second")],
+      expectedLearnings: { "index.md": { digest: null, sequence: 1 } },
+    }),
+  ).toMatchObject({ kind: "committed" });
+});
+
+test("a fork cannot recreate a deleted project learning from its inherited entry", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const parent = await openStore(root, { sessionId: "parent" });
+  const parentRevision = committedId(
+    await commit(parent, { ...learning, sourceIds: [reference(parent, "parent")] }),
+  );
+  await rm(join(parent.baseDir, "learnings", "index.md"));
+  const child = await openStore(root, { sessionId: "child" });
+  expect(
+    await commit(child, {
+      ...learning,
+      baseRevision: { sessionId: "parent", revisionId: parentRevision },
+      sourceIds: [reference(child, "child")],
+      expectedLearnings: { "index.md": { digest: null, sequence: 1 } },
+    }),
+  ).toMatchObject({ kind: "conflict", reason: "curation" });
+});
+
+test("learning provenance advances for matching views when another committed view changed", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  committedId(
+    await commit(store, {
+      learnings: { "index.md": "first\n", "guide.md": "guide\n" },
+      expectedLearnings: {
+        "index.md": { digest: null, sequence: null },
+        "guide.md": { digest: null, sequence: null },
+      },
+    }),
+  );
+  await writeFile(join(store.baseDir, "learnings", "index.md"), "external edit\n");
+  await publishProjectGenerated(
+    store.baseDir,
+    {
+      learnings: { "index.md": "first\n", "guide.md": "guide\n" },
+      sourceIds: ["entry-2"],
+      sequence: 2,
+    },
+    store.access,
+  );
+  const state = await readProjectCuration(store.baseDir, store.access.signal);
+  expect(state.generated["index.md"]?.sequence).toBe(1);
+  expect(state.generated["guide.md"]).toMatchObject({
+    sequence: 2,
+    consumedSourceIds: ["entry-2"],
+  });
+  expect(state.curated).toEqual({});
 });
 
 test("inspectCuration writes curation.json only when a record changes", async ({ makeRoot }) => {
@@ -198,6 +334,67 @@ test("an absent ancestor tombstone carries through a second fork", async ({ make
   ).notes["current-work.md"];
   expect(record).toMatchObject({ kind: "deleted" });
   expect(record?.consumedSourceIds).toContain(reference(parent, "grandchild"));
+});
+
+test("a fork can inherit curation after 130 ordinary parent revisions", async ({ makeRoot }) => {
+  const root = await makeRoot();
+  const parent = await openStore(root, { sessionId: "parent" });
+  let revisionId: string | null = null;
+  for (let index = 0; index < 130; index++) {
+    revisionId = committedId(
+      // oxlint-disable-next-line no-await-in-loop -- Each commit uses the previous revision as its base.
+      await commit(parent, {
+        expectedRevision: revisionId,
+        baseRevision: revisionId === null ? null : { sessionId: "parent", revisionId },
+      }),
+    );
+  }
+  if (revisionId === null) {
+    throw new Error("Missing parent revision.");
+  }
+  await rm(note(parent));
+  const child = await openStore(root, { sessionId: "child" });
+  expect(
+    (await child.inspectCuration({ sessionId: "parent", revisionId })).notes["current-work.md"],
+  ).toMatchObject({
+    kind: "deleted",
+  });
+}, 60_000);
+
+test("a fork rejects a cycle in ancestor revision pointers", async ({ makeRoot }) => {
+  const root = await makeRoot();
+  const parent = await openStore(root, { sessionId: "parent" });
+  const revisionId = committedId(await commit(parent, {}));
+  const path = join(parent.sessionDir, "revisions", `${revisionId}.json`);
+  const revision: unknown = JSON.parse(await readFile(path, "utf8"));
+  if (!Value.Check(revisionSchema, revision)) {
+    throw new Error("Invalid revision fixture.");
+  }
+  revision.baseRevision = { sessionId: "parent", revisionId };
+  await writeFile(path, `${JSON.stringify(revision)}\n`);
+  const child = await openStore(root, { sessionId: "child" });
+  await expect(child.inspectCuration({ sessionId: "parent", revisionId })).rejects.toThrow(
+    "Damaged ancestor memory lineage",
+  );
+});
+
+test("a fork rejects a missing ancestor revision instead of losing curation ancestry", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const parent = await openStore(root, { sessionId: "parent" });
+  const revisionId = committedId(await commit(parent, {}));
+  const path = join(parent.sessionDir, "revisions", `${revisionId}.json`);
+  const revision: unknown = JSON.parse(await readFile(path, "utf8"));
+  if (!Value.Check(revisionSchema, revision)) {
+    throw new Error("Invalid revision fixture.");
+  }
+  revision.baseRevision = { sessionId: "parent", revisionId: "missing" };
+  await writeFile(path, `${JSON.stringify(revision)}\n`);
+  const child = await openStore(root, { sessionId: "child" });
+  await expect(child.inspectCuration({ sessionId: "parent", revisionId })).rejects.toThrow(
+    "Damaged ancestor memory lineage",
+  );
 });
 
 test("an inherited regenerated note does not consume its new evidence", async ({ makeRoot }) => {

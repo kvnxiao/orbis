@@ -6,6 +6,7 @@ import type { MemoryProposal, NoteDependency } from "./proposal.ts";
 import {
   decodeReference,
   digestSchema,
+  encodeReference,
   safeIdSchema,
   sourceIdSchema,
   sourceReferenceSchema,
@@ -86,6 +87,14 @@ function indexSources(sources: readonly SourceEvidence[]): Map<string, SourceEvi
   return index;
 }
 
+function sourceIdentity(id: string, scope: { projectId: string; sessionId: string }): string {
+  const location = decodeReference(id);
+  if (location === undefined) {
+    return encodeReference({ ...scope, entryId: id, span: 0 });
+  }
+  return id;
+}
+
 function matches(
   index: ReadonlyMap<string, SourceEvidence>,
   dependency: NoteDependency,
@@ -128,6 +137,25 @@ export function sourceFingerprint(
   );
 }
 
+/** Resolve registered source ids once for a proposal's references and evidence fingerprint. */
+export function sourceReferences(
+  sources: readonly SourceEvidence[],
+  ids: readonly string[],
+): { references: string[]; evidenceFingerprint: string } {
+  const index = indexSources(sources);
+  const selected = ids.map((id) => {
+    const source = index.get(id);
+    if (source === undefined) {
+      throw new Error(`Unregistered source: ${id}`);
+    }
+    return source;
+  });
+  return {
+    references: selected.map((source) => source.reference),
+    evidenceFingerprint: fingerprintOf(selected),
+  };
+}
+
 /**
  * Report whether a dependency's sources still produce its captured fingerprint.
  *
@@ -155,6 +183,7 @@ export function assessRevision(
   curation: Readonly<Record<string, CurationRecord>>,
   revision: Pick<MemoryProposal, "sourceIds" | "evidenceFingerprint" | "noteDependencies">,
   projectId: string,
+  sessionId: string,
 ): { invalidNotes: string[]; invalidReason: InvalidReason | undefined } {
   const index = indexSources(sources);
   const dependencies = Object.entries(revision.noteDependencies);
@@ -162,7 +191,10 @@ export function assessRevision(
     .filter(([, dependency]) => !matches(index, dependency, projectId))
     .map(([name]) => name);
   const curated = dependencies
-    .filter(([name, dependency]) => !mayUseNote(curation[name], dependency.sourceIds))
+    .filter(
+      ([name, dependency]) =>
+        !mayUseNote(curation[name], dependency.sourceIds, { projectId, sessionId }),
+    )
     .map(([name]) => name);
   const invalidNotes = [...new Set([...changed, ...curated])];
   let invalidReason: InvalidReason | undefined;
@@ -180,11 +212,13 @@ export function assessRevision(
  * Report whether content generated from `sourceIds` may replace or recreate a curated note.
  *
  * An edited note is never replaced. A deleted note may be recreated only when at least one of
- * `sourceIds` is absent from its consumed evidence.
+ * `sourceIds` is absent from its consumed evidence. Bare entry ids resolve in `scope.sessionId`;
+ * full references retain their encoded session identity.
  */
 export function mayUseNote(
   record: CurationRecord | undefined,
   sourceIds: readonly string[],
+  scope: { projectId: string; sessionId: string },
 ): boolean {
   if (record === undefined) {
     return true;
@@ -192,5 +226,6 @@ export function mayUseNote(
   if (record.kind === "edited") {
     return false;
   }
-  return sourceIds.some((id) => !record.consumedSourceIds.includes(id));
+  const consumed = new Set(record.consumedSourceIds.map((id) => sourceIdentity(id, scope)));
+  return sourceIds.some((id) => !consumed.has(sourceIdentity(id, scope)));
 }

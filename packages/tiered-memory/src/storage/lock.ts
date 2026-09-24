@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { link, lstat, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -8,12 +8,14 @@ import type { Static } from "typebox";
 
 import { errorCode, readText } from "./files.ts";
 import type { StorageAccess } from "./files.ts";
-import { parseRecord, readOptional } from "./records.ts";
+import { parseRecord } from "./records.ts";
 
 const lockWaitMs = 5000;
 const pollMs = 20;
+const ticketName = /^([1-9]\d*)\.json$/u;
+const privateName = /^([1-9]\d*)-[0-9a-f-]+\.json(?:\.[0-9a-f-]+\.tmp)?$/u;
 
-/** Validate the lock owner record; `token` identifies the holder allowed to release the lock. */
+/** Validate the immutable owner record published for a lock ticket. */
 export const lockOwnerSchema = Type.Object(
   {
     version: Type.Literal(1),
@@ -23,19 +25,16 @@ export const lockOwnerSchema = Type.Object(
   { additionalProperties: false },
 );
 
-/** Define the `sessions/.lock/owner.json` payload. */
+/** Define a `sessions/.lock/tickets/<number>.json` payload. */
 export type LockOwner = Static<typeof lockOwnerSchema>;
 
-/**
- * Supply the clock and process probe the lock uses, so tests can pass the deadline or report an
- * owner gone.
- *
- * The default `isRunning` calls `process.kill(pid, 0)`: it returns false on `ESRCH`, true on
- * success or `EPERM`, and rethrows any other error.
- */
+/** Supply time, process liveness, and atomic ticket publication. */
 export interface LockIo {
   now: () => number;
   isRunning: (pid: number) => boolean;
+  publish?: (source: string, ticket: string) => Promise<void>;
+  list?: (directory: string) => Promise<string[]>;
+  removeTicket?: (path: string) => Promise<void>;
 }
 
 function processRunning(pid: number): boolean {
@@ -56,41 +55,6 @@ function processRunning(pid: number): boolean {
 
 const defaultLockIo: LockIo = { now: () => Date.now(), isRunning: processRunning };
 
-function parseOwner(text: string, path: string): LockOwner | undefined {
-  try {
-    return parseRecord(lockOwnerSchema, text, path);
-  } catch (error) {
-    if (error instanceof Error) {
-      return undefined;
-    }
-    throw error;
-  }
-}
-
-async function inspectLock(
-  lock: string,
-  signal: AbortSignal,
-  io: LockIo,
-): Promise<"held" | "stale" | "gone"> {
-  const path = join(lock, "owner.json");
-  const text = await readText(path, signal);
-  const owner = text === undefined ? undefined : parseOwner(text, path);
-  if (owner !== undefined) {
-    return io.isRunning(owner.pid) ? "held" : "stale";
-  }
-  let modified: number;
-  try {
-    modified = (await stat(lock)).mtimeMs;
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") {
-      return "gone";
-    }
-    throw error;
-  }
-  signal.throwIfAborted();
-  return io.now() - modified > lockWaitMs ? "stale" : "held";
-}
-
 async function pause(signal: AbortSignal): Promise<void> {
   try {
     await sleep(pollMs, undefined, { signal });
@@ -102,108 +66,238 @@ async function pause(signal: AbortSignal): Promise<void> {
   }
 }
 
-function renameBlocked(code: string | undefined): boolean {
+function busy(): Error {
+  return new Error("Tiered memory project lock is busy. Retry after the other writer finishes.");
+}
+
+function removalBlocked(error: unknown): boolean {
+  const code = errorCode(error);
   return process.platform === "win32" && (code === "EPERM" || code === "EBUSY");
 }
 
-async function restore(claimed: string, lock: string): Promise<void> {
+async function inspectDirectory(path: string, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  let entry;
   try {
-    await rename(claimed, lock);
+    entry = await lstat(path);
   } catch (error) {
-    const code = errorCode(error);
-    if (code !== "EEXIST" && code !== "ENOTEMPTY" && !renameBlocked(code)) {
-      throw error;
-    }
-  }
-}
-
-async function claimStale(lock: string, io: LockIo): Promise<"held" | "gone"> {
-  const claimed = `${lock}.stale-${randomUUID()}`;
-  try {
-    await rename(lock, claimed);
-  } catch (error) {
-    const code = errorCode(error);
-    if (code === "ENOENT") {
-      return "gone";
-    }
-    if (renameBlocked(code)) {
-      return "held";
+    if (errorCode(error) === "ENOENT") {
+      return;
     }
     throw error;
   }
-  // A waiter that judged an older owner stale can claim a lock acquired after its inspection.
-  if ((await inspectLock(claimed, new AbortController().signal, io)) === "held") {
-    await restore(claimed, lock);
-    return "held";
+  signal.throwIfAborted();
+  if (entry.isSymbolicLink()) {
+    throw new Error(`Project lock directory is a symbolic link: ${path}`);
   }
-  await rm(claimed, { recursive: true, force: true });
-  return "gone";
+  if (!entry.isDirectory()) {
+    throw new Error(`Project lock path is not a directory: ${path}`);
+  }
 }
 
-async function attempt(
-  lock: string,
-  deadline: number,
-  access: StorageAccess,
-  io: LockIo,
-): Promise<boolean> {
-  access.signal.throwIfAborted();
+async function ensureDirectory(
+  path: string,
+  signal: AbortSignal,
+  recursive = false,
+): Promise<void> {
+  await inspectDirectory(path, signal);
   try {
-    await mkdir(lock);
-    return true;
+    await mkdir(path, { recursive });
   } catch (error) {
     if (errorCode(error) !== "EEXIST") {
       throw error;
     }
   }
-  let state = await inspectLock(lock, access.signal, io);
-  if (state === "stale") {
-    state = await claimStale(lock, io);
-  }
-  if (state === "held") {
-    if (io.now() >= deadline) {
-      throw new Error("Tiered memory project lock is busy. Retry after the other writer finishes.");
-    }
-    await pause(access.signal);
-  }
-  return false;
+  await inspectDirectory(path, signal);
 }
 
-async function acquire(
+async function ticketNumbers(directory: string, io: LockIo): Promise<number[]> {
+  const numbers: number[] = [];
+  for (const name of await (io.list ?? readdir)(directory)) {
+    const match = ticketName.exec(name);
+    if (match === null) {
+      throw new Error(`Invalid project lock ticket: ${name}`);
+    }
+    const number = Number(match[1]);
+    if (!Number.isSafeInteger(number)) {
+      throw new Error(`Invalid project lock ticket: ${name}`);
+    }
+    numbers.push(number);
+  }
+  return numbers.toSorted((left, right) => left - right);
+}
+
+async function ticketOwner(
+  directory: string,
+  number: number,
+  signal: AbortSignal,
+): Promise<LockOwner | undefined> {
+  const path = join(directory, `${String(number)}.json`);
+  const text = await readText(path, signal);
+  return text === undefined ? undefined : parseRecord(lockOwnerSchema, text, path);
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function donePath(lock: string, number: number, token: string): string {
+  const digest = createHash("sha256").update(token).digest("hex");
+  return join(lock, "done", `${String(number)}-${digest}`);
+}
+
+async function clearDeadPrivate(lock: string, io: LockIo): Promise<void> {
+  const directory = join(lock, "private");
+  for (const name of await readdir(directory)) {
+    const match = privateName.exec(name);
+    if (match === null) {
+      throw new Error(`Invalid project lock private file: ${name}`);
+    }
+    const pid = Number(match[1]);
+    if (!Number.isSafeInteger(pid)) {
+      throw new Error(`Invalid project lock private file: ${name}`);
+    }
+    if (!io.isRunning(pid)) {
+      // oxlint-disable-next-line no-await-in-loop -- Only the dead process's private file is removed.
+      await rm(join(directory, name), { force: true });
+    }
+  }
+}
+
+async function clearFinished(
   lock: string,
+  numbers: number[],
+  signal: AbortSignal,
+  io: LockIo,
+): Promise<void> {
+  const maximum = numbers.at(-1);
+  for (const number of numbers) {
+    if (number === maximum) {
+      break;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- The ticket can disappear during another cleanup.
+    const owner = await ticketOwner(join(lock, "tickets"), number, signal);
+    if (owner === undefined) {
+      continue;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- Completion is checked for this ticket.
+    const completed = await exists(donePath(lock, number, owner.token));
+    if (!completed && io.isRunning(owner.pid)) {
+      continue;
+    }
+    try {
+      const path = join(lock, "tickets", `${String(number)}.json`);
+      // oxlint-disable-next-line no-await-in-loop -- Only tickets below the maximum are reclaimed.
+      await (
+        io.removeTicket ??
+        (async (ticket) => {
+          await rm(ticket, { force: true });
+        })
+      )(path);
+    } catch (error) {
+      if (removalBlocked(error)) {
+        continue;
+      }
+      throw error;
+    }
+    if (completed) {
+      // oxlint-disable-next-line no-await-in-loop -- A done marker belongs to its ticket token.
+      await rm(donePath(lock, number, owner.token), { recursive: true, force: true });
+    }
+  }
+}
+
+async function publishTicket(
+  lock: string,
+  source: string,
+  deadline: number,
+  access: StorageAccess,
+  io: LockIo,
+  publication: { number: number | undefined },
+): Promise<number> {
+  const directory = join(lock, "tickets");
+  for (;;) {
+    access.signal.throwIfAborted();
+    // oxlint-disable-next-line no-await-in-loop -- The next number depends on the published maximum.
+    const numbers = await ticketNumbers(directory, io);
+    const maximum = numbers.at(-1) ?? 0;
+    if (maximum >= Number.MAX_SAFE_INTEGER) {
+      throw new Error("Project lock ticket sequence exhausted.");
+    }
+    const number = maximum + 1;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- A hard link publishes a complete owner atomically.
+      await (io.publish ?? link)(source, join(directory, `${String(number)}.json`));
+      publication.number = number;
+    } catch (error) {
+      if (errorCode(error) !== "EEXIST") {
+        throw error;
+      }
+      if (io.now() >= deadline) {
+        throw busy();
+      }
+      // oxlint-disable-next-line no-await-in-loop -- Retry after a conflicting publication.
+      await pause(access.signal);
+      continue;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- Recheck fences a number retired during publication.
+    const after = await ticketNumbers(directory, io);
+    if ((after.at(-1) ?? 0) === number) {
+      return number;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- This ticket never entered an action.
+    await rm(join(directory, `${String(number)}.json`), { force: true });
+    publication.number = undefined;
+    if (io.now() >= deadline) {
+      throw busy();
+    }
+  }
+}
+
+async function waitForTurn(
+  lock: string,
+  number: number,
   deadline: number,
   access: StorageAccess,
   io: LockIo,
 ): Promise<void> {
-  let acquired = false;
-  while (!acquired) {
-    // oxlint-disable-next-line no-await-in-loop -- Each attempt depends on the previous attempt's poll or stale-lock claim.
-    acquired = await attempt(lock, deadline, access, io);
-  }
-}
-
-async function release(lock: string, token: string): Promise<void> {
-  const path = join(lock, "owner.json");
-  const text = await readOptional(path);
-  if (text !== undefined && parseOwner(text, path)?.token === token) {
-    await rm(lock, { recursive: true, force: true });
+  for (;;) {
+    access.signal.throwIfAborted();
+    // oxlint-disable-next-line no-await-in-loop -- Each poll sees current predecessors.
+    const numbers = await ticketNumbers(join(lock, "tickets"), io);
+    // oxlint-disable-next-line no-await-in-loop -- Cleanup precedes entry.
+    await clearFinished(lock, numbers, access.signal, io);
+    // oxlint-disable-next-line no-await-in-loop -- Cleanup may change predecessor membership.
+    const remaining = await ticketNumbers(join(lock, "tickets"), io);
+    if (remaining.every((candidate) => candidate >= number)) {
+      return;
+    }
+    if (io.now() >= deadline) {
+      throw busy();
+    }
+    // oxlint-disable-next-line no-await-in-loop -- Wait for a predecessor to release.
+    await pause(access.signal);
   }
 }
 
 /**
- * Run `action` while holding the project mutation lock at `<sessionsDir>/.lock`.
+ * Run `action` under the project mutation lock.
  *
- * Acquires the lock by creating the directory, then writing `owner.json` through `access.write`.
- * When the directory exists, an owner whose process is gone makes the lock stale; a directory
- * without `owner.json`, or whose `owner.json` is not JSON or fails `lockOwnerSchema`, is stale once
- * the directory's modification time is older than the five-second deadline. A waiter claims a stale
- * lock by renaming it to a unique `.lock.stale-<uuid>` sibling, so only one waiter claims it, then
- * removes the claimed directory and retries; a claimed directory that is no longer stale is renamed
- * back. On Windows, a rename refused because a handle is open counts as held. A held lock is polled
- * until the deadline. Releases by removing the directory only while `owner.json` still names this
- * holder's token.
+ * A complete owner record is published as an atomic hard link to a numbered ticket. The greatest
+ * ticket remains as a sequence marker. A delayed publisher rejects a retired number by rechecking
+ * the maximum before waiting. Lower live tickets finish first; dead owners and completed tickets
+ * are reclaimed. A damaged ticket is preserved and reported.
  *
- * @throws Error saying the lock is busy when the deadline passes; `access.signal.reason` when the
- *   signal aborts while waiting; the original filesystem error for any other failure.
+ * @throws Error when the lock is busy or the ticket sequence is exhausted; `access.signal.reason`
+ *   when cancelled while waiting; the original filesystem error for other failures.
  */
 export async function withProjectLock<T>(
   sessionsDir: string,
@@ -214,18 +308,32 @@ export async function withProjectLock<T>(
   const lock = join(sessionsDir, ".lock");
   const token = randomUUID();
   access.signal.throwIfAborted();
-  await mkdir(sessionsDir, { recursive: true });
-  await acquire(lock, io.now() + lockWaitMs, access, io);
-  try {
-    const owner: LockOwner = { version: 1, pid: process.pid, token };
-    await access.write(join(lock, "owner.json"), `${JSON.stringify(owner)}\n`);
-  } catch (error) {
-    await rm(lock, { recursive: true, force: true });
-    throw error;
+  await ensureDirectory(sessionsDir, access.signal, true);
+  await ensureDirectory(lock, access.signal);
+  await ensureDirectory(join(lock, "tickets"), access.signal);
+  await ensureDirectory(join(lock, "done"), access.signal);
+  await ensureDirectory(join(lock, "private"), access.signal);
+  if (await exists(join(lock, "owner.json"))) {
+    throw new Error("Unsupported project lock layout: owner.json");
   }
+  await clearDeadPrivate(lock, io);
+  const privatePath = join(lock, "private", `${String(process.pid)}-${token}.json`);
+  const owner: LockOwner = { version: 1, pid: process.pid, token };
+  const deadline = io.now() + lockWaitMs;
+  const publication: { number: number | undefined } = { number: undefined };
   try {
+    await access.write(privatePath, `${JSON.stringify(owner)}\n`);
+    const number = await publishTicket(lock, privatePath, deadline, access, io, publication);
+    await waitForTurn(lock, number, deadline, access, io);
+    access.signal.throwIfAborted();
     return await action();
   } finally {
-    await release(lock, token);
+    try {
+      if (publication.number !== undefined) {
+        await mkdir(donePath(lock, publication.number, token));
+      }
+    } finally {
+      await rm(privatePath, { force: true });
+    }
   }
 }

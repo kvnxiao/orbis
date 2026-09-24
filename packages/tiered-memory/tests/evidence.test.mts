@@ -13,6 +13,7 @@ import { encodeReference } from "../src/domain/references.ts";
 import { rejectionPaths } from "./store-fixture.mts";
 
 const projectId = "a".repeat(64);
+const scope = { projectId, sessionId: "child" };
 
 function source(entryId: string, text: string, sessionId = "child"): SourceEvidence {
   return {
@@ -92,6 +93,7 @@ test("assessRevision reports note evidence before curation before assigned evide
         noteDependencies: { "current-work.md": stale, "journey.md": valid },
       },
       projectId,
+      scope.sessionId,
     ),
   ).toEqual({ invalidNotes: ["current-work.md", "journey.md"], invalidReason: "note-evidence" });
   expect(
@@ -100,10 +102,17 @@ test("assessRevision reports note evidence before curation before assigned evide
       curation,
       { ...valid, noteDependencies: { "journey.md": valid } },
       projectId,
+      scope.sessionId,
     ),
   ).toEqual({ invalidNotes: ["journey.md"], invalidReason: "curation" });
   expect(
-    assessRevision(sources, {}, { ...stale, noteDependencies: { "journey.md": valid } }, projectId),
+    assessRevision(
+      sources,
+      {},
+      { ...stale, noteDependencies: { "journey.md": valid } },
+      projectId,
+      scope.sessionId,
+    ),
   ).toEqual({ invalidNotes: [], invalidReason: "assigned-evidence" });
 });
 
@@ -118,21 +127,47 @@ test("assessRevision lists every invalid note and reports no reason when all che
       {},
       { ...valid, noteDependencies: { "current-work.md": valid } },
       projectId,
+      scope.sessionId,
     ),
   ).toEqual({ invalidNotes: [], invalidReason: undefined });
 });
 
 test("mayUseNote forbids replacing an edited note", () => {
   expect(
-    mayUseNote({ kind: "edited", digest: digest("user"), consumedSourceIds: [] }, ["new"]),
+    mayUseNote({ kind: "edited", digest: digest("user"), consumedSourceIds: [] }, ["new"], scope),
   ).toBe(false);
-  expect(mayUseNote(undefined, ["any"])).toBe(true);
+  expect(mayUseNote(undefined, ["any"], scope)).toBe(true);
 });
 
 test("mayUseNote permits recreating a deleted note only with evidence it did not consume", () => {
   const deleted = { kind: "deleted" as const, consumedSourceIds: ["old"] };
-  expect(mayUseNote(deleted, ["old"])).toBe(false);
-  expect(mayUseNote(deleted, ["old", "new"])).toBe(true);
+  expect(mayUseNote(deleted, ["old"], scope)).toBe(false);
+  expect(mayUseNote(deleted, ["old", "new"], scope)).toBe(true);
+});
+
+test("a bare entry id aliases its local full reference without conflating sessions", () => {
+  const parent = encodeReference({ projectId, sessionId: "parent", entryId: "entry-a", span: 0 });
+  const child = first.reference;
+  expect(mayUseNote({ kind: "deleted", consumedSourceIds: [child] }, ["entry-a"], scope)).toBe(
+    false,
+  );
+  expect(mayUseNote({ kind: "deleted", consumedSourceIds: ["entry-a"] }, [child], scope)).toBe(
+    false,
+  );
+  expect(mayUseNote({ kind: "deleted", consumedSourceIds: [parent] }, [child], scope)).toBe(true);
+  expect(mayUseNote({ kind: "deleted", consumedSourceIds: [parent, child] }, [child], scope)).toBe(
+    false,
+  );
+  expect(mayUseNote({ kind: "deleted", consumedSourceIds: [parent] }, ["entry-b"], scope)).toBe(
+    true,
+  );
+  const foreign = encodeReference({
+    projectId: "b".repeat(64),
+    sessionId: "parent",
+    entryId: "entry-a",
+    span: 0,
+  });
+  expect(mayUseNote({ kind: "deleted", consumedSourceIds: [foreign] }, [child], scope)).toBe(true);
 });
 
 test("curation record schema rejects an edited record without a digest", () => {

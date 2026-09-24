@@ -334,6 +334,28 @@ test("registration writes sources.json once per call", async ({ createFixture })
   expect(recorder.writes.filter((path) => path.endsWith("sources.json"))).toHaveLength(1);
 });
 
+test("current source projection detects context edits without writing sources.json", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Original instruction.");
+  const recorder = interruptingWriter(() => false);
+  const { registry } = await registryFor(f, recorder.write);
+  const [registered] = await registry.register(f.session.sessionManager);
+  if (registered === undefined) {
+    throw new Error("Missing registered source.");
+  }
+  recorder.writes.length = 0;
+  f.session.sessionManager.appendContextEdit(sourceEntry(f, "Original instruction.").id, {
+    content: "Replacement instruction.",
+  });
+  const current = await registry.current(f.session.sessionManager);
+  expect(current.find((source) => source.entryId === registered.entryId)?.effectiveDigest).not.toBe(
+    registered.effectiveDigest,
+  );
+  expect(recorder.writes.filter((path) => path.endsWith("sources.json"))).toHaveLength(0);
+});
+
 const registry = {
   version: 1,
   projectId: "a".repeat(64),

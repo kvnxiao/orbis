@@ -336,8 +336,13 @@ function attachable(
     binding.latestRevision === revision.id &&
     ctx.sessionManager.getBranch().some((entry) => entry.id === revision.anchorId) &&
     bindingMatches &&
-    assessRevision(evidence.sources, evidence.curation, revision, revision.projectId)
-      .invalidReason === undefined
+    assessRevision(
+      evidence.sources,
+      evidence.curation,
+      revision,
+      revision.projectId,
+      ctx.sessionManager.getSessionId(),
+    ).invalidReason === undefined
   );
 }
 
@@ -421,7 +426,13 @@ export async function refreshLineage(
     const assessed =
       revision === undefined
         ? undefined
-        : assessRevision(update.sources, curation.notes, revision, store.projectId);
+        : assessRevision(
+            update.sources,
+            curation.notes,
+            revision,
+            store.projectId,
+            store.sessionId,
+          );
     selected =
       assessed === undefined
         ? {

@@ -13,7 +13,7 @@ import type {
   RevisionPointer,
 } from "../domain/proposal.ts";
 import { safeIdSchema } from "../domain/references.ts";
-import { repairViews, writeCommit } from "./commit.ts";
+import { repairPendingLearnings, repairViews, writeCommit } from "./commit.ts";
 import type { Snapshot } from "./commit.ts";
 import { inheritForkCuration, inspectCuration, learningConflict } from "./curation.ts";
 import type { CurationState } from "./curation.ts";
@@ -63,16 +63,15 @@ export class MemoryStore {
   }
 
   /**
-   * Open a session's store under a canonical project root, repairing an interrupted commit's views
-   * first.
+   * Open a session's store under a canonical project root, repairing overlapping pending learning
+   * publications in sequence order and then this session's unfinished views.
    *
-   * `projectRoot` must come from `canonicalProjectRoot`. Under the project lock, rejects symlinked
-   * managed directories and writes the identity record at first open. When the head is not marked
-   * materialized, repairs its views: a note view whose digest matches needs nothing, an absent note
-   * view or one equal to the parent revision's rendering is rewritten, and any other note content
-   * is an external edit and is kept; an absent learning view is rewritten from the head's revision
-   * and a present learning file is kept for the next commit's project curation inspection. `write`
-   * defaults to `writeDurable`.
+   * `projectRoot` must come from `canonicalProjectRoot`. Rejects symlinked managed directories
+   * before taking the project lock and again under it; writes the identity record at first open.
+   * For an unfinished head, restores absent note views and views equal to their parent revision's
+   * rendering, while preserving external edits. Restores learning files only when they still match
+   * the expected predecessor; newer publications and external curation remain. `write` defaults to
+   * `writeDurable`.
    *
    * @throws Error when `sessionId` is not a safe id, a managed directory is a symlink, the identity
    *   record names another project or session, or a head, revision, or identity record is damaged;
@@ -92,6 +91,7 @@ export class MemoryStore {
     });
     await store.locked(store.access, async () => {
       await store.assertSafeLayout(store.access.signal);
+      await repairPendingLearnings(store, [], store.access);
       await repairViews(store, store.access);
       const identity: Identity = { version: 1, projectId: store.projectId, projectRoot, sessionId };
       await ensureIdentity(store.sessionDir, identity, store.access);
@@ -102,12 +102,13 @@ export class MemoryStore {
   /**
    * Commit a proposal as a new revision under the project lock.
    *
-   * Checks in order that the head equals `expectedRevision`, curation permits every written note,
-   * learning digests and sequences equal `expectedLearnings`, and `validate` returns `undefined`;
-   * `validate` must not write, and a reason it returns becomes the conflict's reason. Then advances
-   * the sequence and writes the revision, the head, the changed note views, the learning views, and
-   * learning provenance. `proposal` must satisfy `validateProposal`. `signal` is observed together
-   * with the store's signal until the head is written.
+   * Repairs prior accepted heads for the proposal's learning names before checking that the head
+   * equals `expectedRevision`, curation permits every written note, learning digests and sequences
+   * equal `expectedLearnings`, and `validate` returns `undefined`; `validate` must not write and
+   * runs again before head publication. A returned reason becomes the conflict's reason. Then
+   * advances the sequence and writes the revision, the head, the changed note views, the learning
+   * views, and learning provenance. `proposal` must satisfy `validateProposal`. `signal` is
+   * observed together with the store's signal until the head is written.
    *
    * @throws Error when the proposal belongs to another project or session, or when the head's
    *   revision or the base revision is unavailable. A rejection after the head is durable, from a
@@ -116,7 +117,10 @@ export class MemoryStore {
    */
   async commit(
     proposal: MemoryProposal,
-    options: { validate: () => ConflictReason | undefined; signal?: AbortSignal },
+    options: {
+      validate: () => Promise<ConflictReason | undefined> | ConflictReason | undefined;
+      signal?: AbortSignal;
+    },
   ): Promise<CommitResult> {
     const captured = validateProposal(structuredClone(proposal));
     if (captured.sessionId !== this.sessionId || captured.projectId !== this.projectId) {
@@ -214,6 +218,7 @@ export class MemoryStore {
   }
 
   private async locked<T>(access: StorageAccess, action: () => Promise<T>): Promise<T> {
+    await this.assertSafeLayout(access.signal);
     return await withProjectLock(join(this.baseDir, "sessions"), access, action);
   }
 
@@ -240,9 +245,11 @@ export class MemoryStore {
   private async commitLocked(
     proposal: MemoryProposal,
     access: StorageAccess,
-    validate: () => ConflictReason | undefined,
+    validate: () => Promise<ConflictReason | undefined> | ConflictReason | undefined,
   ): Promise<CommitResult> {
     await this.assertSafeLayout(access.signal);
+    await repairPendingLearnings(this, Object.keys(proposal.learnings), access);
+    await repairViews(this, access);
     const head = await readHead(this.sessionDir, access.signal);
     const actualRevision = head?.revisionId ?? null;
     const conflict = (reason: ConflictReason): CommitResult => ({
@@ -258,16 +265,30 @@ export class MemoryStore {
     if (snapshot === undefined) {
       return conflict("curation");
     }
-    const learning = await learningConflict(this.baseDir, proposal, access);
+    const learning = await learningConflict(
+      this.baseDir,
+      proposal,
+      async (pointer) => await this.inheritRevision(pointer),
+      access,
+    );
     if (learning !== undefined) {
       return conflict(learning);
     }
-    const reason = validate();
+    const reason = await validate();
     if (reason !== undefined) {
       return conflict(reason);
     }
-    const revisionId = await writeCommit(this, proposal, head, snapshot, access);
-    return { kind: "committed", revisionId };
+    const result = await writeCommit(
+      this,
+      proposal,
+      head,
+      snapshot,
+      access,
+      async () => await validate(),
+    );
+    return "conflict" in result
+      ? conflict(result.conflict)
+      : { kind: "committed", revisionId: result.revisionId };
   }
 
   private async prepareSnapshot(
@@ -301,7 +322,10 @@ export class MemoryStore {
         evidenceFingerprint: proposal.evidenceFingerprint,
       };
       const disk = disks[index];
-      const blocked = !mayUseNote(curation.notes[name], dependency.sourceIds);
+      const blocked = !mayUseNote(curation.notes[name], dependency.sourceIds, {
+        projectId: this.projectId,
+        sessionId: this.sessionId,
+      });
       const foreign =
         head?.views.notes[name] === undefined && disk !== undefined && disk !== content;
       if (explicit && (blocked || foreign)) {

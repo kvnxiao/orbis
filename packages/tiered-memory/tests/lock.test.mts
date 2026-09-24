@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdir, open, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { link, mkdir, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -31,9 +32,7 @@ async function exitedPid(): Promise<number> {
   const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
   const pid = child.pid;
   await new Promise<void>((done) => {
-    child.once("exit", () => {
-      done();
-    });
+    child.once("exit", done);
   });
   if (pid === undefined) {
     throw new Error("Missing child process id.");
@@ -41,45 +40,39 @@ async function exitedPid(): Promise<number> {
   return pid;
 }
 
-async function writeOwner(lock: string, owner: unknown): Promise<void> {
-  await mkdir(lock, { recursive: true });
+async function writeTicket(sessions: string, number: number, owner: unknown): Promise<void> {
+  const directory = join(sessions, ".lock", "tickets");
+  await mkdir(directory, { recursive: true });
   await writeFile(
-    join(lock, "owner.json"),
+    join(directory, `${String(number)}.json`),
     typeof owner === "string" ? owner : JSON.stringify(owner),
   );
 }
 
-test("withProjectLock writes owner.json with the pid and a token while the action runs", async ({
-  makeRoot,
-}) => {
+async function tickets(sessions: string): Promise<string[]> {
+  return await readdir(join(sessions, ".lock", "tickets"));
+}
+
+function doneName(number: number, token: string): string {
+  return `${String(number)}-${createHash("sha256").update(token).digest("hex")}`;
+}
+
+test("a holder publishes its pid and token and leaves a sequence marker", async ({ makeRoot }) => {
   const sessions = join(await makeRoot(), "sessions");
   const owner = await withProjectLock(sessions, access(), async () =>
     parseRecord(
       lockOwnerSchema,
-      await readFile(join(sessions, ".lock", "owner.json"), "utf8"),
-      "owner.json",
+      await readFile(join(sessions, ".lock", "tickets", "1.json"), "utf8"),
+      "1.json",
     ),
   );
   expect(owner).toMatchObject({ version: 1, pid: process.pid });
   expect(owner.token.length).toBeGreaterThan(0);
+  expect(await tickets(sessions)).toEqual(["1.json"]);
+  expect(await exists(join(sessions, ".lock", "done", doneName(1, owner.token)))).toBe(true);
 });
 
-test("withProjectLock releases the lock after the action resolves and after it rejects", async ({
-  makeRoot,
-}) => {
-  const sessions = join(await makeRoot(), "sessions");
-  await withProjectLock(sessions, access(), async () => {
-    await Promise.resolve();
-  });
-  expect(await exists(join(sessions, ".lock"))).toBe(false);
-  const failure = new Error("action failed");
-  await expect(
-    withProjectLock(sessions, access(), async () => await Promise.reject(failure)),
-  ).rejects.toBe(failure);
-  expect(await exists(join(sessions, ".lock"))).toBe(false);
-});
-
-test("a second holder waits until the first releases the lock", async ({ makeRoot }) => {
+test("a second holder waits until the first resolves or rejects", async ({ makeRoot }) => {
   const sessions = join(await makeRoot(), "sessions");
   const order: string[] = [];
   const held = Promise.withResolvers<undefined>();
@@ -97,126 +90,96 @@ test("a second holder waits until the first releases the lock", async ({ makeRoo
   });
   held.resolve(undefined);
   await Promise.all([first, second]);
+  const failure = new Error("action failed");
+  await expect(
+    withProjectLock(sessions, access(), async () => await Promise.reject(failure)),
+  ).rejects.toBe(failure);
   expect(order).toEqual(["first start", "first end", "second"]);
 });
 
-test("a stale owner whose process is gone is removed and the lock is acquired", async ({
+test("dead predecessor tickets are recovered without overlapping live holders", async ({
   makeRoot,
 }) => {
   const sessions = join(await makeRoot(), "sessions");
-  await writeOwner(join(sessions, ".lock"), { version: 1, pid: 4242, token: "previous" });
-  const io: LockIo = { now: () => Date.now(), isRunning: (pid) => pid !== 4242 };
-  const token = await withProjectLock(
-    sessions,
-    access(),
-    async () =>
-      parseRecord(
-        lockOwnerSchema,
-        await readFile(join(sessions, ".lock", "owner.json"), "utf8"),
-        "owner.json",
-      ).token,
-    io,
-  );
-  expect(token).not.toBe("previous");
-});
-
-test("two acquisitions racing over one dead owner hold the lock one at a time", async ({
-  makeRoot,
-}) => {
-  const sessions = join(await makeRoot(), "sessions");
+  await writeTicket(sessions, 1, { version: 1, pid: 4242, token: "dead" });
   const io: LockIo = { now: () => Date.now(), isRunning: (pid) => pid !== 4242 };
   let holders = 0;
-  let overlapped = false;
-  let runs = 0;
+  let overlap = false;
   const action = async (): Promise<void> => {
     holders++;
-    overlapped ||= holders > 1;
-    await sleep(5);
+    overlap ||= holders > 1;
+    await sleep(10);
     holders--;
-    runs++;
   };
-  for (let round = 0; round < 20; round++) {
-    // oxlint-disable-next-line no-await-in-loop -- Each round starts from a fresh dead owner after the previous round released the lock.
-    await writeOwner(join(sessions, ".lock"), {
-      version: 1,
-      pid: 4242,
-      token: `dead-${String(round)}`,
-    });
-    // oxlint-disable-next-line no-await-in-loop -- Each round starts from a fresh dead owner after the previous round released the lock.
-    await Promise.all([
-      withProjectLock(sessions, access(), action, io),
-      withProjectLock(sessions, access(), action, io),
-    ]);
-  }
-  expect(overlapped).toBe(false);
-  expect(runs).toBe(40);
-  expect((await readdir(sessions)).filter((name) => name.startsWith(".lock"))).toEqual([]);
+  await Promise.all([
+    withProjectLock(sessions, access(), action, io),
+    withProjectLock(sessions, access(), action, io),
+    withProjectLock(sessions, access(), action, io),
+  ]);
+  expect(overlap).toBe(false);
+  expect((await tickets(sessions)).length).toBeLessThanOrEqual(2);
 });
 
-test("a claimed lock whose owner is running again is renamed back and waited on", async ({
+test("a delayed publication cannot reuse a retired ticket before a live holder", async ({
   makeRoot,
 }) => {
   const sessions = join(await makeRoot(), "sessions");
-  const owner = { version: 1, pid: 4242, token: "revived" };
-  await writeOwner(join(sessions, ".lock"), owner);
-  let probes = 0;
-  let now = 0;
-  const io: LockIo = { now: () => (now += 1000), isRunning: () => ++probes > 1 };
-  await expect(
-    withProjectLock(
-      sessions,
-      access(),
-      async () => {
-        await Promise.resolve();
-      },
-      io,
-    ),
-  ).rejects.toThrow("project lock is busy");
-  expect(JSON.parse(await readFile(join(sessions, ".lock", "owner.json"), "utf8"))).toEqual(owner);
-  expect((await readdir(sessions)).filter((name) => name.startsWith(".lock"))).toEqual([".lock"]);
-});
-
-test("a stale lock that Windows refuses to rename while a handle is open is waited on", async ({
-  makeRoot,
-  skip,
-}) => {
-  skip(
-    process.platform !== "win32",
-    "Only Windows refuses to rename a directory with an open file.",
+  await writeTicket(sessions, 1, { version: 1, pid: 4242, token: "dead" });
+  const enteredPublish = Promise.withResolvers<undefined>();
+  const resumePublish = Promise.withResolvers<undefined>();
+  const holderEntered = Promise.withResolvers<undefined>();
+  const releaseHolder = Promise.withResolvers<undefined>();
+  const io: LockIo = {
+    now: () => Date.now(),
+    isRunning: (pid) => pid !== 4242,
+    publish: async (source, ticket) => {
+      enteredPublish.resolve(undefined);
+      await resumePublish.promise;
+      await link(source, ticket);
+    },
+  };
+  let holderActive = false;
+  let overlap = false;
+  const delayed = withProjectLock(
+    sessions,
+    access(),
+    async () => {
+      overlap ||= holderActive;
+      await Promise.resolve();
+    },
+    io,
   );
-  const sessions = join(await makeRoot(), "sessions");
-  await writeOwner(join(sessions, ".lock"), { version: 1, pid: 4242, token: "dead" });
-  const handle = await open(join(sessions, ".lock", "owner.json"), "r");
-  let now = 0;
-  const io: LockIo = { now: () => (now += 1000), isRunning: (pid) => pid !== 4242 };
-  try {
-    await expect(
-      withProjectLock(
-        sessions,
-        access(),
-        async () => {
-          await Promise.resolve();
-        },
-        io,
-      ),
-    ).rejects.toThrow("project lock is busy");
-  } finally {
-    await handle.close();
-  }
-  expect(await exists(join(sessions, ".lock", "owner.json"))).toBe(true);
+  await enteredPublish.promise;
+  await withProjectLock(sessions, access(), async () => {
+    await Promise.resolve();
+  });
+  const holder = withProjectLock(sessions, access(), async () => {
+    holderActive = true;
+    holderEntered.resolve(undefined);
+    await releaseHolder.promise;
+    holderActive = false;
+  });
+  await holderEntered.promise;
+  expect(await tickets(sessions)).toEqual(["3.json"]);
+  resumePublish.resolve(undefined);
+  await sleep(100);
+  expect(overlap).toBe(false);
+  releaseHolder.resolve(undefined);
+  await Promise.all([delayed, holder]);
+  expect(overlap).toBe(false);
 });
 
-test("a killed writer's lock is recovered without manual removal", async ({ makeRoot }) => {
+test("a killed writer's ticket is recovered", async ({ makeRoot }) => {
   const sessions = join(await makeRoot(), "sessions");
-  await writeOwner(join(sessions, ".lock"), { version: 1, pid: await exitedPid(), token: "dead" });
+  await writeTicket(sessions, 1, { version: 1, pid: await exitedPid(), token: "dead" });
   await expect(
     withProjectLock(sessions, access(), async () => await Promise.resolve("acquired")),
   ).resolves.toBe("acquired");
 });
 
-test("a live owner past the deadline fails with the busy error", async ({ makeRoot }) => {
+test("a live predecessor past the deadline reports busy", async ({ makeRoot }) => {
   const sessions = join(await makeRoot(), "sessions");
-  await writeOwner(join(sessions, ".lock"), { version: 1, pid: process.pid, token: "live" });
+  await writeTicket(sessions, 1, { version: 1, pid: process.pid, token: "live" });
   let now = 0;
   const io: LockIo = { now: () => (now += 1000), isRunning: () => true };
   await expect(
@@ -229,43 +192,42 @@ test("a live owner past the deadline fails with the busy error", async ({ makeRo
       io,
     ),
   ).rejects.toThrow("project lock is busy");
-  expect(await exists(join(sessions, ".lock", "owner.json"))).toBe(true);
+  expect(await exists(join(sessions, ".lock", "tickets", "1.json"))).toBe(true);
 });
 
-test("a lock directory without owner.json is polled while it is newer than the deadline", async ({
+test("a Windows handle blocking dead-ticket removal waits until busy", async ({
   makeRoot,
+  skip,
 }) => {
+  skip(process.platform !== "win32", "Windows reports an open ticket handle as EPERM or EBUSY.");
   const sessions = join(await makeRoot(), "sessions");
-  await mkdir(join(sessions, ".lock"), { recursive: true });
-  const controller = new AbortController();
-  const reason = new Error("stop waiting");
-  setTimeout(() => {
-    controller.abort(reason);
-  }, 100);
+  await writeTicket(sessions, 1, { version: 1, pid: 4242, token: "dead" });
+  let now = 0;
+  const io: LockIo = {
+    now: () => (now += 1000),
+    isRunning: (pid) => pid !== 4242,
+    removeTicket: async () => {
+      await Promise.reject(
+        Object.assign(new Error("ticket has an open handle"), { code: "EPERM" }),
+      );
+    },
+  };
   await expect(
-    withProjectLock(sessions, access(controller.signal), async () => {
-      await Promise.resolve();
-    }),
-  ).rejects.toBe(reason);
-  expect(await exists(join(sessions, ".lock"))).toBe(true);
+    withProjectLock(
+      sessions,
+      access(),
+      async () => {
+        await Promise.resolve();
+      },
+      io,
+    ),
+  ).rejects.toThrow("project lock is busy");
+  expect(await exists(join(sessions, ".lock", "tickets", "1.json"))).toBe(true);
 });
 
-test("a lock directory without a valid owner older than the deadline is removed and acquired", async ({
-  makeRoot,
-}) => {
+test("cancellation while waiting preserves the abort reason", async ({ makeRoot }) => {
   const sessions = join(await makeRoot(), "sessions");
-  const lock = join(sessions, ".lock");
-  await writeOwner(lock, "{not json");
-  const old = new Date(Date.now() - 60_000);
-  await utimes(lock, old, old);
-  await expect(
-    withProjectLock(sessions, access(), async () => await Promise.resolve("acquired")),
-  ).resolves.toBe("acquired");
-});
-
-test("an aborted signal stops polling with the signal's reason", async ({ makeRoot }) => {
-  const sessions = join(await makeRoot(), "sessions");
-  await writeOwner(join(sessions, ".lock"), { version: 1, pid: process.pid, token: "live" });
+  await writeTicket(sessions, 1, { version: 1, pid: process.pid, token: "live" });
   const controller = new AbortController();
   const reason = new Error("session replaced");
   setTimeout(() => {
@@ -276,29 +238,201 @@ test("an aborted signal stops polling with the signal's reason", async ({ makeRo
       await Promise.resolve();
     }),
   ).rejects.toBe(reason);
+  expect(await exists(join(sessions, ".lock", "tickets", "1.json"))).toBe(true);
 });
 
-test("release leaves a lock whose owner.json names another token", async ({ makeRoot }) => {
+test("cancellation after publication marks its ticket complete", async ({ makeRoot }) => {
   const sessions = join(await makeRoot(), "sessions");
-  const owner = join(sessions, ".lock", "owner.json");
-  await withProjectLock(sessions, access(), async () => {
-    await writeFile(owner, JSON.stringify({ version: 1, pid: process.pid, token: "other" }));
-  });
-  expect(JSON.parse(await readFile(owner, "utf8"))).toMatchObject({ token: "other" });
-});
-
-test("owner.json with an unsupported version is rejected at /version", () => {
-  const owner = { version: 2, pid: 1, token: "t" };
-  expect(rejectionPaths(lockOwnerSchema, owner)).toContain("/version");
-  expect(() => parseRecord(lockOwnerSchema, JSON.stringify(owner), "owner.json")).toThrow(
-    "Invalid record at owner.json: /version",
+  const controller = new AbortController();
+  const reason = new Error("cancelled after publication");
+  let ran = false;
+  const io: LockIo = {
+    now: () => Date.now(),
+    isRunning: () => true,
+    publish: async (source, ticket) => {
+      await link(source, ticket);
+      controller.abort(reason);
+    },
+  };
+  await expect(
+    withProjectLock(
+      sessions,
+      access(controller.signal),
+      async () => {
+        ran = true;
+        await Promise.resolve();
+      },
+      io,
+    ),
+  ).rejects.toBe(reason);
+  const owner = parseRecord(
+    lockOwnerSchema,
+    await readFile(join(sessions, ".lock", "tickets", "1.json"), "utf8"),
+    "1.json",
   );
+  expect(ran).toBe(false);
+  expect(await exists(join(sessions, ".lock", "done", doneName(1, owner.token)))).toBe(true);
 });
 
-test("owner.json missing its token is rejected at /token", () => {
+test("a failed read after publication still marks its ticket complete", async ({ makeRoot }) => {
+  const sessions = join(await makeRoot(), "sessions");
+  const failure = new Error("readdir failed after publication");
+  let armed = false;
+  const io: LockIo = {
+    now: () => Date.now(),
+    isRunning: () => true,
+    publish: async (source, ticket) => {
+      await link(source, ticket);
+      armed = true;
+    },
+    list: async (directory) => {
+      if (armed) {
+        armed = false;
+        throw failure;
+      }
+      return await readdir(directory);
+    },
+  };
+  await expect(
+    withProjectLock(
+      sessions,
+      access(),
+      async () => {
+        await Promise.resolve();
+      },
+      io,
+    ),
+  ).rejects.toBe(failure);
+  const owner = parseRecord(
+    lockOwnerSchema,
+    await readFile(join(sessions, ".lock", "tickets", "1.json"), "utf8"),
+    "1.json",
+  );
+  expect(await exists(join(sessions, ".lock", "done", doneName(1, owner.token)))).toBe(true);
+});
+
+test("a live owner whose ticket changes token is not removed by release", async ({ makeRoot }) => {
+  const sessions = join(await makeRoot(), "sessions");
+  const ticket = join(sessions, ".lock", "tickets", "1.json");
+  await withProjectLock(sessions, access(), async () => {
+    await writeFile(ticket, JSON.stringify({ version: 1, pid: process.pid, token: "other" }));
+  });
+  expect(JSON.parse(await readFile(ticket, "utf8"))).toMatchObject({ token: "other" });
+});
+
+test("private files from a dead process are removed without touching a live writer", async ({
+  makeRoot,
+}) => {
+  const sessions = join(await makeRoot(), "sessions");
+  const directory = join(sessions, ".lock", "private");
+  await mkdir(directory, { recursive: true });
+  const dead = join(directory, "4242-dead.json");
+  const live = join(directory, `${String(process.pid)}-beef.json`);
+  await writeFile(dead, "{}");
+  await writeFile(live, "{}");
+  const io: LockIo = { now: () => Date.now(), isRunning: (pid) => pid !== 4242 };
+  await withProjectLock(
+    sessions,
+    access(),
+    async () => {
+      await Promise.resolve();
+    },
+    io,
+  );
+  expect(await exists(dead)).toBe(false);
+  expect(await exists(live)).toBe(true);
+});
+
+for (const child of [undefined, "tickets", "done", "private"] as const) {
+  test(`a symlink at ${child ?? ".lock"} is rejected before external files change`, async ({
+    makeRoot,
+  }) => {
+    const root = await makeRoot();
+    const sessions = join(root, "sessions");
+    const lock = join(sessions, ".lock");
+    const external = join(root, "external");
+    await mkdir(sessions);
+    await mkdir(external);
+    const target = child === undefined ? lock : join(lock, child);
+    if (child !== undefined) {
+      await mkdir(lock);
+    }
+    const marker = join(
+      external,
+      child === "private" || child === undefined ? "4242-dead.json" : "keep.txt",
+    );
+    await writeFile(marker, "external content");
+    await symlink(external, target, process.platform === "win32" ? "junction" : "dir");
+    const io: LockIo = { now: () => Date.now(), isRunning: (pid) => pid !== 4242 };
+    await expect(
+      withProjectLock(
+        sessions,
+        access(),
+        async () => {
+          await Promise.resolve();
+          throw new Error("entered action");
+        },
+        io,
+      ),
+    ).rejects.toThrow("symbolic link");
+    expect(await readdir(external)).toEqual([marker.split(/[\\/]/u).at(-1)]);
+    expect(await readFile(marker, "utf8")).toBe("external content");
+  });
+}
+
+test("a symlinked sessions directory is rejected before external lock cleanup", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const external = join(root, "external");
+  const privateDir = join(external, ".lock", "private");
+  await mkdir(privateDir, { recursive: true });
+  const marker = join(privateDir, "4242-dead.json");
+  await writeFile(marker, "external content");
+  await symlink(
+    external,
+    join(root, "sessions"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  const io: LockIo = { now: () => Date.now(), isRunning: (pid) => pid !== 4242 };
+  await expect(
+    withProjectLock(
+      join(root, "sessions"),
+      access(),
+      async () => {
+        await Promise.resolve();
+        throw new Error("entered action");
+      },
+      io,
+    ),
+  ).rejects.toThrow("symbolic link");
+  expect(await readFile(marker, "utf8")).toBe("external content");
+});
+
+test("damaged and unsupported ticket records remain available for repair", async ({ makeRoot }) => {
+  const sessions = join(await makeRoot(), "sessions");
+  await writeTicket(sessions, 1, "{not json");
+  await expect(
+    withProjectLock(sessions, access(), async () => {
+      await Promise.resolve();
+    }),
+  ).rejects.toThrow("Invalid JSON");
+  expect(await readFile(join(sessions, ".lock", "tickets", "1.json"), "utf8")).toBe("{not json");
+});
+
+test("an exhausted ticket sequence fails without changing the marker", async ({ makeRoot }) => {
+  const sessions = join(await makeRoot(), "sessions");
+  await writeTicket(sessions, Number.MAX_SAFE_INTEGER, { version: 1, pid: 4242, token: "dead" });
+  await expect(
+    withProjectLock(sessions, access(), async () => {
+      await Promise.resolve();
+    }),
+  ).rejects.toThrow("sequence exhausted");
+  expect(await tickets(sessions)).toEqual([`${String(Number.MAX_SAFE_INTEGER)}.json`]);
+});
+
+test("owner records reject unsupported versions, missing tokens, and wrong pid types", () => {
+  expect(rejectionPaths(lockOwnerSchema, { version: 2, pid: 1, token: "t" })).toContain("/version");
   expect(rejectionPaths(lockOwnerSchema, { version: 1, pid: 1 })).toContain("/token");
-});
-
-test("owner.json with a wrong-typed pid is rejected at /pid", () => {
   expect(rejectionPaths(lockOwnerSchema, { version: 1, pid: "1", token: "t" })).toContain("/pid");
 });

@@ -165,8 +165,8 @@ function registryProblem(registry: Registry, store: MemoryStore): string | undef
 /**
  * Own a session's source registry.
  *
- * Registration writes `sources.json`; every other member only reads the in-memory copy. Every read
- * and write observes the store's signal.
+ * Registration writes `sources.json`; `current` projects the manager's active branch without
+ * writing. Registry file reads and writes observe the store's signal.
  */
 export class SourceRegistry {
   private readonly store: MemoryStore;
@@ -208,6 +208,13 @@ export class SourceRegistry {
     return structuredClone(this.registry.sources);
   }
 
+  /** Project the active branch's current effective sources without changing the registry. */
+  async current(manager: SourceSessionManager): Promise<readonly SourceRecord[]> {
+    await this.assertManager(manager);
+    this.store.access.signal.throwIfAborted();
+    return this.recordsFor(manager.getBranch(), {});
+  }
+
   /**
    * Register the active branch's message entries and write the registry once.
    *
@@ -225,18 +232,7 @@ export class SourceRegistry {
   ): Promise<readonly SourceRecord[]> {
     const store = this.store;
     const signal = store.access.signal;
-    signal.throwIfAborted();
-    if (manager.getSessionId() !== store.sessionId) {
-      throw new Error("Source session identity differs from storage identity.");
-    }
-    const header = manager.getHeader();
-    if (
-      header !== null &&
-      (header.id !== store.sessionId ||
-        (header.cwd !== "" && (await canonicalProjectRoot(header.cwd)) !== store.projectRoot))
-    ) {
-      throw new Error("Source session belongs to a different project root.");
-    }
+    await this.assertManager(manager);
     signal.throwIfAborted();
     const records = this.recordsFor(manager.getBranch(), times);
     const merged = new Map(this.registry.sources.map((source) => [source.reference, source]));
@@ -248,6 +244,22 @@ export class SourceRegistry {
     signal.throwIfAborted();
     this.registry = next;
     return structuredClone(records);
+  }
+
+  private async assertManager(manager: SourceSessionManager): Promise<void> {
+    const store = this.store;
+    store.access.signal.throwIfAborted();
+    if (manager.getSessionId() !== store.sessionId) {
+      throw new Error("Source session identity differs from storage identity.");
+    }
+    const header = manager.getHeader();
+    if (
+      header !== null &&
+      (header.id !== store.sessionId ||
+        (header.cwd !== "" && (await canonicalProjectRoot(header.cwd)) !== store.projectRoot))
+    ) {
+      throw new Error("Source session belongs to a different project root.");
+    }
   }
 
   private recordsFor(
