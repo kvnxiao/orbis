@@ -52,6 +52,37 @@ inspect the resulting diff. When lint errors remain, the recipe stops before for
 them and rerun. After changing a dependency manifest, run `just install`. Before completing a
 change, run `just fix` and `just check`.
 
+## Code design
+
+- Use concrete names and straightforward control flow. Prefer the smallest design that satisfies the
+  current contract. Name intermediate decisions and use early returns when they clarify the main
+  path.
+- Before extending a workflow, identify its decisions, effects, and owners. Keep the operation
+  sequence, dependencies, and failure paths visible; delegate detailed transformation, I/O, and
+  presentation when they obscure that sequence. Keep short, cohesive operations inline.
+- Separate decisions and data transformations from execution when they have rules that can be
+  understood and tested independently. Pass data into decision code and return decisions or values;
+  keep reads, writes, and lifecycle handling with their owners. Preserve transaction boundaries and
+  revalidate stale inputs before committing.
+- Extract a private helper, even for one caller, when its name, inputs, and result remove details
+  from the caller's reasoning. Keep it local. Inline trivial forwarding; introduce shared or
+  configurable abstractions only for an established common contract or caller requirement.
+- Organize modules around cohesive responsibilities and owned invariants. Separate responsibilities
+  with different dependencies or lifetimes. Give each shared rule one authoritative owner without
+  coupling code that merely looks similar.
+- Allow loops and mutation of locally owned values when they express the algorithm clearly. Keep
+  borrowed data unchanged, and give mutable state shared across operations an explicit owner and
+  controlled update points.
+- Express correlated states and outcomes as variants that carry the data each case requires. Keep
+  independent optional data and retained history independent; validate relationships that types
+  cannot express at the appropriate boundary.
+- Pass only the data and capabilities an operation needs. Keep task ownership, cancellation,
+  synchronization, and cleanup visible at the scope that owns them, including after helper
+  extraction.
+- Review responsibilities and data flow as code is produced. Require each extraction to remove a
+  specific reasoning burden; passing size limits or increasing the helper count does not establish a
+  clear design.
+
 ## Package conventions
 
 `CONTRIBUTING.md` documents the compiler options and lint rules that `just check` enforces. Apply

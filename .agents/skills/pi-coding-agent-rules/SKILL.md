@@ -13,6 +13,19 @@ Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TU
 - **Default**: Follow this project convention unless a stated exception applies.
 - **Conditional**: Apply this rule only when its stated condition or measurement is present.
 
+## Apply the rules
+
+Before adding or extending a workflow, read [TypeScript architecture](references/typescript-architecture.md)
+and [code organization](references/typescript-code-organization.md). Identify the operation sequence,
+the data passed between operations, and the owners of effects and mutable state before filling in
+the implementation. For a small operation, do this directly in the code; a separate design artifact
+is not required. Read the domain and asynchronous references below when the work changes state
+variants or task lifetimes.
+
+During implementation and review, apply the [responsibility review](references/typescript-code-organization.md#review-responsibilities-and-data-flow-default)
+to the changed workflow and its helpers together. Check both mixed responsibilities and needless
+extraction; do not wait for a size-limit failure to examine the design.
+
 ## Rule References
 
 - [Pi design and compatibility](references/pi-design-and-compatibility.md): Read when choosing a Pi customization mechanism, importing Pi APIs, or deciding which guidance belongs in code, skills, or lint configuration.
