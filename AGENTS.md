@@ -1,8 +1,8 @@
 # Orbis development instructions
 
-Orbis is the Orbis agent harness: a monorepo of modular Pi agent extensions. The name refers to
-Latin _orbis_, a circle or orb, and the circle constant pi. Use the name explanation in project
-introductions; keep operational documentation concrete.
+Orbis is an agent harness built from modular Pi extensions in a monorepo. In project introductions,
+explain the name: Latin _orbis_, a circle or orb, and the circle constant pi. Keep operational
+documentation concrete.
 
 ## Start a session
 
@@ -10,7 +10,7 @@ For small changes with settled scope, use the
 [lightweight path](docs/development-workflow.md#lightweight-path). It overrides the procedural
 requirements below and in repository skills; preserve contracts and authorization boundaries.
 
-At the start of substantive repository work, read the
+At the start of substantive work, read the
 [wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) once and open the records for
 the affected package or mechanism. If GitHub is unavailable, report the gap and continue independent
 local work.
@@ -19,88 +19,81 @@ The [development workflow](docs/development-workflow.md) defines shared work, au
 checkpoints, and delivery. Its [agent model policy](docs/development-workflow.md#agent-models) maps
 each role to a model and effort per host.
 
-Route requests to resume, continue, work on, or take the next step on an issue through `work-issue`,
-and infer the current stage instead of asking the user to name a skill. Treat status questions and
-review-only requests according to their stated scope. When a host does not discover
-`.agents/skills`, read the linked `SKILL.md`. `verify-changes` and `audit-prose` are global skills;
-when required but unavailable, review the diff, update affected documentation, audit prose, run
-repository checks, and report what was skipped.
+For issue work, infer the current stage rather than asking the user to select a skill. Keep status
+and review-only requests within their stated scope. If the host does not discover `.agents/skills`,
+read the linked `SKILL.md`.
 
-| Trigger                                                             | Read or invoke                                                                            |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Before touching any package                                         | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)                    |
-| Start or resume tracked development                                 | [work-issue](.agents/skills/work-issue/SKILL.md)                                          |
-| Package design                                                      | [design-package](.agents/skills/design-package/SKILL.md)                                  |
-| Implementation planning                                             | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)                        |
-| Package contract changes, or code that drifted from its SPEC        | [revise-package](.agents/skills/revise-package/SKILL.md)                                  |
-| Package conformance review, including the pass in `verify-changes`  | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)                          |
-| README creation or revision, including the pass in `verify-changes` | [write-readme](.agents/skills/write-readme/SKILL.md)                                      |
-| Dependency refreshes or newly supported strict checks               | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                              |
-| Writing or amending a SPEC or interaction contract                  | [specification guidance](docs/specifications.md)                                          |
-| Recording a design decision                                         | [Decisions and local evidence](docs/development-workflow.md#decisions-and-local-evidence) |
-| Workspace setup, toolchain, publication, and lint rule details      | [CONTRIBUTING.md](CONTRIBUTING.md)                                                        |
-| Issue bodies, PR bodies, and comments                               | [GitHub Markdown](docs/development-workflow.md#write-github-markdown)                     |
+| Trigger                                               | Read or invoke                                                                            |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Before touching any package                           | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)                    |
+| Start, resume, or continue issue work                 | [work-issue](.agents/skills/work-issue/SKILL.md)                                          |
+| Package design                                        | [design-package](.agents/skills/design-package/SKILL.md)                                  |
+| Implementation planning                               | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)                        |
+| Contract changes or code that drifted from a SPEC     | [revise-package](.agents/skills/revise-package/SKILL.md)                                  |
+| Package conformance review                            | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)                          |
+| README creation or revision                           | [write-readme](.agents/skills/write-readme/SKILL.md)                                      |
+| Dependency refreshes or newly supported strict checks | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                              |
+| Write or amend a SPEC or interaction contract         | [specification guidance](docs/specifications.md)                                          |
+| Recording a design decision                           | [Decisions and local evidence](docs/development-workflow.md#decisions-and-local-evidence) |
+| Setup, toolchain, publication, and lint details       | [CONTRIBUTING.md](CONTRIBUTING.md)                                                        |
+| GitHub issue and PR bodies and comments               | [GitHub Markdown](docs/development-workflow.md#write-github-markdown)                     |
 
 ## Commands
 
-Run `just` to list recipes. Prefer `just install`, `just new <name>`, `just fix`, `just check`, and
+Run `just --list` to list recipes. Prefer `just install`, `just new <name>`, `just fix`, `just check`, and
 `just test` over the root `pnpm` scripts; use `pnpm` directly for package-filtered commands such as
 `pnpm --filter @orbis/<name> test`, dependency-manifest changes, and publication.
 
-After editing code, run `just fix` before repairing formatting or fixable lint errors by hand, and
-inspect the resulting diff. When lint errors remain, the recipe stops before formatting; resolve
-them and rerun. After changing a dependency manifest, run `just install`. Before completing a
-change, run `just fix` and `just check`.
+Before completing a change, run `just fix` and `just check`. After code edits, use `just fix` before
+manual formatting or fixable lint repairs and inspect its diff. If lint errors stop formatting,
+resolve them and rerun. After changing a dependency manifest, run `just install`.
 
 ## Code design
 
-- Use concrete names and straightforward control flow. Prefer the smallest design that satisfies the
-  current contract. Name intermediate decisions and use early returns when they clarify the main
-  path.
-- Before extending a workflow, identify its decisions, effects, and owners. Keep the operation
-  sequence, dependencies, and failure paths visible; delegate detailed transformation, I/O, and
-  presentation when they obscure that sequence. Keep short, cohesive operations inline.
-- Separate decisions and data transformations from execution when they have rules that can be
-  understood and tested independently. Pass data into decision code and return decisions or values;
-  keep reads, writes, and lifecycle handling with their owners. Preserve transaction boundaries and
-  revalidate stale inputs before committing.
-- Extract a private helper, even for one caller, when its name, inputs, and result remove details
-  from the caller's reasoning. Keep it local. Inline trivial forwarding; introduce shared or
-  configurable abstractions only for an established common contract or caller requirement.
-- Organize modules around cohesive responsibilities and owned invariants. Separate responsibilities
-  with different dependencies or lifetimes. Give each shared rule one authoritative owner without
+Before adding or extending a TypeScript workflow, read the architecture and code organization
+references in `pi-coding-agent-rules` and apply them during implementation and review.
+
+- Use concrete names, straightforward control flow, and the smallest design that satisfies the
+  current contract. Name intermediate decisions and use early returns when they clarify the main path.
+- Before writing or extending a workflow, identify its decisions, effects, and owners. Keep operation
+  order, dependencies, and failure paths visible; delegate transformation, I/O, and presentation
+  details when they obscure that sequence. Separate decisions and transformations from execution
+  when their rules can be understood and tested independently. Pass data in and return decisions or
+  values; keep reads, writes, and lifecycle handling with their owners.
+- Extract a local private helper, even for one caller, when its name, inputs, and result simplify
+  the caller's reasoning. Keep short, clear operations and trivial forwarding inline. Introduce
+  shared or configurable abstractions only for an established common contract or caller requirement.
+- Organize modules around cohesive responsibilities and owned invariants; separate those with
+  different dependencies or lifetimes. Give each shared rule one authoritative owner without
   coupling code that merely looks similar.
 - Allow loops and mutation of locally owned values when they express the algorithm clearly. Keep
-  borrowed data unchanged, and give mutable state shared across operations an explicit owner and
+  borrowed data unchanged; give mutable state shared across operations an explicit owner and
   controlled update points.
 - Express correlated states and outcomes as variants that carry the data each case requires. Keep
   independent optional data and retained history independent; validate relationships that types
   cannot express at the appropriate boundary.
 - Pass only the data and capabilities an operation needs. Keep task ownership, cancellation,
-  synchronization, and cleanup visible at the scope that owns them, including after helper
-  extraction.
-- Review responsibilities and data flow as code is produced. Require each extraction to remove a
-  specific reasoning burden; passing size limits or increasing the helper count does not establish a
-  clear design.
+  synchronization, and cleanup visible in the owning scope, including after extraction. Preserve
+  transaction boundaries and revalidate potentially stale inputs before committing.
+
+During implementation and review, examine workflows and helpers together for clear responsibilities
+and data flow. Require each extraction to remove a specific reasoning burden; line counts and helper
+counts do not establish a clear design.
 
 ## Package conventions
 
-`CONTRIBUTING.md` documents the compiler options and lint rules that `just check` enforces. Apply
-these conventions as well.
-
 - Scaffold each extension with `just new <name>` as `packages/<name>` with npm name `@orbis/<name>`.
-  Publish TypeScript source with no build step, and export a default factory accepting
+  Publish TypeScript source without a build step, and export a default factory accepting
   `ExtensionAPI` from `src/index.ts`.
 - Declare every imported dependency in the importing package: `catalog:` for pinned development
   dependencies, `workspace:^` for shared workspace packages, `"*"` peers with matching development
   dependencies for `@earendil-works/pi-*`, and ordinary runtime dependencies in `dependencies`.
   Commit `pnpm-lock.yaml`. Do not bundle Pi's runtime.
-- Boundary data is any value the package did not construct in the current process, such as settings
-  files, persisted records, and session entries. Validate it with typebox schemas through one
-  per-package parse helper.
+- Validate data the package did not construct in the current process, including settings,
+  persisted records, and session entries, with typebox schemas through one per-package parse helper.
 - Use explicit `.ts` extensions on relative imports and package exports between workspace packages;
   do not import a sibling package's source through a relative path or a `tsconfig.paths` alias.
-- Keep single-use code local; extract a shared package only for behavior used by multiple packages.
+- Extract a shared package only for behavior used by multiple packages.
 - Keep each file within 500 lines and each function within 80 lines; the lint exempts `tests/`
   directories, `*.test.mts` files, `scripts/`, and `packages/plan`.
 - Write scripts, tests, and Vitest configuration as `.mts`. Keep package tests in
@@ -108,33 +101,31 @@ these conventions as well.
 
 ## Contract before code
 
-`packages/<name>/SPEC.md` and, for interactive packages, its linked `docs/tui-interactions.md`
-define approved behavior. Before changing package code, read them and identify the affected
-`REQ-<behavior-slug>` requirements, even when the request omits specifications. Make a fix within
-the contract or a permitted implementation choice under the current contract. Route a contract
-change through `revise-package` before implementation, and change code, tests, the SPEC, and the
-interaction document in the same change set. Current code is evidence of implementation, not
-approval of behavior; explicit user direction approves the behavior it specifies.
+Before changing package code, read `packages/<name>/SPEC.md` and, for interactive packages, its
+linked `docs/tui-interactions.md`. Identify affected `REQ-<behavior-slug>` requirements even when
+the request omits specifications. These documents define approved behavior; current code does not.
+Explicit user direction approves the behavior it specifies. Make fixes and implementation choices
+within the approved contract. For contract changes, use `revise-package` before implementation and
+update code, tests, the SPEC, and interaction document in the same change set; material changes
+require user direction. Do not weaken a SPEC to make code pass.
 
-For unreleased packages, implement only the current approved SPEC. When behavior is replaced, delete
-the superseded code, settings, aliases, migrations, and tests. Keep tests for current behavior and
-its failure paths. Add backward compatibility only for an explicit released contract or user
-requirement.
+For unreleased packages, implement only the current approved SPEC. Delete superseded code, settings,
+aliases, migrations, and tests; retain tests for current behavior and failure paths. Add backward
+compatibility only for an explicit released contract or user requirement.
 
-Work that introduces, improves, or changes package behavior is tracked in an issue whose body
-contains the plan in the
-[issue plan format](.agents/skills/plan-implementation/references/plan-format.md). A fix within the
-contract, a documentation change, or a workspace tooling change goes straight to a PR whose body
-records the outcome, acceptance, and verification. Keep scratch work and run evidence in ignored
+Track new or changed package behavior in an issue whose body contains the plan in the
+[issue plan format](.agents/skills/plan-implementation/references/plan-format.md). Within-contract
+fixes, documentation, and workspace tooling changes go directly to a PR recording outcome,
+acceptance, and verification. Keep scratch work and run evidence in ignored
 `packages/<name>/implementation/` or `.artifacts/`; do not maintain a second authoritative plan.
 
 ## Tests
 
 Automated tests, including `just test` and `just check`, must not call real models, start live agent
-sessions, or incur model charges. Use local fixtures; when a test exercises an agent turn, configure
-the Pi SDK session with a scripted in-process provider and block external network connections except
-local fixture traffic. Run real-model checks only as separate, explicit, orchestrator-supervised
-verification outside test discovery and repository check commands.
+sessions, or incur model charges. Use local fixtures. For tests of agent turns, configure the Pi SDK
+session with a scripted in-process provider and block network traffic except to local fixtures.
+Keep real-model checks separate, explicit, and orchestrator-supervised, outside test discovery and
+repository check commands.
 
 Reproduce a bug with a failing test. When changing validation, test rejected inputs. Before and
 after a refactor, run the same checks. For changed extension behavior, run the package tests and
@@ -144,29 +135,32 @@ load the package through Pi; type checking does not prove import compatibility.
 
 Run `verify-changes` once on the accumulated change set before a commit or PR, and include
 `verify-conformance` for affected contracts and `write-readme` for affected READMEs. Reviewers
-report without editing; the coordinator resolves findings within authorized scope and reruns the
-affected checks. Do not weaken a SPEC to make code pass; material contract changes need user
-direction. Review agent instruction and configuration changes that affect routing, authorization,
-delegation, checkpoints, or execution for correctness under the workflow's
+report without editing; the coordinator resolves findings within authorized scope and reruns affected
+checks. Review instruction and configuration changes affecting routing, authorization, delegation,
+checkpoints, or execution under the workflow's
 [review rules](docs/development-workflow.md#review-and-delivery).
 
-Within authorized work, create and update issues and Project items, and record decisions where the
-workflow's [decision rules](docs/development-workflow.md#decisions-and-local-evidence) place them;
-prepare verified commits on a work branch, push that branch, and open focused PRs. Developers review
-and merge. Do not merge, push to the default branch, publish packages, or create releases without
-separate explicit authorization. Honor requests limited to local or chat-only work. For issue-backed
-work, publish a checkpoint comment at each stage transition, blocked or interrupted handoff, and
-delivery, as described in the workflow's
+If the global `verify-changes` or `audit-prose` skill is required but unavailable, review the diff,
+update affected documentation, audit prose, run repository checks, and report what was skipped.
+
+Within authorized work, create and update issues and Project items, record decisions under the
+[decision rules](docs/development-workflow.md#decisions-and-local-evidence), and prepare verified
+commits on a work branch, push it, and open focused PRs. Developers review and merge. Honor local-only
+and chat-only requests. Do not merge, push to the default branch, publish packages, or create releases
+without separate explicit authorization.
+
+For issue-backed work, publish checkpoint comments at stage transitions, blocked or interrupted
+handoffs, and delivery under the
 [checkpoint policy](docs/development-workflow.md#publish-checkpoint-artifacts).
 
 ## Writing
 
-- In GitHub issue and PR bodies and comments, keep each paragraph or list item on one physical line,
-  draft in ignored `.artifacts/`, publish with `--body-file`, verify the stored body, and pass the
-  no-reflow rule to prose auditors.
-- Avoid forward references in documentation, skills, and design discussions: introduce a term,
-  state, interface, or approach before using or comparing it. Before delivery, read changed
-  documents top to bottom without following forward links, and apply the
+- Draft GitHub bodies and comments in ignored `.artifacts/`, keep each paragraph or list item on one
+  physical line, publish with `--body-file`, and verify the stored body. Pass the no-reflow rule to
+  prose auditors.
+- In documentation, skills, and design discussions, introduce terms and concepts before using or
+  comparing them. Before delivery, read changed documents top to bottom without following forward
+  links; apply the
   [reading-order checks](docs/specifications.md#avoid-forward-references) to SPECs and interaction
   contracts.
 - Omit comments that repeat code; comment only an external contract, hazard, or ordering constraint

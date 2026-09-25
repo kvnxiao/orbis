@@ -37,44 +37,31 @@ point.
 
 ## Make workflows describe meaningful operations (Default)
 
+Before implementing a workflow, identify its operation sequence, data dependencies, and owners of
+effects and mutable state. For a small operation, do this directly in the code; a separate design
+artifact is not required. During implementation and review, apply the
+[responsibility review](typescript-code-organization.md#review-responsibilities-and-data-flow-default)
+to the workflow and its helpers together.
+
 Keep a workflow's prerequisites, operation order, data dependencies, outcome branches, and commit
-boundary visible. Delegate detailed parsing, collection assembly, storage access, and rendering
-when those details obscure the process. Keep lifecycle coordination with the scope that owns it;
-an operation that owns a subscription must also own its cleanup. A workflow may contain branches,
+boundary visible. Delegate detailed parsing, collection assembly, storage access, and rendering when
+those details obscure the process. Keep lifecycle coordination with the scope that owns it; an
+operation that owns a subscription must also own its cleanup. A workflow may contain branches,
 loops, sequential awaits, and `try`/`finally` when they express that coordination.
 
 Use names that state the operation or decision, such as `reserveCapacity` or `eligibleOrders`,
 rather than `processData` or `handleStep`. Name intermediate decisions and use early returns when
-they make the main path easier to follow. Keep precedence and materially different outcomes explicit;
-do not compress them into a pipeline or dispatch table merely to reduce statements.
+they make the main path easier to follow. Keep precedence and materially different outcomes
+explicit; do not compress them into a pipeline or dispatch table merely to reduce statements.
 
 Extract by the operation's result or invariant, not by consecutive blocks of statements. Pass the
 inputs the operation needs and return its result. Avoid helpers that exchange progress through a
 shared mutable context object. Keep short, cohesive adapter operations inline, and do not add a
 generic workflow engine, command interpreter, or service layer to sequence a fixed set of calls.
 
-For example, assume `loadInvoices` returns validated records and `writeReminder` accepts a rendered
-message and cancellation signal. This workflow also implements the overdue-balance rule:
-
-```ts
-async function remind(accountId: string, cutoff: number, signal: AbortSignal): Promise<void> {
-  const invoices = await loadInvoices(accountId, signal);
-  signal.throwIfAborted();
-  const balances: Balance[] = [];
-  for (const invoice of invoices) {
-    if (invoice.dueAt <= cutoff && invoice.paid < invoice.total) {
-      balances.push({ id: invoice.id, amount: invoice.total - invoice.paid });
-    }
-  }
-  if (balances.length === 0) {
-    return;
-  }
-  await writeReminder(accountId, renderReminder(balances), signal);
-}
-```
-
-Name that decision so the workflow exposes its result. Keep the locally owned accumulation in the
-private helper; reuse is not required:
+For example, keep overdue-balance calculation in a private helper so the reminder workflow can use
+its result without following eligibility and accumulation details. Assume `loadInvoices` returns
+validated records and both I/O operations honor the supplied cancellation signal:
 
 ```ts
 function overdueBalances(invoices: readonly Invoice[], cutoff: number): Balance[] {
@@ -88,6 +75,7 @@ function overdueBalances(invoices: readonly Invoice[], cutoff: number): Balance[
 }
 
 async function remind(accountId: string, cutoff: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
   const invoices = await loadInvoices(accountId, signal);
   signal.throwIfAborted();
   const balances = overdueBalances(invoices, cutoff);
@@ -98,9 +86,10 @@ async function remind(accountId: string, cutoff: number, signal: AbortSignal): P
 }
 ```
 
-Keep a direct field projection such as `items.map((item) => item.id)` inline when it does not hide a
-domain rule. The extraction should let a reader reason about the surrounding operation with fewer
-details, not merely replace an expression with a name.
+Keep short decisions and transformations inline when their meaning is already clear. For example,
+`if (requested > available) return { status: "full" };` can express a capacity rule directly, and
+`items.map((item) => item.id)` can express a field projection. Extract only when the operation's
+contract reduces the details a reader must follow to understand the caller.
 [Split Phase](https://refactoring.com/catalog/splitPhase.html).
 
 ## Expose operations that preserve invariants (Default)

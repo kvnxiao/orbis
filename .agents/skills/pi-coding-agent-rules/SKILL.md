@@ -13,19 +13,6 @@ Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TU
 - **Default**: Follow this project convention unless a stated exception applies.
 - **Conditional**: Apply this rule only when its stated condition or measurement is present.
 
-## Apply the rules
-
-Before adding or extending a workflow, read [TypeScript architecture](references/typescript-architecture.md)
-and [code organization](references/typescript-code-organization.md). Identify the operation sequence,
-the data passed between operations, and the owners of effects and mutable state before filling in
-the implementation. For a small operation, do this directly in the code; a separate design artifact
-is not required. Read the domain and asynchronous references below when the work changes state
-variants or task lifetimes.
-
-During implementation and review, apply the [responsibility review](references/typescript-code-organization.md#review-responsibilities-and-data-flow-default)
-to the changed workflow and its helpers together. Check both mixed responsibilities and needless
-extraction; do not wait for a size-limit failure to examine the design.
-
 ## Rule References
 
 - [Pi design and compatibility](references/pi-design-and-compatibility.md): Read when choosing a Pi customization mechanism, importing Pi APIs, or deciding which guidance belongs in code, skills, or lint configuration.
@@ -40,8 +27,8 @@ extraction; do not wait for a size-limit failure to examine the design.
 - [Pi UI and RPC](references/pi-ui-and-rpc.md): Read when prompting users, completing or dismissing UI, sequencing selectors, rendering terminal components, supporting noninteractive modes, or implementing an RPC client.
 - [Pi TUI interactions](references/pi-tui-interactions.md): Read when designing keyboard navigation, inline editing, question or review flows, modal dismissal, composer modes, or terminal layout.
 - [Pi packages and SDK](references/pi-packages-and-sdk.md): Read when distributing Pi resources, declaring package dependencies, embedding sessions, switching model or remote-tool integrations, or configuring resource discovery and working directories.
-- [TypeScript architecture](references/typescript-architecture.md): Read when separating domain logic from adapters, defining ownership and copy semantics, transforming derived data, deriving schema or registry metadata, or introducing an abstraction.
-- [TypeScript code organization](references/typescript-code-organization.md): Read when placing or naming a module, deciding what a module exports, documenting an exported symbol, colocating a type with its validator, promoting a helper to shared code, or defining a package entry point.
+- [TypeScript architecture](references/typescript-architecture.md): Read before adding or extending a workflow, and when separating domain logic from adapters, defining ownership and copy semantics, transforming derived data, deriving schema or registry metadata, or introducing an abstraction.
+- [TypeScript code organization](references/typescript-code-organization.md): Read before adding or extending a workflow, and when reviewing its responsibilities, placing or naming a module, deciding what a module exports, documenting an exported symbol, colocating a type with its validator, promoting a helper to shared code, or defining a package entry point.
 - [TypeScript domain boundaries](references/typescript-domain-boundaries.md): Read when modeling workflow states, declaring schemas for persisted or parsed data, validating external data, comparing structured input by meaning, distinguishing identifiers or units, or designing public data contracts.
 - [TypeScript asynchronous work and errors](references/typescript-async-and-errors.md): Read when assigning asynchronous task ownership, propagating cancellation, coordinating concurrent mutations, retrying operations, or translating errors.
 - [TypeScript error contracts](references/typescript-error-contracts.md): Read when defining, propagating, documenting, or testing failures and cancellation. Classify expected failures by recovery action, preserve data and causes, recognize shared contracts structurally, and check ownership before cancellation cleanup.

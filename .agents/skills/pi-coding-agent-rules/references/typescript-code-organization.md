@@ -11,8 +11,8 @@ operation imports it to enforce capacity.
 
 Keep those operations in the same module while they form one cohesive responsibility. Split when
 they own different decisions, dependencies, or lifetimes; sharing a session type does not make every
-operation on that session one responsibility. Do not move I/O, rendering, or an entire workflow
-into the schema module merely because they use its types.
+operation on that session one responsibility. Do not move I/O, rendering, or an entire workflow into
+the schema module merely because they use its types.
 
 Count the encodings before adding one. A union partitioned into subsets is itself a contract: the
 members one validator accepts, and the members another branch dispatches. Derive each subset from
@@ -24,9 +24,9 @@ dispatch condition.
 
 Cohesion depends on shared invariants, dependencies, and lifetimes; importer sets provide supporting
 evidence. One large importer can still consume several distinct responsibilities. When one module
-exports a presentation type, a domain predicate, and filesystem read and write, every importer of any
-one export can depend on all three. Split along the importer sets: give a presentation type to the
-module the renderers already depend on, and keep file I/O with the code that owns the file.
+exports a presentation type, a domain predicate, and filesystem read and write, every importer of
+any one export can depend on all three. Split along the importer sets: give a presentation type to
+the module the renderers already depend on, and keep file I/O with the code that owns the file.
 
 Apply the same test before splitting. When a typical change touches most of a module's exports,
 splitting adds edit sites without reducing coupling; keep that module whole. A generic `utils`
@@ -34,24 +34,24 @@ module fails the test by construction, because its importers share no contract.
 
 ## Decompose locally before introducing shared abstractions (Default)
 
-Extract a private helper for one caller when it names a meaningful decision, transformation, or
-resource lifetime and lets the caller reason from its inputs and result. Keep it in the owning
-module until a separate responsibility warrants another module. For example, `overdueBalances`
-can own eligibility and balance calculation without becoming a configurable billing service.
+Extract a private helper when its name and contract let the caller omit implementation details from
+its reasoning, even if it has one caller. Keep short decisions and transformations inline when their
+meaning is already clear. Keep the helper in the owning module until a separate responsibility
+warrants another module. For example, `overdueBalances` can own eligibility and balance calculation
+without becoming a configurable billing service.
 
 Keep trivial forwarding inline. Require a helper's contract to be understandable without
 reconstructing changing locals from its caller. A closure may capture stable dependencies, and a
 state owner may use private methods; make their effects explicit. Reject extractions that spread one
-invariant across files or pass the entire runtime to helpers without narrowing responsibilities.
-A short wrapper is justified when it enforces a constraint, adapts a boundary, or owns cleanup.
-Interpret restrictions on single-use abstractions as restrictions on speculative reuse or
-infrastructure, not on cohesive private operations.
+invariant across files or pass the entire runtime to helpers without narrowing responsibilities. A
+short wrapper is justified when it enforces a constraint, adapts a boundary, or owns cleanup.
 [Extract Function](https://refactoring.com/catalog/extractFunction.html),
 [Inline Function](https://refactoring.com/catalog/inlineFunction.html).
 
 ## Review responsibilities and data flow (Default)
 
-Review the workflow with its helpers, even when each function passes the size limits:
+During implementation and review, examine the workflow with its helpers, regardless of function
+size:
 
 - Can the reader identify the operation sequence and dependencies without following collection
   assembly, rendering, or storage mechanics? Name a specific mixed responsibility before requesting
@@ -64,13 +64,13 @@ Review the workflow with its helpers, even when each function passes the size li
 - Do types guarantee the data required by each outcome? Distinguish missing correlations from
   legitimate optional data, history, and runtime relationships.
 - Can the reader locate the owner of each mutable resource, task, subscription, and cleanup action?
-  Check whether extraction changed ordering, cancellation, transaction scope, or stale-result guards.
+  Check whether extraction changed ordering, cancellation, transaction scope, or stale-result
+  guards.
 
-Report the concrete reasoning burden, the proposed boundary, and the behavior that must remain
-unchanged. Keep design findings distinct from demonstrated correctness defects. Treat size and
-field-count thresholds as review signals; an exemption does not exempt responsibilities from
-review. When changing size-limit exceptions, scope them to the affected code and state the condition
-for removing them. Do not split code mechanically to satisfy a count.
+When proposing a design change, report the concrete reasoning burden, the proposed boundary, and the
+behavior that must remain unchanged. Keep design findings distinct from demonstrated correctness
+defects. Treat size and field-count thresholds as review signals; do not split code mechanically to
+satisfy a count.
 
 ## Report size, duplication, and test-coupling thresholds (Default)
 
