@@ -31,7 +31,7 @@ costs must also be acceptable for a source-loaded Pi extension.
 
 ## Examined baseline and evidence
 
-The repository baseline is
+The package implementation baseline is
 [`090a0c7`](https://github.com/kvnxiao/orbis/tree/090a0c7ff385ba990c05aa5d6904d95a18c01d57). Package
 availability below describes that revision. API and compatibility conclusions use these specific
 versions rather than an unspecified future release.
@@ -112,13 +112,26 @@ not supply the same runtime facilities. Relevant v4 documentation covers
 
 ## Code structure is a separate responsibility
 
-The existing
-[architecture guidance](../.agents/skills/pi-coding-agent-rules/references/typescript-architecture.md)
-already calls for separating policy from integration, narrowing dependencies, and using functional
-transformations where they clarify derived data. The
-[domain guidance](../.agents/skills/pi-coding-agent-rules/references/typescript-domain-boundaries.md)
-already recommends modeling valid states explicitly. TypeScript can support these designs without
-Effect.
+The repository's [code-design guidance](../AGENTS.md#code-design) sets language-independent
+expectations for visible operation order, narrow dependencies, cohesive responsibilities, and
+ownership of mutable state and resources. The TypeScript skill requires reading its architecture and
+organization references before adding or extending a workflow.
+
+The
+[organization rules](../.agents/skills/pi-coding-agent-rules/references/typescript-code-organization.md)
+explicitly permit a private helper with one caller when its contract removes details from the
+caller's reasoning. They distinguish that decomposition from shared abstractions, trivial
+forwarding, and helpers that exchange progress through mutable state. Review examines the workflow
+and its helpers together; line counts alone do not establish a clear design.
+
+The
+[architecture rules](../.agents/skills/pi-coding-agent-rules/references/typescript-architecture.md)
+permit loops and local collection mutation inside pure transformations. They require domain
+decisions to remain understandable independently of I/O while preserving transaction scope and
+revalidation before writes. The
+[domain rules](../.agents/skills/pi-coding-agent-rules/references/typescript-domain-boundaries.md)
+distinguish required variant payloads from independent optional data, retained history, and value
+relationships that need runtime checks.
 
 Inspection found concentrated responsibilities in `PlanningRuntime.interact` in
 [`plan/src/pi/runtime.ts`](../packages/plan/src/pi/runtime.ts), and correlated optional fields
@@ -130,15 +143,18 @@ establish why earlier reviews accepted the code.
 
 There are counterexamples: tiered-memory models storage lifecycle states as a discriminated union,
 plan has pure state transformations, and document analysis uses local mutation for indexing and
-normalization. A rewrite should preserve useful designs. The plan size-limit exemption in
-[`oxlint.config.ts`](../oxlint.config.ts) and the ambiguous boundary between private decomposition
-and single-use abstraction deserve separate attention. Existing issues
+normalization. A rewrite should preserve useful designs. The plan size-limit exemption remains in
+[`oxlint.config.ts`](../oxlint.config.ts). Existing issues
 [#37](https://github.com/kvnxiao/orbis/issues/37) and
 [#41](https://github.com/kvnxiao/orbis/issues/41) track size limits and boundary parsing.
 
-Effect would replace some execution machinery. Clear domain types, cohesive modules, meaningful
-helper boundaries, and enforcement of existing rules remain necessary. Changes to agent guidance
-belong to the separate rules investigation.
+The guidance clarifies the expected design; package inspection must establish whether an
+implementation applies it. These expectations apply equally to native TypeScript and Effect code.
+Workflow decomposition and stronger domain types are baseline improvements, so the evaluation must
+not attribute their benefits to Effect. The Effect recommendation rests on its execution facilities
+for dependencies, failures, lifetimes, concurrency, and timing. Introducing a service needs a
+dependency or resource lifetime boundary; sequencing a fixed set of calls alone does not justify
+one.
 
 ## Proposed package use
 
@@ -463,9 +479,10 @@ and retain the limitations stated above.
    execution, ordinary TypeScript for pure domain code and rendering, conditional lifecycle use for
    theme-preview, and direct Pi integration for exit. Treat the recommendation as a design choice
    for reference implementations, not a requirement for independent SPEC implementers.
-2. **Resolve coding-guidance ambiguities separately.** Clarify meaningful decomposition, state
-   modeling, mutation ownership, and review enforcement regardless of library choice. Avoid using
-   Effect adoption as evidence that those concerns are solved.
+2. **Apply the current coding guidance.** Review workflows and their helpers together for meaningful
+   decomposition, valid state modeling, narrow dependencies, and visible resource ownership.
+   Preserve transaction boundaries and stale-result checks during extraction. Use these standards
+   for both native TypeScript and Effect designs so the comparison isolates Effect's contribution.
 3. **Write concrete implementation designs.** Define each runtime and scope owner, service boundary,
    public adapter, cancellation path, and protected storage phase. Keep existing contracts unless an
    explicit behavior change is approved. Reconcile related open issue plans instead of creating a
