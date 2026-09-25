@@ -7,12 +7,20 @@ their tests close enough to review the contract together. When a module's respon
 different dependencies or lifetimes, split the module; line count alone does not identify a module
 boundary.
 
+Choose the smallest design that satisfies the current contract. Add extension points when a caller
+requires variation. Improving names or extracting a cohesive operation can simplify current code
+without adding future capabilities. [YAGNI](https://martinfowler.com/bliki/Yagni.html).
+
 ## Separate policy from integration code when it has an independent contract (Default)
 
 For a workflow with domain decisions, keep parsing and Pi event wiring at the adapter boundary. Pass
 validated domain values into functions that compute decisions or transitions, then execute I/O
 through the adapter. Domain code should not need a terminal, active Pi session, or provider
 connection to express its rules.
+
+Separate reads from decisions by passing the observed values to decision code. Keep the read,
+decision, revalidation, and write inside the same lock or transaction when correctness requires it.
+A pure decision can still become stale; extracting it does not change the concurrency contract.
 
 For layered configuration, resolve defaults and scope precedence at one configuration boundary, then
 pass resolved values to consumers. Keep overrides distinct from resolved configuration; a missing
@@ -26,6 +34,63 @@ separating a policy, lifetime, or testable contract. Do not require a repository
 class, or dependency-injection container for every extension. Pi's factory is already a composition
 point.
 [Extension factory](https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/docs/extensions.md#writing-an-extension).
+
+## Make workflows describe meaningful operations (Default)
+
+Before implementing a workflow, identify its operation sequence, data dependencies, and owners of
+effects and mutable state. For a small operation, do this directly in the code; a separate design
+artifact is not required. During implementation and review, apply the
+[responsibility review](typescript-code-organization.md#review-responsibilities-and-data-flow-default)
+to the workflow and its helpers together.
+
+Keep a workflow's prerequisites, operation order, data dependencies, outcome branches, and commit
+boundary visible. Delegate detailed parsing, collection assembly, storage access, and rendering when
+those details obscure the process. Keep lifecycle coordination with the scope that owns it; an
+operation that owns a subscription must also own its cleanup. A workflow may contain branches,
+loops, sequential awaits, and `try`/`finally` when they express that coordination.
+
+Use names that state the operation or decision, such as `reserveCapacity` or `eligibleOrders`,
+rather than `processData` or `handleStep`. Name intermediate decisions and use early returns when
+they make the main path easier to follow. Keep precedence and materially different outcomes
+explicit; do not compress them into a pipeline or dispatch table merely to reduce statements.
+
+Extract by the operation's result or invariant, not by consecutive blocks of statements. Pass the
+inputs the operation needs and return its result. Avoid helpers that exchange progress through a
+shared mutable context object. Keep short, cohesive adapter operations inline, and do not add a
+generic workflow engine, command interpreter, or service layer to sequence a fixed set of calls.
+
+For example, keep overdue-balance calculation in a private helper so the reminder workflow can use
+its result without following eligibility and accumulation details. Assume `loadInvoices` returns
+validated records and both I/O operations honor the supplied cancellation signal:
+
+```ts
+function overdueBalances(invoices: readonly Invoice[], cutoff: number): Balance[] {
+  const balances: Balance[] = [];
+  for (const invoice of invoices) {
+    if (invoice.dueAt <= cutoff && invoice.paid < invoice.total) {
+      balances.push({ id: invoice.id, amount: invoice.total - invoice.paid });
+    }
+  }
+  return balances;
+}
+
+async function remind(accountId: string, cutoff: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  const invoices = await loadInvoices(accountId, signal);
+  signal.throwIfAborted();
+  const balances = overdueBalances(invoices, cutoff);
+  if (balances.length === 0) {
+    return;
+  }
+  await writeReminder(accountId, renderReminder(balances), signal);
+}
+```
+
+Keep short decisions and transformations inline when their meaning is already clear. For example,
+`if (requested > available) return { status: "full" };` can express a capacity rule directly, and
+`items.map((item) => item.id)` can express a field projection. Extract only when the operation's
+contract reduces the details a reader must follow to understand the caller.
+[Split Phase](https://refactoring.com/catalog/splitPhase.html).
 
 ## Expose operations that preserve invariants (Default)
 
@@ -78,12 +143,13 @@ uses. For example, a status contract can require a summary and a detailed view t
 Preserve separate values when equality is incidental or the contract permits divergence. Add
 configuration only when callers need to vary the choice.
 
-## Prefer functional transformations for derived data (Default)
+## Keep derived-data transformations pure (Default)
 
-Default to small pure functions and readable `map`, `filter`, and related transformations. Keep
-transformation callbacks free of externally visible side effects. When a long transformation becomes
-hard to follow, name intermediate values. Use `reduce` for clear accumulations; avoid reducers that
-combine unrelated state or obscure execution order.
+Compute derived data without changing inputs or shared state. Choose loops or `map`, `filter`, and
+related transformations according to which expresses the algorithm clearly. Keep transformation
+callbacks free of externally visible side effects. When a long transformation becomes hard to
+follow, name intermediate values. Use `reduce` for clear accumulations; avoid reducers that combine
+unrelated state or obscure execution order.
 
 Before indexing, sorting, or deduplicating a collection, define its identity, ordering, and
 duplicate policy. When duplicate keys are possible, choose rejection, aggregation, or replacement
@@ -101,6 +167,12 @@ When it simplifies implementation or avoids repeated copying, allow mutation of 
 local collections. A function can populate a local array with `push` and remain pure without
 mutating inputs or shared state. Local collection ownership does not permit mutation of borrowed
 elements.
+
+When concurrent callbacks mutate a captured collection or operations share a mutable collection,
+treat it as shared state even when declared inside a function. Identify its writers and lifetime,
+and control updates through its owner. Conditional appends are not a design defect by themselves;
+separate collection assembly when it makes the surrounding workflow track transformation details
+alongside I/O or lifecycle work.
 
 Do not replace readable transformations with loops solely on an assumed performance advantage. For
 lazy pipelines, collection dependencies, compatibility checks, and measurement, apply the

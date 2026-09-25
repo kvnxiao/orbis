@@ -6,6 +6,43 @@ When fields are valid only together, model the alternatives as a discriminated u
 `status: "succeeded"` requires its result; a job with `status: "failed"` requires its error.
 Independent `loading`, `done`, and `failed` booleans permit combinations the workflow may forbid.
 
+Distinguish presence constraints from value relationships. Encode a phase's required payload in its
+variant; check identities, revision equality, collection membership, and other value relationships
+with runtime validation. Keep independent optional data and retained history available in every
+phase where the contract permits them. For example, a cancelled job may retain its previous attempts
+and the intent needed to reconcile a partial write. Do not restrict retry intent to the writing
+phase when recovery keeps it in another phase.
+
+When delivery requires a receipt and pending delivery forbids one, encode both constraints in the
+schema and derive the TypeScript union:
+
+```ts
+const deliverySchema = Type.Union([
+  Type.Object({
+    status: Type.Literal("pending"),
+    receiptId: Type.Optional(Type.Never()),
+  }),
+  Type.Object({
+    status: Type.Literal("delivered"),
+    receiptId: Type.String(),
+  }),
+]);
+type Delivery = Static<typeof deliverySchema>;
+```
+
+Keep a simple optional property when absence is independently valid; do not introduce a status
+solely to replace every optional field. Group all-or-none companion data in one optional object when
+consumers do not need named alternatives. Treat changes to persisted representations as contract
+work, even when the in-memory type becomes simpler.
+
+Apply the same correlation to outcomes: a success variant must carry the result its callers need.
+Put failure data on the failure variant, with an optional cause when a cause is not always
+available. When callers recover differently from rejection and interrupted execution, distinguish
+those cases and preserve the state needed for recovery. Choose returned outcomes or thrown failures
+using the
+[error contract](typescript-error-contracts.md#choose-the-outcome-channel-before-defining-an-error-default);
+do not introduce a result framework for every function.
+
 When a command determines its payload, preserve that correlation in a discriminated request object
 through internal calls. Separate `command: Command` and `payload: AllPayloads` parameters accept
 combinations that may be invalid together. Where an authoritative schema or command registry exists,

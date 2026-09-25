@@ -46,7 +46,7 @@ synchronous iteration does not move computation off the event loop or await asyn
 Before converting an array pipeline, check observable differences in callback ordering, mutation,
 index arguments, sparse arrays, and iterator reuse. Keep callbacks free of externally visible side
 effects as specified in
-[functional transformations](typescript-architecture.md#prefer-functional-transformations-for-derived-data-default).
+[pure transformations](typescript-architecture.md#keep-derived-data-transformations-pure-default).
 [Iterator helper semantics](https://github.com/tc39/proposal-iterator-helpers).
 
 ## Select collection dependencies by required capabilities (Default)
@@ -108,7 +108,7 @@ guarantee faster execution.
 
 Repeatedly copying a growing accumulator, such as `[...acc, item]` inside `reduce`, can produce
 quadratic copying. Use a readable transformation or populate a fresh local collection under the
-[architecture ownership rules](typescript-architecture.md#prefer-functional-transformations-for-derived-data-default).
+[architecture ownership rules](typescript-architecture.md#keep-derived-data-transformations-pure-default).
 
 Keep a more complex representation only when measured cost or a required scale bound justifies it.
 Include cold-start cost and invalidation work in cache comparisons; a warm-cache benchmark alone

@@ -12,6 +12,15 @@ identity or generation before committing state. A timeout that only races promis
 losing operation. [AbortSignal](https://nodejs.org/api/globals.html#class-abortsignal),
 [subprocess cancellation](https://nodejs.org/api/child_process.html).
 
+When extracting asynchronous work, keep resource acquisition and cleanup in one owning scope. Pass
+cancellation and the operation's required capabilities explicitly; return the completed result or an
+explicit task handle when work must outlive the call. For example, a presenter operation can own its
+subscription, race, and `finally` cleanup while the calling workflow owns replacement order. Keep
+ownership and revision checks next to the mutation they protect, including recovery and cleanup. Do
+not hide detached work, retries, or shared-state updates behind a helper that appears to compute a
+value. Preserve the existing owner instead of adding a lifecycle framework solely to shorten a
+function.
+
 ## Choose concurrency according to resource independence (Default)
 
 Run independent reads concurrently within a limit that matches service capacity and memory use.

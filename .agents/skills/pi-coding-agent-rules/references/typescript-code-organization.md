@@ -1,13 +1,18 @@
 # TypeScript code organization
 
-## Keep one contract in one module (Default)
+## Give each contract an authoritative owner (Default)
 
-A contract's TypeScript type, its runtime schema, its transitions, and its validity check belong in
-one module, with one encoding derived from the others. Declare the schema and derive the type from
-it, as the
+Keep a boundary record's schema and derived TypeScript type together. Declare its shape constraints
+in the schema, as the
 [boundary validation rule](typescript-domain-boundaries.md#validate-boundary-data-with-the-host-schema-library-required)
-requires. Parallel hand-written encodings can diverge without a compiler error: adding a state or an
-action then requires a matching edit in every encoding, and a missed edit still compiles.
+requires. Let transitions and semantic validation depend on that authoritative contract rather than
+repeat its encoding. For example, keep a reservation schema with its derived type while a booking
+operation imports it to enforce capacity.
+
+Keep those operations in the same module while they form one cohesive responsibility. Split when
+they own different decisions, dependencies, or lifetimes; sharing a session type does not make every
+operation on that session one responsibility. Do not move I/O, rendering, or an entire workflow into
+the schema module merely because they use its types.
 
 Count the encodings before adding one. A union partitioned into subsets is itself a contract: the
 members one validator accepts, and the members another branch dispatches. Derive each subset from
@@ -17,14 +22,55 @@ dispatch condition.
 
 ## Split a module when its exports serve unrelated importers (Default)
 
-Cohesion is measured by which importers change together. When one module exports a presentation
-type, a domain predicate, and filesystem read and write, every importer of any one export can depend
-on all three. Split along the importer sets: give a presentation type to the module the renderers
-already depend on, and keep file I/O with the code that owns the file.
+Cohesion depends on shared invariants, dependencies, and lifetimes; importer sets provide supporting
+evidence. One large importer can still consume several distinct responsibilities. When one module
+exports a presentation type, a domain predicate, and filesystem read and write, every importer of
+any one export can depend on all three. Split along the importer sets: give a presentation type to
+the module the renderers already depend on, and keep file I/O with the code that owns the file.
 
 Apply the same test before splitting. When a typical change touches most of a module's exports,
 splitting adds edit sites without reducing coupling; keep that module whole. A generic `utils`
 module fails the test by construction, because its importers share no contract.
+
+## Decompose locally before introducing shared abstractions (Default)
+
+Extract a private helper when its name and contract let the caller omit implementation details from
+its reasoning, even if it has one caller. Keep short decisions and transformations inline when their
+meaning is already clear. Keep the helper in the owning module until a separate responsibility
+warrants another module. For example, `overdueBalances` can own eligibility and balance calculation
+without becoming a configurable billing service.
+
+Keep trivial forwarding inline. Require a helper's contract to be understandable without
+reconstructing changing locals from its caller. A closure may capture stable dependencies, and a
+state owner may use private methods; make their effects explicit. Reject extractions that spread one
+invariant across files or pass the entire runtime to helpers without narrowing responsibilities. A
+short wrapper is justified when it enforces a constraint, adapts a boundary, or owns cleanup.
+[Extract Function](https://refactoring.com/catalog/extractFunction.html),
+[Inline Function](https://refactoring.com/catalog/inlineFunction.html).
+
+## Review responsibilities and data flow (Default)
+
+During implementation and review, examine the workflow with its helpers, regardless of function
+size:
+
+- Can the reader identify the operation sequence and dependencies without following collection
+  assembly, rendering, or storage mechanics? Name a specific mixed responsibility before requesting
+  extraction.
+- Can a domain decision be exercised with values and assertions, without constructing Pi, a
+  terminal, or a filesystem fixture? Keep integration tests for the actual I/O contract.
+- Does each helper remove details from the caller's reasoning, or merely move statements behind a
+  name while sharing the same mutable state? Keep the smaller direct implementation when extraction
+  adds only navigation.
+- Do types guarantee the data required by each outcome? Distinguish missing correlations from
+  legitimate optional data, history, and runtime relationships.
+- Can the reader locate the owner of each mutable resource, task, subscription, and cleanup action?
+  Check whether extraction changed ordering, cancellation, transaction scope, or stale-result
+  guards.
+
+When proposing a design change, report the concrete reasoning burden, the proposed boundary, and the
+behavior that must remain unchanged. Keep design findings distinct from demonstrated correctness
+defects. Treat size and field-count thresholds as review signals; do not split code mechanically to
+satisfy a count.
 
 ## Report size, duplication, and test-coupling thresholds (Default)
 
@@ -71,6 +117,9 @@ promises. For a contract third parties implement, document the ordering the call
 cancellation behavior, and the errors an implementation may throw. [TSDoc](https://tsdoc.org/).
 
 ## Promote a helper on its second caller, not its second resemblance (Default)
+
+Use this rule to share behavior between owners; private decomposition does not need multiple
+callers.
 
 Duplicated knowledge and duplicated syntax take different remedies. Where two modules encode the
 same rule — one precedence order, one retry policy — unify them at the second occurrence, because a

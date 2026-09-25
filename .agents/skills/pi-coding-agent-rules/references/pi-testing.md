@@ -13,6 +13,10 @@ including nested values and serialization boundaries the API uses. For layered c
 exercise conflicting scopes, omitted overrides, and reload behavior through the resolver and its
 consumers.
 
+For state variants, reject missing required payloads and forbidden payload combinations at the
+parser. Also accept retained history and recovery data that can coexist with the current phase;
+tightening a type must not silently remove supported states.
+
 For collection transformations, cover duplicate identities and meaningful order or multiplicity. For
 queries, assert that reads preserve domain state; for consuming operations, assert the returned
 value and the mutation together. When preview and execution are separate operations, verify that
