@@ -1,11 +1,11 @@
 ---
 name: pi-coding-agent-rules
-description: "Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, code organization, public API documentation, domain modeling, asynchronous work, thrown errors, remediation text, cancellation, performance, and testing."
+description: "Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, code organization, public API documentation, domain modeling, asynchronous work, thrown errors, remediation text, cancellation, performance, testing, and Effect v4 integration where selected by the repository."
 ---
 
 # TypeScript and Pi Coding Agent Rules
 
-Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, code organization, public API documentation, domain modeling, asynchronous work, thrown errors, remediation text, cancellation, performance, and testing.
+Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TUI components, and SDK or RPC integrations, including TypeScript architecture, code organization, public API documentation, domain modeling, asynchronous work, thrown errors, remediation text, cancellation, performance, testing, and Effect v4 integration where selected by the repository.
 
 ## Rule Strength
 
@@ -27,6 +27,7 @@ Use for developing and reviewing Pi Coding Agent extensions, tools, packages, TU
 - [Pi UI and RPC](references/pi-ui-and-rpc.md): Read when prompting users, completing or dismissing UI, sequencing selectors, rendering terminal components, supporting noninteractive modes, or implementing an RPC client.
 - [Pi TUI interactions](references/pi-tui-interactions.md): Read when designing keyboard navigation, inline editing, question or review flows, modal dismissal, composer modes, or terminal layout.
 - [Pi packages and SDK](references/pi-packages-and-sdk.md): Read when distributing Pi resources, declaring package dependencies, embedding sessions, switching model or remote-tool integrations, or configuring resource discovery and working directories.
+- [Effect v4 integration](references/effect-v4-integration.md): Read when assessing Effect under a repository adoption policy, implementing Effect v4 code, or reviewing its integration. Include synchronous work and data modeling; use the selected installation's guidance and preserve Pi host contracts.
 - [TypeScript architecture](references/typescript-architecture.md): Read before adding or extending a workflow, and when separating domain logic from adapters, defining ownership and copy semantics, transforming derived data, deriving schema or registry metadata, or introducing an abstraction.
 - [TypeScript code organization](references/typescript-code-organization.md): Read before adding or extending a workflow, and when reviewing its responsibilities, placing or naming a module, deciding what a module exports, documenting an exported symbol, colocating a type with its validator, promoting a helper to shared code, or defining a package entry point.
 - [TypeScript domain boundaries](references/typescript-domain-boundaries.md): Read when modeling workflow states, declaring schemas for persisted or parsed data, validating external data, comparing structured input by meaning, distinguishing identifiers or units, or designing public data contracts.
