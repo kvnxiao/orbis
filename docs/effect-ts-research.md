@@ -133,7 +133,7 @@ revalidation before writes. The
 distinguish required variant payloads from independent optional data, retained history, and value
 relationships that need runtime checks.
 
-Inspection found concentrated responsibilities in `PlanningRuntime.interact` in
+Inspection found concentrated responsibilities in `PlanRuntime.interact` in
 [`plan/src/pi/runtime.ts`](../packages/plan/src/pi/runtime.ts), and correlated optional fields
 validated through separate checks in
 [`plan/src/domain/state.ts`](../packages/plan/src/domain/state.ts). The return shape in
@@ -243,6 +243,24 @@ The storage protocol is a separate correctness concern:
 - Curation exclusions, exact source coverage, compare-before-commit checks, and recovery of
   materialized views remain domain/storage logic. Effect does not infer those invariants.
 
+For `settleWrites`, a candidate is
+`Effect.all(writes.map(Effect.exit), { concurrency: "unbounded" })` inside `Effect.uninterruptible`.
+Each write produces an `Exit`, so a failed write does not stop settlement of its siblings. Inspect
+all exits and propagate the first failure in input order after the batch settles, preserving the
+current error-selection rule. Keep the existing sequence of batches and publication steps; a failed
+batch must not start later phases.
+
+Apply interruption protection from the head write through post-commit publication, after the final
+pre-head cancellation check. This avoids an interruption gap after commitment. Non-cancellable
+writes before commitment also need protection until they settle. Keep the project lock until all
+started writes finish, and keep failure interpretation inside the protected region.
+
+In `4.0.0-rc.117`, `Effect.all` uses `mode: "result"`, not `mode: "either"`. That mode and
+`Effect.result` collect typed failures but do not capture defects or interruption. `Effect.exit`
+captures those outcomes too; external cancellation still requires interruption protection around the
+storage phase. Validate this design against the package's commit and recovery tests.
+[Pinned Effect API](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.117/packages/effect/src/Effect.ts)
+
 The open delivery work under [#12](https://github.com/kvnxiao/orbis/issues/12), including
 [#21](https://github.com/kvnxiao/orbis/issues/21),
 [#22](https://github.com/kvnxiao/orbis/issues/22),
@@ -291,9 +309,14 @@ and `Result`; v3 examples using different names need version-specific checking.
 
 When an exit contains interruption together with a real failure, the boundary must not suppress the
 failure merely because an abort signal is also set. Preserve the distinction among user
-cancellation, supersession, expected operational failure, and unexpected defects. Keep error
-recognition structural across independently loaded extensions rather than relying on class identity.
-Pi-facing error behavior still follows the
+cancellation, supersession, expected operational failure, and unexpected defects.
+
+Keep error recognition structural across independently loaded extensions rather than relying on
+class identity. For a `Data.TaggedError`, narrow an unknown value to a non-null object with a `_tag`
+property before checking `error._tag === "MyTaggedError"`; validate any payload fields the handler
+uses. Avoid `instanceof MyTaggedError` across host or package boundaries: independently loaded
+copies of a class have different constructor identities. Preserve existing public error
+discriminants when adapting internal Effect failures. Pi-facing error behavior still follows the
 [failure-signaling rules](../.agents/skills/pi-coding-agent-rules/references/pi-failure-signaling.md).
 
 ### Cancellation and durability
@@ -328,6 +351,12 @@ constraints. Pin and verify a selected v4 release before relying on its exact AP
 Effect objects through public presenter protocols or persisting runtime objects; plain records
 reduce coupling between separately installed packages. These are proposed adoption boundaries, not
 changes made by this document.
+
+Evaluate subpath-only imports as the default convention for the validation slice, for example
+`effect/Effect`, `effect/Layer`, `effect/Scope`, and `effect/Queue`. Verify every required subpath
+through TypeScript 7's NodeNext resolution and Node's ESM export maps, then load the packed
+extension through Pi. Use published subpaths, with no dependency on Effect's internal files. Measure
+the complete module set as described in [Performance](#performance) before adopting the convention.
 
 Pi continues to own provider credentials, model selection, trust decisions, session control, and its
 agent loop. Effect can wrap authorized SDK calls; its AI or platform modules are not a reason to
@@ -438,7 +467,9 @@ statistical equivalence, application throughput, or a universal overhead percent
 The import comparison also loads different module sets. An application using Context, Layer, Scope,
 and other modules will need more than `effect/Effect`. Neither figure is the startup cost of a
 rewritten Pi package. Source-loaded packages do not gain bundler tree shaking; subpath imports are a
-candidate to measure with the actual module set. Effect documents both import forms in its
+candidate to measure with the actual module set. Fresh-process import timings do not establish that
+each command or reload repeats module evaluation; measure those host paths separately. Effect
+documents both import forms in its
 [import guide](https://effect.website/docs/v4/getting-started/importing-effect).
 
 ### What remains to measure
@@ -446,6 +477,7 @@ candidate to measure with the actual module set. Effect documents both import fo
 Before adopting the dependency in a package, compare equivalent workflows on the supported runtime:
 
 - Cold Pi extension loading, first command, repeated command, reload, and session replacement.
+- Root imports versus the proposed subpath-only convention, using every module the slice needs.
 - Retained and peak memory with many queued jobs, open interactions, and repeated cleanup.
 - Cancellation latency for cooperative APIs and completion latency for protected writes.
 - Event-loop delay during parsing, rendering, and filesystem work; large synchronous callbacks still
@@ -483,6 +515,11 @@ and retain the limitations stated above.
    decomposition, valid state modeling, narrow dependencies, and visible resource ownership.
    Preserve transaction boundaries and stale-result checks during extraction. Use these standards
    for both native TypeScript and Effect designs so the comparison isolates Effect's contribution.
+   Prefer `Effect.gen` for sequential multi-step workflows and `.pipe()` for attached policies such
+   as timeouts, retries, and scoped service provision. Decompose long generators into cohesive
+   private functions returning `Effect` values when their contracts simplify the caller, including
+   helpers with one caller. Keep new workflows within the repository's 80-line function limit;
+   plan's current exemption is not a design target.
 3. **Write concrete implementation designs.** Define each runtime and scope owner, service boundary,
    public adapter, cancellation path, and protected storage phase. Keep existing contracts unless an
    explicit behavior change is approved. Reconcile related open issue plans instead of creating a
@@ -491,15 +528,18 @@ and retain the limitations stated above.
    presenter withdrawal, stale results, approval recovery, and fresh-session handoff. For memory,
    include disable/shutdown, interrupted writes, lock release ordering, and revision conflicts. A
    bounded validation slice tests the architecture; it does not limit the eventual rewrite for
-   reasons of time or effort.
+   reasons of time or effort. Pin an exact Effect version for the slice, starting with the examined
+   `4.0.0-rc.117`, and validate the proposed import convention.
 5. **Promote evidence into maintained checks.** Add offline package tests, run equivalent before and
-   after benchmarks, load packed packages on Node.js 22.19.0 and supported Pi distributions, and
-   verify host-facing failures. Standalone compatibility should be tested only where claimed. The
-   probe has not established these release conditions.
+   after benchmarks, and verify host-facing failures. Before package adoption, run the validation
+   slice's offline tests and packed-package loading checks on Node.js **22.19.0**, the declared
+   minimum, with supported Pi distributions. The probe ran on Node.js 26.9.0 and does not establish
+   compatibility with the minimum runtime. Test standalone compatibility only where claimed.
 6. **Proceed with the broader rewrite when the design passes those checks.** Use queues, schedules,
    TestClock, and observability as the specified memory workflows are implemented. Review the chosen
-   v4 release and any necessary lint/schema conventions explicitly. Keep package-specific
-   abstractions local until multiple packages actually share behavior.
+   v4 release and any necessary lint/schema conventions explicitly. A verified, exactly pinned v4
+   release candidate is sufficient for adoption; validate later upgrades against the same maintained
+   checks. Keep package-specific abstractions local until multiple packages actually share behavior.
 
 The acceptance criteria are visible business steps, explicit task and resource ownership, preserved
 domain safeguards, reproducible failure-path tests, and acceptable measured runtime costs.
