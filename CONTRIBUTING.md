@@ -79,10 +79,10 @@ the SPEC. For packages with configurable behavior, consult
 [Pi settings integration](docs/pi-extension-settings.md) for the native menu boundary, reusable
 settings components, and command design.
 
-The [development workflow](docs/development-workflow.md) defines how shared work is tracked: an
-initiative issue for each bounded delivery, work issues whose bodies hold the implementation plan,
-checkpoint comments that preserve completed work, a PR-only path for fixes and documentation, and
-PRs that developers review and merge.
+The [development workflow](docs/development-workflow.md) defines how shared work is tracked: issues
+classified by scope and deliverable, issue bodies with current plans, checkpoint comments that
+preserve completed work, a PR-only path for fixes and documentation, and PRs that developers review
+and merge.
 
 ## Work with agents
 

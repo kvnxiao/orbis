@@ -113,10 +113,11 @@ before tasks use or compare them.
 
 ## Publish and verify the plan
 
-Search existing issues before creating plans. Reuse a bounded initiative for the requested delivery
-and create native sub-issues only for independently executable outcomes, following the workflow's
-[work hierarchy](../../../docs/development-workflow.md#work-hierarchy) and the plan format's
-[initiative](references/plan-format.md#initiative) and
+Search existing issues before creating plans. Reuse the issue that matches the requested scope and
+create native sub-issues only for independently executable outcomes, following the workflow's
+[work hierarchy](../../../docs/development-workflow.md#work-hierarchy) and
+[issue labels](../../../docs/development-workflow.md#issue-labels). Use the plan format's
+[initiatives and epics](references/plan-format.md#initiatives-and-epics) and
 [work issue](references/plan-format.md#work-issue) sections. Do not mirror every requirement or
 checklist step as an issue. If GitHub is unavailable, save a local draft and report that publication
 remains pending.

@@ -47,5 +47,5 @@ not from the implementation.
 ## Explored alternatives
 
 Optional. List each idea explored or trialed and abandoned, one entry per idea, with the reason it
-was dropped and an optional link to the initiative issue comment that records the decision. Remove
-this section while the package has no abandoned ideas.
+was dropped and an optional link to the owning issue comment that records the decision. Remove this
+section while the package has no abandoned ideas.

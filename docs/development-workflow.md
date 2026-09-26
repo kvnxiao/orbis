@@ -51,24 +51,27 @@ PR-only work is interrupted before a PR exists, report the branch and next actio
 work already tracked by an issue on that issue, even when its remaining change would otherwise
 qualify for the PR-only path.
 
-An **initiative** is a bounded delivery represented by an ordinary issue. It can cover an
-extension's initial delivery or a functionality facet. A **work issue** is an independently
-executable outcome within that initiative. Small changes can use one issue without children.
-Checklists hold smaller steps that do not need separate ownership or delivery.
+An **initiative** coordinates substantial deliveries across most of the repository, such as an
+Effect overhaul. An **epic** delivers a substantial package or capability through coordinated tasks.
+A **task** is an independently executable, bounded outcome. Initiatives and epics are coordinating
+issues. These roles describe scope rather than tree depth or effort. An epic or task can stand
+alone. A parent can skip a level. A repository-wide investigation with one bounded result is a task,
+and an epic can precede its children. Keep small work in one issue; do not create issues to fill
+hierarchy tiers. Checklists record steps that do not need separate ownership or delivery.
 
-| Record                                       | Contents                                                                                                   |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Package SPEC and linked interaction contract | Current approved behavior and conformance scenarios                                                        |
-| Initiative issue                             | Outcome, approved scope and SPEC baseline, requirement coverage, shared constraints, integrated acceptance |
-| Initiative decision comments                 | Decision records for a package before its first stable release                                             |
-| Work issue                                   | Requirement contribution, design, concrete approach, dependencies, acceptance checks, current handoff      |
-| Checkpoint comments                          | Authored work summaries, findings, verification, and unresolved obligations                                |
-| Project item                                 | Priority and coarse execution status                                                                       |
-| Wiki decision record                         | Repository-wide constraints and decisions for released packages                                            |
-| PR                                           | Delivery summary and verification; the whole record for PR-only work                                       |
-| Optional local files                         | Scratch work, detailed logs, and run evidence                                                              |
+| Record                                       | Contents                                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Package SPEC and linked interaction contract | Current approved behavior and conformance scenarios                                                     |
+| Initiative or epic issue                     | Outcome, approved scope and contract baseline, work coverage, shared constraints, integrated acceptance |
+| Owning delivery issue decision comments      | Decision records for a package before its first stable release                                          |
+| Task issue                                   | Requirement contribution, design, concrete approach, dependencies, acceptance checks, current handoff   |
+| Checkpoint comments                          | Authored work summaries, findings, verification, and unresolved obligations                             |
+| Project item                                 | Priority, Size, Estimate, and coarse execution status                                                   |
+| Wiki decision record                         | Repository-wide constraints and decisions for released packages                                         |
+| PR                                           | Delivery summary and verification; the whole record for PR-only work                                    |
+| Optional local files                         | Scratch work, detailed logs, and run evidence                                                           |
 
-The SPEC belongs to the package and can support successive initiatives. Link its relevant
+The SPEC belongs to the package and can support successive epics or initiatives. Link its relevant
 requirements from each issue; requirements and implementation work can have many-to-many coverage.
 Distinguish partial contributions from full coverage. Use native sub-issue relationships for
 decomposition and blocking relationships for prerequisites; issue numbers do not imply execution
@@ -86,6 +89,39 @@ Batch pending body changes before a stage transition, pause, or delivery; update
 worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to
 refresh a timestamp. Reread before editing, preserve contributor text, and skip unchanged writes.
 After an uncertain write, check remote state before retrying or creating another issue.
+
+### Issue labels
+
+Every issue has exactly one `level:` label and one primary `kind:` label. Every PR has exactly one
+primary `kind:` label and no `level:` label. Classify a PR by its delivered outcome rather than
+copying every label from a linked issue. Apply labels when creating an issue or PR, and reconcile
+them when its scope or deliverable changes. Reconcile an existing issue's labels when working on it;
+leave unrelated issue content alone.
+
+| Level label        | Scope                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `level:initiative` | Rare, broad effort coordinating substantial deliveries across most of the repository |
+| `level:epic`       | Substantial package or capability delivery coordinated through tasks                 |
+| `level:task`       | Independently executable, bounded outcome                                            |
+
+Choose the primary kind by the deliverable, regardless of files touched or the current Stage. A
+feature issue in Design remains `kind:feature` when its deliverable is package behavior. Classify
+design or research as the primary kind only when that work is itself the deliverable.
+
+| Kind label      | Deliverable                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| `kind:feature`  | Add or change package behavior                                     |
+| `kind:bug`      | Correct a deviation from approved behavior                         |
+| `kind:refactor` | Improve implementation while preserving behavior                   |
+| `kind:design`   | Deliver an approved contract or design                             |
+| `kind:research` | Investigate or evaluate a question                                 |
+| `kind:docs`     | Deliver documentation or agent guidance                            |
+| `kind:tooling`  | Change workspace tooling, dependencies, scaffolding, or automation |
+
+The repository label catalog has only these ten labels; GitHub's default labels, including
+`help wanted` and `good first issue`, are outside it. Report unexpected labels without changing
+unrelated records. The issue handoff records Stage, blockers, and authorization. The Project records
+status, priority, Size, and Estimate.
 
 ## Authorization
 
@@ -296,8 +332,8 @@ bulk-reformat historical comments.
 
 ## Design and PR boundaries
 
-When substantive package brainstorming begins, create or reuse an initiative once its intended
-outcome can be named. Research and resolve the design through
+When substantive package brainstorming begins, create or reuse an issue at the intended scope once
+its outcome can be named. Research and resolve the design through
 [design-package](../.agents/skills/design-package/SKILL.md). Save the approved SPEC before
 implementing behavior. Plans can include bounded investigations while design decisions remain open;
 dependent implementation stays blocked.
@@ -306,7 +342,7 @@ For a substantial new extension, use an initial SPEC-only PR when shared design 
 implementation efforts need an agreed baseline. State implementation availability in the SPEC. Small
 deliveries can combine the SPEC and implementation in one PR. Later scoped revisions normally
 combine approved SPEC amendments, code, and tests. Use a separate design PR when the decision needs
-independent review. The initiative persists across these PRs. Draft PRs share unfinished work.
+independent review. The delivery issue persists across these PRs. Draft PRs share unfinished work.
 
 ## Status and completion
 
@@ -322,21 +358,21 @@ Record a blocker and its resolving decision or prerequisite on the issue without
 parent remains In progress while only some child outcomes are in review. Avoid inferring readiness
 from a draft PR or completion from a locally passing test suite.
 
-| Issue role     | Definition of done                                                                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Implementation | Scoped behavior is implemented, contracts and docs agree, required verification passes, and changes are merged                     |
-| Design         | Material decisions are resolved and the approved contract is delivered in its shared destination; a repository design PR is merged |
-| Investigation  | The stated question has supported findings and the consequence for dependent work is recorded; a negative result can complete it   |
-| Initiative     | Required outcomes are delivered and integrated acceptance establishes the scoped requirement coverage                              |
+| Completion case    | Definition of done                                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Implementation     | Scoped behavior is implemented, contracts and docs agree, required verification passes, and changes are merged                     |
+| Design             | Material decisions are resolved and the approved contract is delivered in its shared destination; a repository design PR is merged |
+| Investigation      | The stated question has supported findings and the consequence for dependent work is recorded; a negative result can complete it   |
+| Initiative or epic | Required outcomes are delivered and integrated acceptance establishes coverage of the approved scope                               |
 
 Close abandoned work as **not planned**. It may appear in Done, but do not report it as delivered or
-treat it as satisfying parent acceptance. Reassess an initiative's scope with the developer when a
-required child is abandoned. Child completion counts do not establish conformance.
+treat it as satisfying parent acceptance. Reassess a coordinating issue's scope with the developer
+when a required child is abandoned. Child completion counts do not establish conformance.
 
 For PR-delivered work, put a separate `Closes #<number>` line in the PR body for every issue the
 merge will complete. Ordinary references describe related work. A SPEC-only PR references an
-implementation initiative without closing it. The final delivery PR closes the initiative only when
-all required child outcomes are already delivered or land in that PR and integrated acceptance
+implementation epic or initiative without closing it. The final delivery PR closes that issue only
+when all required child outcomes are already delivered or land in that PR and integrated acceptance
 passes. List each delivered issue explicitly; do not rely on parent or child closure cascading.
 
 Merging into the default branch closes the linked issues and updates their Project status through
@@ -355,14 +391,15 @@ current plan changes reflected in the issue body. Record observed failed attempt
 untested alternatives.
 
 The record's location depends on its scope. A package without a stable release, meaning no published
-version at 1.0.0 or later, keeps its decision records as comments on its initiative issue, because
-implementation and dogfooding are expected to change them. The SPEC states only the current approved
-behavior; its optional [Explored alternatives](specifications.md#explored-alternatives) section
-lists each abandoned idea with the reason; later planning reads it before proposing approaches.
-Repository-wide constraints, and decisions for a package with a stable release, go to the wiki.
-Comments and wiki records are append-only by convention: supersede a record with a new one that
-links the earlier record and states what changes, and move the superseded approach into the record's
-explored alternatives.
+version at 1.0.0 or later, keeps its decision records as comments on its owning package delivery
+issue, usually an epic or sometimes an initiative. A standalone task records its decisions without
+an invented parent. Implementation and dogfooding can change these decisions. The SPEC states only
+the current approved behavior; its optional
+[Explored alternatives](specifications.md#explored-alternatives) section lists each abandoned idea
+with the reason; later planning reads it before proposing approaches. Repository-wide constraints,
+and decisions for a package with a stable release, go to the wiki. Comments and wiki records are
+append-only by convention: supersede a record with a new one that links the earlier record and
+states what changes, and move the superseded approach into the record's explored alternatives.
 
 Use descriptive wiki page names. The Decisions index contains scope, a one-sentence choice or
 constraint, status, and a page link. Preserve superseded records with replacement links. A
@@ -377,7 +414,7 @@ do not force-push. Wiki publication of approved decision summaries is authorized
 
 After a retrospective, put reusable conclusions in the record location its scope requires, linking
 the checkpoint evidence and stating the history examined and its gaps. Keep the checkpoint artifacts
-on their work issues. A retrospective does not authorize new package requirements.
+on their issues. A retrospective does not authorize new package requirements.
 
 Detailed execution logs and scratch files can remain in ignored `packages/<name>/implementation/`
 directories, or `.artifacts/` for repository-wide work. Do not maintain a second authoritative local

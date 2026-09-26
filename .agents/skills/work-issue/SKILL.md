@@ -17,6 +17,8 @@ verification, and delivery to the specialist skills without requiring the user t
 The [development workflow](../../../docs/development-workflow.md) defines the work hierarchy,
 authorization, checkpoints, and definitions of done that this skill applies; read each linked
 section when the step reaches it.
+Apply its [issue labels](../../../docs/development-workflow.md#issue-labels) when
+creating an issue or PR, and reconcile labels when the current issue's scope or deliverable changes.
 
 ## Establish current work
 
@@ -87,7 +89,7 @@ returned work before starting another task that touches the same files. Keep dec
 verification, and delivery with the orchestrator.
 
 For issue-backed work, update the issue's current plan when discoveries change the approach. Amend approved requirements
-before implementing changed behavior. For an initiative, select an unfinished child from its
+before implementing changed behavior. For an epic or initiative, select an unfinished child from its
 dependencies, approved priority, and existing active work; do not restart completed design or
 duplicate current plans. State blockers and continue independent authorized work only within the
 requested target. Do not dispatch conflicting edits concurrently.
