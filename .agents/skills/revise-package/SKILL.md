@@ -19,7 +19,10 @@ documentation does not change the package contract.
 
 A direct fix within the contract that has no issue takes the workflow's
 [PR-only path](../../../docs/development-workflow.md#work-hierarchy); a contract change gets an
-issue for the bounded revision, linked to its parent initiative when one exists. Resume work
+issue for the bounded revision, linked to an existing parent when one exists. Apply the workflow's
+[issue labels](../../../docs/development-workflow.md#issue-labels) by deliverable. A revision that
+delivers changed package behavior remains `kind:feature` while its Stage is Design; a contract-only
+deliverable uses `kind:design`. Resume work
 already tracked by an issue on that issue. Read the
 [specification guidance](../../../docs/specifications.md) and the package's complete `SPEC.md`.
 Inspect relevant source, tests, README, and `docs/tui-interactions.md` when present. Establish the

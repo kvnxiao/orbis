@@ -5,7 +5,7 @@ behavior; issues select concrete edits and checks. The development workflow's
 [work hierarchy](../../../../docs/development-workflow.md#work-hierarchy) defines which work gets an
 issue, how body edits are batched, and where evidence lives.
 
-Start each initiative or work issue with the Current handoff block below. For a small change, cover
+Start each issue with the Current handoff block below. For a small change, cover
 the remaining plan information in a few paragraphs. Do not add empty plan sections or copy the
 section-guidance tables into issues.
 
@@ -38,9 +38,9 @@ approval remains. When design approval blocks later work within the same issue, 
 
 Keep the current stage while work is blocked or paused, and put the cause and resumption condition
 in Blocker and Next action. Do not use Blocked, Paused, Ready, In progress, In review, Done, or Handoff
-as Stage values. Project status is a separate coarse execution field. For an initiative, derive
+as Stage values. Project status is a separate coarse execution field. For an initiative or epic, derive
 Stage from its remaining work and integrated acceptance; a child reaching Review or Complete does
-not move the whole initiative to that stage. A negative investigation result can be Complete when
+not move the whole parent to that stage. A negative investigation result can be Complete when
 its supported findings answer the issue's question, the effect on dependent work is recorded, and
 the investigation's acceptance criteria are met.
 
@@ -92,17 +92,19 @@ not bulk-migrate idle or closed issues. If markers are missing, duplicated, or m
 the structure explicitly before applying a routine block replacement. Treat changes to scope,
 approach, dependencies, acceptance criteria, or task checklists as separate plan edits.
 
-## Initiative
+## Initiatives and epics
 
-An initiative tracks a bounded delivery across one or more PRs. Keep small work in one issue.
-Create native sub-issues only for independently executable outcomes.
+An initiative or epic tracks coordinated delivery across one or more PRs. Keep small work in one
+issue. Create native sub-issues only for independently executable outcomes. Apply the workflow's
+[scope and label rules](../../../../docs/development-workflow.md#issue-labels) independently
+of parent depth.
 
 | Section | Required information |
 | --- | --- |
-| Outcome and scope | Observable delivery, package, boundaries, and approved requirements |
-| Baseline | SPEC and interaction-contract links and reviewed revision; repository baseline; developer approval reference or pending decisions |
+| Outcome and scope | Observable delivery, affected packages or mechanisms, boundaries, and approved requirements when applicable |
+| Baseline | Applicable SPEC and interaction-contract links and reviewed revisions; repository baseline; developer approval reference or pending decisions |
 | Shared approach | Verified current behavior, proposed additions, selected approach, and shared constraints |
-| Coverage and integrated acceptance | Requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks |
+| Coverage and integrated acceptance | Applicable requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks |
 
 Use native child relationships rather than a duplicate child-status checklist. Record blocking links
 and the prerequisite's observable output. Issue numbers do not imply execution order. SPEC approval
@@ -110,8 +112,9 @@ does not itself authorize execution or establish readiness.
 
 ## Work issue
 
-Make each work issue executable from the repository and linked issues without the original chat.
-Refer to the parent for shared context rather than copying its contract or coverage table.
+A work issue is a `level:task` issue. Make each one executable from the repository and linked
+issues without the original chat. When it has a parent, refer to that issue for shared context
+rather than copying its contract or coverage table.
 
 | Section | Required information |
 | --- | --- |

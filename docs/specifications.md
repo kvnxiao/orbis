@@ -99,7 +99,7 @@ before implementing changed behavior.
 
 A SPEC may contain one short informative section with this heading. List each idea explored or
 trialed and abandoned during design, implementation, or dogfooding, one entry per idea: the idea,
-the reason it was dropped, and optionally a link to the initiative issue comment that records the
+the reason it was dropped, and optionally a link to the owning issue comment that records the
 decision. Later planning sessions read it before proposing approaches. Reconsider a recorded idea
 only when new evidence or changed constraints invalidate its stated rejection reason; name what
 changed. The current approved behavior and its approval requirements still apply. The section adds

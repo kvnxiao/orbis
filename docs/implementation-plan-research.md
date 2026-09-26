@@ -101,9 +101,8 @@ contains its task details and evidence. Assign verification of interactions acro
 tasks. A separate JSON ledger or YAML schema is unnecessary until a consumer needs machine-readable
 state.
 
-The [development workflow](development-workflow.md) applies this content to GitHub initiative and
-work issues. Issue bodies contain the current shared plan; native relationships express hierarchy
-and dependencies. The
+The [development workflow](development-workflow.md) applies this content to GitHub issues. Issue
+bodies contain the current shared plan; native relationships express hierarchy and dependencies. The
 [issue plan format](../.agents/skills/plan-implementation/references/plan-format.md) defines their
 content.
 

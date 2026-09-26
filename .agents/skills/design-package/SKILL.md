@@ -22,10 +22,12 @@ package design.
 
 ## Establish context and research
 
-When the intended outcome can be named, create or reuse a bounded initiative under the workflow's
-[design and PR boundaries](../../../docs/development-workflow.md#design-and-pr-boundaries) and add
-it to the Project. Keep unresolved decisions visible there. A package-delivery initiative remains
-open after design approval; a design-only initiative has its own design deliverable. Do not create
+When the intended outcome can be named, create or reuse an issue at the appropriate scope under the
+workflow's [work hierarchy](../../../docs/development-workflow.md#work-hierarchy),
+[issue labels](../../../docs/development-workflow.md#issue-labels), and
+[design and PR boundaries](../../../docs/development-workflow.md#design-and-pr-boundaries). Add it
+to the Project and keep unresolved decisions visible there. A package-delivery epic remains open
+after design approval; a design-only issue has its own design deliverable. Do not create
 implementation children for unsettled behavior.
 
 Read the [specification guidance](../../../docs/specifications.md) and the repository `README.md`.
@@ -133,7 +135,7 @@ reason. Write original prose under the repository license and cite external cont
 implementers need. Describe implementation availability separately from intended behavior. Do not
 create runtime stubs or package-local plan directories merely to store a specification.
 
-Link the SPEC and approved scope from the initiative, and record decisions where the workflow's
+Link the SPEC and approved scope from the owning issue, and record decisions where the workflow's
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place them.
 Follow the repository verification requirements for changed files. Report the research,
 specification, and applicable interaction-document paths, any unresolved decisions, and
