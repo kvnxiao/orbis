@@ -81,6 +81,27 @@ During implementation and review, examine workflows and helpers together for cle
 and data flow. Require each extraction to remove a specific reasoning burden; line counts and helper
 counts do not establish a clear design.
 
+## Effect in reference implementations
+
+Prefer Effect v4 for reference implementations and repository scripts when it improves:
+
+- Code quality and high-level legibility.
+- Separation of concerns.
+- Maintainability.
+
+Use it when these gains outweigh added complexity and nonzero runtime costs. Assess synchronous
+operations and data modeling too. Reject uses that worsen quality or legibility; uniform syntax
+alone does not justify adoption.
+
+Before implementing or reviewing Effect code, read the generated
+[Effect v4 integration reference](.agents/skills/pi-coding-agent-rules/references/effect-v4-integration.md).
+Resolve `effect/package.json` from the importing package. For adoption assessment, use the root
+`node_modules/effect/package.json` documentation dependency. Follow package-manager symlinks to that
+installation. Read that installation's `AGENTS.md` fully, then the relevant `ai-docs/src` examples
+and `src` API documentation. Recheck after dependency changes. Preserve TypeBox and Pi host
+contracts. Select library approaches and verification in implementation plans. Do not name Effect as
+a library choice or requirement in package SPECs or the SPEC template.
+
 ## Package conventions
 
 - Scaffold each extension with `just new <name>` as `packages/<name>` with npm name `@orbis/<name>`.
@@ -89,7 +110,8 @@ counts do not establish a clear design.
 - Declare every imported dependency in the importing package: `catalog:` for pinned development
   dependencies, `workspace:^` for shared workspace packages, `"*"` peers with matching development
   dependencies for `@earendil-works/pi-*`, and ordinary runtime dependencies in `dependencies`.
-  Commit `pnpm-lock.yaml`. Do not bundle Pi's runtime.
+  Commit `pnpm-lock.yaml`. Do not bundle Pi's runtime. The root Effect documentation dependency does
+  not replace a package's runtime dependency.
 - Validate data the package did not construct in the current process, including settings, persisted
   records, and session entries, with typebox schemas through one per-package parse helper.
 - Use explicit `.ts` extensions on relative imports and package exports between workspace packages;
