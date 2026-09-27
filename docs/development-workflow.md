@@ -171,8 +171,8 @@ For routine discovery, request issue metadata, then read the selected issue's bo
 relationships with explicit fields. For example:
 
 ```sh
-gh issue list -R OWNER/REPO --state open --json number,title,state,url --limit 30
-gh issue view NUMBER -R OWNER/REPO --json number,title,state,body,parent,subIssues,blockedBy,blocking
+agent-gh issue list -R OWNER/REPO --state open --json number,title,state,url --limit 30
+agent-gh issue view NUMBER -R OWNER/REPO --json number,title,state,body,parent,subIssues,blockedBy,blocking
 ```
 
 Do not request comments during routine task selection or resumption. Bare `gh issue view` can fetch
@@ -184,7 +184,7 @@ decision needs its supporting evidence, or the developer requests a retrospectiv
 comment link or ID and request that comment alone:
 
 ```sh
-gh api repos/OWNER/REPO/issues/comments/COMMENT_ID --jq '{id,html_url,body,created_at,updated_at}'
+agent-gh api repos/OWNER/REPO/issues/comments/COMMENT_ID --jq '{id,html_url,body,created_at,updated_at}'
 ```
 
 When the comment ID is unknown, request bounded pages of comment metadata through GraphQL without
@@ -195,16 +195,16 @@ comment records, and does not establish an exhaustive history.
 
 ## Agent models
 
-The orchestrator runs on the host's strongest reasoning model and every delegate runs on the host's
-delegate model. Both hosts set reasoning effort per agent, so effort follows the role.
+Each role runs on the model and reasoning effort in this table. Both hosts set reasoning effort per
+agent, so effort follows the role.
 
-| Responsibility                                                                              | Codex model and effort                               | Claude Code model and effort                               |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
-| Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` at `xhigh`, the main session           | `claude-fable-5-1` at `xhigh`, the main session            |
-| Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol` at `high`, `orbis-implementer`           | `claude-opus-5-5` at `high`, `orbis-implementer`           |
-| Conformance review, which reads the contract and does not edit files                        | `gpt-6-sol` at `xhigh`, `orbis-conformance-reviewer` | `claude-opus-5-5` at `xhigh`, `orbis-conformance-reviewer` |
-| Correctness, simplification, and other reviews that do not edit files                       | `gpt-6-sol` at `high`, `orbis-reviewer`              | `claude-opus-5-5` at `high`, `orbis-reviewer`              |
-| Documentation updates and prose audits that may edit files                                  | `gpt-6-sol` at `high`, explicit model selection      | `claude-opus-5-5` at `high`, explicit model selection      |
+| Responsibility                                                                              | Codex model and effort                                 | Claude Code model and effort                               |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` at `xhigh`, the main session             | `claude-opus-5-5` at `xhigh`, the main session             |
+| Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol` at `xhigh`, `orbis-implementer`            | `claude-opus-5-5` at `high`, `orbis-implementer`           |
+| Conformance review, which reads the contract and does not edit files                        | `gpt-6-astra` at `xhigh`, `orbis-conformance-reviewer` | `claude-opus-5-5` at `xhigh`, `orbis-conformance-reviewer` |
+| Correctness, simplification, and other reviews that do not edit files                       | `gpt-6-astra` at `xhigh`, `orbis-reviewer`             | `claude-opus-5-5` at `xhigh`, `orbis-reviewer`             |
+| Documentation updates and prose audits that may edit files                                  | `gpt-6-sol` at `high`, explicit model selection        | `claude-opus-5-5` at `high`, explicit model selection      |
 
 The [Codex configuration](../.codex/config.toml) selects Astra at `xhigh` for new main sessions and
 Sol at `high` as the default subagent model; the definitions under
@@ -429,6 +429,23 @@ not bulk-upload historical files.
 Use `gh` for issues, Projects, and PRs. Authenticate with `gh auth login`, then add project access
 with `gh auth refresh --hostname github.com --scopes project`. Use the supported CLI commands or
 `gh api` for native sub-issues and dependencies. Check the installed CLI's help before using flags.
+
+Agents run `gh` through [`agent-gh`](https://github.com/kvnxiao/agent-gh), which accepts the same
+arguments. The repository's Claude Code and Codex `PreToolUse` hooks block direct `gh` commands and
+direct the agent to `agent-gh`. Each contributor selects an `agent-gh` profile in their own clone.
+The profile names the contributor's GitHub App and the `run_as_bot` rules that select which commands
+run as the App's bot. Commands that match no rule run with the contributor's `gh` login.
+
+Configure the profile to route issue comments, PR comments, and comment-only reviews to the bot, so
+checkpoint comments show the contributor's bot as their author. Issue, PR, and Project changes then
+stay with the contributor's login. To set up `agent-gh` in a clone:
+
+1. Install `agent-gh`, install a GitHub App with Issues and Pull requests write access on the
+   repository, and define a profile for the App with the
+   [comments configuration](https://github.com/kvnxiao/agent-gh#comments-configuration) as its
+   `run_as_bot` rules.
+2. Run `agent-gh self setup <profile>` in the clone to select the profile.
+3. Run `agent-gh self status` and confirm that it prints the profile and its `run_as_bot` rules.
 
 Keep the existing Project columns. Native auto-add for `repo:kvnxiao/orbis is:issue` is optional;
 agents explicitly add their issues and verify membership. In the Project menu, open **Workflows**
