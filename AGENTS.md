@@ -38,6 +38,8 @@ read the linked `SKILL.md`.
 | Setup, toolchain, publication, and lint details       | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                  |
 | GitHub issue and PR labels, bodies, and comments      | [Issue labels](docs/development-workflow.md#issue-labels) and [GitHub Markdown](docs/development-workflow.md#write-github-markdown) |
 
+Use `agent-gh` for all GitHub CLI commands; do not invoke `gh` directly.
+
 ## Commands
 
 Run `just --list` to list recipes. Prefer `just install`, `just new <name>`, `just fix`,
