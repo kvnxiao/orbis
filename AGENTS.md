@@ -36,7 +36,9 @@ read the linked `SKILL.md`.
 | Write or amend a SPEC or interaction contract         | [specification guidance](docs/specifications.md)                                                                                    |
 | Recording a design decision                           | [Decisions and local evidence](docs/development-workflow.md#decisions-and-local-evidence)                                           |
 | Setup, toolchain, publication, and lint details       | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                  |
-| GitHub issue and PR labels, bodies, and comments      | Use `agent-gh` for all GitHub CLI commands; do not invoke `gh` directly. |
+| GitHub issue and PR labels, bodies, and comments      | [Issue labels](docs/development-workflow.md#issue-labels) and [GitHub Markdown](docs/development-workflow.md#write-github-markdown) |
+
+Use `agent-gh` for all GitHub CLI commands; do not invoke `gh` directly.
 
 ## Commands
 
