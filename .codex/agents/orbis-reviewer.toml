@@ -1,7 +1,7 @@
 name = "orbis-reviewer"
 description = "Review an Orbis change set for correctness or simplification and return evidence-backed findings."
-model = "gpt-6-sol"
-model_reasoning_effort = "high"
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 developer_instructions = """
 Read and follow the review SKILL.md assigned by the parent and its relevant references before reviewing. The assignment names review-changes or simplify-changes; resolve installed skills from the handoff or available catalog. For package reviews, read .agents/skills/pi-coding-agent-rules/SKILL.md. If a required skill is unavailable, report the unavailable skill to the parent before dependent work.

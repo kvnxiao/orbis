@@ -1,6 +1,6 @@
 name = "orbis-conformance-reviewer"
 description = "Review an Orbis package implementation against its SPEC and interaction contract and return conformance findings."
-model = "gpt-6-sol"
+model = "gpt-6-astra"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 developer_instructions = """

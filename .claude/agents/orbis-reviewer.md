@@ -4,7 +4,7 @@ description:
   Review an Orbis contract or change set read-only and return evidence-backed findings for
   correctness, simplification, or conformance.
 model: claude-opus-5-5
-effort: high
+effort: xhigh
 disallowedTools: Write, Edit, NotebookEdit
 ---
 
