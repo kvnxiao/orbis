@@ -4,7 +4,7 @@ Adds `/orbis-example` to [Pi](https://pi.dev/) to check that the extension loade
 
 ## Install
 
-Requires Pi and Node.js `>=22.19.0`.
+Requires Node.js `>=22.19.0`.
 
 ```sh
 pi install npm:@orbis/example

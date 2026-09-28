@@ -12,7 +12,7 @@ follows; this guide covers the workspace, the package lifecycle, and the checks.
 | Node.js for development   | `26.9.0`, pinned in `.node-version` |
 | pnpm                      | `12.5.1`, pinned in `package.json`  |
 | TypeScript                | `7.0.2`, used for type checking     |
-| Pi coding agent           | `0.87.0`                            |
+| Pi coding agent           | `0.87.1`                            |
 | Oxfmt                     | `0.68.0`                            |
 | Oxlint                    | `1.83.0`                            |
 | Oxlint type-aware checker | `oxlint-tsgolint@7.0.2002`          |
@@ -222,10 +222,11 @@ pnpm --filter @orbis/review pack --pack-destination .artifacts
 ```
 
 Install the tarball and its runtime dependencies in a temporary project outside this workspace, then
-load that installed package through Pi and test its behavior. Include the minimum supported Node.js
-and Pi versions in release checks. If the package supports Pi's standalone binary, test that
-distribution too. Review the README against the [README guidance](docs/readme-guidelines.md#review),
-including the npm description and `pi-package` keyword that the catalog uses.
+load that installed package through Pi and test its behavior. Include the minimum Node.js version
+and the tested Pi version in release checks. If the package supports Pi's standalone binary, test
+that distribution too. Review the README against the
+[README guidance](docs/readme-guidelines.md#review), including the npm description and `pi-package`
+keyword that the catalog uses.
 
 `pnpm pack` and `pnpm publish` convert `workspace:` and `catalog:` references to ordinary npm
 versions and preserve TypeScript source. After the checks pass and the npm account has publish

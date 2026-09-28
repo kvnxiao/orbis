@@ -4,7 +4,7 @@ Adds `/exit` to quit [Pi](https://pi.dev/).
 
 ## Install
 
-Requires Pi and Node.js `>=22.19.0`.
+Requires Node.js `>=22.19.0`.
 
 ```sh
 pi install npm:@orbis/exit
