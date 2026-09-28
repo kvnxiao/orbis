@@ -30,7 +30,7 @@ baseline or explicitly skips checks.
 The baseline records Node.js and pnpm versions, root/package/template manifests, all default and
 named catalog entries, release-age and build policies, and files requiring review. Read the reported
 `reviewFiles` relevant to the update, `CONTRIBUTING.md` for the workspace toolchain, and package
-`docs/development.md` files for compatibility checks. Preserve existing user changes.
+`docs/development.md` files for compatibility checks. Preserve the developer's existing changes.
 
 Release discovery queries the configured npm registries through pnpm and the
 [official Node.js release index](https://nodejs.org/dist/index.json). It sorts stable versions
@@ -73,7 +73,7 @@ versions for failed queries.
 
 When a candidate is incompatible, select the newest compatible version permitted by that package's
 release-age rule, record the blocker, and continue independent updates. Query metadata for any
-fallback version before selecting it. Previews require a user request.
+fallback version before selecting it. Previews require a developer request.
 
 ## Apply the selected versions
 

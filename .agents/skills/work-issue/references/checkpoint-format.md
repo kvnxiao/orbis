@@ -10,16 +10,24 @@ reuse it when checking an uncertain write. Use a metadata table with these requi
 | Field | Contents |
 | --- | --- |
 | Agent | The packet author's role or purpose, plus an agent identifier when available. |
-| Model | The author's host-reported or explicitly selected model identifier, such as `gpt-6-astra` or `gpt-6-sol`. Use `Unknown` when unavailable; do not infer it from a role name or repository default. |
+| Model | The author's host-reported or explicitly selected model identifier, such as `gpt-6-astra` or `gpt-6-sol` on Codex, or `claude-opus-5-5` on Claude Code. Use `Unknown` when unavailable; do not infer it from a role name or repository default. |
 | Assignment | The bounded work or handoff this packet records. |
 | Outcome | Exactly `Completed`, `Blocked`, or `Interrupted`, describing the assignment rather than the whole issue. |
 | Revision | The source revision examined or changed and any uncommitted scope. Use `Not applicable` for work without a repository revision, or `Unknown` when it cannot be established. |
 
 Resolve Model before drafting the packet. Read the active host's session or turn metadata, or use
-the explicit model selection for the delegate that authored it. On Codex hosts with local session
-records, use `CODEX_THREAD_ID` to locate the matching session under `CODEX_HOME` (normally
-`~/.codex`), then read `payload.model` from the authoring turn's `turn_context` record. For
-retrospective packets, use that turn's model rather than a later selection. Inspect only the
+the explicit model selection for the delegate that authored it. On hosts with local session
+records:
+
+- **Codex:** use `CODEX_THREAD_ID` to locate the matching session under `CODEX_HOME` (normally
+  `~/.codex`), then read `payload.model` from the authoring turn's `turn_context` record.
+- **Claude Code:** use `CLAUDE_CODE_SESSION_ID` to locate the session transcript
+  `<session-id>.jsonl` in the project's directory under `~/.claude/projects/`, then read
+  `message.model` from the authoring turn's `assistant` records. A delegate's transcript is
+  `<session-id>/subagents/agent-<id>.jsonl`; the `model` field in its `.meta.json` records only a
+  requested override, not the model that ran.
+
+For retrospective packets, use that turn's model rather than a later selection. Inspect only the
 identity metadata; do not publish session logs. Use `Unknown` only when the relevant metadata and
 explicit selection cannot be obtained, and state the lookup gap in Evidence. A repository default
 alone does not establish the model used for a turn.
@@ -68,3 +76,6 @@ State what was inspected or checked and what remains unverified.
 
 Name the remaining action and responsible role, or write None.
 ```
+
+A packet authored on Claude Code uses the same structure with a Claude model identifier in its
+Model row, such as `claude-opus-5-5`.

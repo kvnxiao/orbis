@@ -163,8 +163,8 @@ Before using a package-specific term, acronym, actor, state, artifact, interface
 introduce its meaning and role. Put concepts shared by several sections in a short opening
 explanation, and define a term used in one section at its first substantive use there. Introduce
 each approach and its relevant constraints before comparing trade-offs, recommending it, or asking
-the user to choose. Do not add a glossary of ordinary technical vocabulary or duplicate detailed
-requirements in an overview.
+the developer to choose. Do not add a glossary of ordinary technical vocabulary or duplicate
+detailed requirements in an overview.
 
 Order sections by their knowledge prerequisites: shared concepts before the workflow, inputs and
 states before their transitions, behavior before its exceptions and conformance scenarios, with

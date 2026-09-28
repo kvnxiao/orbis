@@ -231,7 +231,7 @@ agent, so effort follows the role.
 | Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` at `xhigh`, the main session             | `claude-opus-5-5` at `xhigh`, the main session             |
 | Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol` at `xhigh`, `orbis-implementer`            | `claude-opus-5-5` at `high`, `orbis-implementer`           |
 | Conformance review, which reads the contract and does not edit files                        | `gpt-6-astra` at `xhigh`, `orbis-conformance-reviewer` | `claude-opus-5-5` at `xhigh`, `orbis-conformance-reviewer` |
-| Correctness, simplification, and other reviews that do not edit files                       | `gpt-6-astra` at `xhigh`, `orbis-reviewer`             | `claude-opus-5-5` at `xhigh`, `orbis-reviewer`             |
+| Correctness, repository-rule, and simplification reviews that do not edit files             | `gpt-6-astra` at `xhigh`, `orbis-reviewer`             | `claude-opus-5-5` at `xhigh`, `orbis-reviewer`             |
 | Documentation updates and prose audits that may edit files                                  | `gpt-6-sol` at `high`, explicit model selection        | `claude-opus-5-5` at `high`, explicit model selection      |
 
 The [Codex configuration](../.codex/config.toml) selects Astra at `xhigh` for new main sessions and

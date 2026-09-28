@@ -7,9 +7,10 @@ description:
 
 # Brainstorm an Orbis package
 
-Develop the package with the user, save its research synthesis, and write
+Develop the package design with the developer, save its research synthesis, and write
 `packages/<name>/SPEC.md` for an independent Pi implementer. This workflow produces research and a
-specification; implementing the extension is a separate task unless the user explicitly includes it.
+specification; implementing the extension is a separate task unless the developer explicitly
+includes it.
 
 When the global `brainstorm` skill is available, load its advertised `SKILL.md` and use it for the
 brainstorming interaction: decision-tree rounds, question format, factual research delegation, and
@@ -30,8 +31,8 @@ implementation children for unsettled behavior.
 Read the [specification guidance](../../../docs/specifications.md) and the repository `README.md`.
 When the request concerns an existing package, inspect its specification and source. Read its
 `Explored alternatives` section when present and apply the guide's
-[reconsideration rule](../../../docs/specifications.md#explored-alternatives). Preserve the user's
-settled requirements, exclusions, and prior decisions.
+[reconsideration rule](../../../docs/specifications.md#explored-alternatives). Preserve the
+developer's settled requirements, exclusions, and prior decisions.
 
 Before proposing an architecture, research current relevant Pi packages and official Pi APIs when
 those facts can affect the design. Use primary documentation and source to compare actual behavior,
@@ -40,11 +41,11 @@ Distinguish a shipped feature from an example or proposal, and source inspection
 verification. Download counts are dated adoption signals, not evidence of quality or community
 consensus.
 
-Compare other coding agents when the user's requested experience makes them relevant. Do not turn
-every brainstorm into an exhaustive market survey. Focus research on facts that can change the
+Compare other coding agents when the developer's requested experience makes them relevant. Do not
+turn every brainstorm into an exhaustive market survey. Focus research on facts that can change the
 available choices. Use bounded factual subagents when available; otherwise research directly. Wait
-for relevant factual work before presenting the decision round. Ask the user for preferences and
-constraints, not facts available in the repository or documentation. When online research is
+for relevant factual work before presenting the decision round. Ask the developer for preferences
+and constraints, not facts available in the repository or documentation. When online research is
 unavailable, report the gap and continue from installed documentation and verified local context;
 defer decisions that require missing evidence.
 
@@ -73,39 +74,40 @@ existing spec.
 
 ## Work the design tree
 
-Keep the package focused on the user's intended responsibility. Explore relevant boundaries such as
-commands, skills, model-callable tools, UI, persistence, and events without assuming every package
-needs all of them. Let current requirements determine conformance; portability and hypothetical
-consumers are secondary unless the user asks for them.
+Keep the package focused on the developer's intended responsibility. Explore relevant boundaries
+such as commands, skills, model-callable tools, UI, persistence, and events without assuming every
+package needs all of them. Let current requirements determine conformance; portability and
+hypothetical consumers are secondary unless the developer asks for them.
 
 When the global `brainstorm` skill is unavailable or unreadable, state that limitation and use the
 fallback interaction below; do not require installation or stop package design.
 
-Map decisions and their prerequisites. Keep user decisions, proposals, and open questions distinct.
-The frontier is the set of unresolved decisions the user can answer now without guessing an answer
-to another open question. Before comparing approaches or presenting a decision, introduce the
-terminology, each approach, and the constraints needed to assess it.
+Map decisions and their prerequisites. Keep developer decisions, proposals, and open questions
+distinct. The frontier is the set of unresolved decisions the developer can answer now without
+guessing an answer to another open question. Before comparing approaches or presenting a decision,
+introduce the terminology, each approach, and the constraints needed to assess it.
 
 Present the whole frontier in one numbered round. Explain the trade-offs, offer two to four
 meaningful options when alternatives exist, and put the recommended option first with its reason.
 Consider an unconventional option when it serves the problem; do not manufacture choices to fill a
 quota. Use a structured question tool when available, or numbered questions in chat. Then wait for
-the user's answers.
+the developer's answers.
 
 After a reply, incorporate additions and corrections, preserve settled choices, and recompute the
 frontier. Defer dependent decisions to the next round. A recommendation or an unanswered question is
-not a user decision. Research new factual gaps before asking the next round.
+not a developer decision. Research new factual gaps before asking the next round.
 
 ## Explore terminal interactions
 
 When the package owns prompts, menus, forms, modals, or interactive terminal views, it requires
 `docs/tui-interactions.md` as the guide's
 [terminal interaction document](../../../docs/specifications.md#terminal-interaction-document)
-section defines it. Before confirming the design, walk through its user interactions with the user.
-Resolve focus, navigation, text entry, confirmation versus submission, back and cancel behavior,
-recovery, and relevant narrow-terminal, resize, and SSH behavior. Distinguish highlighted controls,
-local drafts, submitted input, and completed actions. Explore failure and interruption paths as well
-as successful completion; do not infer an interaction merely from a proposed widget or hotkey.
+section defines it. Before confirming the design, walk through its user interactions with the
+developer. Resolve focus, navigation, text entry, confirmation versus submission, back and cancel
+behavior, recovery, and relevant narrow-terminal, resize, and SSH behavior. Distinguish highlighted
+controls, local drafts, submitted input, and completed actions. Explore failure and interruption
+paths as well as successful completion; do not infer an interaction merely from a proposed widget or
+hotkey.
 
 After shared design confirmation, write the document with the agreed interaction in its examples;
 do not impose another package's keybindings, modal layout, or approval workflow. Before reporting
@@ -133,5 +135,5 @@ Link the SPEC and approved scope from the owning issue, and record decisions whe
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place them.
 Follow the repository verification requirements for changed files. Report the research,
 specification, and applicable interaction-document paths, any unresolved decisions, and
-verification limits. When the user requests implementation planning, continue with
+verification limits. When the developer requests implementation planning, continue with
 [plan-implementation](../plan-implementation/SKILL.md) against the approved specification.

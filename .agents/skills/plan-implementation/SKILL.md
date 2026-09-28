@@ -49,9 +49,10 @@ or retire requirements. Derive task order from dependencies, not from identifier
 In the plan, select files, internal types, algorithms, and task boundaries within the contract.
 Translate failure, cancellation, recovery, and ordering guarantees into concrete edits and checks;
 do not require the SPEC to prescribe the mechanism. When a missing behavioral decision would change
-acceptance, resolve it with the user before planning dependent work. When an implementation decision
-changes observable behavior, treat it as a specification decision and obtain the user's direction;
-do not add requirements, weaken acceptance criteria, or treat a proposed change as already approved.
+acceptance, resolve it with the developer before planning dependent work. When an implementation
+decision changes observable behavior, treat it as a specification decision and obtain the
+developer's direction; do not add requirements, weaken acceptance criteria, or treat a proposed
+change as already approved.
 
 When several tasks contribute to a requirement, name each task's contribution and remaining
 obligations, and assign the check that establishes full coverage to a task. A requirement reference

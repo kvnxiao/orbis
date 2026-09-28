@@ -2,9 +2,9 @@
 name: revise-package
 description:
   Revise an existing Orbis package's behavior while keeping its SPEC, interaction scenarios,
-  implementation plans, code, and tests consistent. Use when user feedback or a code-change request
-  alters the package contract, when an approved amendment needs implementation, or when iteration
-  has already landed in code and the SPEC must be reconciled with the current package.
+  implementation plans, code, and tests consistent. Use when developer feedback or a code-change
+  request alters the package contract, when an approved amendment needs implementation, or when
+  iteration has already landed in code and the SPEC must be reconciled with the current package.
 ---
 
 # Revise an Orbis package
@@ -12,8 +12,8 @@ description:
 Carry a requested behavior change through the package contract and authorized implementation work.
 Stop at the request's explicit scope limits under the workflow's
 [authorization rules](../../../docs/development-workflow.md#authorization). A request to change
-package code includes synchronizing its affected contract; the user does not need to invoke this
-skill explicitly. For affected READMEs, use [write-readme](../write-readme/SKILL.md); moving
+package code includes synchronizing its affected contract; the developer does not need to invoke
+this skill explicitly. For affected READMEs, use [write-readme](../write-readme/SKILL.md); moving
 documentation does not change the package contract.
 
 ## Identify the affected contract
@@ -51,23 +51,23 @@ contract. Keep unrelated deviations separate from the requested revision.
 ## Reconcile an iterated implementation
 
 When iteration lands in code before the contract is updated, the SPEC describes an earlier package.
-When the user requests whole-package reconciliation, review the accumulated drift in one pass. For a
-scoped revision, reconcile affected requirements and report unrelated drift separately.
+When the developer requests whole-package reconciliation, review the accumulated drift in one pass.
+For a scoped revision, reconcile affected requirements and report unrelated drift separately.
 
 Enumerate current public behavior from source, tests, README, and the interaction document. Map
 commands, tools, configuration, events, persisted artifacts, ordering rules, and user-visible
 failure behavior to every applicable requirement. Identify behavior without requirement coverage.
 Then classify every requirement and uncovered behavior in scope:
 
-| Finding                                                       | Action                                                                                          |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Code implements the requirement and the contract describes it | Verify the wording against observed behavior and keep the slug.                                 |
-| Code implements it differently and the user authorizes that   | Amend the requirement text and keep the slug.                                                   |
-| Code implements behavior that no slug claims                  | Mint a slug, write the requirement and its conformance check, and have the behavior authorized. |
-| No code implements it and the behavior is abandoned           | Retire the slug under the requirement lifecycle rules.                                          |
-| No code implements it and the behavior is still wanted        | Keep the slug and record it as unimplemented in the package status.                             |
+| Finding                                                          | Action                                                                                          |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Code implements the requirement and the contract describes it    | Verify the wording against observed behavior and keep the slug.                                 |
+| Code implements it differently and the developer authorizes that | Amend the requirement text and keep the slug.                                                   |
+| Code implements behavior that no slug claims                     | Mint a slug, write the requirement and its conformance check, and have the behavior authorized. |
+| No code implements it and the behavior is abandoned              | Retire the slug under the requirement lifecycle rules.                                          |
+| No code implements it and the behavior is still wanted           | Keep the slug and record it as unimplemented in the package status.                             |
 
-Minting and retirement both need a user decision. An absent implementation does not retire a
+Minting and retirement both need a developer decision. An absent implementation does not retire a
 requirement, and existing code does not approve the behavior it implements. Present the proposed
 mints, amendments, and retirements together with the behavior each one covers, then apply the
 authorized set under the
@@ -90,9 +90,9 @@ research under that skill's
 Before implementing changed behavior, update the approved requirements and their conformance
 scenarios under the [requirement lifecycle](../../../docs/specifications.md#requirement-lifecycle),
 including the reference sweep after a retirement or rename. Describe observable behavior without
-prescribing internal files or algorithms, and preserve unaffected requirements and identifiers. When a
-definition changes, inspect its earlier uses and affected interaction sections; no passage may depend
-on a later introduction. When an approach or requirement is abandoned, add it to the SPEC's
+prescribing internal files or algorithms, and preserve unaffected requirements and identifiers. When
+a definition changes, inspect its earlier uses and affected interaction sections; no passage may
+depend on a later introduction. When an approach or requirement is abandoned, add it to the SPEC's
 [Explored alternatives](../../../docs/specifications.md#explored-alternatives) section with the
 reason, and record the decision where the workflow's
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
@@ -102,8 +102,8 @@ behavior, and update `docs/tui-interactions.md`, its requirement references, and
 to agree with the SPEC's system guarantees.
 
 When implementation changes already exist, compare them with the approved request and contract
-before continuing. Amend only behavior the user has authorized, or correct the implementation within
-the existing contract. Passing tests and current output do not authorize a contract change.
+before continuing. Amend only behavior the developer has authorized, or correct the implementation
+within the existing contract. Passing tests and current output do not authorize a contract change.
 
 ## Plan and implement the revision
 

@@ -95,9 +95,9 @@ changing either artifact.
 For a proposed amendment, identify the affected requirement or undocumented public behavior, the
 discrepancy, and the decision needed. Hand approved revision work to the caller or `verify-changes`
 coordinator through [revise-package](../revise-package/SKILL.md). The coordinator determines
-authorization from the user's request; this review neither approves nor applies amendments. After
-the coordinator resolves a finding, review the affected requirements and their interactions against
-the updated artifacts.
+authorization from the developer's request; this review neither approves nor applies amendments.
+After the coordinator resolves a finding, review the affected requirements and their interactions
+against the updated artifacts.
 
 ## Obtain reproducible evidence
 

@@ -24,14 +24,16 @@ this start protocol in order:
    involved, such as [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md) for Pi
    extensions, packages, and TypeScript. Read each of their references whose "Read when" condition
    matches the change.
-5. Delegate implementation edits to the `orbis-implementer` agent on every path, including small
-   fixes, and name the loaded rules skills and references in the handoff. Implementation edits cover
-   all TypeScript source and tests, the scaffold templates (`templates/`), repository scripts
-   (`scripts/`), and toolchain configuration, such as `tsconfig*.json`, the oxlint, oxfmt, and
-   Vitest configuration, and package manifests. The orchestrator edits Markdown documentation and
-   instructions, agent definitions (`.claude/agents/`, `.codex/agents/`), and GitHub artifacts,
-   directly or through a documentation delegate, and runs investigation probes only in scratch
-   locations outside tracked files.
+5. Assign edits under the executor rule on every path, including small fixes, and name the loaded
+   rules skills and references in each handoff:
+   - The `orbis-implementer` agent makes implementation edits: all TypeScript source and tests, the
+     scaffold templates (`templates/`), repository scripts (`scripts/`), and toolchain
+     configuration, such as `tsconfig*.json`, the oxlint, oxfmt, and Vitest configuration, and
+     package manifests.
+   - The orchestrator edits Markdown documentation and instructions, agent definitions
+     (`.claude/agents/`, `.codex/agents/`), and GitHub artifacts, directly or through a
+     documentation delegate, and runs investigation probes only in scratch locations outside tracked
+     files.
 
 Status questions, read-only reviews, and general questions skip this protocol, but a review still
 loads the rules skills in step 4. Every request stops at the explicit scope limits that the
