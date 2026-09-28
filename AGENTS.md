@@ -53,6 +53,11 @@ general questions also skip it, but a review still loads the rules skills in ste
 stops at the explicit scope limits that the workflow's
 [authorization rules](docs/development-workflow.md#authorization) define.
 
+When a skill repeats a read this session already made, such as the issue, SPEC, or source, reuse
+that result while its scope and revision are unchanged. Reread after an edit, conflicting evidence,
+or an external change, and reread remote state before writing to it. Delegates and independent
+reviewers still read the artifacts they are assigned.
+
 At the start of substantive work, read the
 [wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) once, open the records for
 the affected package or mechanism, and compare their constraints with current source and runtime

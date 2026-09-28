@@ -51,19 +51,20 @@ the working tree and branch, then resolve the target by its kind:
 
 ### Read the current state
 
-Read the delivery state first under the retrieval rules. For issue-backed work, read the issue body
-and its current handoff. For the target or linked PR, read its state, draft status, head commit,
-review decision, latest reviews, closing issues, and body. Fetch checkpoint comments only for a
-specific gap, supporting evidence, or a requested retrospective. When this state shows that the work
-awaits developer review, skip the reads below, then classify the work and report the remaining
-developer action. The work awaits developer review when all of these hold:
+Read the delivery state first under the retrieval rules. For issue-backed work, read the issue body,
+its current handoff, and its sub-issue metadata. For the target or linked PR, read its state, draft
+status, head commit, review decision, latest reviews, closing issues, and body. Fetch checkpoint
+comments only for a specific gap, supporting evidence, or a requested retrospective. When this state
+shows that the work awaits developer review, skip the reads below, then classify the work and report
+the remaining developer action. The work awaits developer review when all of these hold:
 
 - The PR is open and is not a draft.
 - The PR has no requested changes or unaddressed developer review feedback.
-- A recorded passing verification covers the PR's current head.
+- A recorded passing verification covers the PR's current head and the current approved scope.
 - The branch has no unpushed or uncommitted changes.
-- The handoff's Next action, or the PR body for PR-only work, leaves no agent-owned work.
-- For issue-backed work, the PR closes the issue and the issue has no unfinished children.
+- The current request, the issue's current scope, and its handoff leave no agent-owned work. For
+  PR-only work, the request and the PR body leave none.
+- For issue-backed work, the PR closes the issue and each of its unfinished descendants.
 
 Otherwise, read the issue's relationship metadata, then the related bodies that establish scope,
 readiness, or acceptance: its parent, open blockers, and, for an epic or initiative, the unfinished
@@ -114,11 +115,6 @@ makes implementation edits and the orchestrator edits the remaining files that s
 Delegate under the workflow's
 [skill handoffs](../../../docs/development-workflow.md#skill-handoffs), and integrate returned work
 before starting another task that touches the same files.
-
-When a specialist skill repeats a read this session already made, such as the issue, SPEC, or
-source, reuse that result while its scope and revision are unchanged. Reread after an edit,
-conflicting evidence, or an external change, and reread remote state before writing to it.
-Delegates and independent reviewers still read the artifacts they are assigned.
 
 | Situation | Next action |
 | --- | --- |
