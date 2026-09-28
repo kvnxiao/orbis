@@ -13,10 +13,9 @@ repository's [MIT license](../LICENSE).
 Write the specification before implementing a new package, and keep it current with approved
 behavior afterwards. A package containing research and a specification without runtime files is not
 an installable extension. Use the [specification starter](../templates/extension/SPEC.md) as writing
-guidance and replace its instructional text with the package's contract. When research informs the
-design, the [design-package](../.agents/skills/design-package/SKILL.md) skill persists its synthesis
-in `packages/<name>/docs/research/` before the SPEC is written. Research documents cite external
-sources and their inspected versions and do not reference Orbis implementation code.
+guidance and replace its instructional text with the package's contract. The
+[design-package](../.agents/skills/design-package/SKILL.md#persist-the-research-synthesis) skill
+defines how research that informs the design is saved.
 
 Choose headings for the package's audience and responsibilities. A command may need a short
 description and conformance scenarios. An interactive workflow may also need state transitions,
@@ -191,19 +190,11 @@ understand them.
 
 ## Related workflow
 
-- [design-package](../.agents/skills/design-package/SKILL.md) researches and writes a new SPEC.
-  [revise-package](../.agents/skills/revise-package/SKILL.md) amends an existing one, including
-  [code that drifted from its contract](../.agents/skills/revise-package/SKILL.md#reconcile-an-iterated-implementation).
-- [plan-implementation](../.agents/skills/plan-implementation/SKILL.md) derives issue plans from an
-  approved SPEC in the
-  [issue plan format](../.agents/skills/plan-implementation/references/plan-format.md).
-- [verify-conformance](../.agents/skills/verify-conformance/SKILL.md) reviews an implementation
-  against the contract. A full-package review covers every requirement; within `verify-changes` it
-  covers the affected requirements and their interactions with unchanged behavior.
-- The development workflow's
-  [design and PR boundaries](development-workflow.md#design-and-pr-boundaries) define SPEC-only and
-  combined PRs, [Add an extension](../CONTRIBUTING.md#add-an-extension) describes the scaffold, and
-  [README guidance](readme-guidelines.md) covers package READMEs.
+The [skill routing table](../AGENTS.md#skill-routing) names the skills that design, amend, plan, and
+review a SPEC. The development workflow's
+[design and PR boundaries](development-workflow.md#design-and-pr-boundaries) define SPEC-only and
+combined PRs, [Add an extension](../CONTRIBUTING.md#add-an-extension) describes the scaffold, and
+[README guidance](readme-guidelines.md) covers package READMEs.
 
 ## References
 

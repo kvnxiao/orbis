@@ -1,7 +1,6 @@
 # Checkpoint packets
 
-A checkpoint packet is an authored summary of the assignments completed since the previous
-checkpoint, or of a blocked or interrupted handoff. The development workflow's
+A checkpoint packet is the authored summary that a checkpoint publishes. The development workflow's
 [checkpoint policy](../../../../docs/development-workflow.md#publish-checkpoint-artifacts) defines
 when to publish a packet and how to correct or retrieve one; this reference defines the packet.
 

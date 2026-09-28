@@ -77,16 +77,16 @@ fallback version before selecting it. Previews require a user request.
 
 ## Apply the selected versions
 
-Delegate bounded, approved implementation and compatibility fixes under the workflow's
-[implementation handoff](../../../docs/development-workflow.md#implementation-handoff). Keep version
-selection, compatibility decisions, and accumulated verification with the orchestrator.
+Delegate the approved version edits and compatibility fixes to `orbis-implementer` under the
+workflow's [executor rule](../../../docs/development-workflow.md#implementation-handoff). Keep
+version selection, compatibility decisions, and accumulated verification with the orchestrator.
 
 Update default and named catalog values, `.node-version`, `packageManager`, affected manifests, and
-the `CONTRIBUTING.md` version table together. Update package runtime requirements and compatibility
-documentation where affected; keep workspace development versions out of READMEs. Preserve
-`catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep `minimumReleaseAge: 1440`
-and the package-name exclusions listed in `pnpm-workspace.yaml`; remove exclusions the release
-report marks `remove`, and do not add exclusions for younger releases.
+the `CONTRIBUTING.md` version table in the same change set. Update package runtime requirements and
+compatibility documentation where affected; keep workspace development versions out of READMEs.
+Preserve `catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep
+`minimumReleaseAge: 1440` and the package-name exclusions listed in `pnpm-workspace.yaml`; remove
+exclusions the release report marks `remove`, and do not add exclusions for younger releases.
 
 Activate the selected development Node.js and pnpm, then run `pnpm install` to regenerate the
 lockfile. Review the catalog and lockfile diff. Installed versions alone do not establish that the
@@ -94,8 +94,9 @@ catalogs were updated.
 
 ## Verify the update
 
-Run `verify-changes` once for the accumulated change set. Use these commands for its mechanical
-verification:
+Verify the accumulated change set under the
+[repository verification rule](../../../AGENTS.md#verify-and-deliver). Use these commands for its
+mechanical verification:
 
 ```sh
 just fix
@@ -122,5 +123,5 @@ describe the update as fully verified. Never add a build step to satisfy loading
 
 Report old and selected versions, retained versions and blockers, new checks, primary sources, and
 verification results. Distinguish measured command timings from upstream performance claims. State
-skipped checks and unverified runtime or distribution support. Publication requires its own
-authorization.
+skipped checks and unverified runtime or distribution support. Publication requires separate
+authorization under the [delivery limits](../../../AGENTS.md#verify-and-deliver).

@@ -7,18 +7,15 @@ description:
 
 # Brainstorm an Orbis package
 
-Develop the package with the user and write `packages/<name>/SPEC.md` for an independent Pi
-implementer, persisting any research synthesis in `packages/<name>/docs/research/` first. This
-workflow produces research and a specification; implementing the extension is a separate task unless
-the user explicitly includes it.
+Develop the package with the user, save its research synthesis, and write
+`packages/<name>/SPEC.md` for an independent Pi implementer. This workflow produces research and a
+specification; implementing the extension is a separate task unless the user explicitly includes it.
 
 When the global `brainstorm` skill is available, load its advertised `SKILL.md` and use it for the
 brainstorming interaction: decision-tree rounds, question format, factual research delegation, and
 confirmation of shared understanding. Resolve it through the host's available skills rather than a
 machine-specific path, and keep this skill's Orbis research, contract, and delivery
-responsibilities. If the global skill is unavailable or unreadable, state that limitation and use
-the fallback in [Work the design tree](#work-the-design-tree); do not require installation or stop
-package design.
+responsibilities. [Work the design tree](#work-the-design-tree) defines the fallback interaction.
 
 ## Establish context and research
 
@@ -65,7 +62,8 @@ implications for this package, and remaining gaps. Synthesize the evidence; do n
 list or raw tool output. Distinguish observed behavior, author claims, inference, and design
 recommendations. When research includes papers, identify publication status and evaluation limits.
 When online access is unavailable, persist the local evidence and limitations before drafting the
-spec. Research documents cite external sources, not Orbis implementation code.
+spec. Research documents cite external sources, not Orbis implementation code. Existing design
+approval does not waive persistence of research performed during the brainstorm.
 
 As later rounds resolve factual gaps, update the synthesis before incorporating those findings into
 the spec. When revising an existing spec, read and verify the relevant research first; if research
@@ -75,9 +73,13 @@ existing spec.
 
 ## Work the design tree
 
-Use this section as the interaction fallback when the global `brainstorm` skill cannot be loaded.
-When it is loaded, follow its interaction instructions, including question presentation, rather than
-the fallback's choice of a structured question tool or chat format.
+Keep the package focused on the user's intended responsibility. Explore relevant boundaries such as
+commands, skills, model-callable tools, UI, persistence, and events without assuming every package
+needs all of them. Let current requirements determine conformance; portability and hypothetical
+consumers are secondary unless the user asks for them.
+
+When the global `brainstorm` skill is unavailable or unreadable, state that limitation and use the
+fallback interaction below; do not require installation or stop package design.
 
 Map decisions and their prerequisites. Keep user decisions, proposals, and open questions distinct.
 The frontier is the set of unresolved decisions the user can answer now without guessing an answer
@@ -93,11 +95,6 @@ the user's answers.
 After a reply, incorporate additions and corrections, preserve settled choices, and recompute the
 frontier. Defer dependent decisions to the next round. A recommendation or an unanswered question is
 not a user decision. Research new factual gaps before asking the next round.
-
-Keep the package focused on the user's intended responsibility. Explore relevant boundaries such as
-commands, skills, model-callable tools, UI, persistence, and events without assuming every package
-needs all of them. Let current requirements determine conformance; portability and hypothetical
-consumers are secondary unless the user asks for them.
 
 ## Explore terminal interactions
 
@@ -117,12 +114,9 @@ flows and match the requirements.
 
 ## Write the specification
 
-When research informed the design, confirm that its synthesis exists on disk and reflects the
-evidence used. Existing design approval does not waive persistence of research performed during the
-brainstorm.
-
 Once the decisions are settled, summarize the resulting contract and confirm shared understanding.
-Existing explicit agreement is sufficient; do not ask for the same decision again. When uncertainty
+Under the [approval rule](../../../AGENTS.md#contract-before-code), existing explicit agreement is
+sufficient; do not ask for the same decision again. When uncertainty
 remains, mark the document as a draft and name the unresolved questions instead of claiming an
 approved contract.
 

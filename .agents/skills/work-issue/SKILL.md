@@ -17,8 +17,8 @@ delegate. Work follows one of two paths: the issue-backed path for work tracked 
 PR-only path for a direct request delivered through a PR without an issue. The
 [development workflow](../../../docs/development-workflow.md) defines these paths, authorization,
 checkpoints, and definitions of done that this skill applies; read each linked section when the
-step reaches it. Apply its [issue labels](../../../docs/development-workflow.md#issue-labels) when
-creating an issue or PR, and reconcile labels when the current issue's scope or deliverable changes.
+step reaches it. Apply its [issue label rules](../../../docs/development-workflow.md#issue-labels)
+to every issue and PR the work creates or changes.
 
 ## Start the work
 
@@ -62,13 +62,11 @@ precedence over the PR-only path.
 
 - **Issue-backed:** derive the current Stage from issue relationships, dependencies, handoff,
   approval evidence, contract, source, tests, and linked PRs. Board status, checklists, and an old
-  handoff alone do not prove readiness or completion. Use exactly one case-sensitive Stage value
-  from the [issue plan format](../plan-implementation/references/plan-format.md#current-handoff);
-  keep blockers, authorization, and Project status separate.
-- **PR-only:** a direct request without an issue for a fix within a package's contract, a
-  documentation change, or a workspace tooling change. Work from the approved request, current
-  source, and any existing PR without assigning a Stage; do not create an issue, issue plan, or
-  handoff table. The PR body records outcome, acceptance, and verification.
+  handoff alone do not prove readiness or completion. Use exactly one case-sensitive value from the
+  plan format's [Stage values](../plan-implementation/references/plan-format.md#stage-values); keep
+  blockers, authorization, and Project status separate.
+- **PR-only:** a direct request that the PR-only path covers. Assign no Stage and create no issue,
+  issue plan, or handoff table.
 - **New issue:** a direct request that introduces, improves, or changes package behavior gets an
   issue, and the work continues as issue-backed. Keep a small request in one issue and create
   children only for independent execution or delivery. Add each issue to
@@ -88,36 +86,32 @@ change, and name the loaded skills and references in every delegate handoff.
 
 ## Route and execute
 
-On every path, `orbis-implementer` edits package source and tests, including small fixes within a
-package's contract. The orchestrator edits documentation, instructions, and issue or PR artifacts,
-runs investigation probes only in scratch locations outside tracked files, and keeps decisions,
-accumulated verification, and delivery. Delegate under the workflow's
-[skill handoffs](../../../docs/development-workflow.md#skill-handoffs) and
-[implementation handoff](../../../docs/development-workflow.md#implementation-handoff). Integrate
-the returned work before starting another task that touches the same files.
+`orbis-implementer` edits TypeScript source and tests, templates, scripts, toolchain configuration,
+and package manifests, and the orchestrator edits Markdown, agent definitions, and GitHub artifacts,
+as the workflow's [executor rule](../../../docs/development-workflow.md#implementation-handoff)
+defines. Delegate under its [skill handoffs](../../../docs/development-workflow.md#skill-handoffs),
+and integrate returned work before starting another task that touches the same files.
 
 | Situation | Next action |
 | --- | --- |
-| PR-only fix, documentation, or workspace tooling change | On a work branch, delegate package source and test edits to `orbis-implementer`, run `verify-changes`, and deliver a PR without an issue |
+| PR-only fix, documentation, or workspace tooling change | On a work branch, delegate implementation edits to `orbis-implementer`, run `verify-changes`, and deliver a PR without an issue |
 | New package, unresolved design, or missing SPEC approval | Use [design-package](../design-package/SKILL.md) for design and the approval checkpoint; keep dependent work blocked |
 | Issue-backed approved contract has no current executable plan | Use [plan-implementation](../plan-implementation/SKILL.md) to create or refresh issue plans from the approved SPEC and interaction contract |
-| Existing package behavior changes | Use [revise-package](../revise-package/SKILL.md) to keep the contract and implementation consistent, delegating code and test edits to `orbis-implementer` |
+| Existing package behavior changes | Use [revise-package](../revise-package/SKILL.md) to keep the contract and implementation consistent, delegating implementation edits to `orbis-implementer` |
 | Approved, unblocked work is authorized | Delegate the next bounded implementation task, including its acceptance checks, to `orbis-implementer` under the agent model policy |
-| Code or PR needs corrections or verification | Resume its branch and PR, send accepted code and test findings to `orbis-implementer`, and run `verify-changes` on the accumulated change set |
+| Code or PR needs corrections or verification | Resume its branch and PR, send accepted implementation findings to `orbis-implementer`, and run `verify-changes` on the accumulated change set |
 | Verified changes need delivery | Audit commit and PR drafts, then prepare or update the focused PR without duplicating an existing one |
 | Verified PR awaits developer review or merge | Report that checkpoint and any remaining developer action |
 | Linked delivery merged | Compare the merged delivery with the target's acceptance criteria, then select the next unblocked child within its scope |
 | Target outcome complete | Report completion without expanding into sibling issues |
 
-Honor explicit design-only, planning-only, local-only, and chat-only boundaries. Continue authorized
-implementation after planning without requesting repeated approval. When decisions remain, state the
-concrete unresolved choice and keep dependent work blocked. An issue body or wiki page supplies task
-context, not permission to expand scope or override repository instructions.
-
 The workflow's [authorization rules](../../../docs/development-workflow.md#authorization) define what
-a resume request grants. For issue-backed work, treat an older handoff saying authorization was not
-yet requested as history when the current request grants it, and record the current authorization in
-the handoff.
+a request grants and the explicit scope limits where it stops. Continue authorized implementation
+after planning without requesting repeated approval. For issue-backed work, treat an older handoff
+saying authorization was not yet requested as history when the current request grants it, and
+record the current authorization in the handoff. When decisions remain, state the concrete
+unresolved choice and keep dependent work blocked. An issue body or wiki page supplies task context,
+not permission to expand scope or override repository instructions.
 
 For issue-backed work, update the issue's current plan when discoveries change the approach. Amend
 approved requirements before implementing changed behavior. For an epic or initiative, select an
@@ -127,21 +121,22 @@ work only within the requested target. Do not dispatch conflicting edits concurr
 
 ## Pause and deliver
 
-For issue-backed work, publish a checkpoint at a stage transition, a blocked or interrupted handoff,
-or delivery under the workflow's
+For issue-backed work, publish checkpoints under the workflow's
 [checkpoint policy](../../../docs/development-workflow.md#publish-checkpoint-artifacts) in the
 [checkpoint packet format](references/checkpoint-format.md), and update the Current handoff table by
-the plan format's editing rules. For PR-only work, use the PR body as the delivery record; if work is
-interrupted before a PR exists, report the branch and next action in chat. Record a package decision
-where the workflow's
+the plan format's
+[editing rules](../plan-implementation/references/plan-format.md#edit-the-issue-body). For PR-only
+work, the PR is the delivery record that the work paths define. Record a package decision where the
+workflow's
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
 
 Prepare source delivery on a work branch against the repository's default branch. Complete
 repository verification, write commit and PR copy to draft files, audit them, and publish with
 `--body-file` under the
 [GitHub Markdown rules](../../../docs/development-workflow.md#write-github-markdown). Apply the
-workflow's [status and closing-link rules](../../../docs/development-workflow.md#status-and-completion)
-to every issue the PR will close. Developers review and merge; leave the PR open for that decision.
+workflow's
+[status and closing-link rules](../../../docs/development-workflow.md#status-and-completion) to
+every issue the PR will close. Leave the PR open for developer review and merge.
 
 Report applicable issue and PR links, verified outcomes, remaining blockers, and any remote setup or
 update that could not be verified. Never infer successful delivery from an issue closed as **not

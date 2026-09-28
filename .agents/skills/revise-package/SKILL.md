@@ -10,7 +10,8 @@ description:
 # Revise an Orbis package
 
 Carry a requested behavior change through the package contract and authorized implementation work.
-A design-only or planning-only request stops at its requested deliverable. A request to change
+Stop at the request's explicit scope limits under the workflow's
+[authorization rules](../../../docs/development-workflow.md#authorization). A request to change
 package code includes synchronizing its affected contract; the user does not need to invoke this
 skill explicitly. For affected READMEs, use [write-readme](../write-readme/SKILL.md); moving
 documentation does not change the package contract.
@@ -18,12 +19,10 @@ documentation does not change the package contract.
 ## Identify the affected contract
 
 A direct fix within the contract that has no issue takes the workflow's
-[PR-only path](../../../docs/development-workflow.md#work-paths); a contract change gets an
-issue for the bounded revision, linked to an existing parent when one exists. Apply the workflow's
-[issue labels](../../../docs/development-workflow.md#issue-labels) by deliverable. A revision that
-delivers changed package behavior remains `kind:feature` while its Stage is Design; a contract-only
-deliverable uses `kind:design`. Resume work
-already tracked by an issue on that issue. Read the
+[PR-only path](../../../docs/development-workflow.md#work-paths); a contract change gets an issue
+for the bounded revision, linked to an existing parent when one exists, and labeled by its
+deliverable under the workflow's [issue labels](../../../docs/development-workflow.md#issue-labels).
+Read the
 [specification guidance](../../../docs/specifications.md) and the package's complete `SPEC.md`.
 Inspect relevant source, tests, README, and `docs/tui-interactions.md` when present. Establish the
 current Git revision and working-tree changes; preserve unrelated work. Treat current code as
@@ -77,14 +76,16 @@ amended, retired, and unchanged slugs.
 
 ## Resolve and amend behavior
 
-Explicit user direction approves the behavior it specifies. Do not request the same approval again.
-Ask only about material unanswered decisions; continue independent inspection while waiting. A
+Apply the [approval rule](../../../AGENTS.md#contract-before-code) without requesting the same
+approval again. Ask only about material unanswered decisions; continue independent inspection while
+waiting. A
 request to improve an experience does not settle its submission, cancellation, or persistence
 behavior.
 
 When design decisions remain, use [design-package](../design-package/SKILL.md) for the affected
-design. Preserve settled requirements and keep research proportional to factual uncertainty; when
-research informs the revision, persist its synthesis before editing the SPEC.
+design. Preserve settled requirements and keep research proportional to factual uncertainty; persist
+research under that skill's
+[research synthesis rules](../design-package/SKILL.md#persist-the-research-synthesis).
 
 Before implementing changed behavior, update the approved requirements and their conformance
 scenarios under the [requirement lifecycle](../../../docs/specifications.md#requirement-lifecycle),
@@ -111,24 +112,22 @@ For work tracked by an issue, use
 and current source. Keep a small, settled revision in a concise issue plan; do not restart
 full-package planning. Update authoritative issue plans, preserving unrelated scope, contributor
 edits, and completed work. Revise affected dependencies and coverage claims. Evidence for previous
-behavior does not verify a changed requirement. For a direct fix or permitted choice within the
-contract that has no issue,
-use the [PR-only path](../../../docs/development-workflow.md#work-paths): work from the approved
-request and current source without creating an issue plan.
+behavior does not verify a changed requirement. A direct fix or permitted choice within the contract
+that has no issue takes the PR-only path without an issue plan.
 
 When code changes are authorized, continue through implementation and verification without stopping
 at the amended SPEC or plan. Update code, tests, package usage, and interaction scenarios within the
 same change set. Derive expected results from the approved requirements. Cover affected failure and
 ordering boundaries and interactions with preserved behavior; reproduce defects with failing tests.
-Delegate bounded code and test tasks to `orbis-implementer` after the contract and, for
-issue-backed work, plan are approved.
+After the contract and, for issue-backed work, plan are approved, delegate bounded implementation
+tasks to `orbis-implementer` under the workflow's
+[executor rule](../../../docs/development-workflow.md#implementation-handoff).
 
 ## Verify the accumulated revision
 
 When this skill resolves a finding within an active `verify-changes` run, return to that coordinator
-without starting a nested verification workflow. Otherwise, run `verify-changes` once on the
-accumulated change set, including [verify-conformance](../verify-conformance/SKILL.md) for affected
-requirements and their interactions with unchanged behavior.
+without starting a nested verification workflow. Otherwise, verify the accumulated change set under
+the [repository verification rule](../../../AGENTS.md#verify-and-deliver).
 
 Review both directions: code must satisfy the revised requirements, and changed public behavior must
 be specified or explicitly permitted. Check tests and documentation for obsolete expectations and
