@@ -129,17 +129,18 @@ or is cancelled; a committed commit refreshes after recording its reference. A c
 does not refresh. The refresh:
 
 - Reads the latest head, so a proposal captured afterward expects the accepted revision.
-- Rechecks the selected revision's notes against the registered sources and curation.
+- Rechecks the selected revision's notes against the sources this commit registered and the current
+  curation.
 - Reconciles the head with the branch as described under [Recovery](#recovery), which can attach a
   head whose reference is missing from the branch.
-- Updates the latest status counts, labeled `commit`.
+- Updates the latest status counts from this commit's registration, labeled `commit`.
 
-Refreshes and reference recording for one storage session run one at a time, so a refresh that
-finishes later cannot replace newer lineage state. Disabling memory or cancelling the call does not
-stop a refresh. Tree navigation, a session change, or shutdown discards it. If a refresh fails, the
-commit keeps its result, and status reports the storage error. A cancellation that arrives while the
-commit's registration writes `sources.json` stops the commit before it records that registration, so
-status keeps the previous counts until the next refresh.
+Refreshes and reference recording for one storage session run one at a time, so none of them
+overwrites lineage state that another changes while it runs. Disabling memory or cancelling the call
+does not stop a refresh. Tree navigation, a session change, or shutdown discards it. If a refresh
+fails, the commit keeps its result, and status reports the storage error. A cancellation that
+arrives while the commit's registration writes `sources.json` stops the commit before it records
+that registration, so status keeps the previous counts until the next refresh.
 
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected
