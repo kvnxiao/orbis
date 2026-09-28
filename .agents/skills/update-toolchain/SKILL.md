@@ -86,7 +86,9 @@ Make the approved edits in one change set, divided under the
   It then activates the selected development Node.js and pnpm and runs `just install`, which runs
   `pnpm install`, to regenerate the lockfile.
 - The orchestrator updates the `CONTRIBUTING.md` version table and affected compatibility
-  documentation, and keeps workspace development versions out of READMEs.
+  documentation. It keeps development tool versions, such as the Node.js and pnpm pins, out of
+  READMEs. Where documentation names the Pi release, it describes the new release as tested, not
+  required, under the `AGENTS.md` [package conventions](../../../AGENTS.md#package-conventions).
 
 Preserve `catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep
 `minimumReleaseAge: 1440` and the package-name exclusions listed in `pnpm-workspace.yaml`; remove

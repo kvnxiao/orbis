@@ -164,10 +164,14 @@ name Effect as a library choice or requirement in package SPECs or the SPEC temp
   dependencies, `workspace:^` for shared workspace packages, `"*"` peers with matching development
   dependencies for `@earendil-works/pi-*`, and ordinary runtime dependencies in `dependencies`.
   Commit `pnpm-lock.yaml`. Do not bundle Pi's runtime.
+- Describe a Pi version as tested, never as required, because the `"*"` peers do not constrain the
+  Pi release. In READMEs, package documentation, and PR bodies, write `Tested with Pi X.Y.Z`, not
+  `Requires Pi X.Y.Z`. Keep the Node.js minimum a requirement, such as `Requires Node.js >=22.19.0`,
+  because `engines.node` declares it.
 - Boundary data is any value the package did not construct in the current process, such as settings
   files, persisted records, and session entries. In a package that reads or writes boundary data,
   declare `typebox` as a `"*"` peer with a `catalog:` development dependency. Pin the catalog's
-  `typebox` entry to the version in the supported Pi release's `package.json`.
+  `typebox` entry to the version in the tested Pi release's `package.json`.
 - Validate boundary data with typebox schemas through the package's `src/records.ts`, which exports
   `parseRecord` and `readOptional`. Keep each package's copy identical to
   `templates/extension/src/records.ts`. Lint rejects `JSON.parse` elsewhere under a package's

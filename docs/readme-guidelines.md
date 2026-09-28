@@ -9,8 +9,10 @@ with its expected result.
 Use this reading order and adapt headings to the package:
 
 1. **Purpose:** Name the user capability and when it is useful. Avoid implementation inventories.
-2. **Install:** State required setup and show `pi install npm:@orbis/<name>`. Include activation
-   instructions. Keep source builds and workspace setup in contributor documentation.
+2. **Install:** State required setup and show `pi install npm:@orbis/<name>`. State the Node.js
+   minimum. Describe any Pi version the README names as tested, following the
+   [package conventions](../AGENTS.md#package-conventions). Include activation instructions. Keep
+   source builds and workspace setup in contributor documentation.
 3. **Try it:** Show a command or natural-language request and its visible result. Complete the
    default workflow before introducing alternatives. Use tool-call JSON only for an API audience.
 4. **How it works, when needed:** Explain activation, user decisions, saved output, and everyday

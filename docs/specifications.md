@@ -55,7 +55,9 @@ Write requirements against Pi's public capabilities. Independent implementations
 complete package contract, including the interfaces and workflows required by Orbis. Portability to
 other hosts is outside the default contract. When an external API or format defines part of the
 contract, identify the relevant capability and reference. State a version or compatibility boundary
-when versions change the required behavior.
+when versions change the required behavior. When a SPEC names the Pi release whose public
+capabilities the contract was checked against, present it as a reference baseline, not a minimum
+version.
 
 ### Requirement identifiers
 
