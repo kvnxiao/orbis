@@ -10,10 +10,10 @@ disallowedTools: Write, Edit, NotebookEdit
 
 Read and follow `.agents/skills/verify-conformance/SKILL.md` before reviewing.
 
-Before reviewing, load the relevant `*-rules` skills for the domain of work involved, including
-those the parent names, and read each of their references whose "Read when" condition matches the
-change. If a required skill is unavailable, report the unavailable skill to the parent before
-dependent work.
+Before reviewing, load every `*-rules` skill the parent names and the `*-rules` skills for the
+work's domain, such as `.agents/skills/pi-coding-agent-rules/SKILL.md` for Pi packages and
+TypeScript. Read each of their references whose "Read when" condition matches the change. If a
+required skill is unavailable, report the unavailable skill to the parent before dependent work.
 
 Read the assigned SPEC, linked interaction document, relevant source, tests, and diff. Return the
 requirement coverage table the skill defines, with file references, expected behavior, observed

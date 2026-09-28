@@ -85,18 +85,20 @@ recorded, and the investigation's acceptance criteria are met.
 
 ### Edit the issue body
 
+Before every body edit, reread the remote body, preserve contributor text, and skip unchanged
+writes. After an uncertain write, check remote state before retrying or creating another issue.
+
 Edit plan sections only when the plan changes, and confine routine state updates to the handoff
 block. Record findings and progress in checkpoint comments even when the body needs no change.
 Batch pending body changes before a stage transition, pause, or delivery; update sooner when another
 worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to
 refresh a timestamp.
 
-For a routine state update, reread the remote body and locate exactly one ordered marker pair around
-the top handoff block. Change only the affected value cells, preserving labels, row order, and all
-bytes outside the block. Skip publication when no value changes. GitHub still receives a whole-body
+For a routine state update, locate exactly one ordered marker pair around the top handoff block in
+the reread body. Change only the affected value cells, preserving labels, row order, and all bytes
+outside the block. Skip publication when no value changes. GitHub still receives a whole-body
 update; inspect the draft diff before publishing and reconcile concurrent changes rather than
-overwriting them. After an uncertain write, check remote state before retrying or creating another
-issue.
+overwriting them.
 
 When an existing issue needs a plan or handoff update, migrate its current handoff into this block
 and remove only the superseded handoff section. Preserve the remaining plan and contributor text; do
@@ -161,8 +163,6 @@ work. A negative finding can complete the investigation without making the depen
 
 Compare the recorded baseline with current SPEC and source changes before resuming. Revise affected
 tasks and coverage; unrelated commits do not invalidate the whole plan. Preserve completed work and
-contributor edits. For explicit local or chat-only requests, preserve the same outcome, approach,
-acceptance, and handoff information in that destination. Local drafts during a GitHub outage remain
-unpublished until the issue update succeeds; reconcile old local plans against current scope before
-publication. This format governs repository development, not the exact reviewed Markdown saved by
-`@orbis/plan`.
+contributor edits. Local drafts during a GitHub outage remain unpublished until the issue update
+succeeds; reconcile old local plans against current scope before publication. This format governs
+repository development, not the exact reviewed Markdown saved by `@orbis/plan`.

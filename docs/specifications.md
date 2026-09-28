@@ -15,7 +15,7 @@ behavior afterwards. A package containing research and a specification without r
 an installable extension. Use the [specification starter](../templates/extension/SPEC.md) as writing
 guidance and replace its instructional text with the package's contract. The
 [design-package](../.agents/skills/design-package/SKILL.md#persist-the-research-synthesis) skill
-defines how research that informs the design is saved.
+defines how to save research that informs the design.
 
 Choose headings for the package's audience and responsibilities. A command may need a short
 description and conformance scenarios. An interactive workflow may also need state transitions,
@@ -190,10 +190,10 @@ understand them.
 
 ## Related workflow
 
-The [skill routing table](../AGENTS.md#skill-routing) names the skills that design, amend, plan, and
-review a SPEC. The development workflow's
+The [skill routing table](../AGENTS.md#skill-routing) names the skills that design and amend a SPEC,
+plan from it, and review an implementation against it. The development workflow's
 [design and PR boundaries](development-workflow.md#design-and-pr-boundaries) define SPEC-only and
-combined PRs, [Add an extension](../CONTRIBUTING.md#add-an-extension) describes the scaffold, and
+combined PRs. [Add an extension](../CONTRIBUTING.md#add-an-extension) describes the scaffold, and
 [README guidance](readme-guidelines.md) covers package READMEs.
 
 ## References

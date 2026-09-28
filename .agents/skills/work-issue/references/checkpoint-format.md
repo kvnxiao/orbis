@@ -1,6 +1,6 @@
 # Checkpoint packets
 
-A checkpoint packet is the authored summary that a checkpoint publishes. The development workflow's
+A checkpoint packet is the authored summary published as a checkpoint. The development workflow's
 [checkpoint policy](../../../../docs/development-workflow.md#publish-checkpoint-artifacts) defines
 when to publish a packet and how to correct or retrieve one; this reference defines the packet.
 
@@ -25,7 +25,10 @@ records:
   `<session-id>.jsonl` in the project's directory under `~/.claude/projects/`, then read
   `message.model` from the authoring turn's `assistant` records. A delegate's transcript is
   `<session-id>/subagents/agent-<id>.jsonl`; the `model` field in its `.meta.json` records only a
-  requested override, not the model that ran.
+  requested override, not the model that ran. Inside a delegate, `CLAUDE_CODE_SESSION_ID` names the
+  parent session and `CLAUDE_CODE_CHILD_SESSION=1` is set, so a delegate authoring its own packet
+  uses its explicit model selection: the spawn call's model override or, without one, the `model`
+  field of its agent definition.
 
 For retrospective packets, use that turn's model rather than a later selection. Inspect only the
 identity metadata; do not publish session logs. Use `Unknown` only when the relevant metadata and
@@ -76,6 +79,3 @@ State what was inspected or checked and what remains unverified.
 
 Name the remaining action and responsible role, or write None.
 ```
-
-A packet authored on Claude Code uses the same structure with a Claude model identifier in its
-Model row, such as `claude-opus-5-5`.

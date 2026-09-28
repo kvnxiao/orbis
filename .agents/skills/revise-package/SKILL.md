@@ -18,15 +18,14 @@ documentation does not change the package contract.
 
 ## Identify the affected contract
 
-A direct fix within the contract that has no issue takes the workflow's
-[PR-only path](../../../docs/development-workflow.md#work-paths); a contract change gets an issue
+When no issue tracks it, a direct request for a fix within the contract takes the workflow's
+[PR-only path](../../../docs/development-workflow.md#work-paths). A contract change gets an issue
 for the bounded revision, linked to an existing parent when one exists, and labeled by its
 deliverable under the workflow's [issue labels](../../../docs/development-workflow.md#issue-labels).
-Read the
-[specification guidance](../../../docs/specifications.md) and the package's complete `SPEC.md`.
-Inspect relevant source, tests, README, and `docs/tui-interactions.md` when present. Establish the
-current Git revision and working-tree changes; preserve unrelated work. Treat current code as
-evidence of implementation, not approval of its behavior.
+Read the [specification guidance](../../../docs/specifications.md) and the package's complete
+`SPEC.md`. Inspect relevant source, tests, README, and `docs/tui-interactions.md` when present.
+Establish the current Git revision and working-tree changes; preserve unrelated work. Treat current
+code as evidence of implementation, not approval of its behavior.
 
 Map the request to affected requirement IDs, conformance scenarios, and interactions with unchanged
 behavior. State the required behavior, observed implementation, requested outcome, and checks that
@@ -78,9 +77,8 @@ amended, retired, and unchanged slugs.
 
 Apply the [approval rule](../../../AGENTS.md#contract-before-code) without requesting the same
 approval again. Ask only about material unanswered decisions; continue independent inspection while
-waiting. A
-request to improve an experience does not settle its submission, cancellation, or persistence
-behavior.
+waiting. A request to improve an experience does not settle its submission, cancellation, or
+persistence behavior.
 
 When design decisions remain, use [design-package](../design-package/SKILL.md) for the affected
 design. Preserve settled requirements and keep research proportional to factual uncertainty; persist
@@ -112,16 +110,16 @@ For work tracked by an issue, use
 and current source. Keep a small, settled revision in a concise issue plan; do not restart
 full-package planning. Update authoritative issue plans, preserving unrelated scope, contributor
 edits, and completed work. Revise affected dependencies and coverage claims. Evidence for previous
-behavior does not verify a changed requirement. A direct fix or permitted choice within the contract
-that has no issue takes the PR-only path without an issue plan.
+behavior does not verify a changed requirement. When no issue tracks it, a direct request for a fix
+or permitted choice within the contract takes the PR-only path without an issue plan.
 
 When code changes are authorized, continue through implementation and verification without stopping
 at the amended SPEC or plan. Update code, tests, package usage, and interaction scenarios within the
 same change set. Derive expected results from the approved requirements. Cover affected failure and
 ordering boundaries and interactions with preserved behavior; reproduce defects with failing tests.
-After the contract and, for issue-backed work, plan are approved, delegate bounded implementation
-tasks to `orbis-implementer` under the workflow's
-[executor rule](../../../docs/development-workflow.md#implementation-handoff).
+After approval of the contract and, for issue-backed work, the plan, delegate bounded implementation
+tasks to `orbis-implementer` under the [executor rule](../../../AGENTS.md#start-a-session) in
+`AGENTS.md`.
 
 ## Verify the accumulated revision
 

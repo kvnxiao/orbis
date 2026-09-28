@@ -17,9 +17,9 @@ authorizes shared planning records, not execution of their tasks.
 Read the [specification guidance](../../../docs/specifications.md) and the target
 `packages/<name>/SPEC.md` with its linked interaction document. Identify the package, requested
 scope, specification revision, and approval evidence from the current conversation or repository.
-Explicit developer direction approves a SPEC under the
-[approval rule](../../../AGENTS.md#contract-before-code), even before the file's status is updated.
-The existence of a specification does not establish approval.
+Under the [approval rule](../../../AGENTS.md#contract-before-code), explicit developer direction
+approves the behavior it specifies, even before the SPEC file's status is updated. The existence of
+a specification does not establish approval.
 
 When the specification is missing or material design questions remain, research the current
 implementation and identify the missing contract. Use [design-package](../design-package/SKILL.md)
@@ -66,7 +66,8 @@ layer a separate task. Infrastructure tasks are appropriate when a concrete prer
 a useful independent slice; name the dependent behavior.
 
 Write the work issue's Design section when the [plan format](references/plan-format.md#work-issue)
-requires it; that section defines the triggers, contents, approval, and first assignment.
+requires it; the plan format defines the section's triggers, contents, approval, and first
+assignment.
 
 When an uncertain API or runtime behavior could invalidate dependent work, schedule a bounded
 investigation before that work. State the question, experiment, and observable result needed to

@@ -77,20 +77,23 @@ fallback version before selecting it. Previews require a developer request.
 
 ## Apply the selected versions
 
-Delegate the approved version edits and compatibility fixes to `orbis-implementer` under the
-workflow's [executor rule](../../../docs/development-workflow.md#implementation-handoff). Keep
-version selection, compatibility decisions, and accumulated verification with the orchestrator.
+The orchestrator keeps version selection, compatibility decisions, and accumulated verification.
+Make the approved edits in one change set, divided under the
+[executor rule](../../../AGENTS.md#start-a-session) in `AGENTS.md`:
 
-Update default and named catalog values, `.node-version`, `packageManager`, affected manifests, and
-the `CONTRIBUTING.md` version table in the same change set. Update package runtime requirements and
-compatibility documentation where affected; keep workspace development versions out of READMEs.
+- `orbis-implementer` updates default and named catalog values, `.node-version`, `packageManager`,
+  and affected manifests, including package runtime requirements, and makes the compatibility fixes.
+  It then activates the selected development Node.js and pnpm and runs `just install`, which runs
+  `pnpm install`, to regenerate the lockfile.
+- The orchestrator updates the `CONTRIBUTING.md` version table and affected compatibility
+  documentation, and keeps workspace development versions out of READMEs.
+
 Preserve `catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep
 `minimumReleaseAge: 1440` and the package-name exclusions listed in `pnpm-workspace.yaml`; remove
 exclusions the release report marks `remove`, and do not add exclusions for younger releases.
 
-Activate the selected development Node.js and pnpm, then run `pnpm install` to regenerate the
-lockfile. Review the catalog and lockfile diff. Installed versions alone do not establish that the
-catalogs were updated.
+Review the catalog and lockfile diff. Installed versions alone do not establish that the catalogs
+were updated.
 
 ## Verify the update
 

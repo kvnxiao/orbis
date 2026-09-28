@@ -10,14 +10,16 @@ follows, including the start protocol; this document defines the procedures thos
 ## Roles and terms
 
 Three roles appear throughout this document. The **developer** approves designs, resolves material
-decisions, and merges PRs. The **orchestrator** is the main agent session or an explicitly selected
-delegate that owns decisions, coordination, and verification. A **delegate** executes bounded work
-that the orchestrator assigns: the `orbis-implementer` agent implements work from an issue plan or
-an approved direct request, reviewer agents return findings, and documentation delegates edit
-documentation. [Delegation](#delegation) defines their limits and models.
+decisions, and merges PRs. The **orchestrator** is the main agent session that owns decisions,
+coordination, and verification. A **delegate** executes bounded work that the orchestrator assigns:
+the `orbis-implementer` agent implements approved work, reviewer agents return findings, and
+documentation delegates edit documentation. [Delegation](#delegation) defines their limits and
+models.
 
 These terms recur:
 
+- A **direct request** asks for a development change without naming an issue or PR as its target,
+  such as a package fix or a documentation update.
 - An issue's **Stage** is its current required activity, such as Design, Planning, or
   Implementation, recorded in the issue's Current handoff table. The issue plan format defines the
   [Stage values](../.agents/skills/plan-implementation/references/plan-format.md#stage-values).
@@ -27,8 +29,8 @@ These terms recur:
 - A **decision record** preserves a lasting choice and its rationale.
   [Decisions and local evidence](#decisions-and-local-evidence) defines its contents and location.
 - A package has a **stable release** once it publishes a version at 1.0.0 or later.
-- [`agent-gh`](https://github.com/kvnxiao/agent-gh) runs GitHub CLI commands for agents. It accepts
-  the same arguments as `gh`, and [GitHub setup](#github-setup) configures it.
+- `agent-gh` runs every agent GitHub CLI command, as the
+  [`AGENTS.md` commands](../AGENTS.md#commands) require.
 - `verify-changes` is a global skill, installed outside this repository, that verifies an
   accumulated change set with review and checks scaled to the change's risk.
 
@@ -37,38 +39,49 @@ These terms recur:
 Every development request follows one of two paths. The path determines where the plan and the
 shared record live:
 
-- The **issue-backed path** tracks work that introduces, improves, or changes package behavior in an
-  issue, whose body and checkpoint comments are the shared record.
-- The **PR-only path** delivers a direct request without an issue for a fix within a package's
-  existing contract, a documentation change, or a workspace tooling change. Use the approved
-  request, current source, and any existing PR as inputs; do not create an issue, issue plan, or
-  handoff table. The PR body records the outcome, acceptance, and verification, and the PR is the
-  shared record another session resumes from. If PR-only work is interrupted before a PR exists,
-  report the branch and next action in chat.
+- The **issue-backed path** covers work that introduces, improves, or changes package behavior. An
+  issue tracks the work, and its body and checkpoint comments are the shared record.
+- The **PR-only path** delivers a direct request through a PR without an issue. It covers a direct
+  request for one of these changes:
+  - A change that keeps observable behavior within a package's approved contract, such as a fix, a
+    behavior-preserving refactor, or a test change. Implementing a SPEC requirement that the code
+    lacks introduces behavior and takes the issue-backed path.
+  - A documentation change
+  - A workspace tooling change
+
+PR-only work uses the approved request, current source, and any existing PR as inputs and creates no
+issue, issue plan, or handoff table. The PR body records the outcome, acceptance, and verification,
+and the PR is the shared record another session resumes from. If PR-only work is interrupted before
+a PR exists, report the branch and next action in chat.
 
 An existing issue always takes precedence over the PR-only path:
 
 - Resume work already tracked by an issue on that issue, even when its remaining change would
   otherwise qualify for the PR-only path.
 - Resume a PR on its closing issue: an issue that merging the PR closes, such as one named by a
-  `Closes #<number>` line in the PR body. A PR without a closing issue continues on the PR-only
-  path.
+  `Closes #<number>` line in the PR body. When a PR closes several issues, resume on the one whose
+  [handoff](../.agents/skills/plan-implementation/references/plan-format.md#current-handoff) Work
+  row records the PR, or else on the most specific one, such as a task rather than its epic. Without
+  a closing issue, resume on the issue whose Work row records the PR or its branch; a reference in
+  the PR body alone does not select an issue. Only a PR with neither kind of issue continues on the
+  PR-only path.
 - When investigation shows that a direct request changes package behavior, create or reuse an issue
   for it before dependent work.
 
-Both paths share the same roles, the [executor rule](#implementation-handoff), and the
-[verification requirement](../AGENTS.md#verify-and-deliver) in `AGENTS.md`. Because `verify-changes`
-scales its review to risk, a small change still passes through it.
+Both paths share the same roles and two `AGENTS.md` rules: the
+[executor rule](../AGENTS.md#start-a-session) in start protocol step 5 and the
+[verification requirement](../AGENTS.md#verify-and-deliver). Because `verify-changes` scales its
+review to risk, a small change still passes through it.
 
 ## Start or resume work
 
 Ask to start, resume, or continue work, for example `Resume #<number>`, `Resume PR #<number>`,
-`Continue work on <issue or PR URL>`, or a direct development request. The request needs no skill
-name or lifecycle stage. The start protocol in `AGENTS.md` invokes the
+`Continue work on <issue or PR URL>`, or a direct request. The request needs no skill name or
+lifecycle stage. The start protocol in `AGENTS.md` invokes the
 [work-issue](../.agents/skills/work-issue/SKILL.md) skill, the entry point for the whole development
-workflow, which resolves the target, derives its Stage or path from current evidence, and routes the
-next bounded action. Keep the issue as the shared record for issue-backed work; do not introduce a
-separate lifecycle-state file.
+workflow. The skill resolves the target, derives its Stage or path from current evidence, and routes
+the next bounded action. Keep the issue as the shared record for issue-backed work; do not introduce
+a separate lifecycle-state file.
 
 ### Retrieve current work before history
 
@@ -84,6 +97,12 @@ For a PR target, request its state and closing issues the same way:
 
 ```sh
 agent-gh pr view NUMBER -R OWNER/REPO --json number,title,state,url,headRefName,isDraft,reviewDecision,closingIssuesReferences
+```
+
+To find the issue whose handoff Work row records a PR or branch, search issue bodies:
+
+```sh
+agent-gh issue list -R OWNER/REPO --state all --search "<PR number or branch> in:body" --json number,title,state,url
 ```
 
 Do not request comments during routine task selection or resumption. Bare `agent-gh issue view` can
@@ -178,19 +197,23 @@ branch, pushing that branch, and opening PRs after repository verification, with
 [delivery limits](../AGENTS.md#verify-and-deliver) in `AGENTS.md`.
 
 A request to resume, continue, or work on an issue or PR authorizes ordinary continuation within its
-approved scope, including implementation when its prerequisites are satisfied. A direct development
-request authorizes delivery on the PR-only path within the request's scope. Each explicit scope
-limit stops the work at its boundary:
+approved scope, including implementation when its prerequisites are satisfied. A direct request
+authorizes delivery on the PR-only path within the request's scope. When classification moves the
+request to an issue, the request also authorizes ordinary continuation on that issue within the
+request's scope. Each explicit scope limit stops the work at its boundary:
 
 - A design-only or planning-only request authorizes its shared deliverables and, when useful, a
   design-only PR; it does not authorize runtime implementation.
-- A review-only request returns findings without editing.
+- A review-only request returns findings without editing files or publishing to GitHub, unless the
+  request asks for a posted review.
 - A local-only request keeps its results in local files or commits, and a chat-only request keeps
-  them in chat; neither pushes or publishes to GitHub.
-- A status question requests a report, not execution.
+  them in chat; neither pushes or publishes to GitHub. When such a request changes package behavior,
+  keep the outcome, approach, acceptance, and handoff that an issue plan would record in that local
+  or chat destination instead of creating an issue.
+- A status question requests a report, not execution or a checkpoint comment.
 
 SPEC approval, permission to implement, and readiness to merge remain distinct, and design approval
-does not approve code added later. Direct requests to specialist skills retain their stated scope.
+does not approve code added later. A directly invoked specialist skill retains its stated scope.
 
 Record the scope and source of existing developer approval; an agent-written summary, issue
 assignment, Project status, or community suggestion does not grant additional authority. Resolve
@@ -215,24 +238,24 @@ independent review. The delivery issue persists across these PRs. Draft PRs shar
 
 ## Delegation
 
-The orchestrator keeps `work-issue` and `verify-changes` coordination, decisions, contract approval,
-accumulated verification, commits, and PR delivery. Delegates execute their assignment and return
-results or findings to the orchestrator. They do not delegate further, start either coordinating
-workflow, or take ownership of the orchestrator's responsibilities. Design-only and planning-only
-work stays with the orchestrator until implementation is authorized.
+The orchestrator keeps `work-issue` and `verify-changes` coordination, decisions, obtaining the
+developer's contract approval, accumulated verification, commits, and PR delivery. Delegates execute
+their assignment and return results or findings to the orchestrator. They do not delegate further,
+start either coordinating workflow, or take ownership of the orchestrator's responsibilities.
+Design-only and planning-only work stays with the orchestrator until implementation is authorized.
 
 ### Agent models
 
 Each role runs on the model and reasoning effort in this table. Both hosts set reasoning effort per
 agent, so effort follows the role.
 
-| Responsibility                                                                              | Codex model and effort                                 | Claude Code model and effort                               |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| Orchestration, research, design, SPECs, implementation plans, and verification coordination | `gpt-6-astra` at `xhigh`, the main session             | `claude-opus-5-5` at `xhigh`, the main session             |
-| Approved implementation, tests, and fixes from accepted review findings                     | `gpt-6-sol` at `xhigh`, `orbis-implementer`            | `claude-opus-5-5` at `high`, `orbis-implementer`           |
-| Conformance review, which reads the contract and does not edit files                        | `gpt-6-astra` at `xhigh`, `orbis-conformance-reviewer` | `claude-opus-5-5` at `xhigh`, `orbis-conformance-reviewer` |
-| Correctness, repository-rule, and simplification reviews that do not edit files             | `gpt-6-astra` at `xhigh`, `orbis-reviewer`             | `claude-opus-5-5` at `xhigh`, `orbis-reviewer`             |
-| Documentation updates and prose audits that may edit files                                  | `gpt-6-sol` at `high`, explicit model selection        | `claude-opus-5-5` at `high`, explicit model selection      |
+| Responsibility                                                                                             | Codex model and effort                                 | Claude Code model and effort                               |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| Orchestration, research, design, SPECs, implementation plans, and verification coordination                | `gpt-6-astra` at `xhigh`, the main session             | `claude-opus-5-5` at `xhigh`, the main session             |
+| Approved implementation, tests, and fixes from accepted review findings                                    | `gpt-6-sol` at `xhigh`, `orbis-implementer`            | `claude-opus-5-5` at `high`, `orbis-implementer`           |
+| Conformance review, which reads the contract and does not edit files                                       | `gpt-6-astra` at `xhigh`, `orbis-conformance-reviewer` | `claude-opus-5-5` at `xhigh`, `orbis-conformance-reviewer` |
+| Correctness, repository-rule, simplification, and other assigned read-only reviews, such as a README check | `gpt-6-astra` at `xhigh`, `orbis-reviewer`             | `claude-opus-5-5` at `xhigh`, `orbis-reviewer`             |
+| Documentation updates and prose audits that may edit files                                                 | `gpt-6-sol` at `high`, explicit model selection        | `claude-opus-5-5` at `high`, explicit model selection      |
 
 The [Codex configuration](../.codex/config.toml) selects Astra at `xhigh` for new main sessions and
 Sol at `high` as the default subagent model; the definitions under
@@ -270,15 +293,9 @@ gap to the orchestrator, which supplies the missing instructions or resolves the
 
 ### Implementation handoff
 
-The executor rule applies on both work paths:
-
-- `orbis-implementer` edits all TypeScript source and tests, the scaffold templates (`templates/`),
-  repository scripts (`scripts/`), and toolchain configuration, such as `tsconfig*.json`, the
-  oxlint, oxfmt, and Vitest configuration, and package manifests. This includes small fixes within a
-  package's contract.
-- The orchestrator edits Markdown documentation and instructions, agent definitions
-  (`.claude/agents/`, `.codex/agents/`), and GitHub artifacts, directly or through a documentation
-  delegate. It runs investigation probes only in scratch locations outside tracked files.
+On both work paths, the [executor rule](../AGENTS.md#start-a-session) in `AGENTS.md` start protocol
+step 5 assigns implementation edits, including small fixes within a package's contract, to
+`orbis-implementer` and the remaining files it lists to the orchestrator.
 
 Before delegating implementation, the orchestrator resolves the contract and selects authorized,
 unblocked work. Give the implementer:
@@ -313,12 +330,12 @@ complete delivery. Match each PR to a coherent reviewable outcome.
 ## Publish checkpoint artifacts
 
 For authorized issue-backed work, the orchestrator publishes a checkpoint at each stage transition,
-at a blocked or interrupted handoff, and at delivery. The checkpoint covers the orchestrator's own
-bounded work and reviews with no findings as well as delegated assignments; an intermediate
-assignment does not get its own comment. The request's explicit scope limits under
-[Authorization](#authorization) also limit publication. Publish when the checkpoint is reached
-instead of deferring all records until the session ends. A sudden process termination may prevent
-publication; report any resulting gap when resuming.
+at a blocked or interrupted handoff, and at delivery. The checkpoint covers delegated assignments,
+the orchestrator's own bounded work, and reviews with no findings; an intermediate assignment does
+not get its own comment. The request's explicit scope limits under [Authorization](#authorization)
+also apply to publication. Publish when the checkpoint is reached instead of deferring all records
+until the session ends. A sudden process termination may prevent publication; report any resulting
+gap when resuming.
 
 Author a summary from the work and verified results, or verify a separately authored delegate packet
 before publishing it. Do not copy ordinary conversation turns, delegate replies, tool-call dumps, or
@@ -370,7 +387,8 @@ bulk-reformat historical comments.
 | Done           | Issue is closed; its completion reason distinguishes delivery from abandonment            |
 
 Record a blocker and its resolving decision or prerequisite on the issue without adding a status. A
-parent remains In progress while only some child outcomes are in review.
+parent remains In progress while only some child outcomes are in review. Avoid inferring readiness
+from a draft PR or completion from a locally passing test suite.
 
 | Completion case    | Definition of done                                                                                                                 |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -436,20 +454,19 @@ scope before publishing issue plans; do not bulk-upload historical files.
 
 ## GitHub setup
 
-Agents run every GitHub CLI command through `agent-gh`; the repository's Claude Code and Codex
-`PreToolUse` hooks block direct `gh` commands and direct the agent to `agent-gh`. `agent-gh` runs
-commands with the contributor's `gh` login unless its profile routes them to a bot. Authenticate
-`gh` with `gh auth login`, then add project access with
+The repository's Claude Code and Codex `PreToolUse` hooks block direct `gh` commands and direct the
+agent to `agent-gh`. `agent-gh` runs commands with the contributor's `gh` login unless its profile
+routes them to a bot. As a one-time setup step outside agent sessions, the contributor authenticates
+`gh` with `gh auth login`, then adds project access with
 `gh auth refresh --hostname github.com --scopes project`. Use the supported CLI commands or
 `agent-gh api` for native sub-issues and dependencies. Check the installed CLI's help before using
 flags.
 
 Each contributor selects an `agent-gh` profile in their own clone. The profile names the
 contributor's GitHub App and the `run_as_bot` rules that select which commands run as the App's bot.
-Commands that match no rule run with the contributor's `gh` login. Configure the profile to route
-issue comments, PR comments, and comment-only reviews to the bot, so checkpoint comments show the
-contributor's bot as their author. Issue, PR, and Project changes then stay with the contributor's
-login. To set up `agent-gh` in a clone:
+Configure the profile to route issue comments, PR comments, and comment-only reviews to the bot, so
+checkpoint comments show the contributor's bot as their author. Issue, PR, and Project changes then
+stay with the contributor's login. To set up `agent-gh` in a clone:
 
 1. Install `agent-gh`, install a GitHub App with Issues and Pull requests write access on the
    repository, and define a profile for the App with the

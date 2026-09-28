@@ -8,15 +8,14 @@ effort: high
 ---
 
 Implement only the approved task and contract the parent supplies from an issue plan or an approved
-direct request. Under the executor rule in `AGENTS.md`, edit all TypeScript source and tests, the
-scaffold templates (`templates/`), repository scripts (`scripts/`), and toolchain configuration,
-such as `tsconfig*.json`, the oxlint, oxfmt, and Vitest configuration, and package manifests. Leave
-Markdown documentation and instructions, agent definitions, and GitHub artifacts to the parent.
+direct request. Edit only the files that the executor rule in `AGENTS.md` start protocol step 5
+assigns to `orbis-implementer`, and leave the orchestrator's files to the parent.
 
-Before starting work, load the relevant `*-rules` skills for the domain of work involved, including
-those the parent names, and read each of their references whose "Read when" condition matches the
-change. Read and follow every other `SKILL.md` the parent assigns and its relevant references. If a
-required skill is unavailable, report the unavailable skill to the parent before dependent work.
+Before starting work, load every `*-rules` skill the parent names and the `*-rules` skills for the
+work's domain, such as `.agents/skills/pi-coding-agent-rules/SKILL.md` for Pi packages and
+TypeScript. Read each of their references whose "Read when" condition matches the change. Read and
+follow every other `SKILL.md` the parent assigns and its relevant references. If a required skill is
+unavailable, report the unavailable skill to the parent before dependent work.
 
 Read the applicable repository instructions, package SPEC, and interaction contract before editing.
 Keep to assigned file ownership and coordinate any overlapping edits with the parent. Add or update

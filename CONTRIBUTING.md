@@ -93,7 +93,7 @@ In a new Codex or Claude Code session in the updated, trusted repository, send:
 Resume #<number>
 ```
 
-The same entry point resumes a PR or takes a direct development request, as the
+The same entry point resumes a PR or takes a direct request, as the
 [start protocol](AGENTS.md#start-a-session) describes. To limit the work, say
 `Resume #<number>, planning only`; to inspect without execution, ask
 `What is the status of #<number>?`.
@@ -118,8 +118,9 @@ read the linked `SKILL.md` directly.
 3. Implement `packages/<name>/src/index.ts` as a default factory that receives `ExtensionAPI` and
    registers commands, tools, and handlers. Keep runtime imports resolvable from the published
    package under the import rules in the [package conventions](AGENTS.md#package-conventions).
-4. Declare dependencies and validate boundary data through the scaffold's `src/records.ts` as the
-   [package conventions](AGENTS.md#package-conventions) require.
+4. Declare dependencies and validate boundary data as the
+   [package conventions](AGENTS.md#package-conventions) require. Validation goes through the
+   scaffold's `src/records.ts`.
 5. Add tests in `packages/<name>/tests/**/*.test.mts`. The scaffold includes a Pi loading test and a
    `vitest.config.mts` project named `@orbis/<name>`; the root Vitest configuration discovers it
    automatically.
@@ -145,8 +146,8 @@ The Exit test loads the package through Pi and checks that `/exit` requests shut
 test checks that `/orbis-<name>` registers. For Plan's fixtures, benchmarks, and terminal checks,
 see [package development](packages/plan/docs/development.md). Use `pnpm test:watch` for workspace
 watch mode; each package also provides `test:watch`. The scaffold and template tests load TypeScript
-source through Pi and check command registration; the [test policy](AGENTS.md#tests) covers the
-runtime tests new extension behavior needs.
+source through Pi and check command registration; the [test policy](AGENTS.md#tests) requires
+runtime tests for new or changed extension behavior.
 
 ## TypeScript compatibility
 

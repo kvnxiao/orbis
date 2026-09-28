@@ -1,28 +1,28 @@
 ---
 name: work-issue
 description: >-
-  Start, resume, or continue an Orbis issue, a PR, or a direct development request, including plain
-  requests such as "Resume #12", "Resume PR #34", or "continue this ticket". Resolve the target,
-  state its classification, load the relevant rules skills, and route design, planning,
-  implementation, verification, and PR delivery. Excludes status-only questions, read-only reviews,
-  and general questions.
+  Start, resume, or continue an Orbis issue, a PR, or a direct request, including plain requests
+  such as "Resume #12", "Resume PR #34", or "continue this ticket". Resolve the target, state its
+  classification, load the relevant rules skills, and route design, planning, implementation,
+  verification, and PR delivery. Excludes status-only questions, read-only reviews, and general
+  questions.
 ---
 
 # Work on an Orbis issue, PR, or request
 
-Run the start protocol from `AGENTS.md`, then route design, planning, implementation, verification,
-and delivery to the specialist skills without requiring the developer to invoke each one. The
-session running this skill is the orchestrator, and the `orbis-implementer` agent is its
-implementation delegate. Work follows one of two paths: the issue-backed path for work tracked in an
-issue, or the PR-only path for a direct request delivered through a PR without an issue. The
-[development workflow](../../../docs/development-workflow.md) defines these paths, authorization,
-checkpoints, and definitions of done that this skill applies; read each linked section when the step
-reaches it. Apply its [issue label rules](../../../docs/development-workflow.md#issue-labels) to
-every issue and PR the work creates or changes.
+Start the work, then route design, planning, implementation, verification, and delivery to the
+specialist skills without requiring the developer to invoke each one. The session running this
+skill is the orchestrator, and the `orbis-implementer` agent is its implementation delegate. The
+[development workflow](../../../docs/development-workflow.md) defines the work paths,
+authorization, checkpoints, and definitions of done that this skill applies; read each linked
+section when the step reaches it. Apply its
+[issue label rules](../../../docs/development-workflow.md#issue-labels) to every issue and PR the
+work creates or changes.
 
 ## Start the work
 
-Complete these steps in order before any edit.
+These steps carry out the [`AGENTS.md` start protocol](../../../AGENTS.md#start-a-session).
+Complete them in order before any edit.
 
 ### Resolve the target
 
@@ -33,12 +33,15 @@ the working tree and branch, then resolve the target:
 - **Issue:** work on that issue.
 - **PR:** read its state and closing issues under the workflow's
   [retrieval rules](../../../docs/development-workflow.md#retrieve-current-work-before-history).
-  Resume on the closing issue when one exists and treat the PR as its linked delivery; otherwise
-  continue the PR on the PR-only path.
+  Resume on its closing issue and treat the PR as that issue's linked delivery; when the PR closes
+  several issues, resume on the one whose handoff Work row records the PR, or else on the most
+  specific one, such as a task rather than its epic. Without a closing issue,
+  resume on the issue whose Work row records the PR or its branch; a reference in the PR body alone
+  does not select an issue. Only a PR with neither kind of issue continues on the PR-only path.
 - **Branch:** resolve its PR and continue as a PR target. Resume a branch without a PR on the issue
   that the request names or whose handoff Work row records the branch; otherwise resume it as
   PR-only work interrupted before a PR existed.
-- **Package or other direct request:** search open and closed issues for work that already tracks
+- **Package or other direct request:** search open and closed issues for one that already tracks
   the request. Resume on a matching open issue, and treat a closed match as delivered context
   without reopening its scope. Otherwise the target is a direct request without an issue.
 
@@ -79,22 +82,22 @@ plan, implementation, or PR state changes.
 
 ### Load the rules
 
-Before starting work or implementation, load the relevant `*-rules` skills for the domain of work
-involved, such as [pi-coding-agent-rules](../pi-coding-agent-rules/SKILL.md) for Pi extensions,
-packages, and TypeScript. Read each of their references whose "Read when" condition matches the
-change, and name the loaded skills and references in every delegate handoff.
+Before starting work or implementation, load the `*-rules` skills for the work's domain, such as
+[pi-coding-agent-rules](../pi-coding-agent-rules/SKILL.md) for Pi extensions, packages, and
+TypeScript. Read each of their references whose "Read when" condition matches the change, and name
+the loaded skills and references in every delegate handoff.
 
 ## Route and execute
 
-`orbis-implementer` edits TypeScript source and tests, templates, scripts, toolchain configuration,
-and package manifests, and the orchestrator edits Markdown, agent definitions, and GitHub artifacts,
-as the workflow's [executor rule](../../../docs/development-workflow.md#implementation-handoff)
-defines. Delegate under its [skill handoffs](../../../docs/development-workflow.md#skill-handoffs),
-and integrate returned work before starting another task that touches the same files.
+Under the [executor rule](../../../AGENTS.md#start-a-session) in `AGENTS.md`, `orbis-implementer`
+makes implementation edits and the orchestrator edits the remaining files that step 5 lists.
+Delegate under the workflow's
+[skill handoffs](../../../docs/development-workflow.md#skill-handoffs), and integrate returned work
+before starting another task that touches the same files.
 
 | Situation | Next action |
 | --- | --- |
-| PR-only fix, documentation, or workspace tooling change | On a work branch, delegate implementation edits to `orbis-implementer`, run `verify-changes`, and deliver a PR without an issue |
+| Direct request on the PR-only path | On a work branch, use the matching specialist skill from the `AGENTS.md` [routing table](../../../AGENTS.md#skill-routing), delegate implementation edits to `orbis-implementer`, run `verify-changes`, and deliver a PR without an issue |
 | New package, unresolved design, or missing SPEC approval | Use [design-package](../design-package/SKILL.md) for design and the approval checkpoint; keep dependent work blocked |
 | Issue-backed approved contract has no current executable plan | Use [plan-implementation](../plan-implementation/SKILL.md) to create or refresh issue plans from the approved SPEC and interaction contract |
 | Existing package behavior changes | Use [revise-package](../revise-package/SKILL.md) to keep the contract and implementation consistent, delegating implementation edits to `orbis-implementer` |

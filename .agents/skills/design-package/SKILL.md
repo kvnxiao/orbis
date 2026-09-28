@@ -7,7 +7,7 @@ description:
 
 # Brainstorm an Orbis package
 
-Develop the package design with the developer, save its research synthesis, and write
+Develop the package design with the developer, save any research synthesis, and write
 `packages/<name>/SPEC.md` for an independent Pi implementer. This workflow produces research and a
 specification; implementing the extension is a separate task unless the developer explicitly
 includes it.
@@ -63,8 +63,8 @@ implications for this package, and remaining gaps. Synthesize the evidence; do n
 list or raw tool output. Distinguish observed behavior, author claims, inference, and design
 recommendations. When research includes papers, identify publication status and evaluation limits.
 When online access is unavailable, persist the local evidence and limitations before drafting the
-spec. Research documents cite external sources, not Orbis implementation code. Existing design
-approval does not waive persistence of research performed during the brainstorm.
+spec. Research documents cite external sources, not Orbis implementation code. Persist research
+performed during the brainstorm even when the design is already approved.
 
 As later rounds resolve factual gaps, update the synthesis before incorporating those findings into
 the spec. When revising an existing spec, read and verify the relevant research first; if research
@@ -116,11 +116,13 @@ flows and match the requirements.
 
 ## Write the specification
 
+When research informed the design, confirm that its synthesis exists on disk and reflects the
+evidence used.
+
 Once the decisions are settled, summarize the resulting contract and confirm shared understanding.
 Under the [approval rule](../../../AGENTS.md#contract-before-code), existing explicit agreement is
-sufficient; do not ask for the same decision again. When uncertainty
-remains, mark the document as a draft and name the unresolved questions instead of claiming an
-approved contract.
+sufficient; do not ask for the same decision again. When uncertainty remains, mark the document as a
+draft and name the unresolved questions instead of claiming an approved contract.
 
 Write `packages/<name>/SPEC.md` as the guide's
 [Specify a package](../../../docs/specifications.md#specify-a-package) section requires, with
