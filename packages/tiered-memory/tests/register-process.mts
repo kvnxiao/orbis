@@ -3,9 +3,11 @@ import { readFile } from "node:fs/promises";
 import { stdin, stdout } from "node:process";
 
 import type { SessionEntry, SessionHeader } from "@earendil-works/pi-coding-agent";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { liveStorage } from "../src/storage/services.ts";
+import { DurableWrites, LockFilesystem, ProcessLiveness } from "../src/storage/services.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { canonicalProjectRoot, MemoryStore } from "../src/storage/store.ts";
 
@@ -24,12 +26,39 @@ if (inputPath === undefined) {
 }
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The parent test writes this file from a live session.
 const input = JSON.parse(await readFile(inputPath, "utf8")) as RegisterProcessInput;
-const runtime = ManagedRuntime.make(liveStorage);
+const contention = { armed: false, announced: false, reads: new Map<string, number>() };
+const live = LockFilesystem.live;
+const runtime = ManagedRuntime.make(
+  Layer.mergeAll(
+    Layer.succeed(DurableWrites, DurableWrites.live),
+    Layer.succeed(ProcessLiveness, ProcessLiveness.live),
+    Layer.succeed(LockFilesystem, {
+      ...live,
+      readTicket: (path) =>
+        live.readTicket(path).pipe(
+          Effect.tap((text) =>
+            Effect.sync(() => {
+              if (!contention.armed || contention.announced || text === undefined) {
+                return;
+              }
+              const reads = (contention.reads.get(path) ?? 0) + 1;
+              contention.reads.set(path, reads);
+              if (reads === 2) {
+                contention.announced = true;
+                stdout.write("waiting\n");
+              }
+            }),
+          ),
+        ),
+    }),
+  ),
+);
 const root = await runtime.runPromise(canonicalProjectRoot(input.cwd));
 const store = await runtime.runPromise(MemoryStore.open(root, input.sessionId));
 const registry = await runtime.runPromise(SourceRegistry.open(store));
 stdout.write("ready\n");
 await once(stdin, "data");
+contention.armed = true;
 await runtime.runPromise(
   registry.register({
     getSessionId: () => input.sessionId,

@@ -124,6 +124,23 @@ session change, or shutdown discards it, and the next storage startup reconciles
 branch as described under [Recovery](#recovery). If recording the reference fails, the commit still
 reports committed, and status reports the storage error.
 
+A commit that registered its sources refreshes storage state from them once it commits, conflicts,
+or is cancelled; a committed commit refreshes after recording its reference. A commit that rejects
+does not refresh. The refresh:
+
+- Reads the latest head, so a proposal captured afterward expects the accepted revision.
+- Rechecks the selected revision's notes against the registered sources and curation.
+- Reconciles the head with the branch as described under [Recovery](#recovery), which can attach a
+  head whose reference is missing from the branch.
+- Updates the latest status counts, labeled `commit`.
+
+Refreshes and reference recording for one storage session run one at a time, so a refresh that
+finishes later cannot replace newer lineage state. Disabling memory or cancelling the call does not
+stop a refresh. Tree navigation, a session change, or shutdown discards it. If a refresh fails, the
+commit keeps its result, and status reports the storage error. A cancellation that arrives while the
+commit's registration writes `sources.json` stops the commit before it records that registration, so
+status keeps the previous counts until the next refresh.
+
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected
 snapshot.
@@ -158,11 +175,11 @@ recovery has completed, though curated or newer files may differ from the head's
 head already marked as materialized is not repaired, so a note deleted after a completed commit
 stays deleted.
 
-At startup and after tree navigation, a head revision that no session entry references is attached
-to the branch only when its anchor is on the branch, its base is the selected revision, its
-configuration fingerprint is current, and its evidence and curation still hold. A reference already
-appended to the branch is confirmed regardless of a configuration change; it is dropped only when
-the head, anchor, evidence, or curation no longer match.
+At startup, after tree navigation, and in the refresh after a commit, a head revision that no
+session entry references is attached to the branch only when its anchor is on the branch, its base
+is the selected revision, its configuration fingerprint is current, and its evidence and curation
+still hold. A reference already appended to the branch is confirmed regardless of a configuration
+change; it is dropped only when the head, anchor, evidence, or curation no longer match.
 
 Unsupported or damaged records remain unchanged; status reports the storage error. Missing expected
 files or directories do not authorize reconstruction of old notes from historical snapshots.

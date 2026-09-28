@@ -7,6 +7,7 @@ import type * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 
 import type { StorageServices } from "../storage/services.ts";
 
@@ -36,6 +37,7 @@ const state = Symbol("StorageScope state");
 interface ScopeState {
   readonly scope: Scope.Closeable;
   readonly invocations: Set<Invocation>;
+  readonly work: Semaphore.Semaphore;
 }
 
 /**
@@ -45,8 +47,9 @@ interface ScopeState {
  *
  * - Its scope uses the parallel finalizer strategy and closes only under `Effect.uninterruptible`,
  *   because an interrupted close skips its remaining finalizers.
- * - Closing its scope interrupts and awaits the storage startup fiber, the lineage applications, and
+ * - Closing its scope interrupts and awaits the storage startup fiber, the storage-session work, and
  *   the jobs forked into it; only uninterruptible durable writes delay the close.
+ * - Its storage-session work runs one at a time.
  */
 export interface StorageScope {
   readonly [state]: ScopeState;
@@ -55,7 +58,7 @@ export interface StorageScope {
 /**
  * Report how a job ended.
  *
- * `outcome` is the durable outcome the job recorded before it ended, including when interruption
+ * `outcome` is the latest outcome the job recorded before it ended, including when interruption
  * followed the recording. `reason` is the first cancellation reason recorded for the job, whichever
  * of the host signal, a disable, a replacement, or shutdown came first.
  */
@@ -88,7 +91,7 @@ function awaitCompletion(fiber: Fiber.Fiber<unknown, unknown>): Effect.Effect<vo
  *
  * - Settings load, branch step, and role work: one `FiberHandle` each; new work replaces the owner's
  *   previous fiber.
- * - Storage scope: one per storage session, with its jobs and lineage applications; the next scope
+ * - Storage scope: one per storage session, with its jobs and storage-session work; the next scope
  *   opens only after the previous close finished, so at most one close is in flight.
  *
  * A replacement or shutdown first interrupts obsolete work synchronously without awaiting it,
@@ -220,7 +223,11 @@ export class Execution {
       yield* Fiber.await(this.teardown);
     }
     const storage: StorageScope = {
-      [state]: { scope: Scope.makeUnsafe("parallel"), invocations: new Set() },
+      [state]: {
+        scope: Scope.makeUnsafe("parallel"),
+        invocations: new Set(),
+        work: Semaphore.makeUnsafe(1),
+      },
     };
     this.storage = storage;
     const fiber = yield* Effect.forkIn(startup(storage), storage[state].scope);
@@ -230,7 +237,7 @@ export class Execution {
   /**
    * Interrupt role work and cancel the current storage scope's jobs with `reason`.
    *
-   * Leaves the settings load, the branch step, the storage scope, and its lineage applications
+   * Leaves the settings load, the branch step, the storage scope, and its storage-session work
    * running.
    */
   cancelActiveWork(reason: unknown): void {
@@ -245,9 +252,9 @@ export class Execution {
    * Run a job in `storage` with a host signal and wait for it.
    *
    * A pre-aborted `signal` resolves `cancelled` with its reason and starts no work. The job
-   * receives `record`, which stores its durable outcome. A host abort, a disable, a replacement, or
-   * shutdown records its reason if none is recorded, then interrupts the job. Resolves only after
-   * the job fiber ended, so its lock and transaction cleanup finished.
+   * receives `record`, which replaces its recorded outcome. A host abort, a disable, a replacement,
+   * or shutdown records its reason if none is recorded, then interrupts the job. Resolves only
+   * after the job fiber ended, so its lock and transaction cleanup finished.
    *
    * @throws Error when shutdown has started or `storage` is no longer current; nothing runs.
    * @throws The original error or defect of a failure `Exit`, including one that also has
@@ -303,7 +310,8 @@ export class Execution {
   /**
    * Admit `effect` to `storage`'s scope as storage-session work and wait for it.
    *
-   * A closed scope admits nothing and runs no synchronous prefix, because the fork does not start
+   * Admitted work starts only when no other storage-session work of the scope is running. A closed
+   * scope admits nothing and runs no synchronous prefix, because the fork does not start
    * immediately. After shutdown started, resolves without running. Disable does not interrupt
    * admitted work; closing the scope does. Resolves on success and on interruption.
    *
@@ -316,7 +324,8 @@ export class Execution {
     if (this.stopping !== undefined) {
       return;
     }
-    const fiber = this.runtime.runSync(Effect.forkIn(effect, storage[state].scope));
+    const { scope, work } = storage[state];
+    const fiber = this.runtime.runSync(Effect.forkIn(work.withPermit(effect), scope));
     await Effect.runPromise(awaitCompletion(fiber));
   }
 

@@ -21,7 +21,7 @@ import type {
 import { encodeReference } from "../src/domain/references.ts";
 import type { ProposalContent } from "../src/pi/lineage.ts";
 import { MemoryRuntime } from "../src/pi/runtime.ts";
-import type { StorageSnapshot } from "../src/pi/runtime.ts";
+import type { StorageSnapshot } from "../src/pi/storage-session.ts";
 import type { CurationState } from "../src/storage/curation.ts";
 import { fromPromise, writeDurable } from "../src/storage/files.ts";
 import type { Revision } from "../src/storage/revisions.ts";

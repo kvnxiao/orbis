@@ -8,15 +8,23 @@ import { recoverFailure } from "../storage/files.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
 import type { StoreCommitResult } from "../storage/store.ts";
-import { appendReference, selectedAs, selectedPointer, tryConfirmReference } from "./lineage.ts";
+import {
+  appendReference,
+  referencesIn,
+  selectedAs,
+  selectedPointer,
+  tryConfirmReference,
+} from "./lineage.ts";
 import type { LineageState, ProposalBinding, ProposalContent } from "./lineage.ts";
 import type { StorageSession } from "./storage-session.ts";
 
-/** Carry a durable head's revision id and the registration records the lineage refresh needs. */
-export interface CommittedProposal {
-  revisionId: string;
-  records: readonly SourceRecord[];
-}
+/**
+ * Report how far a commit got: `registered` carries the records its registration returned, and
+ * `committed` adds the revision id of the durable head.
+ */
+export type CommitProgress =
+  | { stage: "registered"; records: readonly SourceRecord[] }
+  | { stage: "committed"; records: readonly SourceRecord[]; revisionId: string };
 
 /**
  * Capture a proposal bound to the branch leaf, its evidence, the configuration, and the latest
@@ -103,9 +111,9 @@ const evidenceStillValid = Effect.fnUntraced(function* (
  *
  * Registration writes `sources.json` before `MemoryStore.commit` takes the project lock. The
  * commit's `validate` projects current effective sources without writing and compares them and
- * `binding()` with the captured proposal. `onCommitted` runs synchronously as soon as the head is
- * durable, with the revision id and the registration records, so a caller interrupted after that
- * point still learns the committed revision.
+ * `binding()` with the captured proposal. `record` runs synchronously with `registered` as soon as
+ * registration returns and with `committed` as soon as the head is durable, so a caller interrupted
+ * after either point still learns that progress.
  *
  * @throws Error when the proposal fails `validateProposal`.
  * @throws The failures of `SourceRegistry.register` and `MemoryStore.commit`, unchanged.
@@ -115,10 +123,11 @@ export const commitProposal = Effect.fnUntraced(function* (
   ctx: Pick<ExtensionContext, "sessionManager">,
   binding: () => ProposalBinding,
   proposal: MemoryProposal,
-  onCommitted: (committed: CommittedProposal) => void,
+  record: (progress: CommitProgress) => void,
 ): Effect.fn.Return<StoreCommitResult, unknown, StorageServices> {
   const captured = validateProposal(structuredClone(proposal));
   const records = yield* storage.sources.register(ctx.sessionManager);
+  record({ stage: "registered", records });
   const evidenceValid = yield* evidenceStillValid(storage, ctx, captured, records);
   const validate: Effect.Effect<ConflictReason | undefined, unknown> = Effect.gen(function* () {
     const stillValid = evidenceValid && (yield* evidenceStillValid(storage, ctx, captured));
@@ -134,7 +143,7 @@ export const commitProposal = Effect.fnUntraced(function* (
   return yield* storage.store.commit(captured, {
     validate,
     onHeadDurable: (revisionId) => {
-      onCommitted({ revisionId, records });
+      record({ stage: "committed", records, revisionId });
     },
   });
 });
@@ -143,8 +152,9 @@ export const commitProposal = Effect.fnUntraced(function* (
  * Append and confirm the branch reference of a committed revision and return the lineage it
  * produces.
  *
- * Appends before any await. A failed confirmation leaves the reference `appended` for the next
- * refresh to confirm; only interruption fails the returned Effect.
+ * Appends before any await, and only when the branch has no reference to the revision for the
+ * project; confirms the reference either way. A failed confirmation leaves the reference `appended`
+ * for the next refresh to confirm; only interruption fails the returned Effect.
  */
 export const attachCommitted = Effect.fnUntraced(function* (
   pi: Pick<ExtensionAPI, "appendEntry">,
@@ -154,7 +164,10 @@ export const attachCommitted = Effect.fnUntraced(function* (
   revisionId: string,
 ): Effect.fn.Return<LineageState> {
   const store = storage.store;
-  appendReference(pi, store, revisionId);
+  const branch = referencesIn(ctx.sessionManager.getBranch(), store.projectId);
+  if (!branch.some((entry) => entry.revisionId === revisionId)) {
+    appendReference(pi, store, revisionId);
+  }
   const reference = { projectId: store.projectId, revisionId };
   const confirmed = yield* tryConfirmReference(ctx.sessionManager.getSessionFile(), reference).pipe(
     Effect.catchCause((cause) => recoverFailure(cause, () => false)),

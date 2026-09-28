@@ -15,6 +15,7 @@ const gate = vi.hoisted(() => ({
   armed: false,
   entered: Promise.withResolvers<undefined>(),
   release: Promise.withResolvers<undefined>(),
+  finished: Promise.withResolvers<undefined>(),
 }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -22,12 +23,17 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return {
     ...actual,
     realpath: async (...args: Parameters<typeof actual.realpath>) => {
-      if (gate.armed) {
-        gate.armed = false;
-        gate.entered.resolve(undefined);
-        await gate.release.promise;
+      if (!gate.armed) {
+        return await actual.realpath(...args);
       }
-      return await actual.realpath(...args);
+      gate.armed = false;
+      gate.entered.resolve(undefined);
+      await gate.release.promise;
+      try {
+        return await actual.realpath(...args);
+      } finally {
+        gate.finished.resolve(undefined);
+      }
     },
   };
 });
@@ -47,7 +53,8 @@ test("a replacement during canonicalProjectRoot opens its own session and the ol
   expect(opened.registration).toMatchObject({ event: "session_tree" });
   gate.release.resolve(undefined);
   await starting;
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await gate.finished.promise;
+  await new Promise((resolve) => setImmediate(resolve));
   expect(storageOf(runtime)).toEqual(opened);
   const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Kept\n" }), [
     await sourceReference(f, "Resolved during a replacement."),

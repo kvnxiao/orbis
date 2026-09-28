@@ -632,23 +632,26 @@ test("a registration in another process waits for the lock and both processes' r
   );
   onTestFinished(() => {
     child.kill();
+    gate.resolve(undefined);
   });
   const exited = once(child, "exit");
-  const registered = lineFrom(child, "registered");
+  const progress = { registered: false };
+  const registered = lineFrom(child, "registered").then(() => {
+    progress.registered = true;
+  });
+  const waiting = lineFrom(child, "waiting");
   await lineFrom(child, "ready");
   armed = true;
   const registering = target.register(managerWith(f, [parentEntry]));
   await entered.promise;
   child.stdin.write("go\n");
-  const early = await Promise.race([
-    registered.then(() => "registered"),
-    new Promise((settle) => setTimeout(settle, 300, "waiting")),
-  ]);
+  await waiting;
+  const registeredWhileHeld = progress.registered;
   gate.resolve(undefined);
   await registering;
   await registered;
   expect(await exited).toEqual([0, null]);
-  expect(early).toBe("waiting");
+  expect(registeredWhileHeld).toBe(false);
   const entries = (await openRegistry(store)).sources.map((source) => source.entryId).toSorted();
   expect(entries).toEqual([parentEntry.id, childEntry.id].toSorted());
 }, 20_000);

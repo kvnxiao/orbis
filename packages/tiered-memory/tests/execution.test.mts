@@ -364,6 +364,50 @@ test("work admitted to a closed storage scope runs no synchronous prefix", async
   expect(ran).toBe(false);
 });
 
+test("storage-session work in one scope starts only after the running work ends", async ({
+  createExecution,
+}) => {
+  const execution = createExecution();
+  const storage = await openScope(execution);
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  const log: string[] = [];
+  const first = execution.runInStorage(
+    storage,
+    signal(entered).pipe(
+      Effect.andThen(waitFor(gate.promise)),
+      Effect.andThen(Effect.sync(() => log.push("first"))),
+    ),
+  );
+  await entered.promise;
+  const second = execution.runInStorage(
+    storage,
+    Effect.sync(() => log.push("second")),
+  );
+  await drain();
+  expect(log).toEqual([]);
+  gate.resolve(undefined);
+  await Promise.all([first, second]);
+  expect(log).toEqual(["first", "second"]);
+});
+
+test("failed storage-session work lets the next work in its scope run", async ({
+  createExecution,
+}) => {
+  const execution = createExecution();
+  const storage = await openScope(execution);
+  const failure = new Error("refresh failed");
+  await expect(execution.runInStorage(storage, Effect.fail(failure))).rejects.toBe(failure);
+  let ran = false;
+  await execution.runInStorage(
+    storage,
+    Effect.sync(() => {
+      ran = true;
+    }),
+  );
+  expect(ran).toBe(true);
+});
+
 test("a superseded branch step and a superseded role check resolve their callers without failing", async ({
   createExecution,
 }) => {

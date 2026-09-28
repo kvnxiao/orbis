@@ -34,11 +34,10 @@ import { Execution } from "./execution.ts";
 import type { StorageScope } from "./execution.ts";
 import { attachProject, refreshLineage, selectFromBranch } from "./lineage.ts";
 import type {
-  LineageState,
   ProposalBinding,
   ProposalContent,
-  Registration,
   RegistrationEvent,
+  RegistrationUpdate,
 } from "./lineage.ts";
 import { resolveRoles } from "./models.ts";
 import {
@@ -46,41 +45,11 @@ import {
   captureProposal as captureStorageProposal,
   commitProposal as commitStorageProposal,
 } from "./proposals.ts";
-import type { CommittedProposal } from "./proposals.ts";
-import { openStorageSession } from "./storage-session.ts";
-import type { StorageSession } from "./storage-session.ts";
+import type { CommitProgress } from "./proposals.ts";
+import { openStorageSession, storageSnapshot } from "./storage-session.ts";
+import type { OpenStorage, StorageSnapshot, StorageState } from "./storage-session.ts";
 
 const reportEntryType = "orbis-tiered-memory-report";
-
-/**
- * Expose the storage state that status reads.
- *
- * `stopped` holds before the first start and after shutdown; `opening` lasts from start until the
- * store and source registry are open; `failed` keeps the error that stopped opening; `open` carries
- * the canonical project root, the lineage state, the head seen by the latest refresh, the counts of
- * the latest registration, and the error of the latest failed refresh.
- */
-export type StorageSnapshot =
-  | { state: "stopped" }
-  | { state: "opening" }
-  | { state: "failed"; error: string }
-  | {
-      state: "open";
-      projectRoot: string;
-      lineage: LineageState;
-      latestRevision: string | null;
-      registration: Registration | undefined;
-      error: string | undefined;
-    };
-
-type OpenStorage = Omit<Extract<StorageSnapshot, { state: "open" }>, "projectRoot"> & {
-  scope: StorageScope;
-  session: StorageSession;
-};
-
-type StorageState =
-  | Extract<StorageSnapshot, { state: "stopped" | "opening" | "failed" }>
-  | OpenStorage;
 
 /**
  * Expose the runtime state that status reads.
@@ -148,7 +117,7 @@ export class MemoryRuntime {
       error: this.error,
       configurationRevision: this.configurationRevision,
       roles: structuredClone(this.roles),
-      storage: this.storageSnapshot(),
+      storage: storageSnapshot(this.storage),
     };
   }
 
@@ -265,15 +234,18 @@ export class MemoryRuntime {
    * - `conflict` from the checks under the lock.
    *
    * After `committed`, the branch-reference append, confirmation, and refresh run as work of the
-   * commit's original storage scope: a disable does not stop them, and a replacement or shutdown
-   * discards them without losing the commit.
+   * commit's original storage scope. After `conflict`, or `cancelled` once registration returned, a
+   * refresh with the registration's records runs as that work instead. The scope runs such work one
+   * at a time. A disable does not stop it, and a replacement or shutdown discards it without
+   * changing the result. A failure of that work records `storage.error` while the scope is current
+   * and leaves the result unchanged.
    *
    * @throws Error when memory is disabled, storage is not open, or shutdown has started.
    * @throws The original error of a failed commit, including a failed view write after the head.
    */
   async commitProposal(ctx: ExtensionContext, proposal: MemoryProposal): Promise<CommitResult> {
     const { scope, session } = this.proposalStorage();
-    const job = await this.execution.runJob<StoreCommitResult, CommittedProposal>(
+    const job = await this.execution.runJob<StoreCommitResult, CommitProgress>(
       scope,
       ctx.signal,
       (record) =>
@@ -285,19 +257,16 @@ export class MemoryRuntime {
           record,
         ),
     );
-    const committed = job.outcome;
-    if (committed === undefined) {
-      return job.kind === "completed" ? job.value : { kind: "cancelled", reason: job.reason };
+    const progress = job.outcome;
+    if (progress?.stage === "committed") {
+      await this.runStorageWork(scope, this.applyCommitted(scope, ctx, progress));
+      return { kind: "committed", revisionId: progress.revisionId };
     }
-    await this.execution
-      .runInStorage(scope, this.applyCommitted(scope, ctx, committed))
-      .catch((error: unknown) => {
-        const open = this.openIn(scope);
-        if (open !== undefined) {
-          this.storage = { ...open, error: describeError(error) };
-        }
-      });
-    return { kind: "committed", revisionId: committed.revisionId };
+    if (progress !== undefined) {
+      const update = { sources: progress.records, event: "commit" } as const;
+      await this.runStorageWork(scope, this.refreshIn(scope, ctx, update));
+    }
+    return job.kind === "completed" ? job.value : { kind: "cancelled", reason: job.reason };
   }
 
   /** Append a report entry with rendered status text. */
@@ -419,7 +388,7 @@ export class MemoryRuntime {
     this: MemoryRuntime,
     scope: StorageScope,
     ctx: ExtensionContext,
-    committed: CommittedProposal,
+    committed: Extract<CommitProgress, { stage: "committed" }>,
   ): Effect.fn.Return<void, unknown, StorageServices> {
     const before = this.openIn(scope);
     if (before === undefined) {
@@ -433,18 +402,39 @@ export class MemoryRuntime {
       return;
     }
     this.storage = { ...attached, lineage };
-    const refreshed = yield* refreshLineage(
-      this.pi,
-      session.store,
-      ctx,
-      this.binding(scope, session.store),
-      { sources: committed.records, event: "commit" },
-    );
+    yield* this.refreshIn(scope, ctx, { sources: committed.records, event: "commit" });
+  });
+
+  private readonly refreshIn = Effect.fnUntraced(function* (
+    this: MemoryRuntime,
+    scope: StorageScope,
+    ctx: ExtensionContext,
+    update: RegistrationUpdate,
+  ): Effect.fn.Return<void, unknown, StorageServices> {
+    const before = this.openIn(scope);
+    if (before === undefined) {
+      return;
+    }
+    const store = before.session.store;
+    const binding = this.binding(scope, store);
+    const refreshed = yield* refreshLineage(this.pi, store, ctx, binding, update);
     const current = this.openIn(scope);
     if (current !== undefined) {
       this.storage = { ...current, ...refreshed, error: undefined };
     }
   });
+
+  private async runStorageWork(
+    scope: StorageScope,
+    work: Effect.Effect<void, unknown, StorageServices>,
+  ): Promise<void> {
+    await this.execution.runInStorage(scope, work).catch((error: unknown) => {
+      const open = this.openIn(scope);
+      if (open !== undefined) {
+        this.storage = { ...open, error: describeError(error) };
+      }
+    });
+  }
 
   private proposalStorage(): OpenStorage {
     if (!this.enabled || this.storage.state !== "open") {
@@ -474,15 +464,6 @@ export class MemoryRuntime {
       lineage: open?.lineage ?? { selected: { state: "none" }, pending: { state: "none" } },
       latestRevision: open?.latestRevision ?? null,
     };
-  }
-
-  private storageSnapshot(): StorageSnapshot {
-    const storage = this.storage;
-    if (storage.state !== "open") {
-      return structuredClone(storage);
-    }
-    const { scope: _scope, session, ...state } = storage;
-    return structuredClone({ ...state, projectRoot: session.store.projectRoot });
   }
 
   private setOverride(enabled: boolean): void {

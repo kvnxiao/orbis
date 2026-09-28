@@ -6,7 +6,8 @@ import type { ModelResolution, Role } from "../domain/models.ts";
 import { limitKeys } from "../domain/settings.ts";
 import type { EffectiveSettings, Limits, SettingSource } from "../domain/settings.ts";
 import type { Registration, SelectedRevision } from "./lineage.ts";
-import type { MemoryRuntime, RuntimeSnapshot, StorageSnapshot } from "./runtime.ts";
+import type { MemoryRuntime, RuntimeSnapshot } from "./runtime.ts";
+import type { StorageSnapshot } from "./storage-session.ts";
 
 /**
  * Describe tiered-memory status as data.
