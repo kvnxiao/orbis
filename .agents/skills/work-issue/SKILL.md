@@ -28,16 +28,20 @@ Complete them in order before any edit.
 
 Resolve an unqualified `#number` against the current repository. Honor an explicit GitHub URL or
 repository-qualified reference; clarify only when the target remains materially ambiguous. Inspect
-the working tree and branch, then resolve the target:
+the working tree and branch, then resolve the target by its kind:
 
 - **Issue:** work on that issue.
 - **PR:** read its state and closing issues under the workflow's
-  [retrieval rules](../../../docs/development-workflow.md#retrieve-current-work-before-history).
-  Resume on its closing issue and treat the PR as that issue's linked delivery; when the PR closes
-  several issues, resume on the one whose handoff Work row records the PR, or else on the most
-  specific one, such as a task rather than its epic. Without a closing issue,
-  resume on the issue whose Work row records the PR or its branch; a reference in the PR body alone
-  does not select an issue. Only a PR with neither kind of issue continues on the PR-only path.
+  [retrieval rules](../../../docs/development-workflow.md#retrieve-current-work-before-history). A
+  closing issue is one that merging the PR closes, such as one named by a `Closes #<number>` line in
+  the PR body. Resume on the first issue that matches, and treat the PR as its linked delivery:
+  1. Its closing issue. When the PR closes several issues, use the one whose
+     [handoff](../plan-implementation/references/plan-format.md#current-handoff) Work row records
+     the PR, or else the most specific one, such as a task rather than its epic.
+  2. An issue whose Work row records the PR or its branch.
+
+  An ordinary reference in the PR body, without a closing keyword, does not select an issue. A PR
+  that matches neither continues on the PR-only path.
 - **Branch:** resolve its PR and continue as a PR target. Resume a branch without a PR on the issue
   that the request names or whose handoff Work row records the branch; otherwise resume it as
   PR-only work interrupted before a PR existed.
@@ -47,9 +51,24 @@ the working tree and branch, then resolve the target:
 
 ### Read the current state
 
-For issue-backed work, read the issue, its parent and children, dependencies, linked PRs and their
-review or merge state, and the current handoff under the retrieval rules: fetch checkpoint comments
-only for a specific gap, supporting evidence, or a requested retrospective.
+Read the delivery state first under the retrieval rules. For issue-backed work, read the issue body
+and its current handoff. For the target or linked PR, read its state, draft status, head commit,
+review decision, latest reviews, closing issues, and body. Fetch checkpoint comments only for a
+specific gap, supporting evidence, or a requested retrospective. When this state shows that the work
+awaits developer review, skip the reads below, then classify the work and report the remaining
+developer action. The work awaits developer review when all of these hold:
+
+- The PR is open and is not a draft.
+- The PR has no requested changes or unaddressed developer review feedback.
+- A recorded passing verification covers the PR's current head.
+- The branch has no unpushed or uncommitted changes.
+- The handoff's Next action, or the PR body for PR-only work, leaves no agent-owned work.
+- For issue-backed work, the PR closes the issue and the issue has no unfinished children.
+
+Otherwise, read the issue's relationship metadata, then the related bodies that establish scope,
+readiness, or acceptance: its parent, open blockers, and, for an epic or initiative, the unfinished
+children and their blockers. Read completed children only to establish the issue's completion or
+when a current plan depends on their results.
 
 Read the affected SPEC and interaction contract, then inspect current source and tests. For
 workspace work without a package SPEC, use the approved request and repository constraints. When an
@@ -64,10 +83,11 @@ Classify the work on one of the workflow's
 precedence over the PR-only path.
 
 - **Issue-backed:** derive the current Stage from issue relationships, dependencies, handoff,
-  approval evidence, contract, source, tests, and linked PRs. Board status, checklists, and an old
-  handoff alone do not prove readiness or completion. Use exactly one case-sensitive value from the
-  plan format's [Stage values](../plan-implementation/references/plan-format.md#stage-values); keep
-  blockers, authorization, and Project status separate.
+  approval evidence, contract, source, tests, and linked PRs. When the work awaits developer
+  review, the delivery state alone establishes the Review Stage. Board status, checklists, and an
+  old handoff alone do not prove readiness or completion. Use exactly one case-sensitive value from
+  the plan format's [Stage values](../plan-implementation/references/plan-format.md#stage-values);
+  keep blockers, authorization, and Project status separate.
 - **PR-only:** a direct request that the PR-only path covers. Assign no Stage and create no issue,
   issue plan, or handoff table.
 - **New issue:** a direct request that introduces, improves, or changes package behavior gets an
@@ -77,8 +97,8 @@ precedence over the PR-only path.
   Discover field and option IDs from the project rather than embedding them in plans.
 
 Before acting, state the classification, its supporting evidence, the next bounded action, and who
-executes it: the orchestrator or `orbis-implementer`. Refresh that assessment when the contract,
-plan, implementation, or PR state changes.
+executes it: the orchestrator, `orbis-implementer`, or the developer for a review or merge.
+Refresh that assessment when the contract, plan, implementation, or PR state changes.
 
 ### Load the rules
 
@@ -94,6 +114,11 @@ makes implementation edits and the orchestrator edits the remaining files that s
 Delegate under the workflow's
 [skill handoffs](../../../docs/development-workflow.md#skill-handoffs), and integrate returned work
 before starting another task that touches the same files.
+
+When a specialist skill repeats a read this session already made, such as the issue, SPEC, or
+source, reuse that result while its scope and revision are unchanged. Reread after an edit,
+conflicting evidence, or an external change, and reread remote state before writing to it.
+Delegates and independent reviewers still read the artifacts they are assigned.
 
 | Situation | Next action |
 | --- | --- |

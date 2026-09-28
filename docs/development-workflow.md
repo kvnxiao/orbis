@@ -58,13 +58,8 @@ An existing issue always takes precedence over the PR-only path:
 
 - Resume work already tracked by an issue on that issue, even when its remaining change would
   otherwise qualify for the PR-only path.
-- Resume a PR on its closing issue: an issue that merging the PR closes, such as one named by a
-  `Closes #<number>` line in the PR body. When a PR closes several issues, resume on the one whose
-  [handoff](../.agents/skills/plan-implementation/references/plan-format.md#current-handoff) Work
-  row records the PR, or else on the most specific one, such as a task rather than its epic. Without
-  a closing issue, resume on the issue whose Work row records the PR or its branch; a reference in
-  the PR body alone does not select an issue. Only a PR with neither kind of issue continues on the
-  PR-only path.
+- Resume a PR or branch on the issue that tracks it, which the
+  [target resolution](../.agents/skills/work-issue/SKILL.md#resolve-the-target) steps select.
 - When investigation shows that a direct request changes package behavior, create or reuse an issue
   for it before dependent work.
 
@@ -96,7 +91,7 @@ agent-gh issue view NUMBER -R OWNER/REPO --json number,title,state,body,parent,s
 For a PR target, request its state and closing issues the same way:
 
 ```sh
-agent-gh pr view NUMBER -R OWNER/REPO --json number,title,state,url,headRefName,isDraft,reviewDecision,closingIssuesReferences
+agent-gh pr view NUMBER -R OWNER/REPO --json number,title,state,url,body,headRefName,headRefOid,isDraft,reviewDecision,latestReviews,closingIssuesReferences
 ```
 
 To find the issue whose handoff Work row records a PR or branch, search issue bodies:
@@ -324,8 +319,12 @@ authorization, delegation, checkpoints, or execution. These files govern agent b
 of their Markdown or configuration extension.
 
 Resolve findings with the orchestrator and send bounded implementation repairs to the implementer.
-Recheck the affected behavior after repairs. Then write the commit and PR drafts, audit them, and
-complete delivery. Match each PR to a coherent reviewable outcome.
+While the implementer that made the change is still available, send the repairs to it. Include the
+accepted findings and any changed facts, such as newly applicable rules references, and do not
+resend its unchanged assignment. Give a new delegate a handoff under
+[Skill handoffs](#skill-handoffs) and [Implementation handoff](#implementation-handoff) instead of
+the full conversation. Recheck the affected behavior after repairs. Then write the commit and PR
+drafts, audit them, and complete delivery. Match each PR to a coherent reviewable outcome.
 
 ## Publish checkpoint artifacts
 

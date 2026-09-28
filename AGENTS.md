@@ -15,19 +15,9 @@ this start protocol in order:
    which asks for a development change without naming an issue or PR. The request needs no skill
    name or lifecycle stage. A directly invoked specialist skill that edits files, such as
    `design-package` or `update-toolchain`, replaces this step and runs after steps 2 through 4.
-2. Resolve the target: an issue, a PR, a branch, a package, or another direct request. For a package
-   or another direct request, search open and closed issues for one that already tracks it. Resume a
-   PR on the first issue that matches:
-   - Its closing issue, which merging the PR closes. When the PR closes several issues, use the one
-     whose [handoff](.agents/skills/plan-implementation/references/plan-format.md#current-handoff)
-     Work row records the PR, or else the most specific one, such as a task rather than its epic.
-   - An issue whose Work row records the PR or its branch.
-
-   A reference in the PR body alone does not select an issue. A PR that matches neither continues on
-   the [PR-only path](docs/development-workflow.md#work-paths). Resolve a branch through its PR;
-   resume a branch without a PR on the issue that the request names or whose Work row records the
-   branch, and otherwise as PR-only work interrupted before a PR existed.
-
+2. Resolve the target, which is an issue, a PR, a branch, a package, or another direct request,
+   through the `work-issue`
+   [target resolution](.agents/skills/work-issue/SKILL.md#resolve-the-target) steps.
 3. State the classification, its evidence, the next bounded action, and who executes it. The
    classification is the issue's
    [Stage](.agents/skills/plan-implementation/references/plan-format.md#stage-values) or the PR-only
