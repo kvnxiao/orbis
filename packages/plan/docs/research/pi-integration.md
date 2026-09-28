@@ -105,9 +105,10 @@ selection and session replacement.
 
 ## Settings menus
 
-The shared [Pi settings research](../../../../docs/pi-extension-settings.md) documents the Pi 0.85.1
-native-menu boundary and reusable settings components. `/plan-settings` uses `SettingsList` under a
-package-owned entry. The component does not add rows to native `/settings`.
+The generated
+[Pi settings and commands rules](../../../../.agents/skills/pi-coding-agent-rules/references/pi-settings-and-commands.md)
+document the Pi 0.85.1 native-menu boundary and reusable settings components. `/plan-settings` uses
+`SettingsList` under a package-owned entry. The component does not add rows to native `/settings`.
 
 ## Waiting indicator
 

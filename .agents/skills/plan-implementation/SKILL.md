@@ -17,8 +17,9 @@ authorizes shared planning records, not execution of their tasks.
 Read the [specification guidance](../../../docs/specifications.md) and the target
 `packages/<name>/SPEC.md` with its linked interaction document. Identify the package, requested
 scope, specification revision, and approval evidence from the current conversation or repository.
-Explicit user approval in the current session is sufficient even when the file's status has not yet
-been updated. The existence of a specification does not establish approval.
+Under the [approval rule](../../../AGENTS.md#contract-before-code), explicit developer direction
+approves the behavior it specifies, even before the SPEC file's status is updated. The existence of
+a specification does not establish approval.
 
 When the specification is missing or material design questions remain, research the current
 implementation and identify the missing contract. Use [design-package](../design-package/SKILL.md)
@@ -48,9 +49,10 @@ or retire requirements. Derive task order from dependencies, not from identifier
 In the plan, select files, internal types, algorithms, and task boundaries within the contract.
 Translate failure, cancellation, recovery, and ordering guarantees into concrete edits and checks;
 do not require the SPEC to prescribe the mechanism. When a missing behavioral decision would change
-acceptance, resolve it with the user before planning dependent work. When an implementation decision
-changes observable behavior, treat it as a specification decision and obtain the user's direction;
-do not add requirements, weaken acceptance criteria, or treat a proposed change as already approved.
+acceptance, resolve it with the developer before planning dependent work. When an implementation
+decision changes observable behavior, treat it as a specification decision and obtain the
+developer's direction; do not add requirements, weaken acceptance criteria, or treat a proposed
+change as already approved.
 
 When several tasks contribute to a requirement, name each task's contribution and remaining
 obligations, and assign the check that establishes full coverage to a task. A requirement reference
@@ -63,10 +65,9 @@ or substantial context unrelated to other slices. Do not split solely by file co
 layer a separate task. Infrastructure tasks are appropriate when a concrete prerequisite cannot form
 a useful independent slice; name the dependent behavior.
 
-Write the work issue's Design section, as the [plan format](references/plan-format.md#work-issue)
-defines it, when the plan introduces a persisted format, a new module boundary, or more than one new
-module; the developer approves that section before implementation authorization. A plan without
-those triggers states its approach in the Implementation section and needs no separate approval.
+Write the work issue's Design section when the [plan format](references/plan-format.md#work-issue)
+requires it; the plan format defines the section's triggers, contents, approval, and first
+assignment.
 
 When an uncertain API or runtime behavior could invalidate dependent work, schedule a bounded
 investigation before that work. State the question, experiment, and observable result needed to
@@ -127,15 +128,8 @@ For affected READMEs, plan the purpose, installation, and first use through
 issue plans, dependencies, and coverage while preserving unaffected work. Resolve proposed
 behavioral changes through [revise-package](../revise-package/SKILL.md).
 
-Place `verify-changes` after accumulated implementation and before commit or PR delivery, including
-[verify-conformance](../verify-conformance/SKILL.md) for affected contracts. Verification and
-delivery belong in acceptance criteria, not separate issues. A passing test suite or completed child
-count does not establish full conformance.
-
-When the plan has a Design section, make the first implementation assignment a skeleton: types,
-schemas, module boundaries, exported signatures, and test names with no bodies. The orchestrator
-runs the simplification review on that skeleton before bodies are written. Otherwise the first
-assignment implements the task directly.
+Place the [repository verification](../../../AGENTS.md#verify-and-deliver) after accumulated
+implementation and before commit or PR delivery.
 
 If implementation is authorized, continue with the next ready task. Otherwise report issue links,
 approved scope, readiness, and blockers. Verify remote issue contents, hierarchy, dependencies, and

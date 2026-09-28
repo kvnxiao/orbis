@@ -30,7 +30,7 @@ baseline or explicitly skips checks.
 The baseline records Node.js and pnpm versions, root/package/template manifests, all default and
 named catalog entries, release-age and build policies, and files requiring review. Read the reported
 `reviewFiles` relevant to the update, `CONTRIBUTING.md` for the workspace toolchain, and package
-`docs/development.md` files for compatibility checks. Preserve existing user changes.
+`docs/development.md` files for compatibility checks. Preserve the developer's existing changes.
 
 Release discovery queries the configured npm registries through pnpm and the
 [official Node.js release index](https://nodejs.org/dist/index.json). It sorts stable versions
@@ -73,29 +73,33 @@ versions for failed queries.
 
 When a candidate is incompatible, select the newest compatible version permitted by that package's
 release-age rule, record the blocker, and continue independent updates. Query metadata for any
-fallback version before selecting it. Previews require a user request.
+fallback version before selecting it. Previews require a developer request.
 
 ## Apply the selected versions
 
-Delegate bounded, approved implementation and compatibility fixes under the workflow's
-[implementation handoff](../../../docs/development-workflow.md#implementation-handoff). Keep version
-selection, compatibility decisions, and accumulated verification with the orchestrator.
+The orchestrator keeps version selection, compatibility decisions, and accumulated verification.
+Make the approved edits in one change set, divided under the
+[executor rule](../../../AGENTS.md#start-a-session) in `AGENTS.md`:
 
-Update default and named catalog values, `.node-version`, `packageManager`, affected manifests, and
-the `CONTRIBUTING.md` version table together. Update package runtime requirements and compatibility
-documentation where affected; keep workspace development versions out of READMEs. Preserve
-`catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep `minimumReleaseAge: 1440`
-and the package-name exclusions listed in `pnpm-workspace.yaml`; remove exclusions the release
-report marks `remove`, and do not add exclusions for younger releases.
+- `orbis-implementer` updates default and named catalog values, `.node-version`, `packageManager`,
+  and affected manifests, including package runtime requirements, and makes the compatibility fixes.
+  It then activates the selected development Node.js and pnpm and runs `just install`, which runs
+  `pnpm install`, to regenerate the lockfile.
+- The orchestrator updates the `CONTRIBUTING.md` version table and affected compatibility
+  documentation, and keeps workspace development versions out of READMEs.
 
-Activate the selected development Node.js and pnpm, then run `pnpm install` to regenerate the
-lockfile. Review the catalog and lockfile diff. Installed versions alone do not establish that the
-catalogs were updated.
+Preserve `catalog:`, `catalog:<name>`, `workspace:^`, and Pi peer contracts. Keep
+`minimumReleaseAge: 1440` and the package-name exclusions listed in `pnpm-workspace.yaml`; remove
+exclusions the release report marks `remove`, and do not add exclusions for younger releases.
+
+Review the catalog and lockfile diff. Installed versions alone do not establish that the catalogs
+were updated.
 
 ## Verify the update
 
-Run `verify-changes` once for the accumulated change set. Use these commands for its mechanical
-verification:
+Verify the accumulated change set under the
+[repository verification rule](../../../AGENTS.md#verify-and-deliver). Use these commands for its
+mechanical verification:
 
 ```sh
 just fix
@@ -122,5 +126,5 @@ describe the update as fully verified. Never add a build step to satisfy loading
 
 Report old and selected versions, retained versions and blockers, new checks, primary sources, and
 verification results. Distinguish measured command timings from upstream performance claims. State
-skipped checks and unverified runtime or distribution support. Publication requires its own
-authorization.
+skipped checks and unverified runtime or distribution support. Publication requires separate
+authorization under the [delivery limits](../../../AGENTS.md#verify-and-deliver).

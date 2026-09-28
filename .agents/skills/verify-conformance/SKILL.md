@@ -24,8 +24,8 @@ implementation revisions, and requested scope:
   including required interfaces and compatibility claims.
 - Within `verify-changes`, use the coordinator's change set and review affected requirements plus
   their interactions with unchanged behavior. Do not infer full-package conformance from this scope.
-  Return findings to the coordinator; do not invoke `verify-changes` recursively or delegate
-  further.
+  Return findings to the coordinator within the workflow's
+  [delegate limits](../../../docs/development-workflow.md#delegation).
 
 Use `git ls-files` and Git status to establish which artifacts belong to the reviewed revision. For
 a working-tree review, identify the base revision and local modifications. Include proposed new
@@ -95,9 +95,9 @@ changing either artifact.
 For a proposed amendment, identify the affected requirement or undocumented public behavior, the
 discrepancy, and the decision needed. Hand approved revision work to the caller or `verify-changes`
 coordinator through [revise-package](../revise-package/SKILL.md). The coordinator determines
-authorization from the user's request; this review neither approves nor applies amendments. After
-the coordinator resolves a finding, review the affected requirements and their interactions against
-the updated artifacts.
+authorization from the developer's request; this review neither approves nor applies amendments.
+After the coordinator resolves a finding, review the affected requirements and their interactions
+against the updated artifacts.
 
 ## Obtain reproducible evidence
 
