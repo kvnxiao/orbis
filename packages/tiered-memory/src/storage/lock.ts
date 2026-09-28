@@ -28,13 +28,16 @@ export const lockOwnerSchema = Type.Object(
 /** Define a `sessions/.lock/tickets/<number>.json` payload. */
 export type LockOwner = Static<typeof lockOwnerSchema>;
 
-/** Supply time, process liveness, and atomic ticket publication. */
+/** Supply time, process liveness, and optional overrides for lock file operations. */
 export interface LockIo {
   now: () => number;
   isRunning: (pid: number) => boolean;
   publish?: (source: string, ticket: string) => Promise<void>;
   list?: (directory: string) => Promise<string[]>;
+  readTicket?: (path: string) => Promise<string | undefined>;
   removeTicket?: (path: string) => Promise<void>;
+  removeDone?: (path: string) => Promise<void>;
+  removePrivate?: (path: string) => Promise<void>;
 }
 
 function processRunning(pid: number): boolean {
@@ -66,13 +69,22 @@ async function pause(signal: AbortSignal): Promise<void> {
   }
 }
 
-function busy(): Error {
-  return new Error("Tiered memory project lock is busy. Retry after the other writer finishes.");
+function busy(conflict?: unknown): Error {
+  const message = "Tiered memory project lock is busy. Retry after the other writer finishes.";
+  return conflict === undefined ? new Error(message) : new Error(message, { cause: conflict });
 }
 
-function removalBlocked(error: unknown): boolean {
+function windowsAccessConflict(error: unknown): boolean {
   const code = errorCode(error);
   return process.platform === "win32" && (code === "EPERM" || code === "EBUSY");
+}
+
+async function removeFile(path: string): Promise<void> {
+  await rm(path, { force: true });
+}
+
+async function removeDirectory(path: string): Promise<void> {
+  await rm(path, { recursive: true, force: true });
 }
 
 async function inspectDirectory(path: string, signal: AbortSignal): Promise<void> {
@@ -128,12 +140,12 @@ async function ticketNumbers(directory: string, io: LockIo): Promise<number[]> {
 }
 
 async function ticketOwner(
-  directory: string,
-  number: number,
+  path: string,
   signal: AbortSignal,
+  io: LockIo,
 ): Promise<LockOwner | undefined> {
-  const path = join(directory, `${String(number)}.json`);
-  const text = await readText(path, signal);
+  const text =
+    io.readTicket === undefined ? await readText(path, signal) : await io.readTicket(path);
   return text === undefined ? undefined : parseRecord(lockOwnerSchema, text, path);
 }
 
@@ -165,9 +177,18 @@ async function clearDeadPrivate(lock: string, io: LockIo): Promise<void> {
     if (!Number.isSafeInteger(pid)) {
       throw new Error(`Invalid project lock private file: ${name}`);
     }
-    if (!io.isRunning(pid)) {
+    if (io.isRunning(pid)) {
+      continue;
+    }
+    try {
       // oxlint-disable-next-line no-await-in-loop -- Only the dead process's private file is removed.
-      await rm(join(directory, name), { force: true });
+      await (io.removePrivate ?? removeFile)(join(directory, name));
+    } catch (error) {
+      // Windows reports a file that another contender is removing as EPERM or EBUSY. A later
+      // acquisition retries the removal.
+      if (!windowsAccessConflict(error)) {
+        throw error;
+      }
     }
   }
 }
@@ -177,41 +198,47 @@ async function clearFinished(
   numbers: number[],
   signal: AbortSignal,
   io: LockIo,
-): Promise<void> {
+): Promise<unknown> {
   const maximum = numbers.at(-1);
+  let skippedConflict: unknown;
   for (const number of numbers) {
     if (number === maximum) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- The ticket can disappear during another cleanup.
-    const owner = await ticketOwner(join(lock, "tickets"), number, signal);
-    if (owner === undefined) {
-      continue;
-    }
-    // oxlint-disable-next-line no-await-in-loop -- Completion is checked for this ticket.
-    const completed = await exists(donePath(lock, number, owner.token));
-    if (!completed && io.isRunning(owner.pid)) {
-      continue;
-    }
     try {
-      const path = join(lock, "tickets", `${String(number)}.json`);
-      // oxlint-disable-next-line no-await-in-loop -- Only tickets below the maximum are reclaimed.
-      await (
-        io.removeTicket ??
-        (async (ticket) => {
-          await rm(ticket, { force: true });
-        })
-      )(path);
+      // oxlint-disable-next-line no-await-in-loop -- Sequential reclamation limits concurrent removals that conflict on Windows.
+      await reclaimTicket(lock, number, signal, io);
     } catch (error) {
-      if (removalBlocked(error)) {
-        continue;
+      // Windows reports a ticket or marker that another contender is removing as EPERM or EBUSY.
+      // A later poll retries the ticket, and a leftover marker never matches a new token.
+      if (!windowsAccessConflict(error)) {
+        throw error;
       }
-      throw error;
+      skippedConflict = error;
     }
-    if (completed) {
-      // oxlint-disable-next-line no-await-in-loop -- A done marker belongs to its ticket token.
-      await rm(donePath(lock, number, owner.token), { recursive: true, force: true });
-    }
+  }
+  return skippedConflict;
+}
+
+async function reclaimTicket(
+  lock: string,
+  number: number,
+  signal: AbortSignal,
+  io: LockIo,
+): Promise<void> {
+  const ticket = join(lock, "tickets", `${String(number)}.json`);
+  const owner = await ticketOwner(ticket, signal, io);
+  if (owner === undefined) {
+    return;
+  }
+  const marker = donePath(lock, number, owner.token);
+  const completed = await exists(marker);
+  if (!completed && io.isRunning(owner.pid)) {
+    return;
+  }
+  await (io.removeTicket ?? removeFile)(ticket);
+  if (completed) {
+    await (io.removeDone ?? removeDirectory)(marker);
   }
 }
 
@@ -274,14 +301,14 @@ async function waitForTurn(
     // oxlint-disable-next-line no-await-in-loop -- Each poll sees current predecessors.
     const numbers = await ticketNumbers(join(lock, "tickets"), io);
     // oxlint-disable-next-line no-await-in-loop -- Cleanup precedes entry.
-    await clearFinished(lock, numbers, access.signal, io);
+    const skippedConflict = await clearFinished(lock, numbers, access.signal, io);
     // oxlint-disable-next-line no-await-in-loop -- Cleanup may change predecessor membership.
     const remaining = await ticketNumbers(join(lock, "tickets"), io);
     if (remaining.every((candidate) => candidate >= number)) {
       return;
     }
     if (io.now() >= deadline) {
-      throw busy();
+      throw busy(skippedConflict);
     }
     // oxlint-disable-next-line no-await-in-loop -- Wait for a predecessor to release.
     await pause(access.signal);
@@ -296,8 +323,11 @@ async function waitForTurn(
  * the maximum before waiting. Lower live tickets finish first; dead owners and completed tickets
  * are reclaimed. A damaged ticket is preserved and reported.
  *
- * @throws Error when the lock is busy or the ticket sequence is exhausted; `access.signal.reason`
- *   when cancelled while waiting; the original filesystem error for other failures.
+ * @throws Error when the lock is busy; its `cause` is the last Windows access conflict skipped in
+ *   the final poll, when one was skipped.
+ * @throws Error when the ticket sequence is exhausted.
+ * @throws `access.signal.reason` when cancelled while waiting.
+ * @throws The original filesystem error for other failures.
  */
 export async function withProjectLock<T>(
   sessionsDir: string,

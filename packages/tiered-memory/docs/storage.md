@@ -160,11 +160,21 @@ link. Lower live tickets finish first. Completion markers and dead-process check
 contenders reclaim finished or abandoned tickets below the greatest number; that greatest ticket
 remains as the sequence high-water mark. A delayed contender rechecks the published maximum before
 waiting, so it cannot enter under a retired number. A damaged ticket is preserved and reported. Dead
-private records are removed. On Windows, removal blocked by an open ticket file is retried while the
-contender waits. Acquisition waits up to five seconds before reporting the lock as busy; retry after
-the other writer finishes. Waiting observes cancellation. When another process has reused a dead
-holder's process identifier, contenders treat its ticket as live and report busy after the deadline
-until that process exits.
+private records are removed. Acquisition waits up to five seconds before reporting the lock as busy;
+retry after the other writer finishes. Waiting observes cancellation. When another process has
+reused a dead holder's process identifier, contenders treat its ticket as live and report busy after
+the deadline until that process exits.
+
+On Windows, concurrent removal by another contender can make a lock file operation fail with `EPERM`
+or `EBUSY`. The contender skips that file instead of failing:
+
+- A skipped ticket stays listed, so the contender keeps waiting and retries it on its next check.
+- A skipped dead private record is removed by a later acquisition.
+- A skipped completion marker stays in `sessions/.lock/done/`. It is inert, because its name
+  includes its ticket's random token and no later ticket reuses that token.
+
+If the final check before the deadline skips a ticket, the busy error carries the last skipped
+failure as its cause.
 
 ## Curation
 

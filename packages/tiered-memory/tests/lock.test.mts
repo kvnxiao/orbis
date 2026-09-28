@@ -6,7 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { expect } from "vitest";
 
-import { writeDurable } from "../src/storage/files.ts";
+import { readText, writeDurable } from "../src/storage/files.ts";
 import { lockOwnerSchema, withProjectLock } from "../src/storage/lock.ts";
 import type { LockIo } from "../src/storage/lock.ts";
 import { parseRecord } from "../src/storage/records.ts";
@@ -195,34 +195,111 @@ test("a live predecessor past the deadline reports busy", async ({ makeRoot }) =
   expect(await exists(join(sessions, ".lock", "tickets", "1.json"))).toBe(true);
 });
 
-test("a Windows handle blocking dead-ticket removal waits until busy", async ({
+test("a persistent Windows dead-ticket removal conflict reports busy with that conflict as cause", async ({
   makeRoot,
   skip,
 }) => {
-  skip(process.platform !== "win32", "Windows reports an open ticket handle as EPERM or EBUSY.");
+  skip(process.platform !== "win32", "Windows reports a conflicting removal as EPERM or EBUSY.");
   const sessions = join(await makeRoot(), "sessions");
   await writeTicket(sessions, 1, { version: 1, pid: 4242, token: "dead" });
+  const conflict = Object.assign(new Error("ticket removal conflicts with another contender"), {
+    code: "EPERM",
+  });
   let now = 0;
   const io: LockIo = {
     now: () => (now += 1000),
     isRunning: (pid) => pid !== 4242,
     removeTicket: async () => {
-      await Promise.reject(
-        Object.assign(new Error("ticket has an open handle"), { code: "EPERM" }),
-      );
+      await Promise.reject(conflict);
     },
   };
-  await expect(
-    withProjectLock(
+  let failure: unknown;
+  try {
+    await withProjectLock(
       sessions,
       access(),
       async () => {
         await Promise.resolve();
       },
       io,
-    ),
-  ).rejects.toThrow("project lock is busy");
+    );
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+  expect(failure instanceof Error && failure.message).toContain("project lock is busy");
+  expect(failure instanceof Error && failure.cause).toBe(conflict);
   expect(await exists(join(sessions, ".lock", "tickets", "1.json"))).toBe(true);
+});
+
+test.for(["EPERM", "EBUSY"])(
+  "a Windows %s ticket read that races its removal is retried on a later poll",
+  async (code, { makeRoot, skip }) => {
+    skip(process.platform !== "win32", "Windows reports a ticket being removed as EPERM or EBUSY.");
+    const sessions = join(await makeRoot(), "sessions");
+    await writeTicket(sessions, 1, { version: 1, pid: 4242, token: "dead" });
+    let removalInProgress = true;
+    const io: LockIo = {
+      now: () => Date.now(),
+      isRunning: (pid) => pid !== 4242,
+      readTicket: async (path) => {
+        if (removalInProgress) {
+          removalInProgress = false;
+          throw Object.assign(new Error("ticket is being removed"), { code });
+        }
+        return await readText(path, new AbortController().signal);
+      },
+    };
+    await expect(
+      withProjectLock(sessions, access(), async () => await Promise.resolve("acquired"), io),
+    ).resolves.toBe("acquired");
+    expect(removalInProgress).toBe(false);
+    expect(await tickets(sessions)).toEqual(["2.json"]);
+  },
+);
+
+test("a non-Windows EPERM ticket read rejects acquisition with that error", async ({
+  makeRoot,
+  skip,
+}) => {
+  skip(process.platform === "win32", "Windows skips EPERM ticket reads as removal conflicts.");
+  const sessions = join(await makeRoot(), "sessions");
+  await writeTicket(sessions, 1, { version: 1, pid: 4242, token: "dead" });
+  const failure = Object.assign(new Error("ticket read denied"), { code: "EPERM" });
+  const io: LockIo = {
+    now: () => Date.now(),
+    isRunning: (pid) => pid !== 4242,
+    readTicket: async () => await Promise.reject(failure),
+  };
+  await expect(
+    withProjectLock(sessions, access(), async () => await Promise.resolve("acquired"), io),
+  ).rejects.toBe(failure);
+});
+
+test("a Windows done-marker removal that races another cleaner still acquires the lock", async ({
+  makeRoot,
+  skip,
+}) => {
+  skip(process.platform !== "win32", "Windows reports a concurrently removed directory as EPERM.");
+  const sessions = join(await makeRoot(), "sessions");
+  await writeTicket(sessions, 1, { version: 1, pid: process.pid, token: "finished" });
+  await mkdir(join(sessions, ".lock", "done", doneName(1, "finished")), { recursive: true });
+  let markerRemovalRaced = false;
+  const io: LockIo = {
+    now: () => Date.now(),
+    isRunning: () => true,
+    removeDone: async () => {
+      markerRemovalRaced = true;
+      await Promise.reject(
+        Object.assign(new Error("directory removal raced another cleaner"), { code: "EPERM" }),
+      );
+    },
+  };
+  await expect(
+    withProjectLock(sessions, access(), async () => await Promise.resolve("acquired"), io),
+  ).resolves.toBe("acquired");
+  expect(markerRemovalRaced).toBe(true);
+  expect(await tickets(sessions)).toEqual(["2.json"]);
 });
 
 test("cancellation while waiting preserves the abort reason", async ({ makeRoot }) => {
@@ -341,6 +418,32 @@ test("private files from a dead process are removed without touching a live writ
   );
   expect(await exists(dead)).toBe(false);
   expect(await exists(live)).toBe(true);
+});
+
+test("a Windows dead-private removal that races another contender still acquires the lock", async ({
+  makeRoot,
+  skip,
+}) => {
+  skip(process.platform !== "win32", "Windows reports a concurrently removed file as EPERM.");
+  const sessions = join(await makeRoot(), "sessions");
+  const directory = join(sessions, ".lock", "private");
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, "4242-dead.json"), "{}");
+  let privateRemovalRaced = false;
+  const io: LockIo = {
+    now: () => Date.now(),
+    isRunning: (pid) => pid !== 4242,
+    removePrivate: async () => {
+      privateRemovalRaced = true;
+      await Promise.reject(
+        Object.assign(new Error("private removal raced another contender"), { code: "EPERM" }),
+      );
+    },
+  };
+  await expect(
+    withProjectLock(sessions, access(), async () => await Promise.resolve("acquired"), io),
+  ).resolves.toBe("acquired");
+  expect(privateRemovalRaced).toBe(true);
 });
 
 for (const child of [undefined, "tickets", "done", "private"] as const) {
