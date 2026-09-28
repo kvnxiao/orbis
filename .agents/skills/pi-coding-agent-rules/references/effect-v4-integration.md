@@ -38,10 +38,9 @@ quality or legibility, keep the clearer implementation. Include synchronous oper
 modeling in the assessment; do not require a service or wrapper for every function. Introduce a
 reusable runtime only when shared capabilities or resource ownership justify it.
 
-Apply the [performance rules](typescript-performance.md) to library costs, including loading and
-allocation. Measure consequential or uncertain costs with equivalent work. For example, a data type
-may clarify valid outcomes without a managed runtime, while still adding library execution and
-allocation costs.
+Consider library loading and allocation on performance-sensitive paths. Effect adoption does not
+require before-and-after probes or equivalent-work benchmarks. For example, a data type may clarify
+valid outcomes without a managed runtime, while still adding library execution and allocation costs.
 
 ## Preserve the Pi host contracts (Required)
 
