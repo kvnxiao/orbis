@@ -6,9 +6,32 @@ documentation concrete.
 
 ## Start a session
 
-For small changes with settled scope, use the
-[lightweight path](docs/development-workflow.md#lightweight-path). It overrides the procedural
-requirements below and in repository skills; preserve contracts and authorization boundaries.
+The main session is the **orchestrator**: it owns decisions, coordination, verification, and
+delivery, and assigns bounded work to delegate agents. Before any edit, the orchestrator completes
+this start protocol in order:
+
+1. Invoke [work-issue](.agents/skills/work-issue/SKILL.md) for every request that starts, resumes,
+   or continues an issue, a PR, or a direct development request. The request needs no skill name or
+   lifecycle stage.
+2. Resolve the target: an issue; a PR, resumed on its closing issue when one exists; a branch; or a
+   package.
+3. State the classification, its evidence, the next bounded action, and who executes it. The
+   workflow's [work paths](docs/development-workflow.md#work-paths) define two classifications: work
+   tracked by an issue takes the issue-backed path and is classified by its Stage, the lifecycle
+   value in the issue's Current handoff table; a direct request without an issue takes the PR-only
+   path. An existing issue always takes precedence.
+4. Before starting work or implementation, load the relevant `*-rules` skills for the domain of work
+   involved, such as [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md) for Pi
+   extensions, packages, and TypeScript. Read each of their references whose "Read when" condition
+   matches the change.
+5. Delegate package source and test edits to the `orbis-implementer` agent on every path, including
+   small fixes, and name the loaded rules skills and references in the handoff. The orchestrator
+   edits documentation, instructions, and issue or PR artifacts, and runs investigation probes only
+   in scratch locations outside tracked files.
+
+Status questions, read-only reviews, and general questions skip this protocol and stay within their
+stated scope; a review still loads the rules skills in step 4. Stop at the boundary of an explicit
+local-only, chat-only, design-only, or planning-only request.
 
 At the start of substantive work, read the
 [wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) once and open the records for
@@ -19,24 +42,22 @@ The [development workflow](docs/development-workflow.md) defines shared work, au
 checkpoints, and delivery. Its [agent model policy](docs/development-workflow.md#agent-models) maps
 each role to a model and effort per host.
 
-For issue work, infer the current stage rather than asking the user to select a skill. Keep status
-and review-only requests within their stated scope. If the host does not discover `.agents/skills`,
-read the linked `SKILL.md`.
+If the host does not discover `.agents/skills`, read the linked `SKILL.md`.
 
-| Trigger                                               | Read or invoke                                                                                                                      |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Before touching any package                           | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)                                                              |
-| Start, resume, or continue issue work                 | [work-issue](.agents/skills/work-issue/SKILL.md)                                                                                    |
-| Package design                                        | [design-package](.agents/skills/design-package/SKILL.md)                                                                            |
-| Implementation planning                               | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)                                                                  |
-| Contract changes or code that drifted from a SPEC     | [revise-package](.agents/skills/revise-package/SKILL.md)                                                                            |
-| Package conformance review                            | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)                                                                    |
-| README creation or revision                           | [write-readme](.agents/skills/write-readme/SKILL.md)                                                                                |
-| Dependency refreshes or newly supported strict checks | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                                                                        |
-| Write or amend a SPEC or interaction contract         | [specification guidance](docs/specifications.md)                                                                                    |
-| Recording a design decision                           | [Decisions and local evidence](docs/development-workflow.md#decisions-and-local-evidence)                                           |
-| Setup, toolchain, publication, and lint details       | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                  |
-| GitHub issue and PR labels, bodies, and comments      | [Issue labels](docs/development-workflow.md#issue-labels) and [GitHub Markdown](docs/development-workflow.md#write-github-markdown) |
+| Trigger                                                                    | Read or invoke                                                                                                                      |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Pi extension, package, or TypeScript work or review                        | [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md)                                                              |
+| Start, resume, or continue an issue, a PR, or a direct development request | [work-issue](.agents/skills/work-issue/SKILL.md)                                                                                    |
+| Package design                                                             | [design-package](.agents/skills/design-package/SKILL.md)                                                                            |
+| Implementation planning                                                    | [plan-implementation](.agents/skills/plan-implementation/SKILL.md)                                                                  |
+| Contract changes or code that drifted from a SPEC                          | [revise-package](.agents/skills/revise-package/SKILL.md)                                                                            |
+| Package conformance review                                                 | [verify-conformance](.agents/skills/verify-conformance/SKILL.md)                                                                    |
+| README creation or revision                                                | [write-readme](.agents/skills/write-readme/SKILL.md)                                                                                |
+| Dependency refreshes or newly supported strict checks                      | [update-toolchain](.agents/skills/update-toolchain/SKILL.md)                                                                        |
+| Write or amend a SPEC or interaction contract                              | [specification guidance](docs/specifications.md)                                                                                    |
+| Recording a design decision                                                | [Decisions and local evidence](docs/development-workflow.md#decisions-and-local-evidence)                                           |
+| Setup, toolchain, publication, and lint details                            | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                  |
+| GitHub issue and PR labels, bodies, and comments                           | [Issue labels](docs/development-workflow.md#issue-labels) and [GitHub Markdown](docs/development-workflow.md#write-github-markdown) |
 
 Use `agent-gh` for all GitHub CLI commands; do not invoke `gh` directly.
 
@@ -160,10 +181,10 @@ load the package through Pi; type checking does not prove import compatibility.
 
 Run `verify-changes` once on the accumulated change set before a commit or PR, and include
 `verify-conformance` for affected contracts and `write-readme` for affected READMEs. Reviewers
-report without editing; the coordinator resolves findings within authorized scope and reruns
-affected checks. Review instruction and configuration changes affecting routing, authorization,
-delegation, checkpoints, or execution under the workflow's
-[review rules](docs/development-workflow.md#review-and-delivery).
+report without editing; the orchestrator resolves findings within authorized scope, sends package
+source and test repairs to `orbis-implementer`, and reruns affected checks. Review instruction and
+configuration changes affecting routing, authorization, delegation, checkpoints, or execution under
+the workflow's [review rules](docs/development-workflow.md#review-and-delivery).
 
 If the global `verify-changes` or `audit-prose` skill is required but unavailable, review the diff,
 update affected documentation, audit prose, run repository checks, and report what was skipped.

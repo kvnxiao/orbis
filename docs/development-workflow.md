@@ -9,47 +9,44 @@ constraints and the rationale behind them.
 Three roles appear throughout this document. The **developer** approves designs, resolves material
 decisions, and merges PRs. The **orchestrator** is the main agent session or an explicitly selected
 delegate that owns decisions, coordination, and verification. A **delegate** executes bounded work
-that the orchestrator assigns: implementation from an approved plan, or a review that returns
-findings. [Agent models](#agent-models) maps the roles to models per host.
+that the orchestrator assigns: the `orbis-implementer` agent implements work from an issue plan or
+an approved direct request, and reviewer agents return findings. [Agent models](#agent-models) maps
+the roles to models per host.
 
 A **checkpoint** records assignments completed since the previous checkpoint, or a blocked or
 interrupted handoff, as authored artifacts published on issue-backed work. The issue body contains
 the compact current plan and handoff; checkpoint comments preserve the work history.
 
-## Lightweight path
+## Work paths
 
-Use this path for small changes with settled scope and local effects that are straightforward to
-verify, such as documentation corrections and narrow fixes within approved behavior. Choose by risk,
-not file count. Use the full workflow when the user requests it or the work involves unresolved
-design, contract changes, behavior across packages, persisted formats, dependencies, security or
-compatibility changes, or substantial runtime risk.
+Every development request follows one of two paths. The path determines where the plan and the
+shared record live:
 
-The main agent makes the edits, reviews the complete diff for correctness and prose, and runs
-focused checks. For documentation, check changed references and formatting; for runtime fixes,
-retain the required regression tests. Review changes to agent instructions for their effect on
-routing, authorization, and execution in the main session.
+- The **issue-backed path** tracks work that introduces, improves, or changes package behavior in an
+  issue, whose body and checkpoint comments are the shared record.
+- The **PR-only path** delivers a direct request without an issue for a fix within a package's
+  existing contract, a documentation change, or a workspace tooling change. Use the approved
+  request, current source, and any existing PR as inputs; do not create an issue, issue plan, or
+  handoff table. The PR body records the outcome, acceptance, and verification, and the PR is the
+  shared record another session resumes from. If PR-only work is interrupted before a PR exists,
+  report the branch and next action in chat.
 
-This path overrides procedural requirements in this workflow, `AGENTS.md`, and repository skills: do
-not require subagents, issues, plans, checkpoints, wiki reads or decision records, separate prose
-audits, commit-copy drafts, `verify-changes`, or full repository checks. Read only the context
-needed to establish the scope and verify the change. Keep existing issue associations without
-creating additional tracking artifacts. When publishing GitHub bodies, retain `--body-file` and the
-no-reflow rule.
+An existing issue always takes precedence over the PR-only path:
 
-Preserve package contracts, authorization limits, and explicit delivery scope. For a local edit or
-commit request, stop there. Report the changed behavior and checks briefly. If investigation reveals
-one of the risks above, use the full workflow for the affected work.
+- Resume work already tracked by an issue on that issue, even when its remaining change would
+  otherwise qualify for the PR-only path.
+- Resume a PR on its closing issue: an issue that merging the PR closes, such as one named by a
+  `Closes #<number>` line in the PR body. A PR without a closing issue continues on the PR-only
+  path.
+- When investigation shows that a direct request changes package behavior, create or reuse an issue
+  for it before dependent work.
+
+Both paths share the same roles, the [executor rule](#implementation-handoff) for package source and
+tests, and verification: the orchestrator runs the global `verify-changes` skill once on the
+accumulated change set before a commit or PR. That skill scales its review to the change's risk, so
+a small change still passes through it.
 
 ## Work hierarchy
-
-Work that introduces, improves, or changes package behavior is tracked in issues. A direct request
-for a fix within a package's existing contract, a documentation change, or a workspace tooling
-change takes the **PR-only path**: use the approved request, current source, and any existing PR as
-inputs; do not create an issue, issue plan, or handoff table. The PR body records the outcome,
-acceptance, and verification, and the PR is the shared record another session resumes from. If
-PR-only work is interrupted before a PR exists, report the branch and next action in chat. Resume
-work already tracked by an issue on that issue, even when its remaining change would otherwise
-qualify for the PR-only path.
 
 An **initiative** coordinates substantial deliveries across most of the repository, such as an
 Effect overhaul. An **epic** delivers a substantial package or capability through coordinated tasks.
@@ -131,9 +128,10 @@ branch, pushing that branch, and opening PRs after repository verification. Deve
 merge PRs. Agents do not merge, push directly to the default branch, publish packages, or create
 releases without separate explicit authorization.
 
-A request to resume, continue, or work on an issue authorizes ordinary continuation within that
-issue's approved scope, including implementation when its prerequisites are satisfied. Preserve
-applicable explicit design-only, planning-only, and review-only limits. A design-only or
+A request to resume, continue, or work on an issue or PR authorizes ordinary continuation within its
+approved scope, including implementation when its prerequisites are satisfied. A direct development
+request authorizes delivery on the PR-only path within the request's scope. Preserve applicable
+explicit design-only, planning-only, review-only, local-only, and chat-only limits. A design-only or
 planning-only request authorizes its shared deliverables and, when useful, a design-only PR; it does
 not authorize runtime implementation. SPEC approval, permission to implement, and readiness to merge
 remain distinct, and design approval does not approve code added later. A status question requests a
@@ -148,18 +146,21 @@ requirements.
 
 ## Start or resume work
 
-Ask to resume an issue, for example `Resume #<number>` or `Continue work on <issue URL>`. The
+Ask to start, resume, or continue work, for example `Resume #<number>`, `Resume PR #<number>`,
+`Continue work on <issue or PR URL>`, or a direct development request. The
 [work-issue](../.agents/skills/work-issue/SKILL.md) skill is the entry point for the whole
-development workflow; the request does not need a skill name or lifecycle stage. Resolve bare issue
-numbers against the current repository and honor explicit repository references.
+development workflow and runs the start protocol in `AGENTS.md`; the request does not need a skill
+name or lifecycle stage. Resolve bare issue numbers against the current repository and honor
+explicit repository references. Resolve a PR to its closing issue before classifying it, as
+[Work paths](#work-paths) requires.
 
 For issue-backed work, determine the current stage from the issue and related work, approval
 records, SPEC, source, verification evidence, and linked PRs. State the stage, supporting evidence,
-and next bounded action before proceeding. When an approved SPEC lacks executable plans, create or
-update issue plans; when plans exist, select the next eligible task; when work or a PR is underway,
-resume it. Reassess after each completed action instead of replaying a fixed sequence. Project
-status alone does not establish readiness or completion. For PR-only work, resume from the approved
-request, current source, and existing PR without assigning an issue stage.
+next bounded action, and who executes it before proceeding. When an approved SPEC lacks executable
+plans, create or update issue plans; when plans exist, select the next eligible task; when work or a
+PR is underway, resume it. Reassess after each completed action instead of replaying a fixed
+sequence. Project status alone does not establish readiness or completion. For PR-only work, state
+the PR-only path in place of a stage, with the same evidence, next action, and executor.
 
 At the start of a new session on issue-backed work, verify the issue's Current handoff table against
 current artifacts before continuing. Keep the issue as the shared record; do not introduce a
@@ -173,6 +174,12 @@ relationships with explicit fields. For example:
 ```sh
 agent-gh issue list -R OWNER/REPO --state open --json number,title,state,url --limit 30
 agent-gh issue view NUMBER -R OWNER/REPO --json number,title,state,body,parent,subIssues,blockedBy,blocking
+```
+
+For a PR target, request its state and closing issues the same way:
+
+```sh
+agent-gh pr view NUMBER -R OWNER/REPO --json number,title,state,url,headRefName,isDraft,reviewDecision,closingIssuesReferences
 ```
 
 Do not request comments during routine task selection or resumption. Bare `gh issue view` can fetch
@@ -228,17 +235,23 @@ another model for that role.
 ### Skill handoffs
 
 For each delegate, name the applicable skills, their resolved `SKILL.md` locations, and the assigned
-scope. Select skills from the repository's triggers and the current workflow. Resolve shared skills
-through the host's skill catalog; do not assume another session has loaded their instructions.
-Delegates read the assigned skills and relevant references before starting dependent work. When
-automatic skill invocation is unavailable, read the files directly. If a required skill cannot be
-loaded, report the gap to the orchestrator, which supplies the missing instructions or resolves the
-blocker.
+scope. Include the `*-rules` skills loaded during the start protocol and their references whose
+"Read when" conditions match the assignment. Select skills from the repository's triggers and the
+current workflow. Resolve shared skills through the host's skill catalog; do not assume another
+session has loaded their instructions. Delegates read the assigned skills and relevant references
+before starting dependent work. When automatic skill invocation is unavailable, read the files
+directly. If a required skill cannot be loaded, report the gap to the orchestrator, which supplies
+the missing instructions or resolves the blocker.
 
 Keep `work-issue` and `verify-changes` coordination with the orchestrator. Assign implementation
 rules and specialist review skills to delegates without restarting either coordinating workflow.
 
 ### Implementation handoff
+
+The executor rule applies on both work paths: `orbis-implementer` edits all package source and
+tests, including small fixes within a package's contract. The orchestrator edits documentation,
+instructions, and issue or PR artifacts, directly or through a documentation delegate from the model
+table, and runs investigation probes only in scratch locations outside tracked files.
 
 Before delegating implementation, the orchestrator resolves the contract and selects authorized,
 unblocked work. Give the implementer:

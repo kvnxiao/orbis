@@ -18,7 +18,7 @@ documentation does not change the package contract.
 ## Identify the affected contract
 
 A direct fix within the contract that has no issue takes the workflow's
-[PR-only path](../../../docs/development-workflow.md#work-hierarchy); a contract change gets an
+[PR-only path](../../../docs/development-workflow.md#work-paths); a contract change gets an
 issue for the bounded revision, linked to an existing parent when one exists. Apply the workflow's
 [issue labels](../../../docs/development-workflow.md#issue-labels) by deliverable. A revision that
 delivers changed package behavior remains `kind:feature` while its Stage is Design; a contract-only
@@ -113,15 +113,15 @@ full-package planning. Update authoritative issue plans, preserving unrelated sc
 edits, and completed work. Revise affected dependencies and coverage claims. Evidence for previous
 behavior does not verify a changed requirement. For a direct fix or permitted choice within the
 contract that has no issue,
-use the [PR-only path](../../../docs/development-workflow.md#work-hierarchy): work from the approved
+use the [PR-only path](../../../docs/development-workflow.md#work-paths): work from the approved
 request and current source without creating an issue plan.
 
 When code changes are authorized, continue through implementation and verification without stopping
 at the amended SPEC or plan. Update code, tests, package usage, and interaction scenarios within the
 same change set. Derive expected results from the approved requirements. Cover affected failure and
 ordering boundaries and interactions with preserved behavior; reproduce defects with failing tests.
-Delegate bounded implementation tasks after the contract and, for issue-backed work, plan are
-approved.
+Delegate bounded code and test tasks to `orbis-implementer` after the contract and, for
+issue-backed work, plan are approved.
 
 ## Verify the accumulated revision
 

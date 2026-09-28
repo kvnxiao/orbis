@@ -2,8 +2,9 @@
 
 Keep current executable plans in GitHub issue bodies. The SPEC and interaction contract define
 behavior; issues select concrete edits and checks. The development workflow's
-[work hierarchy](../../../../docs/development-workflow.md#work-hierarchy) defines which work gets an
-issue, how body edits are batched, and where evidence lives.
+[work paths](../../../../docs/development-workflow.md#work-paths) define which work gets an issue,
+and its [work hierarchy](../../../../docs/development-workflow.md#work-hierarchy) defines how body
+edits are batched and where evidence lives.
 
 Start each issue with the Current handoff block below. For a small change, cover
 the remaining plan information in a few paragraphs. Do not add empty plan sections or copy the
