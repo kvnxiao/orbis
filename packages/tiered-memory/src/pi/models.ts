@@ -46,3 +46,15 @@ export async function resolveModel(
   }
   return modelCapacity(id, settings.limits, model);
 }
+
+/** Resolve both memory roles concurrently through `resolveModel`. */
+export async function resolveRoles(
+  ctx: ExtensionContext,
+  settings: Settings,
+): Promise<Record<Role, ModelResolution>> {
+  const [observer, consolidator] = await Promise.all([
+    resolveModel(ctx, settings, "observer"),
+    resolveModel(ctx, settings, "consolidator"),
+  ]);
+  return { observer, consolidator };
+}

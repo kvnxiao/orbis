@@ -1,5 +1,8 @@
+import { spawn } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { once } from "node:events";
 import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -8,12 +11,15 @@ import { Value } from "typebox/value";
 import { expect } from "vitest";
 
 import { digest } from "../src/domain/canonical.ts";
-import type { DurableWriter } from "../src/storage/files.ts";
-import { registrySchema, SourceRegistry } from "../src/storage/sources.ts";
+import { writeDurable } from "../src/storage/files.ts";
+import { registrySchema } from "../src/storage/sources.ts";
 import type { SourceSessionManager } from "../src/storage/sources.ts";
 import type { Fixture } from "./pi-fixture.mts";
+import { interruptedOnly } from "./storage-harness.mts";
+import type { TestWrite } from "./storage-harness.mts";
 import {
   interruptingWriter,
+  openRegistry,
   openStore,
   rejectionPaths,
   sourceEntry,
@@ -21,12 +27,12 @@ import {
   zeroUsage,
 } from "./store-fixture.mts";
 
-async function registryFor(f: Fixture, write?: DurableWriter) {
+async function registryFor(f: Fixture, write?: TestWrite) {
   const store = await openStore(f.cwd, {
     sessionId: f.session.sessionManager.getSessionId(),
     ...(write === undefined ? {} : { write }),
   });
-  return { store, registry: await SourceRegistry.open(store) };
+  return { store, registry: await openRegistry(store) };
 }
 
 const editableRegistrySchema = Type.Object({
@@ -73,7 +79,7 @@ test("registration records original text without observations and round-trips re
     [explicit]: { eventTime: "2026-09-20T10:00:00", timezone: "America/New_York" },
     [relative]: { eventTime: "yesterday" },
   });
-  const reopened = (await SourceRegistry.open(store)).sources;
+  const reopened = (await openRegistry(store)).sources;
   const timeOf = (entryId: string) => reopened.find((source) => source.entryId === entryId)?.time;
   expect(timeOf(explicit)).toEqual({
     recordedAt: "2020-01-02T03:04:05.000Z",
@@ -304,7 +310,7 @@ test("sources returns copies that callers cannot use to change the registry", as
     exposed.time.eventTime = "never";
   }
   expect(Object.keys(registry.sources[0]?.time ?? {})).toEqual(["recordedAt"]);
-  expect((await SourceRegistry.open(store)).sources[0]?.time.timezone).toBeUndefined();
+  expect((await openRegistry(store)).sources[0]?.time.timezone).toBeUndefined();
 });
 
 test("records of entries off the active branch are retained after navigation", async ({
@@ -318,9 +324,7 @@ test("records of entries off the active branch are retained after navigation", a
   f.session.sessionManager.branch(sourceEntry(f, "First branch source.").id);
   const records = await registry.register(f.session.sessionManager);
   expect(records.filter((source) => source.role === "user")).toHaveLength(1);
-  const retained = (await SourceRegistry.open(store)).sources.filter(
-    (source) => source.role === "user",
-  );
+  const retained = (await openRegistry(store)).sources.filter((source) => source.role === "user");
   expect(retained).toHaveLength(2);
 });
 
@@ -428,7 +432,281 @@ test.for([
     first[field] = value;
     const bytes = `${JSON.stringify(damaged)}\n`;
     await writeFile(file, bytes);
-    await expect(SourceRegistry.open(store)).rejects.toThrow(`Invalid record at ${file}: ${path}`);
+    await expect(openRegistry(store)).rejects.toThrow(`Invalid record at ${file}: ${path}`);
     expect(await readFile(file, "utf8")).toBe(bytes);
   },
 );
+
+test("an interruption during the registry write still replaces the cache once the write settles", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Registered while interrupted.");
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  let armed = false;
+  const { store, registry: sources } = await registryFor(f, async (path, contents) => {
+    if (armed && path.endsWith("sources.json")) {
+      entered.resolve(undefined);
+      await gate.promise;
+    }
+    await writeDurable(path, contents);
+  });
+  armed = true;
+  const fiber = store.fork(sources.registry.register(f.session.sessionManager));
+  await entered.promise;
+  fiber.interruptUnsafe();
+  gate.resolve(undefined);
+  expect(await interruptedOnly(fiber)).toBe(true);
+  const onDisk = (await openRegistry(store)).sources.map((source) => source.reference);
+  expect(onDisk.length).toBeGreaterThan(0);
+  expect(sources.sources.map((source) => source.reference)).toEqual(onDisk);
+});
+
+test("two registries on the same session directory register distinct records concurrently and both survive", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("First registry source.");
+  await f.session.prompt("Second registry source.");
+  const first = sourceEntry(f, "First registry source.");
+  const second = sourceEntry(f, "Second registry source.");
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  let armed = false;
+  const { registry: one } = await registryFor(f, async (path, contents) => {
+    if (armed && path.endsWith("sources.json")) {
+      entered.resolve(undefined);
+      await gate.promise;
+    }
+    await writeDurable(path, contents);
+  });
+  const { store, registry: other } = await registryFor(f);
+  armed = true;
+  const registeringOne = one.register(managerWith(f, [first]));
+  await entered.promise;
+  const registeringOther = other.register(managerWith(f, [second]));
+  gate.resolve(undefined);
+  await Promise.all([registeringOne, registeringOther]);
+  const entries = (await openRegistry(store)).sources.map((source) => source.entryId).toSorted();
+  expect(entries).toEqual([first.id, second.id].toSorted());
+});
+
+test("eventTime and timezone added by one registry survive a later registration from a registry with an older cache", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Deploy happened at ten.");
+  const entry = sourceEntry(f, "Deploy happened at ten.");
+  const { registry: timed } = await registryFor(f);
+  const { store, registry: stale } = await registryFor(f);
+  await timed.register(f.session.sessionManager, {
+    [entry.id]: { eventTime: "2026-09-20T10:00:00", timezone: "America/New_York" },
+  });
+  await stale.register(f.session.sessionManager);
+  const time = (await openRegistry(store)).sources.find(
+    (source) => source.entryId === entry.id,
+  )?.time;
+  expect(time).toMatchObject({ eventTime: "2026-09-20T10:00:00", timezone: "America/New_York" });
+  expect(stale.sources.find((source) => source.entryId === entry.id)?.time).toEqual(time);
+});
+
+test("supplied times never replace recordedAt from the transcript entry", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Recorded at the transcript time.");
+  const entry = sourceEntry(f, "Recorded at the transcript time.");
+  const { registry: target } = await registryFor(f);
+  const [plain] = await target.register(managerWith(f, [entry]));
+  const [supplied] = await target.register(managerWith(f, [entry]), {
+    [entry.id]: { recordedAt: "1999-01-01T00:00:00.000Z", eventTime: "yesterday" },
+  });
+  expect(plain?.time.recordedAt).toBeDefined();
+  expect(supplied?.time).toEqual({ recordedAt: plain?.time.recordedAt, eventTime: "yesterday" });
+});
+
+test("a fresh sources.json that fails the cross-field checks rejects registration and keeps the cache and file", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Registered before the damage.");
+  const { store, registry: target } = await registryFor(f);
+  await target.register(f.session.sessionManager);
+  const cached = target.sources;
+  const file = join(store.sessionDir, "sources.json");
+  const damaged = editableRegistry(await readFile(file, "utf8"));
+  const [first] = damaged.sources;
+  if (first === undefined) {
+    throw new Error("Missing persisted source.");
+  }
+  first.omitted = first.omitted !== true;
+  const bytes = `${JSON.stringify(damaged)}\n`;
+  await writeFile(file, bytes);
+  await f.session.prompt("Registered after the damage.");
+  await expect(target.register(f.session.sessionManager)).rejects.toThrow(
+    `Invalid record at ${file}: /sources/0/omitted`,
+  );
+  expect(await readFile(file, "utf8")).toBe(bytes);
+  expect(target.sources).toEqual(cached);
+});
+
+test("a failed registry write leaves the cache unchanged", async ({ createFixture }) => {
+  const f = await createFixture();
+  await f.session.prompt("Registered once.");
+  let armed = false;
+  const failure = new Error("sources.json write failed");
+  const { registry: target } = await registryFor(f, async (path, contents) => {
+    if (armed && path.endsWith("sources.json")) {
+      throw failure;
+    }
+    await writeDurable(path, contents);
+  });
+  await target.register(f.session.sessionManager);
+  const cached = target.sources;
+  await f.session.prompt("Registered twice.");
+  armed = true;
+  await expect(target.register(f.session.sessionManager)).rejects.toBe(failure);
+  expect(target.sources).toEqual(cached);
+});
+
+async function lineFrom(
+  child: ChildProcessWithoutNullStreams,
+  expected: string,
+): Promise<undefined> {
+  const { promise, resolve: done, reject } = Promise.withResolvers<undefined>();
+  let output = "";
+  let errors = "";
+  child.stdout.on("data", (chunk: Buffer) => {
+    output += chunk.toString();
+    if (output.split("\n").includes(expected)) {
+      done(undefined);
+    }
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    errors += chunk.toString();
+  });
+  child.once("exit", (code) => {
+    reject(
+      new Error(`Registration process exited with ${String(code)} before ${expected}: ${errors}`),
+    );
+  });
+  await promise;
+}
+
+test("a registration in another process waits for the lock and both processes' records survive", async ({
+  createFixture,
+  onTestFinished,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Parent process source.");
+  await f.session.prompt("Child process source.");
+  const parentEntry = sourceEntry(f, "Parent process source.");
+  const childEntry = sourceEntry(f, "Child process source.");
+  const manager = f.session.sessionManager;
+  const input = join(f.cwd, "register-process.json");
+  await writeFile(
+    input,
+    JSON.stringify({
+      cwd: f.cwd,
+      sessionId: manager.getSessionId(),
+      sessionFile: manager.getSessionFile(),
+      header: manager.getHeader(),
+      branch: [childEntry],
+    }),
+  );
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  let armed = false;
+  const { store, registry: target } = await registryFor(f, async (path, contents) => {
+    if (armed && path.endsWith("sources.json")) {
+      entered.resolve(undefined);
+      await gate.promise;
+    }
+    await writeDurable(path, contents);
+  });
+  const child = spawn(
+    process.execPath,
+    [resolve(import.meta.dirname, "register-process.mts"), input],
+    { stdio: "pipe" },
+  );
+  onTestFinished(() => {
+    child.kill();
+  });
+  const exited = once(child, "exit");
+  const registered = lineFrom(child, "registered");
+  await lineFrom(child, "ready");
+  armed = true;
+  const registering = target.register(managerWith(f, [parentEntry]));
+  await entered.promise;
+  child.stdin.write("go\n");
+  const early = await Promise.race([
+    registered.then(() => "registered"),
+    new Promise((settle) => setTimeout(settle, 300, "waiting")),
+  ]);
+  gate.resolve(undefined);
+  await registering;
+  await registered;
+  expect(await exited).toEqual([0, null]);
+  expect(early).toBe("waiting");
+  const entries = (await openRegistry(store)).sources.map((source) => source.entryId).toSorted();
+  expect(entries).toEqual([parentEntry.id, childEntry.id].toSorted());
+}, 20_000);
+
+test("an entry appended while registration waits for the lock is registered", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Registered before the wait.");
+  const { store, registry: target } = await registryFor(f);
+  const entered = Promise.withResolvers<undefined>();
+  const held = Promise.withResolvers<undefined>();
+  const holder = store.lock(async () => {
+    entered.resolve(undefined);
+    await held.promise;
+  });
+  await entered.promise;
+  const registering = target.register(f.session.sessionManager);
+  await f.session.prompt("Appended during the wait.");
+  held.resolve(undefined);
+  await holder;
+  const entries = (await registering).map((record) => record.entryId);
+  expect(entries).toContain(sourceEntry(f, "Appended during the wait.").id);
+});
+
+test("a registration supplying only eventTime drops the timezone recorded for the entry", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Deploy happened at ten.");
+  const entry = sourceEntry(f, "Deploy happened at ten.");
+  const { store, registry: target } = await registryFor(f);
+  await target.register(f.session.sessionManager, {
+    [entry.id]: { eventTime: "2026-09-20T10:00:00", timezone: "America/New_York" },
+  });
+  await target.register(f.session.sessionManager, { [entry.id]: { eventTime: "yesterday" } });
+  const time = (await openRegistry(store)).sources.find(
+    (source) => source.entryId === entry.id,
+  )?.time;
+  expect(time?.eventTime).toBe("yesterday");
+  expect(time).not.toHaveProperty("timezone");
+});
+
+test("a times entry with only recordedAt keeps the stored eventTime and timezone", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Deploy happened at ten.");
+  const entry = sourceEntry(f, "Deploy happened at ten.");
+  const { store, registry: target } = await registryFor(f);
+  const context = { eventTime: "2026-09-20T10:00:00", timezone: "America/New_York" };
+  await target.register(f.session.sessionManager, { [entry.id]: context });
+  await target.register(f.session.sessionManager, {
+    [entry.id]: { recordedAt: "1999-01-01T00:00:00.000Z" },
+  });
+  const time = (await openRegistry(store)).sources.find(
+    (source) => source.entryId === entry.id,
+  )?.time;
+  expect(time).toMatchObject(context);
+  expect(time?.recordedAt).not.toBe("1999-01-01T00:00:00.000Z");
+});

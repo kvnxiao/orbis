@@ -14,8 +14,8 @@ export default function extension(pi: ExtensionAPI): void {
   pi.on("session_tree", async (_event, ctx) => {
     await runtime.selectBranch(ctx);
   });
-  pi.on("session_shutdown", () => {
-    runtime.stop();
+  pi.on("session_shutdown", async () => {
+    await runtime.shutdown();
   });
   pi.on("model_select", async (_event, ctx) => {
     await runtime.refreshRoles(ctx);

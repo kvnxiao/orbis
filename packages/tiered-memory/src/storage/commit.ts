@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { Value } from "typebox/value";
 
 import { digest } from "../domain/canonical.ts";
 import type { ConflictReason, MemoryProposal, NoteDependency } from "../domain/proposal.ts";
 import { safeIdSchema } from "../domain/references.ts";
 import { publishProjectGenerated, readProjectCuration } from "./curation.ts";
-import { readText, rejectSymlinks } from "./files.ts";
-import type { StorageAccess } from "./files.ts";
+import { fromPromise, readText, rejectSymlinks } from "./files.ts";
 import {
   advanceSequence,
   readHead,
@@ -20,6 +22,8 @@ import {
   writeRevision,
 } from "./revisions.ts";
 import type { Head, Revision } from "./revisions.ts";
+import type { DurableWrites } from "./services.ts";
+import { writeText } from "./services.ts";
 
 /** Name the session a commit or view repair writes and the project directory it publishes to. */
 export interface CommitTarget {
@@ -48,19 +52,71 @@ function digests(contents: Readonly<Record<string, string>>): Record<string, str
   );
 }
 
-async function settleWrites(writes: readonly Promise<void>[]): Promise<void> {
-  const results = await Promise.allSettled(writes);
-  const failed = results.find((result) => result.status === "rejected");
-  if (failed?.status === "rejected") {
-    throw failed.reason instanceof Error
-      ? failed.reason
-      : new Error("Memory view write failed.", { cause: failed.reason });
+function firstFailure(exits: readonly Exit.Exit<void, unknown>[]): Effect.Effect<void, unknown> {
+  let interruption: Cause.Cause<unknown> | undefined;
+  for (const exit of exits) {
+    if (Exit.isSuccess(exit)) {
+      continue;
+    }
+    if (!Cause.hasInterruptsOnly(exit.cause)) {
+      const failure = Cause.squash(exit.cause);
+      return Effect.fail(
+        failure instanceof Error
+          ? failure
+          : new Error("Memory view write failed.", { cause: failure }),
+      );
+    }
+    interruption ??= exit.cause;
   }
+  return interruption === undefined ? Effect.void : Effect.failCause(interruption);
 }
 
-async function pendingHeads(target: CommitTarget, access: StorageAccess): Promise<PendingHead[]> {
+// The phase is uninterruptible so a pending interruption cannot discard a sibling's failure: every
+// write settles, then the first genuine failure in input order fails the phase.
+function settlePhase<A, R>(
+  items: readonly A[],
+  write: (item: A) => Effect.Effect<void, unknown, R>,
+): Effect.Effect<void, unknown, R> {
+  return Effect.uninterruptibleMask((restore) =>
+    Effect.forEach(items, (item) => Effect.exit(restore(write(item))), {
+      concurrency: "unbounded",
+    }).pipe(Effect.flatMap(firstFailure)),
+  );
+}
+
+const pendingHead = Effect.fnUntraced(function* (
+  target: CommitTarget,
+  sessionId: string,
+): Effect.fn.Return<PendingHead | undefined, unknown> {
+  const sessionDir = join(target.baseDir, "sessions", sessionId);
+  const head = yield* readHead(sessionDir);
+  if (head === undefined || head.materialized) {
+    return undefined;
+  }
+  yield* rejectSymlinks([sessionDir, join(sessionDir, "current"), join(sessionDir, "revisions")]);
+  const identity = yield* readIdentity(sessionDir);
+  if (
+    identity?.projectId !== target.projectId ||
+    identity.projectRoot !== target.projectRoot ||
+    identity.sessionId !== sessionId
+  ) {
+    return yield* Effect.fail(
+      new Error(`Pending memory head in ${sessionDir} has no matching session identity.`),
+    );
+  }
+  const revision = yield* requireRevision(sessionDir, {
+    projectId: target.projectId,
+    sessionId,
+    revisionId: head.revisionId,
+  });
+  return { target: { ...target, sessionId, sessionDir }, revision };
+});
+
+const pendingHeads = Effect.fnUntraced(function* (
+  target: CommitTarget,
+): Effect.fn.Return<PendingHead[], unknown> {
   const sessions = join(target.baseDir, "sessions");
-  const entries = await readdir(sessions, { withFileTypes: true });
+  const entries = yield* fromPromise(async () => await readdir(sessions, { withFileTypes: true }));
   const pending: PendingHead[] = [];
   for (const entry of entries) {
     if (
@@ -70,39 +126,13 @@ async function pendingHeads(target: CommitTarget, access: StorageAccess): Promis
     ) {
       continue;
     }
-    const sessionDir = join(sessions, entry.name);
-    // oxlint-disable-next-line no-await-in-loop -- Each session head is inspected under the project lock.
-    const head = await readHead(sessionDir, access.signal);
-    if (head === undefined || head.materialized) {
-      continue;
+    const head = yield* pendingHead(target, entry.name);
+    if (head !== undefined) {
+      pending.push(head);
     }
-    // oxlint-disable-next-line no-await-in-loop -- Only an unfinished session is opened for repair.
-    await rejectSymlinks(
-      [sessionDir, join(sessionDir, "current"), join(sessionDir, "revisions")],
-      access.signal,
-    );
-    // oxlint-disable-next-line no-await-in-loop -- Identity and revision must match the pending head.
-    const identity = await readIdentity(sessionDir, access.signal);
-    if (
-      identity?.projectId !== target.projectId ||
-      identity.projectRoot !== target.projectRoot ||
-      identity.sessionId !== entry.name
-    ) {
-      throw new Error(`Pending memory head in ${sessionDir} has no matching session identity.`);
-    }
-    // oxlint-disable-next-line no-await-in-loop -- The revision names the learnings this head accepted.
-    const revision = await requireRevision(
-      sessionDir,
-      { projectId: target.projectId, sessionId: entry.name, revisionId: head.revisionId },
-      access.signal,
-    );
-    pending.push({
-      target: { ...target, sessionId: entry.name, sessionDir },
-      revision,
-    });
   }
   return pending;
-}
+});
 
 function overlappingHeads(
   pending: readonly PendingHead[],
@@ -127,59 +157,81 @@ function overlappingHeads(
   return [...selected].toSorted((left, right) => right.revision.sequence - left.revision.sequence);
 }
 
-/** Repair connected unfinished learning publications from newest to oldest under the project lock. */
-export async function repairPendingLearnings(
+/**
+ * Repair connected unfinished learning publications from newest to oldest under the project lock.
+ *
+ * @throws Error when a pending head has no matching session identity or names a missing revision.
+ * @throws The failures of `repairViews`.
+ */
+export const repairPendingLearnings = Effect.fnUntraced(function* (
   target: CommitTarget,
   learningNames: readonly string[],
-  access: StorageAccess,
-): Promise<void> {
-  const ownHead = await readHead(target.sessionDir, access.signal);
+): Effect.fn.Return<void, unknown, DurableWrites> {
+  const ownHead = yield* readHead(target.sessionDir);
   const ownRevision =
     ownHead === undefined || ownHead.materialized
       ? undefined
-      : await requireRevision(
-          target.sessionDir,
-          {
-            projectId: target.projectId,
-            sessionId: target.sessionId,
-            revisionId: ownHead.revisionId,
-          },
-          access.signal,
-        );
+      : yield* requireRevision(target.sessionDir, {
+          projectId: target.projectId,
+          sessionId: target.sessionId,
+          revisionId: ownHead.revisionId,
+        });
   const names = [...learningNames, ...Object.keys(ownRevision?.learnings ?? {})];
   if (names.length === 0) {
     return;
   }
-  const pending = await pendingHeads(target, access);
+  const pending = yield* pendingHeads(target);
   for (const head of overlappingHeads(pending, names)) {
-    // oxlint-disable-next-line no-await-in-loop -- Publication sequence determines repair order.
-    await repairViews(head.target, access);
+    yield* repairViews(head.target);
   }
-}
+});
+
+const publishCommit = Effect.fnUntraced(function* (
+  target: CommitTarget,
+  proposal: MemoryProposal,
+  snapshot: Snapshot,
+  committed: { head: Head; sequence: number; onHeadDurable: (revisionId: string) => void },
+): Effect.fn.Return<void, unknown, DurableWrites> {
+  const { head } = committed;
+  yield* writeHead(target.sessionDir, head);
+  committed.onHeadDurable(head.revisionId);
+  yield* settlePhase(snapshot.materialize, (name) =>
+    writeText(join(target.sessionDir, "current", name), snapshot.notes[name] ?? ""),
+  );
+  yield* settlePhase(Object.entries(proposal.learnings), ([name, content]) =>
+    writeText(join(target.baseDir, "learnings", name), content),
+  );
+  yield* publishProjectGenerated(target.baseDir, {
+    learnings: proposal.learnings,
+    sourceIds: proposal.sourceIds,
+    sequence: committed.sequence,
+  });
+  yield* writeHead(target.sessionDir, { ...head, materialized: true });
+});
 
 /**
- * Record an accepted proposal as the next revision and write its views; return the revision id.
+ * Record an accepted proposal as the next revision, write its views, and return the revision id.
  *
  * Must run under the project lock after every commit check passed; `head` is the head those checks
- * read. Advances the project sequence, then writes the revision, the head marked unmaterialized,
- * the notes in `snapshot.materialize`, the proposal's learnings, and their provenance, then marks
- * the head materialized. The caller's validation runs again immediately before the head write.
- * Cancellation is observed until the head is written. Started view writes finish before the project
- * lock is released, including after a sibling write fails.
+ * read. The sequence advance, the revision write, and `validateBeforeHead` are interruptible
+ * between durable writes; a conflict from `validateBeforeHead` returns before the head write and
+ * leaves only an unreferenced revision file. From the head write on, one uninterruptible region
+ * writes the head marked unmaterialized, calls `onHeadDurable` with the revision id, writes the
+ * note views, the learning views, and the learning provenance, and marks the head materialized.
+ * Each view phase settles every started write before failing.
  *
- * @throws `access.signal.reason` when it aborts before the head is written; the original error of
- *   any failed write, which after the head write leaves a committed revision for open to repair.
+ * @throws The original error of a failed write; after `onHeadDurable` the committed revision stays
+ *   for the next open to repair.
  */
-export async function writeCommit(
+export const writeCommit = Effect.fnUntraced(function* (
   target: CommitTarget,
   proposal: MemoryProposal,
   head: Head | undefined,
   snapshot: Snapshot,
-  access: StorageAccess,
-  validateBeforeHead: () => Promise<ConflictReason | undefined>,
-): Promise<{ revisionId: string } | { conflict: ConflictReason }> {
-  access.signal.throwIfAborted();
-  const sequence = await advanceSequence(target.baseDir, access);
+  validateBeforeHead: Effect.Effect<ConflictReason | undefined, unknown>,
+  onHeadDurable: (revisionId: string) => void,
+): Effect.fn.Return<{ revisionId: string } | { conflict: ConflictReason }, unknown, DurableWrites> {
+  const sequence = yield* advanceSequence(target.baseDir);
   const { expectedRevision, ...fields } = proposal;
   const revision: Revision = {
     version: 1,
@@ -190,9 +242,11 @@ export async function writeCommit(
     notes: snapshot.notes,
     noteDependencies: snapshot.noteDependencies,
   };
-  access.signal.throwIfAborted();
-  await writeRevision(target.sessionDir, revision, access);
-  access.signal.throwIfAborted();
+  yield* writeRevision(target.sessionDir, revision);
+  const conflict = yield* validateBeforeHead;
+  if (conflict !== undefined) {
+    return { conflict };
+  }
   const nextHead: Head = {
     version: 1,
     revisionId: revision.id,
@@ -202,72 +256,23 @@ export async function writeCommit(
     },
     materialized: false,
   };
-  const conflict = await validateBeforeHead();
-  if (conflict !== undefined) {
-    return { conflict };
-  }
-  access.signal.throwIfAborted();
-  await writeHead(target.sessionDir, nextHead, access);
-  // The head is durable, so the rest of the commit ignores cancellation.
-  const committed: StorageAccess = { signal: new AbortController().signal, write: access.write };
-  await settleWrites(
-    snapshot.materialize.map(async (name) => {
-      await committed.write(join(target.sessionDir, "current", name), snapshot.notes[name] ?? "");
-    }),
+  yield* Effect.uninterruptible(
+    publishCommit(target, proposal, snapshot, { head: nextHead, sequence, onHeadDurable }),
   );
-  await settleWrites(
-    Object.entries(proposal.learnings).map(async ([name, content]) => {
-      await committed.write(join(target.baseDir, "learnings", name), content);
-    }),
-  );
-  await publishProjectGenerated(
-    target.baseDir,
-    { learnings: proposal.learnings, sourceIds: proposal.sourceIds, sequence },
-    committed,
-  );
-  await writeHead(target.sessionDir, { ...nextHead, materialized: true }, committed);
   return { revisionId: revision.id };
-}
+});
 
-/**
- * Finish the views and learning provenance of a commit interrupted after its head was written.
- *
- * Must run under the project lock. Does nothing when there is no head or the head is materialized.
- * A note view whose digest matches the head is kept; an absent note view, or one equal to the
- * parent revision's rendering of the same note, is rewritten from the head's revision; any other
- * note content is an external edit and is kept. A learning is written only when its current file
- * still holds the predecessor named in the revision, or the revision created an absent learning.
- * Newer publications and external edits or deletions are kept. Then records provenance for the
- * revision's learning files that hold its content and marks the head materialized.
- *
- * @throws Error when the head names a missing revision or a record is damaged;
- *   `access.signal.reason` when it aborts before the head is marked.
- */
-export async function repairViews(target: CommitTarget, access: StorageAccess): Promise<void> {
-  const { signal } = access;
-  const head = await readHead(target.sessionDir, signal);
-  if (head === undefined || head.materialized) {
-    return;
-  }
-  const identity = { projectId: target.projectId, sessionId: target.sessionId };
-  const revision = await requireRevision(
-    target.sessionDir,
-    { ...identity, revisionId: head.revisionId },
-    signal,
-  );
-  const parent =
-    revision.parentRevisionId === null
-      ? undefined
-      : await readRevision(
-          target.sessionDir,
-          { ...identity, revisionId: revision.parentRevisionId },
-          signal,
-        );
-  await settleWrites(
-    Object.keys(head.views.notes).map(async (name) => {
+function repairNotes(
+  target: CommitTarget,
+  head: Head,
+  revision: Revision,
+  parent: Revision | undefined,
+): Effect.Effect<void, unknown, DurableWrites> {
+  return settlePhase(Object.keys(head.views.notes), (name) =>
+    Effect.gen(function* () {
       const content = revision.notes[name];
       const path = join(target.sessionDir, "current", name);
-      const disk = await readText(path, signal);
+      const disk = yield* readText(path);
       if (
         content === undefined ||
         (disk !== undefined && digest(disk) === head.views.notes[name])
@@ -275,17 +280,22 @@ export async function repairViews(target: CommitTarget, access: StorageAccess): 
         return;
       }
       if (disk === undefined || disk === parent?.notes[name]) {
-        await access.write(path, content);
+        yield* writeText(path, content);
       }
     }),
   );
+}
+
+const repairLearnings = Effect.fnUntraced(function* (
+  target: CommitTarget,
+  revision: Revision,
+): Effect.fn.Return<void, unknown, DurableWrites> {
   const learnings = Object.entries(revision.learnings);
-  const project =
-    learnings.length === 0 ? undefined : await readProjectCuration(target.baseDir, signal);
-  await settleWrites(
-    learnings.map(async ([name, content]) => {
+  const project = learnings.length === 0 ? undefined : yield* readProjectCuration(target.baseDir);
+  yield* settlePhase(learnings, ([name, content]) =>
+    Effect.gen(function* () {
       const path = join(target.baseDir, "learnings", name);
-      const disk = await readText(path, signal);
+      const disk = yield* readText(path);
       const expected = revision.expectedLearnings[name];
       const previous = project?.generated[name];
       if (
@@ -301,16 +311,53 @@ export async function repairViews(target: CommitTarget, access: StorageAccess): 
         (disk === undefined && expected.digest === null) ||
         (disk !== undefined && digest(disk) === expected.digest)
       ) {
-        await access.write(path, content);
+        yield* writeText(path, content);
       }
     }),
   );
-  signal.throwIfAborted();
-  await publishProjectGenerated(
-    target.baseDir,
-    { learnings: revision.learnings, sourceIds: revision.sourceIds, sequence: revision.sequence },
-    access,
-  );
-  signal.throwIfAborted();
-  await writeHead(target.sessionDir, { ...head, materialized: true }, access);
-}
+});
+
+/**
+ * Finish the views and learning provenance of a commit interrupted after its head was written.
+ *
+ * Must run under the project lock. Does nothing when there is no head or the head is materialized.
+ * A note view whose digest matches the head is kept; an absent note view, or one equal to the
+ * parent revision's rendering of the same note, is rewritten from the head's revision; any other
+ * note content is an external edit and is kept. A learning is written only when its current file
+ * still has the predecessor named in the revision, or the revision created an absent learning.
+ * Newer publications and external edits or deletions are kept. Then records provenance for the
+ * revision's learning files that have its content and marks the head materialized. Each phase
+ * settles every started write before the next phase or a failure.
+ *
+ * @throws Error when the head names a missing revision.
+ * @throws Error naming the path when a record is damaged.
+ * @throws The original error of the first failed write in input order.
+ */
+export const repairViews = Effect.fnUntraced(function* (
+  target: CommitTarget,
+): Effect.fn.Return<void, unknown, DurableWrites> {
+  const head = yield* readHead(target.sessionDir);
+  if (head === undefined || head.materialized) {
+    return;
+  }
+  const identity = { projectId: target.projectId, sessionId: target.sessionId };
+  const revision = yield* requireRevision(target.sessionDir, {
+    ...identity,
+    revisionId: head.revisionId,
+  });
+  const parent =
+    revision.parentRevisionId === null
+      ? undefined
+      : yield* readRevision(target.sessionDir, {
+          ...identity,
+          revisionId: revision.parentRevisionId,
+        });
+  yield* repairNotes(target, head, revision, parent);
+  yield* repairLearnings(target, revision);
+  yield* publishProjectGenerated(target.baseDir, {
+    learnings: revision.learnings,
+    sourceIds: revision.sourceIds,
+    sequence: revision.sequence,
+  });
+  yield* writeHead(target.sessionDir, { ...head, materialized: true });
+});

@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+import * as Effect from "effect/Effect";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 
@@ -11,8 +12,9 @@ import {
   safeIdSchema,
 } from "../domain/references.ts";
 import { readText } from "./files.ts";
-import type { StorageAccess } from "./files.ts";
 import { parseRecord } from "./records.ts";
+import type { DurableWrites } from "./services.ts";
+import { writeRecord } from "./services.ts";
 
 /**
  * Validate a session identity record; a record naming another project, root, or session means the
@@ -87,70 +89,72 @@ export type Revision = Static<typeof revisionSchema>;
 /** Define the `sessions/_project/sequence.json` payload. */
 export type Sequence = Static<typeof sequenceSchema>;
 
-function serialize(value: unknown): string {
-  return `${JSON.stringify(value)}\n`;
-}
-
 /**
  * Read a session's identity record, or `undefined` when none exists.
  *
  * @throws Error naming the path when the record is not JSON or fails `identitySchema`.
+ * @throws The original read error other than `ENOENT`.
  */
-export async function readIdentity(
+export const readIdentity = Effect.fnUntraced(function* (
   sessionDir: string,
-  signal: AbortSignal,
-): Promise<Identity | undefined> {
+): Effect.fn.Return<Identity | undefined, unknown> {
   const path = join(sessionDir, "identity.json");
-  const text = await readText(path, signal);
+  const text = yield* readText(path);
   return text === undefined ? undefined : parseRecord(identitySchema, text, path);
-}
+});
 
 /**
  * Write a session's identity record at first open, or confirm that the existing record matches.
  *
  * @throws Error naming the path when the existing record names another project, root, or session,
  *   or when it is not JSON or fails `identitySchema`.
+ * @throws The original read or write error.
  */
-export async function ensureIdentity(
+export const ensureIdentity = Effect.fnUntraced(function* (
   sessionDir: string,
   identity: Identity,
-  access: StorageAccess,
-): Promise<void> {
+): Effect.fn.Return<void, unknown, DurableWrites> {
   const path = join(sessionDir, "identity.json");
-  const existing = await readIdentity(sessionDir, access.signal);
+  const existing = yield* readIdentity(sessionDir);
   if (existing === undefined) {
-    await access.write(path, serialize(identity));
-    return;
-  }
-  if (
+    yield* writeRecord(path, identity);
+  } else if (
     existing.projectId !== identity.projectId ||
     existing.projectRoot !== identity.projectRoot ||
     existing.sessionId !== identity.sessionId
   ) {
-    throw new Error(
-      `Session identity mismatch at ${path}: the directory belongs to another project or session.`,
+    yield* Effect.fail(
+      new Error(
+        `Session identity mismatch at ${path}: the directory belongs to another project or session.`,
+      ),
     );
   }
-}
+});
 
 /**
  * Read a session's head pointer, or `undefined` before the first commit.
  *
  * @throws Error naming the path when the record is not JSON or fails `headSchema`.
+ * @throws The original read error other than `ENOENT`.
  */
-export async function readHead(sessionDir: string, signal: AbortSignal): Promise<Head | undefined> {
+export const readHead = Effect.fnUntraced(function* (
+  sessionDir: string,
+): Effect.fn.Return<Head | undefined, unknown> {
   const path = join(sessionDir, "head.json");
-  const text = await readText(path, signal);
+  const text = yield* readText(path);
   return text === undefined ? undefined : parseRecord(headSchema, text, path);
-}
+});
 
-/** Replace a session's head pointer; callers write it only after its revision file is durable. */
-export async function writeHead(
+/**
+ * Replace a session's head pointer; callers write it only after its revision file is durable.
+ *
+ * @throws The original write error.
+ */
+export function writeHead(
   sessionDir: string,
   head: Head,
-  access: StorageAccess,
-): Promise<void> {
-  await access.write(join(sessionDir, "head.json"), serialize(head));
+): Effect.Effect<void, unknown, DurableWrites> {
+  return writeRecord(join(sessionDir, "head.json"), head);
 }
 
 /**
@@ -160,14 +164,14 @@ export async function writeHead(
  *
  * @throws Error naming the path when the record is not JSON, fails `revisionSchema`, or names a
  *   different id, project, or session than `expected`.
+ * @throws The original read error other than `ENOENT`.
  */
-export async function readRevision(
+export const readRevision = Effect.fnUntraced(function* (
   sessionDir: string,
   expected: { projectId: string; sessionId: string; revisionId: string },
-  signal: AbortSignal,
-): Promise<Revision | undefined> {
+): Effect.fn.Return<Revision | undefined, unknown> {
   const path = join(sessionDir, "revisions", `${expected.revisionId}.json`);
-  const text = await readText(path, signal);
+  const text = yield* readText(path);
   if (text === undefined) {
     return undefined;
   }
@@ -177,31 +181,31 @@ export async function readRevision(
     revision.projectId !== expected.projectId ||
     revision.sessionId !== expected.sessionId
   ) {
-    throw new Error(
-      `Invalid record at ${path}: /id: names a different revision, project, or session.`,
+    return yield* Effect.fail(
+      new Error(`Invalid record at ${path}: /id: names a different revision, project, or session.`),
     );
   }
   return revision;
-}
+});
 
 /**
  * Read the revision a head names.
  *
- * @throws Error when the revision file is missing, and the errors of `readRevision`.
+ * @throws Error when the revision file is missing.
+ * @throws The failures of `readRevision`.
  */
-export async function requireRevision(
+export const requireRevision = Effect.fnUntraced(function* (
   sessionDir: string,
   expected: { projectId: string; sessionId: string; revisionId: string },
-  signal: AbortSignal,
-): Promise<Revision> {
-  const revision = await readRevision(sessionDir, expected, signal);
+): Effect.fn.Return<Revision, unknown> {
+  const revision = yield* readRevision(sessionDir, expected);
   if (revision === undefined) {
-    throw new Error(
-      `Memory head names missing revision ${expected.revisionId}; files are preserved.`,
+    return yield* Effect.fail(
+      new Error(`Memory head names missing revision ${expected.revisionId}; files are preserved.`),
     );
   }
   return revision;
-}
+});
 
 /**
  * Write a revision file once.
@@ -209,18 +213,21 @@ export async function requireRevision(
  * Must run under the project lock.
  *
  * @throws Error when a revision file with the same id exists; revision files are never rewritten.
+ * @throws The original read or write error.
  */
-export async function writeRevision(
+export const writeRevision = Effect.fnUntraced(function* (
   sessionDir: string,
   revision: Revision,
-  access: StorageAccess,
-): Promise<void> {
+): Effect.fn.Return<void, unknown, DurableWrites> {
   const path = join(sessionDir, "revisions", `${revision.id}.json`);
-  if ((await readText(path, access.signal)) !== undefined) {
-    throw new Error(`Revision ${revision.id} already exists; revision files are never rewritten.`);
+  if ((yield* readText(path)) !== undefined) {
+    yield* Effect.fail(
+      new Error(`Revision ${revision.id} already exists; revision files are never rewritten.`),
+    );
+    return;
   }
-  await access.write(path, serialize(revision));
-}
+  yield* writeRecord(path, revision);
+});
 
 /**
  * Advance the project sequence and return the new value, starting from 1.
@@ -229,17 +236,21 @@ export async function writeRevision(
  *
  * @throws Error naming the path when the counter is not JSON, fails `sequenceSchema`, or would
  *   exceed `Number.MAX_SAFE_INTEGER`.
+ * @throws The original read or write error.
  */
-export async function advanceSequence(baseDir: string, access: StorageAccess): Promise<number> {
+export const advanceSequence = Effect.fnUntraced(function* (
+  baseDir: string,
+): Effect.fn.Return<number, unknown, DurableWrites> {
   const path = join(baseDir, "sessions", "_project", "sequence.json");
-  const text = await readText(path, access.signal);
+  const text = yield* readText(path);
   const current = text === undefined ? 0 : parseRecord(sequenceSchema, text, path).value;
   const next = current + 1;
   if (!Number.isSafeInteger(next)) {
-    throw new Error(`Invalid record at ${path}: /value: the project sequence is exhausted.`);
+    return yield* Effect.fail(
+      new Error(`Invalid record at ${path}: /value: the project sequence is exhausted.`),
+    );
   }
   const sequence: Sequence = { version: 1, value: next };
-  access.signal.throwIfAborted();
-  await access.write(path, serialize(sequence));
+  yield* writeRecord(path, sequence);
   return next;
-}
+});

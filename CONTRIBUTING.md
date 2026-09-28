@@ -190,9 +190,12 @@ imports, braces, strict equality, and constant declarations where possible.
   rejections and newly thrown or rejected `any` or `unknown` values are rejected.
 
 Lint also enforces the file and function size limits and the `records.ts` parsing rule in the
-[package conventions](AGENTS.md#package-conventions). Extensions must use Pi's UI or messaging APIs
-instead of writing to the console. CLI scripts may print results and errors. Lint checks reject
-unused suppression directives. Keep exceptions limited to the code that needs them.
+[package conventions](AGENTS.md#package-conventions). In `packages/tiered-memory/src/`, lint also
+rejects `AbortSignal.any` and `.throwIfAborted`: a composite signal reports different reasons on
+Node 22 and on Node 24 and later, so decide cancellation from the fiber's exit and the first
+recorded cancellation reason. Extensions must use Pi's UI or messaging APIs instead of writing to
+the console. CLI scripts may print results and errors. Lint checks reject unused suppression
+directives. Keep exceptions limited to the code that needs them.
 
 ## Checks
 

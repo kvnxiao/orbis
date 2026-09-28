@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import * as Effect from "effect/Effect";
 import { expect } from "vitest";
 
-import { writeDurable } from "../src/storage/files.ts";
 import {
   advanceSequence,
   headSchema,
@@ -15,11 +15,10 @@ import {
   writeRevision,
 } from "../src/storage/revisions.ts";
 import type { Revision } from "../src/storage/revisions.ts";
+import { runStorage } from "./storage-harness.mts";
 import { baseProposal, rejectionPaths, test } from "./store-fixture.mts";
 
 const projectId = "a".repeat(64);
-const signal = new AbortController().signal;
-const access = { signal, write: writeDurable };
 
 function revision(id: string): Revision {
   const { expectedRevision, ...fields } = baseProposal({ sessionId: "session-1", projectId });
@@ -107,17 +106,17 @@ test("readRevision rejects a revision whose id, project, or session differs from
   const bytes = JSON.stringify(revision("revision-2"));
   await writeFile(path, bytes);
   await expect(
-    readRevision(
-      sessionDir,
-      { projectId, sessionId: "session-1", revisionId: "revision-1" },
-      signal,
+    Effect.runPromise(
+      readRevision(sessionDir, { projectId, sessionId: "session-1", revisionId: "revision-1" }),
     ),
   ).rejects.toThrow(`Invalid record at ${path}: /id`);
   await expect(
-    readRevision(
-      sessionDir,
-      { projectId: "b".repeat(64), sessionId: "session-1", revisionId: "revision-1" },
-      signal,
+    Effect.runPromise(
+      readRevision(sessionDir, {
+        projectId: "b".repeat(64),
+        sessionId: "session-1",
+        revisionId: "revision-1",
+      }),
     ),
   ).rejects.toThrow(path);
   expect(await readFile(path, "utf8")).toBe(bytes);
@@ -125,26 +124,24 @@ test("readRevision rejects a revision whose id, project, or session differs from
 
 test("readRevision returns undefined for a revision id without a file", async ({ makeRoot }) => {
   await expect(
-    readRevision(
-      await makeRoot(),
-      { projectId, sessionId: "session-1", revisionId: "missing" },
-      signal,
+    Effect.runPromise(
+      readRevision(await makeRoot(), { projectId, sessionId: "session-1", revisionId: "missing" }),
     ),
   ).resolves.toBeUndefined();
 });
 
 test("writeRevision refuses to rewrite an existing revision file", async ({ makeRoot }) => {
   const sessionDir = await makeRoot();
-  await writeRevision(sessionDir, revision("revision-1"), access);
-  await expect(writeRevision(sessionDir, revision("revision-1"), access)).rejects.toThrow(
+  await runStorage(writeRevision(sessionDir, revision("revision-1")));
+  await expect(runStorage(writeRevision(sessionDir, revision("revision-1")))).rejects.toThrow(
     "never rewritten",
   );
 });
 
 test("advanceSequence starts at 1 and increments by one", async ({ makeRoot }) => {
   const baseDir = await makeRoot();
-  expect(await advanceSequence(baseDir, access)).toBe(1);
-  expect(await advanceSequence(baseDir, access)).toBe(2);
+  expect(await runStorage(advanceSequence(baseDir))).toBe(1);
+  expect(await runStorage(advanceSequence(baseDir))).toBe(2);
 });
 
 test("advanceSequence rejects a counter that would exceed the safe-integer range", async ({
@@ -154,13 +151,13 @@ test("advanceSequence rejects a counter that would exceed the safe-integer range
   const path = join(baseDir, "sessions", "_project", "sequence.json");
   await mkdir(join(baseDir, "sessions", "_project"), { recursive: true });
   await writeFile(path, JSON.stringify({ version: 1, value: Number.MAX_SAFE_INTEGER }));
-  await expect(advanceSequence(baseDir, access)).rejects.toThrow(`${path}: /value`);
+  await expect(runStorage(advanceSequence(baseDir))).rejects.toThrow(`${path}: /value`);
 });
 
 test("a damaged record's bytes are preserved after the read fails", async ({ makeRoot }) => {
   const sessionDir = await makeRoot();
   const path = join(sessionDir, "head.json");
   await writeFile(path, "{damaged");
-  await expect(readHead(sessionDir, signal)).rejects.toThrow(`Invalid JSON at ${path}.`);
+  await expect(Effect.runPromise(readHead(sessionDir))).rejects.toThrow(`Invalid JSON at ${path}.`);
   expect(await readFile(path, "utf8")).toBe("{damaged");
 });

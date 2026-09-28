@@ -2,6 +2,7 @@ import { join } from "node:path";
 
 import { buildSessionProjection } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
+import * as Effect from "effect/Effect";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
@@ -11,6 +12,8 @@ import { sourceEvidenceSchema } from "../domain/evidence.ts";
 import { digestSchema, encodeReference, safeIdSchema } from "../domain/references.ts";
 import { readText } from "./files.ts";
 import { parseRecord } from "./records.ts";
+import { writeRecord } from "./services.ts";
+import type { DurableWrites, StorageServices } from "./services.ts";
 import { canonicalProjectRoot } from "./store.ts";
 import type { MemoryStore } from "./store.ts";
 
@@ -162,11 +165,28 @@ function registryProblem(registry: Registry, store: MemoryStore): string | undef
   return undefined;
 }
 
+const readRegistry = Effect.fnUntraced(function* (
+  store: MemoryStore,
+): Effect.fn.Return<Registry, unknown> {
+  const path = join(store.sessionDir, "sources.json");
+  const text = yield* readText(path);
+  if (text === undefined) {
+    return { version: 1, projectId: store.projectId, sessionId: store.sessionId, sources: [] };
+  }
+  const registry = parseRecord(registrySchema, text, path);
+  const problem = registryProblem(registry, store);
+  if (problem !== undefined) {
+    return yield* Effect.fail(new Error(`Invalid record at ${path}: ${problem}`));
+  }
+  return registry;
+});
+
 /**
- * Own a session's source registry.
+ * Own a session's source registry and its in-memory cache.
  *
- * Registration writes `sources.json`; `current` projects the manager's active branch without
- * writing. Registry file reads and writes observe the store's signal.
+ * Registration merges under the project lock from a fresh read of `sources.json`; `current`
+ * projects the manager's active branch from the cache without writing. The cache changes only after
+ * a registration's write succeeds.
  */
 export class SourceRegistry {
   private readonly store: MemoryStore;
@@ -181,26 +201,12 @@ export class SourceRegistry {
    * Load the registry of the store's session, or start an empty one when none exists.
    *
    * @throws Error naming the path when `sources.json` is not JSON, fails `registrySchema`, names
-   *   another project or session, or holds a record that fails its cross-field checks; its bytes
-   *   are preserved.
+   *   another project or session, or has a record that fails its cross-field checks; its bytes are
+   *   preserved.
+   * @throws The original read error other than `ENOENT`.
    */
-  static async open(store: MemoryStore): Promise<SourceRegistry> {
-    const path = join(store.sessionDir, "sources.json");
-    const text = await readText(path, store.access.signal);
-    if (text === undefined) {
-      return new SourceRegistry(store, {
-        version: 1,
-        projectId: store.projectId,
-        sessionId: store.sessionId,
-        sources: [],
-      });
-    }
-    const registry = parseRecord(registrySchema, text, path);
-    const problem = registryProblem(registry, store);
-    if (problem !== undefined) {
-      throw new Error(`Invalid record at ${path}: ${problem}`);
-    }
-    return new SourceRegistry(store, registry);
+  static open(store: MemoryStore): Effect.Effect<SourceRegistry, unknown> {
+    return readRegistry(store).pipe(Effect.map((registry) => new SourceRegistry(store, registry)));
   }
 
   /** Return a copy of every registered source, including sources no longer on the active branch. */
@@ -208,61 +214,95 @@ export class SourceRegistry {
     return structuredClone(this.registry.sources);
   }
 
-  /** Project the active branch's current effective sources without changing the registry. */
-  async current(manager: SourceSessionManager): Promise<readonly SourceRecord[]> {
-    await this.assertManager(manager);
-    this.store.access.signal.throwIfAborted();
-    return this.recordsFor(manager.getBranch(), {});
+  /**
+   * Project the active branch's current effective sources without changing the registry.
+   *
+   * @throws Error when `manager` belongs to another session or project root, or when tool-call or
+   *   tool-result metadata is malformed.
+   */
+  current(manager: SourceSessionManager): Effect.Effect<readonly SourceRecord[], unknown> {
+    return this.assertManager(manager).pipe(
+      Effect.map(() => this.recordsFor(this.registry, manager.getBranch(), {})),
+    );
   }
 
   /**
-   * Register the active branch's message entries and write the registry once.
+   * Register the active branch's message entries under the project lock and return their records.
    *
-   * Records one source for each user, assistant, or tool-result message with text, keyed by
-   * reference, and keeps earlier records of entries off the branch. `times` supplies event times by
-   * entry id; recording time comes only from the entry itself.
+   * Checks `manager`, then under the lock reads and validates `sources.json` afresh, reads the
+   * active branch, projects it with that fresh registry's metadata rather than the cache, writes
+   * the merge, and replaces the cache. The merge keeps records of references absent from the
+   * branch. For a reference on the branch:
    *
-   * @throws Error when `manager` belongs to another session or project root, or when tool-call or
-   *   tool-result metadata is malformed, before anything is written; the store's `signal.reason`
-   *   when it aborts.
+   * - The branch supplies the digests, role, order, and omission state.
+   * - `recordedAt` comes only from the transcript entry.
+   * - An entry in `times` that has `eventTime` or `timezone` supplies both together, either of which
+   *   may be absent; otherwise the fresh registry's pair stays.
+   *
+   * The lock is not reentrant, so callers do not hold it.
+   *
+   * @throws Error when `manager` belongs to another session or project root, before locking.
+   * @throws Error when tool-call or tool-result metadata is malformed, before anything is written.
+   * @throws Error naming the path when the fresh `sources.json` is not JSON, fails
+   *   `registrySchema`, or fails its cross-field checks; the file and the cache stay unchanged.
+   * @throws The original write error, also when an interruption is pending; the cache stays
+   *   unchanged. A write that succeeds replaces the cache even when an interruption follows it.
+   * @throws The failures of `MemoryStore.locked`, including the busy error.
    */
-  async register(
+  register(
     manager: SourceSessionManager,
     times: Readonly<Record<string, SourceTime>> = {},
-  ): Promise<readonly SourceRecord[]> {
-    const store = this.store;
-    const signal = store.access.signal;
-    await this.assertManager(manager);
-    signal.throwIfAborted();
-    const records = this.recordsFor(manager.getBranch(), times);
-    const merged = new Map(this.registry.sources.map((source) => [source.reference, source]));
+  ): Effect.Effect<readonly SourceRecord[], unknown, StorageServices> {
+    return this.assertManager(manager).pipe(
+      Effect.andThen(this.store.locked(this.mergeLocked(manager, times))),
+    );
+  }
+
+  private readonly mergeLocked = Effect.fnUntraced(function* (
+    this: SourceRegistry,
+    manager: SourceSessionManager,
+    times: Readonly<Record<string, SourceTime>>,
+  ): Effect.fn.Return<readonly SourceRecord[], unknown, DurableWrites> {
+    const fresh = yield* readRegistry(this.store);
+    const records = this.recordsFor(fresh, manager.getBranch(), times);
+    const merged = new Map(fresh.sources.map((source) => [source.reference, source]));
     for (const record of records) {
       merged.set(record.reference, record);
     }
-    const next: Registry = { ...this.registry, sources: [...merged.values()] };
-    await store.access.write(join(store.sessionDir, "sources.json"), `${JSON.stringify(next)}\n`);
-    signal.throwIfAborted();
-    this.registry = next;
+    const next: Registry = { ...fresh, sources: [...merged.values()] };
+    yield* Effect.uninterruptible(
+      writeRecord(join(this.store.sessionDir, "sources.json"), next).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            this.registry = next;
+          }),
+        ),
+      ),
+    );
     return structuredClone(records);
-  }
+  });
 
-  private async assertManager(manager: SourceSessionManager): Promise<void> {
+  private readonly assertManager = Effect.fnUntraced(function* (
+    this: SourceRegistry,
+    manager: SourceSessionManager,
+  ): Effect.fn.Return<void, unknown> {
     const store = this.store;
-    store.access.signal.throwIfAborted();
     if (manager.getSessionId() !== store.sessionId) {
-      throw new Error("Source session identity differs from storage identity.");
+      yield* Effect.fail(new Error("Source session identity differs from storage identity."));
+      return;
     }
     const header = manager.getHeader();
     if (
       header !== null &&
       (header.id !== store.sessionId ||
-        (header.cwd !== "" && (await canonicalProjectRoot(header.cwd)) !== store.projectRoot))
+        (header.cwd !== "" && (yield* canonicalProjectRoot(header.cwd)) !== store.projectRoot))
     ) {
-      throw new Error("Source session belongs to a different project root.");
+      yield* Effect.fail(new Error("Source session belongs to a different project root."));
     }
-  }
+  });
 
   private recordsFor(
+    registry: Registry,
     branch: SessionEntry[],
     times: Readonly<Record<string, SourceTime>>,
   ): SourceRecord[] {
@@ -270,9 +310,7 @@ export class SourceRegistry {
     const effective = new Map(
       projectAllSources(branch).entries.map((entry) => [entry.sourceEntry.id, entry.messages]),
     );
-    const recordedTimes = new Map(
-      this.registry.sources.map((source) => [source.entryId, source.time]),
-    );
+    const recordedTimes = new Map(registry.sources.map((source) => [source.entryId, source.time]));
     const records: SourceRecord[] = [];
     for (const [order, entry] of branch.entries()) {
       if (entry.type !== "message") {
@@ -291,7 +329,11 @@ export class SourceRegistry {
         .map((message) => textOf(message))
         .filter((text) => text !== "")
         .join("\n");
-      const supplied = times[entry.id] ?? recordedTimes.get(entry.id);
+      const supplied = times[entry.id];
+      const context =
+        supplied?.eventTime !== undefined || supplied?.timezone !== undefined
+          ? supplied
+          : recordedTimes.get(entry.id);
       const recordedAt = sourceTimestamp(entry);
       records.push({
         reference: encodeReference({ projectId, sessionId, entryId: entry.id, span: 0 }),
@@ -306,8 +348,8 @@ export class SourceRegistry {
         role,
         time: {
           ...(recordedAt === undefined ? {} : { recordedAt }),
-          ...(supplied?.eventTime === undefined ? {} : { eventTime: supplied.eventTime }),
-          ...(supplied?.timezone === undefined ? {} : { timezone: supplied.timezone }),
+          ...(context?.eventTime === undefined ? {} : { eventTime: context.eventTime }),
+          ...(context?.timezone === undefined ? {} : { timezone: context.timezone }),
         },
       });
     }

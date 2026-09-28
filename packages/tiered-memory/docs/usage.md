@@ -32,7 +32,8 @@ revision once Pi has written the entry to the session file.
 
 At session start, the extension writes identity and source records for every persisted Pi session in
 the project, including while memory is disabled. Disabling memory preserves stored records and
-cancels pending memory writes. Source registration at session start and tree navigation,
+cancels pending memory writes; a commit that has already written its revision head still completes
+and records the revision on the branch. Source registration at session start and tree navigation,
 session-note curation checks, and managed-file write guards remain active.
 
 An in-memory session does not save the override after exit and gets no memory storage; status

@@ -2,9 +2,10 @@ import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import * as Effect from "effect/Effect";
 import { expect, vi } from "vitest";
 
-import { MemoryRuntime } from "../src/pi/runtime.ts";
+import type { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
 import type { StatusReport } from "../src/pi/status.ts";
 import { MemoryStore } from "../src/storage/store.ts";
@@ -40,7 +41,7 @@ async function started(
   options?: FixtureOptions,
 ): Promise<{ f: Fixture; runtime: MemoryRuntime; ctx: ExtensionContext }> {
   const f = await createFixture(options);
-  const runtime = new MemoryRuntime({ appendEntry: () => undefined });
+  const runtime = runtimeFor(f, {}, { appendEntry: () => undefined });
   const ctx = f.session.extensionRunner.createContext();
   await runtime.start(ctx);
   return { f, runtime, ctx };
@@ -387,7 +388,7 @@ test("status reports storage unavailable with the error that stopped opening", a
   );
   await mkdir(sessionDir, { recursive: true });
   await writeFile(join(sessionDir, "identity.json"), "damaged");
-  const runtime = new MemoryRuntime({ appendEntry: () => undefined });
+  const runtime = runtimeFor(f, {}, { appendEntry: () => undefined });
   const ctx = f.session.extensionRunner.createContext();
   await runtime.start(ctx);
   expect(buildStatus(runtime, ctx).storage).toEqual({
@@ -490,7 +491,7 @@ test("status reports the latest refresh error while storage stays open", async (
   ]);
   const inspect = vi
     .spyOn(MemoryStore.prototype, "inspectCuration")
-    .mockRejectedValueOnce(new Error("Curation unreadable."));
+    .mockReturnValueOnce(Effect.fail(new Error("Curation unreadable.")));
   onTestFinished(() => {
     inspect.mockRestore();
   });

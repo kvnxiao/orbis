@@ -1,13 +1,22 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import * as Effect from "effect/Effect";
 
 import { assessRevision, evidenceMatches, sourceReferences } from "../domain/evidence.ts";
 import { validateProposal } from "../domain/proposal.ts";
-import type { CommitResult, ConflictReason, MemoryProposal } from "../domain/proposal.ts";
-import { cancelledBy } from "../storage/files.ts";
+import type { ConflictReason, MemoryProposal } from "../domain/proposal.ts";
+import { recoverFailure } from "../storage/files.ts";
+import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
-import { appendReference, confirmReference, selectedAs, selectedPointer } from "./lineage.ts";
+import type { StoreCommitResult } from "../storage/store.ts";
+import { appendReference, selectedAs, selectedPointer, tryConfirmReference } from "./lineage.ts";
 import type { LineageState, ProposalBinding, ProposalContent } from "./lineage.ts";
 import type { StorageSession } from "./storage-session.ts";
+
+/** Carry a durable head's revision id and the registration records the lineage refresh needs. */
+export interface CommittedProposal {
+  revisionId: string;
+  records: readonly SourceRecord[];
+}
 
 /**
  * Capture a proposal bound to the branch leaf, its evidence, the configuration, and the latest
@@ -59,18 +68,18 @@ export function captureProposal(
   });
 }
 
-async function evidenceStillValid(
+const evidenceStillValid = Effect.fnUntraced(function* (
   storage: StorageSession,
   ctx: Pick<ExtensionContext, "sessionManager">,
   proposal: MemoryProposal,
   sources?: readonly SourceRecord[],
-): Promise<boolean> {
+): Effect.fn.Return<boolean, unknown> {
   const projectId = storage.store.projectId;
   const base =
     proposal.baseRevision === null
       ? undefined
-      : await storage.store.inheritRevision(proposal.baseRevision);
-  const current = sources ?? (await storage.sources.current(ctx.sessionManager));
+      : yield* storage.store.inheritRevision(proposal.baseRevision);
+  const current = sources ?? (yield* storage.sources.current(ctx.sessionManager));
   if (
     !ctx.sessionManager.getBranch().some((entry) => entry.id === proposal.anchorId) ||
     !evidenceMatches(current, proposal, projectId)
@@ -87,54 +96,32 @@ async function evidenceStillValid(
       (name) => excluded.has(name),
     )
   );
-}
+});
 
 /**
- * Register sources once, commit the proposal, and append and confirm its branch reference.
+ * Register sources once, check the captured evidence, and commit the proposal.
  *
- * Registration writes `sources.json` before the lock is taken; the store's `validate` callback
- * projects current effective sources without writing and compares them with the captured evidence.
- * An abort of `storage.signal` or `ctx.signal` yields `cancelled` with that signal's reason and is
- * never reported as a conflict. `records` holds the registration's sources for the refresh that
- * follows, and is `undefined` when cancellation came first. After a commit, a failed or cancelled
- * confirmation leaves the reference `appended`, and the next refresh confirms it or reports the
- * error.
+ * Registration writes `sources.json` before `MemoryStore.commit` takes the project lock. The
+ * commit's `validate` projects current effective sources without writing and compares them and
+ * `binding()` with the captured proposal. `onCommitted` runs synchronously as soon as the head is
+ * durable, with the revision id and the registration records, so a caller interrupted after that
+ * point still learns the committed revision.
  *
- * @throws Error when the proposal fails `validateProposal`, and errors from registration or the
- *   store other than cancellation.
+ * @throws Error when the proposal fails `validateProposal`.
+ * @throws The failures of `SourceRegistry.register` and `MemoryStore.commit`, unchanged.
  */
-export async function commitProposal(
-  pi: Pick<ExtensionAPI, "appendEntry">,
+export const commitProposal = Effect.fnUntraced(function* (
   storage: StorageSession,
-  ctx: Pick<ExtensionContext, "sessionManager" | "signal">,
+  ctx: Pick<ExtensionContext, "sessionManager">,
   binding: () => ProposalBinding,
   proposal: MemoryProposal,
-): Promise<{
-  result: CommitResult;
-  lineage: LineageState;
-  records: readonly SourceRecord[] | undefined;
-}> {
+  onCommitted: (committed: CommittedProposal) => void,
+): Effect.fn.Return<StoreCommitResult, unknown, StorageServices> {
   const captured = validateProposal(structuredClone(proposal));
-  const store = storage.store;
-  const signal =
-    ctx.signal === undefined ? storage.signal : AbortSignal.any([storage.signal, ctx.signal]);
-  let lineage = binding().lineage;
-  let records: readonly SourceRecord[];
-  let evidenceValid: boolean;
-  try {
-    signal.throwIfAborted();
-    records = await storage.sources.register(ctx.sessionManager);
-    signal.throwIfAborted();
-    evidenceValid = await evidenceStillValid(storage, ctx, captured, records);
-    signal.throwIfAborted();
-  } catch (error) {
-    if (cancelledBy(signal, error)) {
-      return { result: { kind: "cancelled", reason: signal.reason }, lineage, records: undefined };
-    }
-    throw error;
-  }
-  const validate = async (): Promise<ConflictReason | undefined> => {
-    const stillValid = evidenceValid && (await evidenceStillValid(storage, ctx, captured));
+  const records = yield* storage.sources.register(ctx.sessionManager);
+  const evidenceValid = yield* evidenceStillValid(storage, ctx, captured, records);
+  const validate: Effect.Effect<ConflictReason | undefined, unknown> = Effect.gen(function* () {
+    const stillValid = evidenceValid && (yield* evidenceStillValid(storage, ctx, captured));
     const current = binding();
     if (
       current.configurationRevision !== captured.configurationRevision ||
@@ -143,31 +130,36 @@ export async function commitProposal(
       return "configuration";
     }
     return stillValid ? undefined : "evidence";
-  };
-  const result = await store.commit(captured, { validate, signal });
-  if (result.kind !== "committed" || signal.aborted) {
-    return {
-      result,
-      lineage:
-        result.kind === "committed"
-          ? { ...lineage, pending: { state: "unappended", revisionId: result.revisionId } }
-          : lineage,
-      records,
-    };
-  }
-  appendReference(pi, store, result.revisionId);
-  lineage = { ...lineage, pending: { state: "appended", revisionId: result.revisionId } };
-  const reference = { projectId: store.projectId, revisionId: result.revisionId };
-  const confirmed = await confirmReference(
-    ctx.sessionManager.getSessionFile(),
-    reference,
-    signal,
-  ).catch(() => false);
-  if (confirmed) {
-    lineage = {
-      selected: selectedAs(result.revisionId, store.sessionId),
-      pending: { state: "none" },
-    };
-  }
-  return { result, lineage, records };
-}
+  });
+  return yield* storage.store.commit(captured, {
+    validate,
+    onHeadDurable: (revisionId) => {
+      onCommitted({ revisionId, records });
+    },
+  });
+});
+
+/**
+ * Append and confirm the branch reference of a committed revision and return the lineage it
+ * produces.
+ *
+ * Appends before any await. A failed confirmation leaves the reference `appended` for the next
+ * refresh to confirm; only interruption fails the returned Effect.
+ */
+export const attachCommitted = Effect.fnUntraced(function* (
+  pi: Pick<ExtensionAPI, "appendEntry">,
+  storage: StorageSession,
+  ctx: Pick<ExtensionContext, "sessionManager">,
+  lineage: LineageState,
+  revisionId: string,
+): Effect.fn.Return<LineageState> {
+  const store = storage.store;
+  appendReference(pi, store, revisionId);
+  const reference = { projectId: store.projectId, revisionId };
+  const confirmed = yield* tryConfirmReference(ctx.sessionManager.getSessionFile(), reference).pipe(
+    Effect.catchCause((cause) => recoverFailure(cause, () => false)),
+  );
+  return confirmed
+    ? { selected: selectedAs(revisionId, store.sessionId), pending: { state: "none" } }
+    : { ...lineage, pending: { state: "appended", revisionId } };
+});

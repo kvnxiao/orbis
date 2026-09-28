@@ -19,9 +19,14 @@ Pi retains original conversation records in its session files. Source references
 registered project, session, entry, and span. They do not accept arbitrary filesystem paths.
 
 The extension registers the active branch's sources when a session starts, after tree navigation,
-and once before each commit. Status reports the source and curated-note counts from the latest
-registration, labeled with the event that produced them, and does not register again. Commit
-validation projects the current effective sources without changing `sources.json`.
+and once before each commit. Each registration runs under the project mutation lock, which
+serializes storage writers across sessions and processes. It rereads `sources.json`, merges the
+branch's sources into it, and keeps the records of entries absent from the branch, so two Pi
+processes that resume the same session keep each other's records. A source's recorded time always
+comes from its Pi entry. Its event time and timezone on disk stay unless the registration supplies
+new time context for it, which replaces both. Status reports the source and curated-note counts from
+the latest registration, labeled with the event that produced them, and does not register again.
+Commit validation projects the current effective sources without changing `sources.json`.
 
 Storage requires a persisted Pi session. Pi assigns a persisted session its file path when the
 session is created, before the first write. A session that Pi keeps only in memory has no session
@@ -89,32 +94,47 @@ source.
 
 The writer captures source identities, the effective-context fingerprint, the configuration
 revision, a fingerprint of the settings, memory roles, and project root, the expected head, and the
-base revision. It registers sources once and checks the captured evidence before taking the project
-mutation lock. Under the lock it checks that the head is the expected revision, that curation
-permits every written note, that learning digests and sequences match, and that the current
-effective sources, branch anchor, and configuration still support the proposal. It checks the live
-evidence and configuration again just before publishing the head, without registering sources or
-changing the latest status counts. A failed check returns a conflict naming both revisions and the
-reason: `head`, `curation`, `learning`, `evidence`, or `configuration`. A stopped session or a
-cancelled call reports cancellation, never a conflict. Concurrent sessions share the lock; an
-obsolete proposal must be recomputed from the accepted revision. Project-learning updates compare
-both the content digest and publication sequence, so a later publication invalidates an older
-proposal even when the text is unchanged.
+base revision. It registers sources once, then checks the captured evidence before taking the
+project mutation lock for the commit. Under the lock it checks that the head is the expected
+revision, that curation permits every written note, that learning digests and sequences match, and
+that the current effective sources, branch anchor, and configuration still support the proposal. It
+checks the live evidence and configuration again just before publishing the head, without
+registering sources or changing the latest status counts. A failed check returns a conflict naming
+both revisions and the reason: `head`, `curation`, `learning`, `evidence`, or `configuration`. When
+a disable, a session stop, or a call cancellation comes before the head is written, the commit
+reports cancellation, never a conflict. Concurrent sessions share the lock; an obsolete proposal
+must be recomputed from the accepted revision. Project-learning updates compare both the content
+digest and publication sequence, so a later publication invalidates an older proposal even when the
+text is unchanged.
 
 An accepted commit advances the project sequence and writes, in order, the revision file, the head
 naming it, each changed note view, the learning views, and the learning provenance, then marks view
 materialization complete. If one of several started view writes fails, the writer waits for its
-siblings to settle before releasing the lock. Only a head names a current revision. The writer then
-records the revision reference on the Pi branch. Pi can defer a new session file until its first
-assistant response, so an in-memory custom entry alone does not prove the reference is durable; the
-reference stays pending until it is confirmed in the session file, and no new proposal is captured
-meanwhile.
+siblings to settle before releasing the lock. Only a head names a current revision. Once the head is
+written, the commit reports the revision as committed even if the call is cancelled or the session
+stops, and the writer still finishes the remaining writes. If one of those writes fails, the commit
+rejects with that error although the head is durable, and the next storage startup repairs the
+pending head and reconciles it with the branch.
+
+The writer then records the revision reference on the Pi branch. Pi can defer a new session file
+until its first assistant response, so an in-memory custom entry alone does not prove the reference
+is durable; the reference stays pending until it is confirmed in the session file, and no new
+proposal is captured meanwhile. Disabling memory does not cancel this step. Tree navigation, a
+session change, or shutdown discards it, and the next storage startup reconciles the head with the
+branch as described under [Recovery](#recovery). If recording the reference fails, the commit still
+reports committed, and status reports the storage error.
 
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected
 snapshot.
 
 ## Recovery
+
+Tree navigation, a session change, reload, and shutdown stop the current storage session. The
+extension cancels pending work at once but lets each file write already in progress finish,
+including the remaining writes of a commit whose head is written and the reads and writes of a view
+repair step already started. The next storage session opens only after that work settles, and
+shutdown waits for it without a timeout.
 
 A stop before the head is written leaves a revision file that no head names. Readers ignore it, the
 previous revision stays current, and no observations are consumed for the interrupted proposal.
@@ -153,17 +173,19 @@ storage unavailable, and status reports the error. Managed ancestors are checked
 creates directories. A commit or curation check based on a fork ancestor's revision also rejects a
 symbolic link at the ancestor's session directories.
 
-Commits and curation checks hold the project mutation lock at `sessions/.lock/`. Acquisition
-requires filesystem hard-link support. A contender writes a complete private owner record with its
-process identifier and token, then publishes an immutable numbered ticket through an atomic hard
-link. Lower live tickets finish first. Completion markers and dead-process checks let later
-contenders reclaim finished or abandoned tickets below the greatest number; that greatest ticket
-remains as the sequence high-water mark. A delayed contender rechecks the published maximum before
-waiting, so it cannot enter under a retired number. A damaged ticket is preserved and reported. Dead
-private records are removed. Acquisition waits up to five seconds before reporting the lock as busy;
-retry after the other writer finishes. Waiting observes cancellation. When another process has
-reused a dead holder's process identifier, contenders treat its ticket as live and report busy after
-the deadline until that process exits.
+Opening a store, commits, curation checks, and source registration hold the project mutation lock at
+`sessions/.lock/`. Acquisition requires filesystem hard-link support. A contender writes a complete
+private owner record with its process identifier and token, then publishes an immutable numbered
+ticket through an atomic hard link. Lower live tickets finish first. Completion markers and
+dead-process checks let later contenders reclaim finished or abandoned tickets below the greatest
+number; that greatest ticket remains as the sequence high-water mark. A delayed contender rechecks
+the published maximum before waiting, so it cannot enter under a retired number. A damaged ticket is
+preserved and reported. Dead private records are removed. Acquisition waits up to five seconds
+before reporting the lock as busy; retry after the other writer finishes. If the lock stays busy
+while storage opens at session start or after tree navigation, storage stays unavailable for that
+session and status reports the busy error; `/reload` or another tree navigation retries. Waiting
+observes cancellation. When another process has reused a dead holder's process identifier,
+contenders treat its ticket as live and report busy after the deadline until that process exits.
 
 On Windows, concurrent removal by another contender can make a lock file operation fail with `EPERM`
 or `EBUSY`. The contender skips that file instead of failing:

@@ -1,6 +1,7 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import * as Effect from "effect/Effect";
 import { Value } from "typebox/value";
 import { expect } from "vitest";
 
@@ -14,7 +15,6 @@ import {
   readProjectCuration,
 } from "../src/storage/curation.ts";
 import { revisionSchema } from "../src/storage/revisions.ts";
-import type { MemoryStore } from "../src/storage/store.ts";
 import {
   baseProposal,
   committedId,
@@ -23,19 +23,17 @@ import {
   rejectionPaths,
   test,
 } from "./store-fixture.mts";
+import type { TestStore } from "./store-fixture.mts";
 
-async function commit(
-  store: MemoryStore,
-  overrides: Partial<MemoryProposal>,
-): Promise<CommitResult> {
+async function commit(store: TestStore, overrides: Partial<MemoryProposal>): Promise<CommitResult> {
   return await store.commit(baseProposal(store, overrides), { validate: () => undefined });
 }
 
-function note(store: MemoryStore): string {
+function note(store: TestStore): string {
   return join(store.sessionDir, "current", "current-work.md");
 }
 
-function reference(store: MemoryStore, sessionId: string, entryId = "entry-1"): string {
+function reference(store: TestStore, sessionId: string, entryId = "entry-1"): string {
   return encodeReference({ projectId: store.projectId, sessionId, entryId, span: 0 });
 }
 
@@ -155,13 +153,10 @@ test("a learning check without foreign exclusions does not traverse ancestry", a
     baseRevision: { sessionId: "unavailable", revisionId: "missing" },
   });
   expect(
-    await learningConflict(
-      store.baseDir,
-      proposal,
-      () => {
-        throw new Error("Unexpected ancestor read.");
-      },
-      store.access,
+    await store.run(
+      learningConflict(store.baseDir, proposal, () =>
+        Effect.fail(new Error("Unexpected ancestor read.")),
+      ),
     ),
   ).toBeUndefined();
 });
@@ -235,16 +230,14 @@ test("learning provenance advances for matching views when another committed vie
     }),
   );
   await writeFile(join(store.baseDir, "learnings", "index.md"), "external edit\n");
-  await publishProjectGenerated(
-    store.baseDir,
-    {
+  await store.run(
+    publishProjectGenerated(store.baseDir, {
       learnings: { "index.md": "first\n", "guide.md": "guide\n" },
       sourceIds: ["entry-2"],
       sequence: 2,
-    },
-    store.access,
+    }),
   );
-  const state = await readProjectCuration(store.baseDir, store.access.signal);
+  const state = await store.run(readProjectCuration(store.baseDir));
   expect(state.generated["index.md"]?.sequence).toBe(1);
   expect(state.generated["guide.md"]).toMatchObject({
     sequence: 2,
@@ -266,7 +259,7 @@ test("inspectCuration writes curation.json only when a record changes", async ({
 async function forkedParent(
   root: string,
   change: "edited" | "deleted",
-): Promise<{ parent: MemoryStore; revisionId: string }> {
+): Promise<{ parent: TestStore; revisionId: string }> {
   const parent = await openStore(root, { sessionId: "parent" });
   const revisionId = committedId(
     await commit(parent, {
