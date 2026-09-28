@@ -19,6 +19,7 @@ export default defineConfig({
     "node_modules/**",
     ".artifacts/**",
     ".agents/**",
+    ".claude/rules/*-rules.md",
   ],
   proseWrap: "always",
   jsdoc: {
