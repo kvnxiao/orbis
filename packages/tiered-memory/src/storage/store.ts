@@ -1,6 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 
+import * as Effect from "effect/Effect";
 import { Value } from "typebox/value";
 
 import { digest } from "../domain/canonical.ts";
@@ -17,8 +18,7 @@ import { repairPendingLearnings, repairViews, writeCommit } from "./commit.ts";
 import type { Snapshot } from "./commit.ts";
 import { inheritForkCuration, inspectCuration, learningConflict } from "./curation.ts";
 import type { CurationState } from "./curation.ts";
-import { cancelledBy, readText, rejectSymlinks, writeDurable } from "./files.ts";
-import type { DurableWriter, StorageAccess } from "./files.ts";
+import { fromPromise, readText, rejectSymlinks } from "./files.ts";
 import { withProjectLock } from "./lock.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import {
@@ -29,6 +29,7 @@ import {
   requireRevision,
 } from "./revisions.ts";
 import type { Head, Identity, Revision } from "./revisions.ts";
+import type { DurableWrites, StorageServices } from "./services.ts";
 
 const namespace = join(".pi", "tiered-memory");
 
@@ -36,13 +37,15 @@ function isSafeId(value: string): boolean {
   return Value.Check(safeIdSchema, value);
 }
 
+/** Report a commit decided under the lock; cancellation is interruption, never a returned value. */
+export type StoreCommitResult = Exclude<CommitResult, { kind: "cancelled" }>;
+
 /**
  * Own one session's memory directory in a project and serialize project mutations through the
  * project lock.
  *
- * Every read, open, mkdir, and lock poll observes `access.signal`, the signal the store was opened
- * with. Readers use only revisions a head names; a revision file left by an interrupted commit
- * stays unreferenced.
+ * Readers use only revisions a head names; a revision file left by an interrupted commit stays
+ * unreferenced. Interruption abandons reads; durable writes finish before it takes effect.
  */
 export class MemoryStore {
   readonly projectRoot: string;
@@ -50,16 +53,13 @@ export class MemoryStore {
   readonly sessionId: string;
   readonly baseDir: string;
   readonly sessionDir: string;
-  /** Carry the store's signal and durable writer to the storage modules that act on its directories. */
-  readonly access: StorageAccess;
 
-  private constructor(projectRoot: string, sessionId: string, access: StorageAccess) {
+  private constructor(projectRoot: string, sessionId: string) {
     this.projectRoot = projectRoot;
     this.projectId = digest(projectRoot);
     this.sessionId = sessionId;
     this.baseDir = join(projectRoot, namespace);
     this.sessionDir = join(this.baseDir, "sessions", sessionId);
-    this.access = access;
   }
 
   /**
@@ -70,33 +70,36 @@ export class MemoryStore {
    * before taking the project lock and again under it; writes the identity record at first open.
    * For an unfinished head, restores absent note views and views equal to their parent revision's
    * rendering, while preserving external edits. Restores learning files only when they still match
-   * the expected predecessor; newer publications and external curation remain. `write` defaults to
-   * `writeDurable`.
+   * the expected predecessor; newer publications and external curation remain.
    *
    * @throws Error when `sessionId` is not a safe id, a managed directory is a symlink, the identity
-   *   record names another project or session, or a head, revision, or identity record is damaged;
-   *   `signal.reason` when the signal aborts.
+   *   record names another project or session, or a head, revision, or identity record is damaged.
+   * @throws The failures of `withProjectLock`, including the busy error.
    */
-  static async open(
+  static open(
     projectRoot: string,
     sessionId: string,
-    options: { signal: AbortSignal; write?: DurableWriter },
-  ): Promise<MemoryStore> {
+  ): Effect.Effect<MemoryStore, unknown, StorageServices> {
     if (!isSafeId(sessionId)) {
-      throw new Error(`Invalid Pi session identity: ${sessionId}`);
+      return Effect.fail(new Error(`Invalid Pi session identity: ${sessionId}`));
     }
-    const store = new MemoryStore(projectRoot, sessionId, {
-      signal: options.signal,
-      write: options.write ?? writeDurable,
-    });
-    await store.locked(store.access, async () => {
-      await store.assertSafeLayout(store.access.signal);
-      await repairPendingLearnings(store, [], store.access);
-      await repairViews(store, store.access);
-      const identity: Identity = { version: 1, projectId: store.projectId, projectRoot, sessionId };
-      await ensureIdentity(store.sessionDir, identity, store.access);
-    });
-    return store;
+    const store = new MemoryStore(projectRoot, sessionId);
+    const identity: Identity = {
+      version: 1,
+      projectId: store.projectId,
+      projectRoot,
+      sessionId,
+    };
+    return store
+      .locked(
+        Effect.gen(function* () {
+          yield* store.assertSafeLayout();
+          yield* repairPendingLearnings(store, []);
+          yield* repairViews(store);
+          yield* ensureIdentity(store.sessionDir, identity);
+        }),
+      )
+      .pipe(Effect.as(store));
   }
 
   /**
@@ -106,42 +109,45 @@ export class MemoryStore {
    * equals `expectedRevision`, curation permits every written note, learning digests and sequences
    * equal `expectedLearnings`, and `validate` returns `undefined`; `validate` must not write and
    * runs again before head publication. A returned reason becomes the conflict's reason. Then
-   * advances the sequence and writes the revision, the head, the changed note views, the learning
-   * views, and learning provenance. `proposal` must satisfy `validateProposal`. `signal` is
-   * observed together with the store's signal until the head is written.
+   * writes the commit through `writeCommit`, which calls `onHeadDurable` as soon as the head is
+   * durable. `proposal` must satisfy `validateProposal`.
    *
    * @throws Error when the proposal belongs to another project or session, or when the head's
-   *   revision or the base revision is unavailable. A rejection after the head is durable, from a
-   *   failed view, learning, or provenance write, leaves a committed revision that the next open
-   *   repairs and that reconciliation attaches to the branch on the next start.
+   *   revision or the base revision is unavailable.
+   * @throws The original error of a failed write; after the head is durable the committed revision
+   *   stays for the next open to repair and for reconciliation to attach.
+   * @throws The failures of `withProjectLock`.
    */
-  async commit(
+  commit(
     proposal: MemoryProposal,
     options: {
-      validate: () => Promise<ConflictReason | undefined> | ConflictReason | undefined;
-      signal?: AbortSignal;
+      validate: Effect.Effect<ConflictReason | undefined, unknown>;
+      onHeadDurable: (revisionId: string) => void;
     },
-  ): Promise<CommitResult> {
-    const captured = validateProposal(structuredClone(proposal));
-    if (captured.sessionId !== this.sessionId || captured.projectId !== this.projectId) {
-      throw new Error("The memory proposal belongs to another project or session.");
-    }
-    const signal =
-      options.signal === undefined
-        ? this.access.signal
-        : AbortSignal.any([this.access.signal, options.signal]);
-    const access: StorageAccess = { signal, write: this.access.write };
-    try {
-      return await this.locked(
-        access,
-        async () => await this.commitLocked(captured, access, options.validate),
-      );
-    } catch (error) {
-      if (cancelledBy(signal, error)) {
-        return { kind: "cancelled", reason: signal.reason };
+  ): Effect.Effect<StoreCommitResult, unknown, StorageServices> {
+    return Effect.suspend(() => {
+      const captured = validateProposal(structuredClone(proposal));
+      if (captured.sessionId !== this.sessionId || captured.projectId !== this.projectId) {
+        return Effect.fail(new Error("The memory proposal belongs to another project or session."));
       }
-      throw error;
-    }
+      return this.locked(this.commitLocked(captured, options.validate, options.onHeadDurable));
+    });
+  }
+
+  /**
+   * Run `action` under the project lock after rejecting symlinked managed directories.
+   *
+   * `action` must not take the lock again.
+   *
+   * @throws Error when a managed directory is a symlink.
+   * @throws The failures of `withProjectLock` and of `action`, unchanged.
+   */
+  locked<A, R>(
+    action: Effect.Effect<A, unknown, R>,
+  ): Effect.Effect<A, unknown, R | StorageServices> {
+    return this.assertSafeLayout().pipe(
+      Effect.andThen(withProjectLock(join(this.baseDir, "sessions"), action)),
+    );
   }
 
   /**
@@ -149,23 +155,25 @@ export class MemoryStore {
    *
    * @throws Error naming the path when the revision is damaged.
    */
-  async readRevision(revisionId: string): Promise<Revision | undefined> {
+  readRevision(revisionId: string): Effect.Effect<Revision | undefined, unknown> {
     if (!isSafeId(revisionId)) {
-      return undefined;
+      return Effect.succeed(undefined);
     }
-    return await readRevisionFile(
-      this.sessionDir,
-      { projectId: this.projectId, sessionId: this.sessionId, revisionId },
-      this.access.signal,
-    );
+    return readRevisionFile(this.sessionDir, {
+      projectId: this.projectId,
+      sessionId: this.sessionId,
+      revisionId,
+    });
   }
 
   /**
    * Return the head's revision id, or `null` before the first commit; reads without the lock, so a
    * concurrent commit may advance it.
+   *
+   * @throws Error naming the path when the head is damaged.
    */
-  async currentHead(): Promise<string | null> {
-    return (await readHead(this.sessionDir, this.access.signal))?.revisionId ?? null;
+  currentHead(): Effect.Effect<string | null, unknown> {
+    return readHead(this.sessionDir).pipe(Effect.map((head) => head?.revisionId ?? null));
   }
 
   /**
@@ -176,27 +184,29 @@ export class MemoryStore {
    *
    * @throws Error naming the path when the revision or the ancestor's identity is damaged.
    */
-  async inheritRevision(pointer: RevisionPointer): Promise<Revision | undefined> {
+  inheritRevision(pointer: RevisionPointer): Effect.Effect<Revision | undefined, unknown> {
     if (pointer.sessionId === this.sessionId) {
-      return await this.readRevision(pointer.revisionId);
+      return this.readRevision(pointer.revisionId);
     }
     if (!isSafeId(pointer.sessionId) || !isSafeId(pointer.revisionId)) {
-      return undefined;
+      return Effect.succeed(undefined);
     }
     const directory = join(this.baseDir, "sessions", pointer.sessionId);
-    const identity = await readIdentity(directory, this.access.signal);
-    if (
-      identity?.projectId !== this.projectId ||
-      identity.projectRoot !== this.projectRoot ||
-      identity.sessionId !== pointer.sessionId
-    ) {
-      return undefined;
-    }
-    return await readRevisionFile(
-      directory,
-      { projectId: this.projectId, sessionId: pointer.sessionId, revisionId: pointer.revisionId },
-      this.access.signal,
-    );
+    return Effect.gen({ self: this }, function* () {
+      const identity = yield* readIdentity(directory);
+      if (
+        identity?.projectId !== this.projectId ||
+        identity.projectRoot !== this.projectRoot ||
+        identity.sessionId !== pointer.sessionId
+      ) {
+        return undefined;
+      }
+      return yield* readRevisionFile(directory, {
+        projectId: this.projectId,
+        sessionId: pointer.sessionId,
+        revisionId: pointer.revisionId,
+      });
+    });
   }
 
   /**
@@ -207,34 +217,28 @@ export class MemoryStore {
    * the fork.
    *
    * @throws Error naming the path when a curation, head, or revision record is damaged.
+   * @throws The failures of `withProjectLock`.
    */
-  async inspectCuration(base: RevisionPointer | null): Promise<CurationState> {
-    return await this.locked(this.access, async () => {
-      const own = await this.inspectOwnCuration(this.access);
-      return base === null || base.sessionId === this.sessionId
-        ? own
-        : await this.inheritLineageCuration(base, this.access);
-    });
-  }
-
-  private async locked<T>(access: StorageAccess, action: () => Promise<T>): Promise<T> {
-    await this.assertSafeLayout(access.signal);
-    return await withProjectLock(join(this.baseDir, "sessions"), access, action);
-  }
-
-  private async assertSafeLayout(signal: AbortSignal): Promise<void> {
-    const sessions = join(this.baseDir, "sessions");
-    await rejectSymlinks(
-      [
-        join(this.projectRoot, ".pi"),
-        this.baseDir,
-        sessions,
-        join(sessions, "_project"),
-        join(this.baseDir, "learnings"),
-        ...this.sessionLayout(this.sessionId),
-      ],
-      signal,
+  inspectCuration(
+    base: RevisionPointer | null,
+  ): Effect.Effect<CurationState, unknown, StorageServices> {
+    return this.locked(
+      base === null || base.sessionId === this.sessionId
+        ? this.inspectOwnCuration()
+        : this.inspectOwnCuration().pipe(Effect.andThen(this.inheritLineageCuration(base))),
     );
+  }
+
+  private assertSafeLayout(): Effect.Effect<void, unknown> {
+    const sessions = join(this.baseDir, "sessions");
+    return rejectSymlinks([
+      join(this.projectRoot, ".pi"),
+      this.baseDir,
+      sessions,
+      join(sessions, "_project"),
+      join(this.baseDir, "learnings"),
+      ...this.sessionLayout(this.sessionId),
+    ]);
   }
 
   private sessionLayout(sessionId: string): string[] {
@@ -242,17 +246,18 @@ export class MemoryStore {
     return [directory, join(directory, "current"), join(directory, "revisions")];
   }
 
-  private async commitLocked(
+  private readonly commitLocked = Effect.fnUntraced(function* (
+    this: MemoryStore,
     proposal: MemoryProposal,
-    access: StorageAccess,
-    validate: () => Promise<ConflictReason | undefined> | ConflictReason | undefined,
-  ): Promise<CommitResult> {
-    await this.assertSafeLayout(access.signal);
-    await repairPendingLearnings(this, Object.keys(proposal.learnings), access);
-    await repairViews(this, access);
-    const head = await readHead(this.sessionDir, access.signal);
+    validate: Effect.Effect<ConflictReason | undefined, unknown>,
+    onHeadDurable: (revisionId: string) => void,
+  ): Effect.fn.Return<StoreCommitResult, unknown, DurableWrites> {
+    yield* this.assertSafeLayout();
+    yield* repairPendingLearnings(this, Object.keys(proposal.learnings));
+    yield* repairViews(this);
+    const head = yield* readHead(this.sessionDir);
     const actualRevision = head?.revisionId ?? null;
-    const conflict = (reason: ConflictReason): CommitResult => ({
+    const conflict = (reason: ConflictReason): StoreCommitResult => ({
       kind: "conflict",
       expectedRevision: proposal.expectedRevision,
       actualRevision,
@@ -261,45 +266,35 @@ export class MemoryStore {
     if (actualRevision !== proposal.expectedRevision) {
       return conflict("head");
     }
-    const snapshot = await this.prepareSnapshot(proposal, head, access);
+    const snapshot = yield* this.prepareSnapshot(proposal, head);
     if (snapshot === undefined) {
       return conflict("curation");
     }
-    const learning = await learningConflict(
-      this.baseDir,
-      proposal,
-      async (pointer) => await this.inheritRevision(pointer),
-      access,
+    const learning = yield* learningConflict(this.baseDir, proposal, (pointer) =>
+      this.inheritRevision(pointer),
     );
     if (learning !== undefined) {
       return conflict(learning);
     }
-    const reason = await validate();
+    const reason = yield* validate;
     if (reason !== undefined) {
       return conflict(reason);
     }
-    const result = await writeCommit(
-      this,
-      proposal,
-      head,
-      snapshot,
-      access,
-      async () => await validate(),
-    );
+    const result = yield* writeCommit(this, proposal, head, snapshot, validate, onHeadDurable);
     return "conflict" in result
       ? conflict(result.conflict)
       : { kind: "committed", revisionId: result.revisionId };
-  }
+  });
 
-  private async prepareSnapshot(
+  private readonly prepareSnapshot = Effect.fnUntraced(function* (
+    this: MemoryStore,
     proposal: MemoryProposal,
     head: Head | undefined,
-    access: StorageAccess,
-  ): Promise<Snapshot | undefined> {
-    const base = await this.baseOf(proposal.baseRevision);
-    let curation = await this.inspectOwnCuration(access);
+  ): Effect.fn.Return<Snapshot | undefined, unknown, DurableWrites> {
+    const base = yield* this.baseOf(proposal.baseRevision);
+    let curation = yield* this.inspectOwnCuration();
     if (proposal.baseRevision !== null && proposal.baseRevision.sessionId !== this.sessionId) {
-      curation = await this.inheritLineageCuration(proposal.baseRevision, access);
+      curation = yield* this.inheritLineageCuration(proposal.baseRevision);
     }
     const excluded = new Set(
       proposal.excludedInheritedNotes.filter((name) => !Object.hasOwn(proposal.notes, name)),
@@ -307,11 +302,22 @@ export class MemoryStore {
     const candidates = Object.entries({ ...base?.notes, ...proposal.notes }).filter(
       ([name]) => !excluded.has(name),
     );
-    const disks = await Promise.all(
-      candidates.map(
-        async ([name]) => await readText(join(this.sessionDir, "current", name), access.signal),
-      ),
+    const disks = yield* Effect.forEach(
+      candidates,
+      ([name]) => readText(join(this.sessionDir, "current", name)),
+      { concurrency: "unbounded" },
     );
+    return this.selectSnapshot(proposal, head, base, curation, candidates, disks);
+  });
+
+  private selectSnapshot(
+    proposal: MemoryProposal,
+    head: Head | undefined,
+    base: Revision | undefined,
+    curation: CurationState,
+    candidates: readonly [string, string][],
+    disks: readonly (string | undefined)[],
+  ): Snapshot | undefined {
     const snapshot: Snapshot = { notes: {}, noteDependencies: {}, materialize: [] };
     for (const [index, [name, content]] of candidates.entries()) {
       const explicit = Object.hasOwn(proposal.notes, name);
@@ -343,50 +349,56 @@ export class MemoryStore {
     return snapshot;
   }
 
-  private async baseOf(pointer: RevisionPointer | null): Promise<Revision | undefined> {
+  private baseOf(pointer: RevisionPointer | null): Effect.Effect<Revision | undefined, unknown> {
     if (pointer === null) {
-      return undefined;
+      return Effect.succeed(undefined);
     }
-    const base = await this.inheritRevision(pointer);
-    if (base === undefined) {
-      throw new Error(`The proposal's base revision ${pointer.revisionId} is unavailable.`);
-    }
-    return base;
-  }
-
-  private async inspectOwnCuration(access: StorageAccess): Promise<CurationState> {
-    const head = await readHead(this.sessionDir, access.signal);
-    const revision =
-      head === undefined
-        ? undefined
-        : await requireRevision(
-            this.sessionDir,
-            { projectId: this.projectId, sessionId: this.sessionId, revisionId: head.revisionId },
-            access.signal,
-          );
-    return await inspectCuration(
-      this.sessionDir,
-      head?.views.notes ?? {},
-      revision?.noteDependencies ?? {},
-      access,
+    return this.inheritRevision(pointer).pipe(
+      Effect.flatMap((base) =>
+        base === undefined
+          ? Effect.fail(
+              new Error(`The proposal's base revision ${pointer.revisionId} is unavailable.`),
+            )
+          : Effect.succeed(base),
+      ),
     );
   }
 
-  private async inheritLineageCuration(
+  private readonly inspectOwnCuration = Effect.fnUntraced(function* (
+    this: MemoryStore,
+  ): Effect.fn.Return<CurationState, unknown, DurableWrites> {
+    const head = yield* readHead(this.sessionDir);
+    const revision =
+      head === undefined
+        ? undefined
+        : yield* requireRevision(this.sessionDir, {
+            projectId: this.projectId,
+            sessionId: this.sessionId,
+            revisionId: head.revisionId,
+          });
+    return yield* inspectCuration(
+      this.sessionDir,
+      head?.views.notes ?? {},
+      revision?.noteDependencies ?? {},
+    );
+  });
+
+  private inheritLineageCuration(
     pointer: RevisionPointer,
-    access: StorageAccess,
-  ): Promise<CurationState> {
-    await rejectSymlinks(this.sessionLayout(pointer.sessionId), access.signal);
-    return await inheritForkCuration(
-      {
-        baseDir: this.baseDir,
-        projectId: this.projectId,
-        sessionDir: this.sessionDir,
-        childSessionId: this.sessionId,
-      },
-      pointer,
-      async (next) => await this.inheritRevision(next),
-      access,
+  ): Effect.Effect<CurationState, unknown, DurableWrites> {
+    return rejectSymlinks(this.sessionLayout(pointer.sessionId)).pipe(
+      Effect.andThen(
+        inheritForkCuration(
+          {
+            baseDir: this.baseDir,
+            projectId: this.projectId,
+            sessionDir: this.sessionDir,
+            childSessionId: this.sessionId,
+          },
+          pointer,
+          (next) => this.inheritRevision(next),
+        ),
+      ),
     );
   }
 }
@@ -395,8 +407,8 @@ export class MemoryStore {
  * Resolve the canonical project root for a working directory: the `.git` walk's result with
  * symbolic links resolved.
  *
- * @throws The original `realpath` error.
+ * @throws The original `realpath` or `stat` error.
  */
-export async function canonicalProjectRoot(cwd: string): Promise<string> {
-  return await realpath(await resolveProjectRoot(cwd));
+export function canonicalProjectRoot(cwd: string): Effect.Effect<string, unknown> {
+  return fromPromise(async () => await realpath(await resolveProjectRoot(cwd)));
 }

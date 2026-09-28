@@ -1,5 +1,8 @@
 import { defineConfig } from "oxlint";
 
+const fiberCancellation =
+  "Decide cancellation from the fiber's Exit and the runner's first recorded reason: a composite signal's reason differs between Node versions.";
+
 export default defineConfig({
   plugins: ["typescript", "unicorn", "oxc", "vitest", "import"],
   categories: {
@@ -183,6 +186,21 @@ export default defineConfig({
             property: "parse",
             message: "Parse boundary data through parseRecord in the package's records.ts module.",
           },
+        ],
+      },
+    },
+    {
+      files: ["packages/tiered-memory/src/**"],
+      rules: {
+        "no-restricted-properties": [
+          "error",
+          {
+            object: "JSON",
+            property: "parse",
+            message: "Parse boundary data through parseRecord in the package's records.ts module.",
+          },
+          { object: "AbortSignal", property: "any", message: fiberCancellation },
+          { property: "throwIfAborted", message: fiberCancellation },
         ],
       },
     },

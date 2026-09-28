@@ -100,8 +100,9 @@ export type ConflictReason = "head" | "curation" | "learning" | "evidence" | "co
  *
  * `committed` means the revision and the head naming it are durable; the branch reference may still
  * be pending. `conflict` carries the head the proposal expected and the head found under the lock,
- * which differ only for reason `head`. `cancelled` carries the abort reason of the signal that
- * fired before the head was written; a revision file already written stays unreferenced.
+ * which differ only for reason `head`. `cancelled` carries the first cancellation reason among the
+ * host signal, a disable, a replacement, and shutdown, recorded before the head was written; a
+ * revision file already written stays unreferenced.
  */
 export type CommitResult =
   | { kind: "committed"; revisionId: string }

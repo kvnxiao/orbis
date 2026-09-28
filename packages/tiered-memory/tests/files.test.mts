@@ -1,10 +1,12 @@
 import { mkdir, open, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import * as Effect from "effect/Effect";
 import { expect } from "vitest";
 
-import { cancelledBy, writeDurable } from "../src/storage/files.ts";
+import { fromPromise, readText, writeDurable } from "../src/storage/files.ts";
 import type { DurableWriteIo } from "../src/storage/files.ts";
+import { interruptedOnly } from "./storage-harness.mts";
 import { test } from "./store-fixture.mts";
 
 function recordingIo(calls: string[], fail: { step?: string; error?: Error } = {}): DurableWriteIo {
@@ -96,11 +98,31 @@ test("writeDurable leaves the previous bytes when the temporary fsync fails", as
   expect(await readFile(path, "utf8")).toBe("previous");
 });
 
-test("cancelledBy is true only for the aborted signal's own reason", () => {
-  const controller = new AbortController();
-  const reason = new Error("session stopped");
-  expect(cancelledBy(controller.signal, reason)).toBe(false);
-  controller.abort(reason);
-  expect(cancelledBy(controller.signal, reason)).toBe(true);
-  expect(cancelledBy(controller.signal, new Error("session stopped"))).toBe(false);
+test("an interrupted readText ends interrupted without a failure from its aborted read", async ({
+  makeRoot,
+}) => {
+  const path = join(await makeRoot(), "record.json");
+  await writeFile(path, "x".repeat(1_000_000));
+  const fiber = Effect.runFork(readText(path));
+  fiber.interruptUnsafe();
+  expect(await interruptedOnly(fiber)).toBe(true);
+});
+
+test("an interrupted Promise operation whose promise rejects with AbortError reports no failure", async () => {
+  const rejected = Promise.withResolvers<unknown>();
+  const fiber = Effect.runFork(
+    fromPromise(
+      async (signal) =>
+        await new Promise<never>((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            const error = new DOMException("The operation was aborted.", "AbortError");
+            rejected.resolve(error);
+            reject(error);
+          });
+        }),
+    ),
+  );
+  fiber.interruptUnsafe();
+  expect(await interruptedOnly(fiber)).toBe(true);
+  expect(await rejected.promise).toBeInstanceOf(DOMException);
 });

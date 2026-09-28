@@ -205,12 +205,14 @@ create usable resources for the new session; a disposed runtime cannot simply be
 
 ### Tiered memory
 
-The implemented [`MemoryRuntime`](../packages/tiered-memory/src/pi/runtime.ts) manually registers
-job controllers and invalidates pending results on stop or replacement. Scopes and fibers could own
-that work while explicit session, lineage, and revision checks continue to govern commits. Storage
-reads and writes can be exposed through narrow Effect services; candidate classification and
-snapshot decisions in [`store.ts`](../packages/tiered-memory/src/storage/store.ts) can be separated
-into ordinary domain functions where that improves clarity.
+The implemented
+[`MemoryRuntime`](https://github.com/kvnxiao/orbis/blob/a63bcf978ea2be33dc20a902c05d8ea4c67bc464/packages/tiered-memory/src/pi/runtime.ts)
+manually registers job controllers and invalidates pending results on stop or replacement. Scopes
+and fibers could own that work while explicit session, lineage, and revision checks continue to
+govern commits. Storage reads and writes can be exposed through narrow Effect services; candidate
+classification and snapshot decisions in
+[`store.ts`](https://github.com/kvnxiao/orbis/blob/a63bcf978ea2be33dc20a902c05d8ea4c67bc464/packages/tiered-memory/src/storage/store.ts)
+can be separated into ordinary domain functions where that improves clarity.
 
 The strongest prospective fit is the specified processing work. The
 [resource contract](../packages/tiered-memory/SPEC.md#resource-budgets--req-resource-budgets)
@@ -236,15 +238,16 @@ waiting and starts again on each retry.
 
 The storage protocol is a separate correctness concern:
 
-- [`lock.ts`](../packages/tiered-memory/src/storage/lock.ts) coordinates independent processes using
-  filesystem operations. An in-memory Effect semaphore does not replace that protocol.
-- [`writeCommit`](../packages/tiered-memory/src/storage/commit.ts) checks cancellation until the
-  head is written. After commitment, started view writes finish before releasing the project lock,
-  including when another write fails. Preserve this with explicitly protected execution and
-  completion of started writes, rather than a default fail-fast traversal.
-- [`writeDurable`](../packages/tiered-memory/src/storage/files.ts) performs filesystem durability
-  operations without observing cancellation. A wrapper must wait for such writes before releasing
-  resources they still use.
+- [`lock.ts`](https://github.com/kvnxiao/orbis/blob/a63bcf978ea2be33dc20a902c05d8ea4c67bc464/packages/tiered-memory/src/storage/lock.ts)
+  coordinates independent processes using filesystem operations. An in-memory Effect semaphore does
+  not replace that protocol.
+- [`writeCommit`](https://github.com/kvnxiao/orbis/blob/a63bcf978ea2be33dc20a902c05d8ea4c67bc464/packages/tiered-memory/src/storage/commit.ts)
+  checks cancellation until the head is written. After commitment, started view writes finish before
+  releasing the project lock, including when another write fails. Preserve this with explicitly
+  protected execution and completion of started writes, rather than a default fail-fast traversal.
+- [`writeDurable`](https://github.com/kvnxiao/orbis/blob/a63bcf978ea2be33dc20a902c05d8ea4c67bc464/packages/tiered-memory/src/storage/files.ts)
+  performs filesystem durability operations without observing cancellation. A wrapper must wait for
+  such writes before releasing resources they still use.
 - Curation exclusions, exact source coverage, compare-before-commit checks, and recovery of
   materialized views remain domain/storage logic. Effect does not infer those invariants.
 

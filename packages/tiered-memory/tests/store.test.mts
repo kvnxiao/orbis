@@ -2,16 +2,19 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import { expect } from "vitest";
 
 import { digest } from "../src/domain/canonical.ts";
 import type { CommitResult, ConflictReason, MemoryProposal } from "../src/domain/proposal.ts";
 import { readText, writeDurable } from "../src/storage/files.ts";
-import type { DurableWriter } from "../src/storage/files.ts";
-import { withProjectLock } from "../src/storage/lock.ts";
 import { readHead } from "../src/storage/revisions.ts";
-import { canonicalProjectRoot } from "../src/storage/store.ts";
-import type { MemoryStore } from "../src/storage/store.ts";
+import { canonicalProjectRoot, MemoryStore } from "../src/storage/store.ts";
+import { afterWrite, interruptedOnly, storageRuntime } from "./storage-harness.mts";
+import type { TestWrite } from "./storage-harness.mts";
 import {
   baseProposal,
   committedId,
@@ -19,27 +22,28 @@ import {
   openStore,
   test,
 } from "./store-fixture.mts";
+import type { TestStore } from "./store-fixture.mts";
 
 async function commit(
-  store: MemoryStore,
+  store: TestStore,
   overrides: Partial<MemoryProposal> = {},
   validate: () => ConflictReason | undefined = () => undefined,
 ): Promise<CommitResult> {
   return await store.commit(baseProposal(store, overrides), { validate });
 }
 
-function view(store: MemoryStore, name = "current-work.md"): string {
+function view(store: TestStore, name = "current-work.md"): string {
   return join(store.sessionDir, "current", name);
 }
 
-async function revisionFiles(store: MemoryStore): Promise<string[]> {
+async function revisionFiles(store: TestStore): Promise<string[]> {
   return (await readdir(join(store.sessionDir, "revisions"))).filter((name) =>
     name.endsWith(".json"),
   );
 }
 
 async function pendingLearningHead(
-  store: MemoryStore,
+  store: TestStore,
   sequence: number,
   learnings: Record<string, string>,
   expectedLearnings: MemoryProposal["expectedLearnings"],
@@ -123,10 +127,10 @@ test("an interruption after the head rewrites absent views on the next open", as
   await expect(commit(store, { notes: { "current-work.md": "one\n" } })).rejects.toThrow(
     "Injected interruption",
   );
-  expect((await readHead(store.sessionDir, store.access.signal))?.materialized).toBe(false);
+  expect((await Effect.runPromise(readHead(store.sessionDir)))?.materialized).toBe(false);
   const reopened = await openStore(root);
   expect(await readFile(view(reopened), "utf8")).toBe("one\n");
-  expect((await readHead(reopened.sessionDir, reopened.access.signal))?.materialized).toBe(true);
+  expect((await Effect.runPromise(readHead(reopened.sessionDir)))?.materialized).toBe(true);
 });
 
 test("open rewrites a view whose bytes equal the parent revision's rendering of the same note", async ({
@@ -170,14 +174,10 @@ test("a failed note write keeps the project lock until sibling writes finish", a
     notes: { "current-work.md": "work", "journey.md": "old writer" },
   });
   await started.promise;
-  const later = withProjectLock(
-    join(store.baseDir, "sessions"),
-    { signal: new AbortController().signal, write: writeDurable },
-    async () => {
-      await mkdir(join(store.sessionDir, "current"), { recursive: true });
-      await writeFile(view(store, "journey.md"), "later edit");
-    },
-  );
+  const later = store.lock(async () => {
+    await mkdir(join(store.sessionDir, "current"), { recursive: true });
+    await writeFile(view(store, "journey.md"), "later edit");
+  });
   const completedBeforeRelease = await Promise.race([
     pending.then(
       () => true,
@@ -341,7 +341,7 @@ test("open finishes an interrupted learning update from the previous generated v
   expect(state).toMatchObject({
     generated: { "index.md": { sequence: 2, digest: digest("Updated learning\n") } },
   });
-  expect((await readHead(reopened.sessionDir, reopened.access.signal))?.materialized).toBe(true);
+  expect((await Effect.runPromise(readHead(reopened.sessionDir)))?.materialized).toBe(true);
 });
 
 test("open repairs and publishes each learning from a partially written revision", async ({
@@ -594,7 +594,7 @@ test.for(["edited", "deleted"])(
         expectedLearnings: { "index.md": { digest: digest("old"), sequence: 1 } },
       }),
     ).toMatchObject({ kind: "conflict", reason: "curation" });
-    expect(await readText(path, newer.access.signal)).toBe(
+    expect(await Effect.runPromise(readText(path))).toBe(
       change === "edited" ? "user edit" : undefined,
     );
   },
@@ -634,7 +634,7 @@ test("a pending learning in another session does not delay an unrelated learning
       expectedLearnings: { "y.md": { digest: digest("old y"), sequence: 1 } },
     }),
   );
-  expect((await readHead(older.sessionDir, older.access.signal))?.materialized).toBe(false);
+  expect((await Effect.runPromise(readHead(older.sessionDir)))?.materialized).toBe(false);
   const learnings = join(seed.baseDir, "learnings");
   expect(await readFile(join(learnings, "x.md"), "utf8")).toBe("old x");
   expect(await readFile(join(learnings, "y.md"), "utf8")).toBe("new y");
@@ -847,41 +847,95 @@ test("a head conflict is reported before the validate callback's reason", async 
   });
 });
 
-function abortingWriter(controller: AbortController, reason: Error, at: string): DurableWriter {
-  return async (path, contents) => {
-    await writeDurable(path, contents);
-    if (path.includes(at)) {
-      controller.abort(reason);
-    }
-  };
-}
-
-test("an abort before the head is written returns cancelled with the signal's reason", async ({
+test("a cancellation before the head write ends the commit interrupted, leaves the previous head, and releases the lock", async ({
   makeRoot,
 }) => {
-  const controller = new AbortController();
-  const reason = new Error("session stopped");
   const store = await openStore(await makeRoot(), {
-    signal: controller.signal,
-    write: abortingWriter(controller, reason, `${sep}revisions${sep}`),
+    write: afterWrite(
+      (path) => path.includes(`${sep}revisions${sep}`),
+      () => {
+        fiber.interruptUnsafe();
+      },
+    ),
   });
-  expect(await commit(store)).toEqual({ kind: "cancelled", reason });
-  expect(
-    (await readHead(store.sessionDir, new AbortController().signal))?.revisionId,
-  ).toBeUndefined();
+  const fiber = store.fork(store.commitEffect(baseProposal(store)));
+  expect(await interruptedOnly(fiber)).toBe(true);
+  expect(await store.currentHead()).toBeNull();
+  expect(await revisionFiles(store)).toHaveLength(1);
+  await expect(store.lock(async () => await Promise.resolve("acquired"))).resolves.toBe("acquired");
 });
 
-test("an abort after the head is durable returns committed and finishes the views", async ({
+test("a cancellation after the head write finishes the views and calls onHeadDurable before the interrupted exit", async ({
   makeRoot,
 }) => {
-  const controller = new AbortController();
   const store = await openStore(await makeRoot(), {
-    signal: controller.signal,
-    write: abortingWriter(controller, new Error("session stopped"), "head.json"),
+    write: afterWrite(
+      (path) => path.endsWith("head.json"),
+      () => {
+        fiber.interruptUnsafe();
+      },
+    ),
   });
-  const result = await commit(store, { notes: { "current-work.md": "kept\n" } });
-  expect(result.kind).toBe("committed");
+  const durable: string[] = [];
+  const fiber = store.fork(
+    store.commitEffect(baseProposal(store, { notes: { "current-work.md": "kept\n" } }), {
+      onHeadDurable: (revisionId) => durable.push(revisionId),
+    }),
+  );
+  expect(await interruptedOnly(fiber)).toBe(true);
+  expect(durable).toEqual([await store.currentHead()]);
   expect(await readFile(view(store), "utf8")).toBe("kept\n");
+  expect((await Effect.runPromise(readHead(store.sessionDir)))?.materialized).toBe(true);
+});
+
+test("a cancellation during the final validate writes no head and releases the lock", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  const entered = Promise.withResolvers<undefined>();
+  let checks = 0;
+  const fiber = store.fork(
+    store.commitEffect(baseProposal(store), {
+      validate: async () => {
+        checks++;
+        if (checks === 2) {
+          entered.resolve(undefined);
+          await new Promise<never>(() => undefined);
+        }
+        return undefined;
+      },
+    }),
+  );
+  await entered.promise;
+  fiber.interruptUnsafe();
+  expect(await interruptedOnly(fiber)).toBe(true);
+  expect(await store.currentHead()).toBeNull();
+  await expect(store.lock(async () => await Promise.resolve("acquired"))).resolves.toBe("acquired");
+});
+
+test("an interruption during the revision's durable write writes no head after the write settles", async ({
+  makeRoot,
+}) => {
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  const store = await openStore(await makeRoot(), {
+    write: async (path, contents) => {
+      if (path.includes(`${sep}revisions${sep}`)) {
+        entered.resolve(undefined);
+        await gate.promise;
+      }
+      await writeDurable(path, contents);
+    },
+  });
+  const fiber = store.fork(store.commitEffect(baseProposal(store)));
+  await entered.promise;
+  fiber.interruptUnsafe();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(fiber.pollUnsafe()).toBeUndefined();
+  gate.resolve(undefined);
+  expect(await interruptedOnly(fiber)).toBe(true);
+  expect(await revisionFiles(store)).toHaveLength(1);
+  expect(await store.currentHead()).toBeNull();
 });
 
 test("two sessions writing the same learning serialize under the lock and the loser conflicts on learning", async ({
@@ -921,7 +975,7 @@ test("commit uses the proposal captured at the call when the caller mutates it w
   const store = await openStore(await makeRoot());
   const held = Promise.withResolvers<undefined>();
   const entered = Promise.withResolvers<undefined>();
-  const holder = withProjectLock(join(store.baseDir, "sessions"), store.access, async () => {
+  const holder = store.lock(async () => {
     entered.resolve(undefined);
     await held.promise;
   });
@@ -933,6 +987,62 @@ test("commit uses the proposal captured at the call when the caller mutates it w
   await holder;
   const id = committedId(await pending);
   expect((await store.readRevision(id))?.notes).toEqual({ "current-work.md": "original\n" });
+});
+
+test("a curation edit made while a commit waits for the lock conflicts on curation", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  const first = committedId(await commit(store, { notes: { "current-work.md": "one\n" } }));
+  const held = Promise.withResolvers<undefined>();
+  const entered = Promise.withResolvers<undefined>();
+  const holder = store.lock(async () => {
+    entered.resolve(undefined);
+    await held.promise;
+  });
+  await entered.promise;
+  const pending = commit(store, { expectedRevision: first, notes: { "current-work.md": "two\n" } });
+  await writeFile(view(store), "user edit\n");
+  held.resolve(undefined);
+  await holder;
+  expect(await pending).toMatchObject({
+    kind: "conflict",
+    reason: "curation",
+    actualRevision: first,
+  });
+  expect(await readFile(view(store), "utf8")).toBe("user edit\n");
+});
+
+test("a revision committed while a commit waits for the lock conflicts on head", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const store = await openStore(root);
+  const first = committedId(await commit(store));
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  let armed = true;
+  const other = await openStore(root, {
+    write: async (path, contents) => {
+      if (armed && path.includes(`${sep}revisions${sep}`)) {
+        armed = false;
+        entered.resolve(undefined);
+        await gate.promise;
+      }
+      await writeDurable(path, contents);
+    },
+  });
+  const winning = commit(other, { expectedRevision: first });
+  await entered.promise;
+  const waiting = commit(store, { expectedRevision: first });
+  gate.resolve(undefined);
+  const winner = committedId(await winning);
+  expect(await waiting).toEqual({
+    kind: "conflict",
+    expectedRevision: first,
+    actualRevision: winner,
+    reason: "head",
+  });
 });
 
 test("an earlier revision stays readable after later commits", async ({ makeRoot }) => {
@@ -1100,7 +1210,7 @@ test("canonicalProjectRoot resolves a symlinked working directory", async ({ mak
   const real = await makeRoot();
   const link = join(await makeRoot(), "link");
   await symlink(real, link, "dir");
-  expect(await canonicalProjectRoot(link)).toBe(await realpath(real));
+  expect(await Effect.runPromise(canonicalProjectRoot(link))).toBe(await realpath(real));
 });
 
 test("a damaged head is rejected on open and its bytes are preserved", async ({ makeRoot }) => {
@@ -1110,6 +1220,19 @@ test("a damaged head is rejected on open and its bytes are preserved", async ({ 
   await writeFile(path, "{damaged");
   await expect(openStore(root)).rejects.toThrow(`Invalid JSON at ${path}.`);
   expect(await readFile(path, "utf8")).toBe("{damaged");
+});
+
+test("a damaged head's parser failure reaches the caller as the parser's own error", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const store = await openStore(root);
+  const path = join(store.sessionDir, "head.json");
+  await writeFile(path, "{damaged");
+  const failure: unknown = await openStore(root).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(Error);
+  expect(failure instanceof Error && failure.message).toBe(`Invalid JSON at ${path}.`);
+  expect(failure instanceof Error && failure.cause).toBeInstanceOf(SyntaxError);
 });
 
 test("opening and committing notes stay local when another session has a damaged head", async ({
@@ -1176,4 +1299,139 @@ test("a commit based on a fork ancestor rejects the ancestor's symlinked current
   await expect(
     commit(child, { baseRevision: { sessionId: "parent", revisionId: id }, notes: {} }),
   ).rejects.toThrow("symlink");
+});
+
+function twoFailingViews(first: Error, second: Error): TestWrite {
+  const secondFailed = Promise.withResolvers<undefined>();
+  return async (path, contents) => {
+    if (path.endsWith("journey.md")) {
+      secondFailed.resolve(undefined);
+      throw second;
+    }
+    if (path.endsWith("current-work.md")) {
+      await secondFailed.promise;
+      throw first;
+    }
+    await writeDurable(path, contents);
+  };
+}
+
+test("two failing view writes reject with the failure first in input order", async ({
+  makeRoot,
+}) => {
+  const first = new Error("current-work write failed");
+  const store = await openStore(await makeRoot(), {
+    write: twoFailingViews(first, new Error("journey write failed")),
+  });
+  await expect(
+    commit(store, { notes: { "current-work.md": "work", "journey.md": "journey" } }),
+  ).rejects.toBe(first);
+});
+
+test("a non-Error view write rejection is wrapped with the rejected value as its cause", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot(), {
+    write: async (path, contents) => {
+      if (path.endsWith("current-work.md")) {
+        // oxlint-disable-next-line typescript/only-throw-error -- The test supplies a non-Error rejection.
+        throw "disk full";
+      }
+      await writeDurable(path, contents);
+    },
+  });
+  const failure: unknown = await commit(store, { notes: { "current-work.md": "work" } }).catch(
+    (error: unknown) => error,
+  );
+  expect(failure).toBeInstanceOf(Error);
+  expect(failure instanceof Error && failure.message).toBe("Memory view write failed.");
+  expect(failure instanceof Error && failure.cause).toBe("disk full");
+});
+
+test("two failing repair writes reject with the failure first in input order", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const interrupted = await openStore(root, {
+    write: interruptingWriter((path) => path.endsWith("current-work.md")).write,
+  });
+  await expect(
+    commit(interrupted, { notes: { "current-work.md": "work", "journey.md": "journey" } }),
+  ).rejects.toThrow("Injected interruption");
+  await rm(view(interrupted, "journey.md"));
+  const first = new Error("current-work repair failed");
+  await expect(
+    openStore(root, { write: twoFailingViews(first, new Error("journey repair failed")) }),
+  ).rejects.toBe(first);
+});
+
+async function unmaterializedHead(root: string): Promise<void> {
+  const interrupted = await openStore(root, {
+    write: interruptingWriter((path) => path.endsWith("current-work.md")).write,
+  });
+  await expect(
+    commit(interrupted, { notes: { "current-work.md": "work", "journey.md": "journey" } }),
+  ).rejects.toThrow("Injected interruption");
+  await rm(view(interrupted, "journey.md"));
+}
+
+function gatedRepairFailure(failure: Error): {
+  write: TestWrite;
+  armed: { value: boolean };
+  entered: Promise<undefined>;
+  release: () => void;
+} {
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  const armed = { value: false };
+  return {
+    armed,
+    entered: entered.promise,
+    release: () => {
+      gate.resolve(undefined);
+    },
+    write: async (path, contents) => {
+      if (armed.value && path.endsWith("journey.md")) {
+        entered.resolve(undefined);
+        await gate.promise;
+        throw failure;
+      }
+      await writeDurable(path, contents);
+    },
+  };
+}
+
+test("an interruption during a failing repair write rejects the commit with the original error", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  const failure = new Error("journey repair failed");
+  const repair = gatedRepairFailure(failure);
+  const store = await openStore(root, { write: repair.write });
+  await unmaterializedHead(root);
+  repair.armed.value = true;
+  const fiber = store.fork(store.commitEffect(baseProposal(store)));
+  await repair.entered;
+  fiber.interruptUnsafe();
+  repair.release();
+  const exit = await Effect.runPromise(Fiber.await(fiber));
+  expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(failure);
+});
+
+test("an interruption during a failing repair write rejects the open with the original error", async ({
+  makeRoot,
+}) => {
+  const root = await makeRoot();
+  await unmaterializedHead(root);
+  const failure = new Error("journey repair failed");
+  const repair = gatedRepairFailure(failure);
+  repair.armed.value = true;
+  const runtime = storageRuntime({ write: repair.write });
+  const canonical = await runtime.runPromise(canonicalProjectRoot(root));
+  const fiber = runtime.runFork(MemoryStore.open(canonical, "session-1"));
+  await repair.entered;
+  fiber.interruptUnsafe();
+  repair.release();
+  const exit = await Effect.runPromise(Fiber.await(fiber));
+  expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(failure);
 });

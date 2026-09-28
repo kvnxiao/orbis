@@ -26,6 +26,9 @@
     "test:watch": "vitest",
     "typecheck:node": "tsc --noEmit -p tsconfig.json"
   },
+  "dependencies": {
+    "effect": "catalog:"
+  },
   "devDependencies": {
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",

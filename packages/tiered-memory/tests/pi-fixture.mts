@@ -20,6 +20,7 @@ import { Value } from "typebox/value";
 import { test as base } from "vitest";
 
 import { reportEntrySchema } from "../src/domain/settings.ts";
+import { disposeStorageRuntimes } from "./storage-harness.mts";
 
 export const fixtureModel = {
   id: "fixture",
@@ -43,6 +44,7 @@ export interface Fixture {
   report: () => string;
   command: (args: string) => Promise<void>;
   reload: () => Promise<void>;
+  onDispose: (teardown: () => Promise<void>) => void;
   dispose: () => Promise<void>;
 }
 
@@ -108,6 +110,7 @@ export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
   );
   const model = options.model ?? fixtureModel;
   const notifications: Fixture["notifications"] = [];
+  const teardowns: (() => Promise<void>)[] = [];
   let nextToolCall = 0;
   const services = await createAgentSessionServices({
     cwd,
@@ -221,9 +224,18 @@ export async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
     async reload() {
       await session.reload();
     },
+    onDispose(teardown) {
+      teardowns.push(teardown);
+    },
     async dispose() {
+      for (const teardown of teardowns.toReversed()) {
+        // oxlint-disable-next-line no-await-in-loop -- Later teardowns can depend on earlier ones.
+        await teardown();
+      }
       await session.abort();
+      await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
       session.dispose();
+      await disposeStorageRuntimes();
       if (options.cwd === undefined) {
         await rm(cwd, { recursive: true, force: true });
       }

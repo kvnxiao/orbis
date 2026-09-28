@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import * as Effect from "effect/Effect";
 import { expect, vi } from "vitest";
 
 import { projectEntrySchema, referencesIn, revisionReferenceSchema } from "../src/pi/lineage.ts";
@@ -11,10 +12,12 @@ import {
   commitProposal as commitStorageProposal,
 } from "../src/pi/proposals.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
-import { StorageSession } from "../src/pi/storage-session.ts";
+import { openStorageSession } from "../src/pi/storage-session.ts";
+import { writeDurable } from "../src/storage/files.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { fixtureModel } from "./pi-fixture.mts";
 import type { Fixture } from "./pi-fixture.mts";
+import { storageRuntime } from "./storage-harness.mts";
 import {
   baseProposal,
   committedId,
@@ -250,7 +253,6 @@ test("reconciliation drops a pending reference when the head no longer matches",
     ),
   );
   const store = await storeFor(f);
-  runtime.stop();
   const moved = baseProposal(store, { expectedRevision: first, notes: { "journey.md": "B\n" } });
   committedId(await store.commit(moved, { validate: () => undefined }));
   await runtime.start(ctx);
@@ -266,7 +268,6 @@ async function orphanHead(
   const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Orphan\n" }), [
     await sourceReference(f, "Orphan evidence."),
   ]);
-  runtime.stop();
   const store = await storeFor(f);
   return committedId(
     await store.commit({ ...proposal, ...overrides }, { validate: () => undefined }),
@@ -521,11 +522,27 @@ test.for(["waiting for lock", "before head publication"] as const)(
     const f = await createFixture();
     await f.session.prompt("Captured evidence.");
     const manager = f.session.sessionManager;
-    const storage = await StorageSession.open(
-      { cwd: f.cwd, sessionManager: manager },
-      new AbortController(),
+    let armed = false;
+    let edited = false;
+    const runtime = storageRuntime({
+      write: async (path, content) => {
+        await writeDurable(path, content);
+        const timing =
+          stage === "waiting for lock"
+            ? path.includes(`${sep}private${sep}`)
+            : path.includes(`${sep}revisions${sep}`);
+        if (armed && !edited && timing) {
+          edited = true;
+          f.session.sessionManager.appendContextEdit(sourceEntry(f, "Captured evidence.").id, {
+            content: "Replacement evidence.",
+          });
+        }
+      },
+    });
+    const storage = await runtime.runPromise(
+      openStorageSession({ cwd: f.cwd, sessionManager: manager }),
     );
-    await storage.sources.register(manager);
+    await runtime.runPromise(storage.sources.register(manager));
     const binding = {
       configurationRevision: 1,
       dependencyFingerprint: "d".repeat(64),
@@ -539,43 +556,24 @@ test.for(["waiting for lock", "before head publication"] as const)(
       noteContent({ "current-work.md": "Old\n" }),
       [await sourceReference(f, "Captured evidence.")],
     );
-    const store = storage.store;
-    const write = store.access.write;
-    let edited = false;
-    store.access.write = async (path, content) => {
-      await write(path, content);
-      const timing =
-        stage === "waiting for lock"
-          ? path.includes(`${sep}private${sep}`)
-          : path.includes(`${sep}revisions${sep}`);
-      if (!edited && timing) {
-        edited = true;
-        f.session.sessionManager.appendContextEdit(sourceEntry(f, "Captured evidence.").id, {
-          content: "Replacement evidence.",
-        });
-      }
-    };
     const register = vi.spyOn(SourceRegistry.prototype, "register");
     onTestFinished(() => {
-      store.access.write = write;
       register.mockRestore();
     });
-    const pi = {
-      appendEntry: (type: string, data: unknown) => {
-        manager.appendCustomEntry(type, data);
-      },
-    };
-    const outcome = await commitStorageProposal(
-      pi,
-      storage,
-      { sessionManager: manager, signal: undefined },
-      () => binding,
-      proposal,
+    armed = true;
+    const result = await runtime.runPromise(
+      commitStorageProposal(
+        storage,
+        { sessionManager: manager },
+        () => binding,
+        proposal,
+        () => undefined,
+      ),
     );
-    expect(outcome.result).toMatchObject({ kind: "conflict", reason: "evidence" });
+    expect(result).toMatchObject({ kind: "conflict", reason: "evidence" });
     expect(edited).toBe(true);
     expect(register).toHaveBeenCalledTimes(1);
-    expect(await store.currentHead()).toBeNull();
+    expect(await runtime.runPromise(storage.store.currentHead())).toBeNull();
   },
 );
 
@@ -585,11 +583,11 @@ test("a configuration change during the final source check rejects the proposal"
   const f = await createFixture();
   await f.session.prompt("Stable evidence.");
   const manager = f.session.sessionManager;
-  const storage = await StorageSession.open(
-    { cwd: f.cwd, sessionManager: manager },
-    new AbortController(),
+  const runtime = storageRuntime();
+  const storage = await runtime.runPromise(
+    openStorageSession({ cwd: f.cwd, sessionManager: manager }),
   );
-  await storage.sources.register(manager);
+  await runtime.runPromise(storage.sources.register(manager));
   let binding = {
     configurationRevision: 1,
     dependencyFingerprint: "d".repeat(64),
@@ -605,29 +603,29 @@ test("a configuration change during the final source check rejects the proposal"
   );
   const project = storage.sources.current.bind(storage.sources);
   let checks = 0;
-  storage.sources.current = async (session) => {
-    const records = await project(session);
-    checks++;
-    if (checks === 2) {
-      binding = { ...binding, configurationRevision: 2 };
-    }
-    return records;
-  };
-  const pi = {
-    appendEntry: (type: string, data: unknown) => {
-      manager.appendCustomEntry(type, data);
-    },
-  };
-  const outcome = await commitStorageProposal(
-    pi,
-    storage,
-    { sessionManager: manager, signal: undefined },
-    () => binding,
-    proposal,
+  storage.sources.current = (session) =>
+    project(session).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          checks++;
+          if (checks === 2) {
+            binding = { ...binding, configurationRevision: 2 };
+          }
+        }),
+      ),
+    );
+  const result = await runtime.runPromise(
+    commitStorageProposal(
+      storage,
+      { sessionManager: manager },
+      () => binding,
+      proposal,
+      () => undefined,
+    ),
   );
-  expect(outcome.result).toMatchObject({ kind: "conflict", reason: "configuration" });
+  expect(result).toMatchObject({ kind: "conflict", reason: "configuration" });
   expect(checks).toBe(2);
-  expect(await storage.store.currentHead()).toBeNull();
+  expect(await runtime.runPromise(storage.store.currentHead())).toBeNull();
 });
 
 test("commitProposal registers sources once and its validate callback writes nothing", async ({
@@ -679,12 +677,14 @@ test("an abort of ctx.signal during commit returns cancelled with that reason, n
   ]);
   const controller = new AbortController();
   const reason = new Error("tool call cancelled");
-  const register = vi
-    .spyOn(SourceRegistry.prototype, "register")
-    .mockImplementationOnce(async function (this: SourceRegistry, manager, times) {
-      controller.abort(reason);
-      return await this.register(manager, times);
-    });
+  const register = vi.spyOn(SourceRegistry.prototype, "register").mockImplementationOnce(function (
+    this: SourceRegistry,
+    manager,
+    times,
+  ) {
+    controller.abort(reason);
+    return this.register(manager, times);
+  });
   onTestFinished(() => {
     register.mockRestore();
   });
@@ -695,7 +695,7 @@ test("an abort of ctx.signal during commit returns cancelled with that reason, n
   expect(await (await storeFor(f)).currentHead()).toBeNull();
 });
 
-test("an abort of the storage session during commit returns cancelled with its reason", async ({
+test("shutdown right after a commit's source registration returns cancelled with the shutdown reason instead of rejecting", async ({
   createFixture,
   onTestFinished,
 }) => {
@@ -705,17 +705,33 @@ test("an abort of the storage session during commit returns cancelled with its r
   const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "No\n" }), [
     await sourceReference(f, "Replaced evidence."),
   ]);
-  const register = vi
-    .spyOn(SourceRegistry.prototype, "register")
-    .mockImplementationOnce(async function (this: SourceRegistry, manager, times) {
-      const records = await this.register(manager, times);
-      runtime.stop();
-      return records;
-    });
+  // oxlint-disable-next-line typescript/unbound-method -- The spy calls the original with its SourceRegistry receiver.
+  const register = SourceRegistry.prototype.register;
+  let shutdown: Promise<void> | undefined;
+  const spy = vi.spyOn(SourceRegistry.prototype, "register").mockImplementationOnce(function (
+    this: SourceRegistry,
+    manager,
+    times,
+  ) {
+    return register.call(this, manager, times).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          shutdown = runtime.shutdown();
+        }),
+      ),
+    );
+  });
   onTestFinished(() => {
-    register.mockRestore();
+    spy.mockRestore();
   });
   const result = await runtime.commitProposal(ctx, proposal);
-  expect(result.kind === "cancelled" ? result.reason : result).toBeInstanceOf(Error);
+  await shutdown;
+  expect(shutdown).toBeDefined();
+  expect(result.kind).toBe("cancelled");
+  const reason = result.kind === "cancelled" ? result.reason : undefined;
+  expect(reason).toBeInstanceOf(Error);
+  expect(reason instanceof Error && reason.message).toBe(
+    "Tiered memory storage stopped for a session change or shutdown.",
+  );
   expect(await (await storeFor(f)).currentHead()).toBeNull();
 });
