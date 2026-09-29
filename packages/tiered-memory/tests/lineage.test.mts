@@ -1,29 +1,39 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 import { expect, vi } from "vitest";
 
-import { projectEntrySchema, referencesIn, revisionReferenceSchema } from "../src/pi/lineage.ts";
+import { evidenceMatches } from "../src/domain/evidence.ts";
+import { dependencyFingerprint } from "../src/domain/proposal.ts";
+import { blockingReferences, projectEntrySchema, selectedAs } from "../src/pi/lineage.ts";
+import type { LineageState, SelectedRevision } from "../src/pi/lineage.ts";
 import {
   captureProposal as captureStorageProposal,
   commitProposal as commitStorageProposal,
 } from "../src/pi/proposals.ts";
+import { referencesIn } from "../src/pi/revision-references.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
+import { buildStatus, renderStatus } from "../src/pi/status.ts";
 import { openStorageSession } from "../src/pi/storage-session.ts";
 import { writeDurable } from "../src/storage/files.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { fixtureModel } from "./pi-fixture.mts";
-import type { Fixture } from "./pi-fixture.mts";
+import type { Fixture, FixtureOptions } from "./pi-fixture.mts";
 import { storageRuntime } from "./storage-harness.mts";
 import {
   baseProposal,
+  blockedLine,
   committedId,
+  customEntry,
   forkOnDisk,
   noteContent,
+  openRegistry,
   rejectionPaths,
+  revisionEntryType,
   runtimeFor,
   sourceEntry,
   sourceReference,
@@ -31,8 +41,6 @@ import {
   storeFor,
   test,
 } from "./store-fixture.mts";
-
-const revisionEntry = "orbis-tiered-memory-revision";
 
 function selected(runtime: MemoryRuntime) {
   return storageOf(runtime).lineage.selected;
@@ -70,11 +78,10 @@ async function commitNote(
 function references(f: Fixture): number {
   return f.session.sessionManager
     .getEntries()
-    .filter((entry) => entry.type === "custom" && entry.customType === revisionEntry).length;
+    .filter((entry) => entry.type === "custom" && entry.customType === revisionEntryType).length;
 }
 
 const projectEntry = { version: 1, root: "/project", projectId: "a".repeat(64), sessionId: "s" };
-const reference = { version: 1, projectId: "a".repeat(64), sessionId: "s", revisionId: "r" };
 
 test("a project entry with an unsupported version fails the schema at /version", () => {
   expect(rejectionPaths(projectEntrySchema, { ...projectEntry, version: 2 })).toContain("/version");
@@ -91,27 +98,147 @@ test("a project entry with a wrong-typed projectId fails the schema at /projectI
   );
 });
 
-test("a revision reference with an unsupported version fails the schema at /version and is skipped", async ({
+const boundaryProject = "a".repeat(64);
+const selectedData = { version: 1, projectId: boundaryProject, sessionId: "s", revisionId: "r0" };
+const selectedR0 = selectedAs("r0", "s");
+
+function damagedAt(id: string): SessionEntry {
+  return customEntry(id, { ...selectedData, version: 2 });
+}
+
+test("blockingReferences returns no entries when every damaged reference precedes the last reference to the selected revision", () => {
+  const branch = [damagedAt("d1"), customEntry("v1", selectedData)];
+  expect(blockingReferences(branch, boundaryProject, selectedR0)).toEqual([]);
+});
+
+test("blockingReferences returns the damaged references after the last reference to the selected revision", () => {
+  const branch = [
+    damagedAt("d5"),
+    customEntry("v1", selectedData),
+    damagedAt("d9"),
+    customEntry("v2", { ...selectedData, revisionId: "r1" }),
+    damagedAt("d1"),
+  ];
+  expect(blockingReferences(branch, boundaryProject, selectedR0)).toEqual([
+    { entryId: "d9", path: "/version" },
+    { entryId: "d1", path: "/version" },
+  ]);
+});
+
+test("blockingReferences returns every damaged reference when no reference matches the selected revision", () => {
+  const branch = [damagedAt("d1"), customEntry("v1", { ...selectedData, sessionId: "other" })];
+  expect(blockingReferences(branch, boundaryProject, selectedR0)).toEqual([
+    { entryId: "d1", path: "/version" },
+  ]);
+});
+
+test.for([
+  { label: "none", selection: { state: "none" } },
+  { label: "unavailable", selection: { state: "unavailable", reason: "Missing." } },
+] satisfies { label: string; selection: SelectedRevision }[])(
+  "blockingReferences returns every damaged reference while the selection is $label",
+  ({ selection }) => {
+    const branch = [damagedAt("d9"), customEntry("v1", selectedData), damagedAt("d1")];
+    expect(blockingReferences(branch, boundaryProject, selection)).toEqual([
+      { entryId: "d9", path: "/version" },
+      { entryId: "d1", path: "/version" },
+    ]);
+  },
+);
+
+test("blockingReferences keeps the damage blocking when a later valid reference to the selected session and revision names another project", () => {
+  const branch = [
+    customEntry("v1", selectedData),
+    damagedAt("d1"),
+    customEntry("v2", { ...selectedData, projectId: "b".repeat(64) }),
+  ];
+  expect(blockingReferences(branch, boundaryProject, selectedR0)).toEqual([
+    { entryId: "d1", path: "/version" },
+  ]);
+});
+
+test("captureProposal refuses when a later valid reference to the selected session and revision names another project", async ({
   createFixture,
 }) => {
   const f = await createFixture();
-  expect(rejectionPaths(revisionReferenceSchema, { ...reference, version: 2 })).toContain(
-    "/version",
+  await f.session.prompt("Foreign boundary evidence.");
+  const { manager, storage } = await openedStorage(f);
+  const { projectId, sessionId } = storage.store;
+  const data = { version: 1, projectId, sessionId, revisionId: "r0" };
+  manager.appendCustomEntry(revisionEntryType, data);
+  manager.appendCustomEntry(revisionEntryType, { ...data, version: 2 });
+  const damagedId = manager.getLeafId();
+  manager.appendCustomEntry(revisionEntryType, { ...data, projectId: "b".repeat(64) });
+  const binding = storageBinding(
+    { selected: selectedAs("r0", sessionId), pending: { state: "none" } },
+    "d".repeat(64),
   );
-  f.session.sessionManager.appendCustomEntry(revisionEntry, { ...reference, version: 2 });
-  expect(referencesIn(f.session.sessionManager.getBranch(), reference.projectId)).toEqual([]);
+  expect(() =>
+    captureStorageProposal(storage, { sessionManager: manager }, binding, noteContent({}), []),
+  ).toThrow(`entry ${String(damagedId)}`);
 });
 
-test("a revision reference missing its revisionId fails the schema at /revisionId", () => {
-  const { revisionId: _removed, ...rest } = reference;
-  expect(rejectionPaths(revisionReferenceSchema, rest)).toContain("/revisionId");
-});
+function storageBinding(lineage: LineageState, fingerprint: string | undefined) {
+  return {
+    configurationRevision: 1,
+    dependencyFingerprint: fingerprint,
+    lineage,
+    latestRevision: null,
+  };
+}
 
-test("a revision reference with a wrong-typed sessionId fails the schema at /sessionId", () => {
-  expect(rejectionPaths(revisionReferenceSchema, { ...reference, sessionId: 5 })).toContain(
-    "/sessionId",
+async function openedStorage(f: Fixture) {
+  const manager = f.session.sessionManager;
+  const runtime = storageRuntime();
+  const storage = await runtime.runPromise(
+    openStorageSession({ cwd: f.cwd, sessionManager: manager }),
   );
-});
+  await runtime.runPromise(storage.sources.register(manager));
+  return { manager, runtime, storage };
+}
+
+test.for([
+  {
+    label: "an unavailable selection",
+    lineage: {
+      selected: { state: "unavailable", reason: "Selected revision r0 is unavailable." },
+      pending: { state: "none" },
+    },
+    fingerprint: "d".repeat(64),
+  },
+  {
+    label: "a pending reference",
+    lineage: { selected: { state: "none" }, pending: { state: "appended", revisionId: "r1" } },
+    fingerprint: "d".repeat(64),
+  },
+  {
+    label: "no current configuration",
+    lineage: { selected: { state: "none" }, pending: { state: "none" } },
+    fingerprint: undefined,
+  },
+] satisfies {
+  label: string;
+  lineage: LineageState;
+  fingerprint: string | undefined;
+}[])(
+  "captureProposal with $label and a damaged reference names the blocking entry",
+  async ({ lineage, fingerprint }, { createFixture }) => {
+    const f = await createFixture();
+    await f.session.prompt("Ordered refusal evidence.");
+    const { manager, storage } = await openedStorage(f);
+    manager.appendCustomEntry(revisionEntryType, { junk: true });
+    const damagedId = manager.getLeafId();
+    expect(() =>
+      captureStorageProposal(
+        storage,
+        { sessionManager: manager },
+        storageBinding(lineage, fingerprint),
+        noteContent({}),
+        [],
+      ),
+    ).toThrow(`Memory lineage is ambiguous: damaged revision reference entry ${String(damagedId)}`);
+  },
+);
 
 test("start selects the newest branch reference confirmed in the session file", async ({
   createFixture,
@@ -230,7 +357,7 @@ test("start drops an appended reference whose revision is unreadable", async ({
 }) => {
   const f = await createFixture();
   const store = await storeFor(f);
-  f.session.sessionManager.appendCustomEntry(revisionEntry, {
+  f.session.sessionManager.appendCustomEntry(revisionEntryType, {
     version: 1,
     projectId: store.projectId,
     sessionId: store.sessionId,
@@ -336,7 +463,7 @@ test("startup does not attach a revision already referenced on an abandoned bran
   const anchor = f.session.sessionManager.getLeafId();
   const orphan = await orphanHead(f, runtime);
   const store = await storeFor(f);
-  f.session.sessionManager.appendCustomEntry(revisionEntry, {
+  f.session.sessionManager.appendCustomEntry(revisionEntryType, {
     version: 1,
     projectId: store.projectId,
     sessionId: store.sessionId,
@@ -471,7 +598,7 @@ test("captureProposal refuses while the selected revision is unavailable", async
 }) => {
   const f = await createFixture();
   const store = await storeFor(f);
-  f.session.sessionManager.appendCustomEntry(revisionEntry, {
+  f.session.sessionManager.appendCustomEntry(revisionEntryType, {
     version: 1,
     projectId: store.projectId,
     sessionId: store.sessionId,
@@ -626,6 +753,329 @@ test("a configuration change during the final source check rejects the proposal"
   expect(result).toMatchObject({ kind: "conflict", reason: "configuration" });
   expect(checks).toBe(2);
   expect(await runtime.runPromise(storage.store.currentHead())).toBeNull();
+});
+
+const chainEvidence = "Chain evidence.";
+
+interface Chain {
+  revisions: string[];
+  references: string[];
+}
+
+async function commitChain(f: Fixture, views: readonly string[]): Promise<Chain> {
+  await f.session.prompt(chainEvidence);
+  const { runtime } = await started(f);
+  const chain: Chain = { revisions: [], references: [] };
+  for (const view of views) {
+    // oxlint-disable-next-line no-await-in-loop -- Each revision builds on the previous head.
+    chain.revisions.push(await commitNote(f, runtime, chainEvidence, { "current-work.md": view }));
+    chain.references.push(leafOf(f));
+  }
+  return chain;
+}
+
+function leafOf(f: Fixture): string {
+  const leaf = f.session.sessionManager.getLeafId();
+  if (leaf === null) {
+    throw new Error("Missing leaf.");
+  }
+  return leaf;
+}
+
+function sessionFileOf(f: Fixture): string {
+  const file = f.session.sessionManager.getSessionFile();
+  if (file === undefined) {
+    throw new Error("Missing session file.");
+  }
+  return file;
+}
+
+async function sessionLine(file: string, entryId: string): Promise<string | undefined> {
+  return (await readFile(file, "utf8"))
+    .split("\n")
+    .find((line) => line.includes(`"id":"${entryId}"`));
+}
+
+async function damageReferences(f: Fixture, revisionIds: readonly string[]): Promise<string[]> {
+  const file = sessionFileOf(f);
+  const text = await readFile(file, "utf8");
+  const damaged = parseSessionEntries(text).flatMap((entry) =>
+    entry.type === "custom" &&
+    entry.customType === revisionEntryType &&
+    typeof entry.data === "object" &&
+    entry.data !== null &&
+    "revisionId" in entry.data &&
+    typeof entry.data.revisionId === "string" &&
+    revisionIds.includes(entry.data.revisionId)
+      ? [entry.id]
+      : [],
+  );
+  const lines = text
+    .split("\n")
+    .map((line) =>
+      damaged.some((id) => line.includes(`"id":"${id}"`))
+        ? line.replace('"version":1', '"version":2')
+        : line,
+    );
+  await writeFile(file, lines.join("\n"));
+  return damaged;
+}
+
+async function reopen(
+  f: Fixture,
+  createFixture: (options?: FixtureOptions) => Promise<Fixture>,
+  options: FixtureOptions = {},
+): Promise<Fixture> {
+  return await createFixture({ ...options, cwd: f.cwd, sessionFile: sessionFileOf(f) });
+}
+
+async function viewOf(f: Fixture): Promise<string> {
+  return await readFile(join((await storeFor(f)).sessionDir, "current", "current-work.md"), "utf8");
+}
+
+test.for([
+  { label: "lineage and evidence", configurationChanges: false, expected: "lineage" },
+  { label: "configuration and lineage", configurationChanges: true, expected: "configuration" },
+] as const)(
+  "a commit whose $label checks both fail returns $expected",
+  async ({ configurationChanges, expected }, { createFixture }) => {
+    const f = await createFixture();
+    await f.session.prompt("Ranked evidence.");
+    const { manager, runtime, storage } = await openedStorage(f);
+    let binding = storageBinding(
+      { selected: { state: "none" }, pending: { state: "none" } },
+      "d".repeat(64),
+    );
+    const proposal = captureStorageProposal(
+      storage,
+      { sessionManager: manager },
+      binding,
+      noteContent({ "current-work.md": "Ranked\n" }),
+      [await sourceReference(f, "Ranked evidence.")],
+    );
+    manager.appendCustomEntry(revisionEntryType, { junk: true });
+    if (configurationChanges) {
+      binding = { ...binding, configurationRevision: 2 };
+    } else {
+      manager.appendContextEdit(sourceEntry(f, "Ranked evidence.").id, {
+        content: "Edited evidence.",
+      });
+    }
+    const result = await runtime.runPromise(
+      commitStorageProposal(
+        storage,
+        { sessionManager: manager },
+        () => binding,
+        proposal,
+        () => undefined,
+      ),
+    );
+    expect(result).toMatchObject({ kind: "conflict", reason: expected });
+    expect(await runtime.runPromise(storage.store.currentHead())).toBeNull();
+  },
+);
+
+test("damaging the two newest references selects the oldest revision with uncertain validity, refuses capture naming the first damaged entry, and keeps the head and its views until navigation before the damage", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const chain = await commitChain(f, ["R0\n", "R1\n", "R2\n"]);
+  const [first] = await damageReferences(f, chain.revisions.slice(1));
+  const g = await reopen(f, createFixture);
+  const { runtime, ctx } = await started(g);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: chain.revisions[0] });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    "Selected memory validity: uncertain: damaged revision references follow the selected revision",
+  );
+  expect(() =>
+    runtime.captureProposal(ctx, noteContent({ "current-work.md": "Rollback\n" }), []),
+  ).toThrow(`entry ${String(first)}`);
+  expect(await (await storeFor(g)).currentHead()).toBe(chain.revisions[2]);
+  expect(await viewOf(g)).toBe("R2\n");
+  await g.session.navigateTree(String(chain.references[0]), { summarize: false });
+  await runtime.selectBranch(ctx);
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).not.toThrow();
+}, 20_000);
+
+test("a proposal captured before tree navigation onto damaged references keeps its anchor, configuration, and evidence and returns a lineage conflict that keeps the head and its views", async ({
+  createFixture,
+}) => {
+  const f = await createFixture({ project: { limits: { queuedJobs: 3 } } });
+  const chain = await commitChain(f, ["R0\n", "R1\n", "R2\n"]);
+  await damageReferences(f, chain.revisions.slice(1));
+  await writeFile(join(f.cwd, ".pi", "tiered-memory", "settings.json"), "{not json");
+  const g = await reopen(f, createFixture);
+  const damagedLeaf = leafOf(g);
+  g.session.sessionManager.branch(String(chain.references[0]));
+  const { runtime, ctx } = await started(g);
+  expect(runtime.snapshot.error).toContain("Invalid JSON");
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Rollback\n" }), [
+    await sourceReference(g, chainEvidence),
+  ]);
+  g.session.sessionManager.branch(damagedLeaf);
+  await runtime.selectBranch(ctx);
+  const { configuration, roles, configurationRevision } = runtime.snapshot;
+  const store = await storeFor(g);
+  const current = await (await openRegistry(store)).current(g.session.sessionManager);
+  expect(g.session.sessionManager.getBranch().some((entry) => entry.id === proposal.anchorId)).toBe(
+    true,
+  );
+  expect(configurationRevision).toBe(proposal.configurationRevision);
+  expect(
+    configuration === undefined
+      ? undefined
+      : dependencyFingerprint({
+          settings: configuration.settings,
+          roles,
+          projectRoot: store.projectRoot,
+        }),
+  ).toBe(proposal.dependencyFingerprint);
+  expect(evidenceMatches(current, proposal, store.projectId)).toBe(true);
+  expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
+    kind: "conflict",
+    reason: "lineage",
+  });
+  expect(await store.currentHead()).toBe(chain.revisions[2]);
+  expect(await viewOf(g)).toBe("R2\n");
+}, 20_000);
+
+test.for([
+  { stage: "before the commit starts", appendOnRead: 0, reads: 1, revisionFiles: 1 },
+  { stage: "during the final evidence read", appendOnRead: 2, reads: 2, revisionFiles: 2 },
+])(
+  "a malformed reference appended $stage returns a lineage conflict and keeps the head and its views",
+  async ({ appendOnRead, reads, revisionFiles }, { createFixture, onTestFinished }) => {
+    const f = await createFixture();
+    const [head] = (await commitChain(f, ["R0\n"])).revisions;
+    const runtime = runtimeFor(f);
+    const ctx = f.session.extensionRunner.createContext();
+    await runtime.start(ctx);
+    const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Late\n" }), [
+      await sourceReference(f, chainEvidence),
+    ]);
+    const appendMalformed = () => {
+      f.session.sessionManager.appendCustomEntry(revisionEntryType, { junk: true });
+    };
+    // oxlint-disable-next-line typescript/unbound-method -- The spy calls the original with its SourceRegistry receiver.
+    const project = SourceRegistry.prototype.current;
+    let observed = 0;
+    const current = vi.spyOn(SourceRegistry.prototype, "current").mockImplementation(function (
+      this: SourceRegistry,
+      manager,
+    ) {
+      return project.call(this, manager).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            observed++;
+            if (observed === appendOnRead) {
+              appendMalformed();
+            }
+          }),
+        ),
+      );
+    });
+    onTestFinished(() => {
+      current.mockRestore();
+    });
+    if (appendOnRead === 0) {
+      appendMalformed();
+    }
+    expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
+      kind: "conflict",
+      reason: "lineage",
+    });
+    const store = await storeFor(f);
+    expect(observed).toBe(reads);
+    expect(await readdir(join(store.sessionDir, "revisions"))).toHaveLength(revisionFiles);
+    expect(await store.currentHead()).toBe(head);
+    expect(await viewOf(f)).toBe("R0\n");
+  },
+);
+
+test("reconciliation after a damaged reference appends one valid reference to the head, selects it, unblocks commits, and keeps the damaged line byte-identical", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const chain = await commitChain(f, ["R0\n", "R1\n"]);
+  const [damaged] = await damageReferences(f, [String(chain.revisions[1])]);
+  const line = await sessionLine(sessionFileOf(f), String(damaged));
+  const g = await reopen(f, createFixture);
+  const { runtime, ctx } = await started(g);
+  const store = await storeFor(g);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: chain.revisions[1] });
+  expect(references(g)).toBe(3);
+  expect(
+    referencesIn(g.session.sessionManager.getEntries(), store.projectId).map(
+      (reference) => reference.revisionId,
+    ),
+  ).toEqual(chain.revisions);
+  committedId(
+    await runtime.commitProposal(
+      ctx,
+      runtime.captureProposal(ctx, noteContent({ "current-work.md": "R2\n" }), []),
+    ),
+  );
+  expect(await sessionLine(sessionFileOf(g), String(damaged))).toBe(line);
+}, 20_000);
+
+test("a configuration change keeps commits blocked after a damaged reference, keeps its bytes, and reports the navigation guidance", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const chain = await commitChain(f, ["R0\n", "R1\n"]);
+  const [damaged] = await damageReferences(f, [String(chain.revisions[1])]);
+  const line = await sessionLine(sessionFileOf(f), String(damaged));
+  const g = await reopen(f, createFixture, { project: { limits: { queuedJobs: 3 } } });
+  const { runtime, ctx } = await started(g);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: chain.revisions[0] });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    blockedLine(String(damaged)),
+  );
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    `entry ${String(damaged)}`,
+  );
+  expect(references(g)).toBe(2);
+  expect(await sessionLine(sessionFileOf(g), String(damaged))).toBe(line);
+}, 20_000);
+
+test("a fork ignores a damaged reference before the parent reference it selects and blocks capture on one after it", async ({
+  createFixture,
+}) => {
+  const parent = await createFixture();
+  const chain = await commitChain(parent, ["A\n", "R0\n"]);
+  const [damaged] = await damageReferences(parent, [String(chain.revisions[0])]);
+  const child = await forkOnDisk(parent, createFixture);
+  const { runtime, ctx } = await started(child);
+  expect(buildStatus(runtime, ctx).damagedReferences).toEqual([
+    { entryId: damaged, path: "/version" },
+  ]);
+  expect(selected(runtime)).toMatchObject({
+    state: "selected",
+    revisionId: chain.revisions[1],
+    sessionId: parent.session.sessionManager.getSessionId(),
+  });
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).not.toThrow();
+  child.session.sessionManager.appendCustomEntry(revisionEntryType, { junk: true });
+  const junk = leafOf(child);
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(`entry ${junk}`);
+}, 20_000);
+
+test("a junk revision entry after the selected reference is listed at /version, keeps the selection, blocks capture, and keeps its session-file line byte-identical", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const [head] = (await commitChain(f, ["R0\n"])).revisions;
+  f.session.sessionManager.appendCustomEntry(revisionEntryType, { junk: true });
+  const junk = leafOf(f);
+  const line = await sessionLine(sessionFileOf(f), junk);
+  const { runtime, ctx } = await started(f);
+  expect(buildStatus(runtime, ctx).damagedReferences).toEqual([
+    { entryId: junk, path: "/version" },
+  ]);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: head });
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(`entry ${junk}`);
+  expect(line).toContain('"junk":true');
+  expect(await sessionLine(sessionFileOf(f), junk)).toBe(line);
 });
 
 test("commitProposal registers sources once and its validate callback writes nothing", async ({

@@ -1,6 +1,3 @@
-import { open } from "node:fs/promises";
-
-import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 import { Type } from "typebox";
@@ -11,14 +8,19 @@ import { assessRevision } from "../domain/evidence.ts";
 import type { CurationRecord, InvalidReason } from "../domain/evidence.ts";
 import type { MemoryProposal, RevisionPointer } from "../domain/proposal.ts";
 import { digestSchema, safeIdSchema } from "../domain/references.ts";
-import { fromPromise, readText } from "../storage/files.ts";
 import type { Revision } from "../storage/revisions.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
 import type { MemoryStore } from "../storage/store.ts";
+import {
+  appendReference,
+  confirmedReferences,
+  damagedReferencesIn,
+  referencesIn,
+} from "./revision-references.ts";
+import type { DamagedReference } from "./revision-references.ts";
 
 const projectEntryType = "orbis-tiered-memory-project";
-const revisionEntryType = "orbis-tiered-memory-revision";
 
 /**
  * Validate the project entry that binds a Pi session to a canonical project root and memory
@@ -34,24 +36,8 @@ export const projectEntrySchema = Type.Object(
   { additionalProperties: false },
 );
 
-/**
- * Validate a revision reference entry; a reference selects its revision only once the entry is
- * confirmed in the session file.
- */
-export const revisionReferenceSchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    projectId: digestSchema,
-    sessionId: safeIdSchema,
-    revisionId: safeIdSchema,
-  },
-  { additionalProperties: false },
-);
-
 /** Carry the `orbis-tiered-memory-project` custom entry. */
 export type ProjectEntry = Static<typeof projectEntrySchema>;
-/** Carry the `orbis-tiered-memory-revision` custom entry. */
-export type RevisionReference = Static<typeof revisionReferenceSchema>;
 
 /**
  * Describe which revision supplies the session's memory snapshot.
@@ -156,76 +142,30 @@ export function selectedAs(
 }
 
 /**
- * Return the revision reference entries for `projectId`, oldest first, skipping entries that fail
- * `revisionReferenceSchema`.
+ * Return the damaged revision references that make `selected` ambiguous, in branch order; an empty
+ * result means the lineage does not block commits.
+ *
+ * - The boundary is the last valid reference that names `projectId` and the selected session and
+ *   revision; only damaged entries after it block.
+ * - Every damaged entry blocks when `selected` is `none` or `unavailable`, or when no reference
+ *   matches it.
  */
-export function referencesIn(
-  entries: readonly { type: string }[],
+export function blockingReferences(
+  branch: readonly SessionEntry[],
   projectId: string,
-): RevisionReference[] {
-  return entries.flatMap((entry) =>
-    entry.type === "custom" &&
-    "customType" in entry &&
-    entry.customType === revisionEntryType &&
-    "data" in entry &&
-    Value.Check(revisionReferenceSchema, entry.data) &&
-    entry.data.projectId === projectId
-      ? [entry.data]
-      : [],
-  );
-}
-
-async function syncFile(path: string): Promise<void> {
-  const handle = await open(path, "r+");
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-// An unsynced file confirms nothing when `syncFailure` is "unconfirmed". That recovery happens
-// inside the fsync's uninterruptible region, where a pending interruption cannot skip it.
-const confirmedReferences = Effect.fnUntraced(function* (
-  sessionFile: string | undefined,
-  projectId: string,
-  syncFailure: "fail" | "unconfirmed",
-): Effect.fn.Return<Set<string>, unknown> {
-  const text = sessionFile === undefined ? undefined : yield* readText(sessionFile);
-  if (sessionFile === undefined || text === undefined) {
-    return new Set();
-  }
-  const ids = new Set(
-    referencesIn(parseSessionEntries(text), projectId).map((entry) => entry.revisionId),
-  );
-  if (ids.size === 0) {
-    return ids;
-  }
-  const sync = fromPromise(async () => {
-    await syncFile(sessionFile);
-  }).pipe(Effect.as(true));
-  const synced = yield* Effect.uninterruptible(
-    syncFailure === "fail" ? sync : sync.pipe(Effect.catch(() => Effect.succeed(false))),
-  );
-  return synced ? ids : new Set<string>();
-});
-
-/**
- * Append the `orbis-tiered-memory-revision` entry that references a committed revision of this
- * store's session.
- */
-export function appendReference(
-  pi: Pick<ExtensionAPI, "appendEntry">,
-  store: MemoryStore,
-  revisionId: string,
-): void {
-  const entry: RevisionReference = {
-    version: 1,
-    projectId: store.projectId,
-    sessionId: store.sessionId,
-    revisionId,
-  };
-  pi.appendEntry(revisionEntryType, entry);
+  selected: SelectedRevision,
+): DamagedReference[] {
+  const boundary =
+    selected.state === "selected"
+      ? branch.findLastIndex((entry) =>
+          referencesIn([entry], projectId).some(
+            (reference) =>
+              reference.sessionId === selected.sessionId &&
+              reference.revisionId === selected.revisionId,
+          ),
+        )
+      : -1;
+  return damagedReferencesIn(branch.slice(boundary + 1));
 }
 
 /**
@@ -264,46 +204,13 @@ export function attachProject(
 }
 
 /**
- * Report whether the session file holds the reference entry for `revisionId`, fsyncing the file
- * before reporting true.
- *
- * Returns false while the session has no file or its file lacks the entry; Pi defers a new
- * session's first write until an assistant message exists.
- *
- * @throws The original read or fsync error other than `ENOENT`.
- */
-function confirmReference(
-  sessionFile: string | undefined,
-  reference: Pick<RevisionReference, "projectId" | "revisionId">,
-): Effect.Effect<boolean, unknown> {
-  return confirmedReferences(sessionFile, reference.projectId, "fail").pipe(
-    Effect.map((ids) => ids.has(reference.revisionId)),
-  );
-}
-
-/**
- * Report whether the session file has the reference entry for `revisionId` as `confirmReference`
- * does, except that a failed fsync reports false.
- *
- * @throws The original read error other than `ENOENT`.
- */
-export function tryConfirmReference(
-  sessionFile: string | undefined,
-  reference: Pick<RevisionReference, "projectId" | "revisionId">,
-): Effect.Effect<boolean, unknown> {
-  return confirmedReferences(sessionFile, reference.projectId, "unconfirmed").pipe(
-    Effect.map((ids) => ids.has(reference.revisionId)),
-  );
-}
-
-/**
  * Derive the selected revision and pending reference from the active branch at start or navigation.
  *
  * Selects the newest reference confirmed in the session file. A newer unconfirmed reference of this
  * session becomes `appended` when its revision is readable and is dropped otherwise.
  *
  * @throws Error when a referenced revision is damaged.
- * @throws The failures of `confirmReference`.
+ * @throws The failures of `confirmedReferences`.
  */
 export const selectFromBranch = Effect.fnUntraced(function* (
   store: MemoryStore,
@@ -313,7 +220,6 @@ export const selectFromBranch = Effect.fnUntraced(function* (
   const confirmed = yield* confirmedReferences(
     ctx.sessionManager.getSessionFile(),
     store.projectId,
-    "fail",
   );
   const index = references.findLastIndex((reference) => confirmed.has(reference.revisionId));
   const chosen = references[index];
@@ -386,7 +292,7 @@ function attachable(
  * pending becomes `none`. An attachable `unappended` reference is appended and an `appended` one is
  * confirmed, which selects its revision.
  *
- * @throws The failures of `MemoryStore.readRevision` and `confirmReference`.
+ * @throws The failures of `MemoryStore.readRevision` and `confirmedReferences`.
  */
 export const reconcilePending = Effect.fnUntraced(function* (
   pi: Pick<ExtensionAPI, "appendEntry">,
@@ -418,8 +324,11 @@ export const reconcilePending = Effect.fnUntraced(function* (
     appendReference(pi, store, pending.revisionId);
     pending = { state: "appended", revisionId: pending.revisionId };
   }
-  const reference = { projectId: store.projectId, revisionId: pending.revisionId };
-  if (yield* confirmReference(ctx.sessionManager.getSessionFile(), reference)) {
+  const confirmed = yield* confirmedReferences(
+    ctx.sessionManager.getSessionFile(),
+    store.projectId,
+  );
+  if (confirmed.has(pending.revisionId)) {
     return {
       selected: selectedAs(pending.revisionId, store.sessionId),
       pending: { state: "none" },

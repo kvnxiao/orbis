@@ -95,17 +95,24 @@ source.
 The writer captures source identities, the effective-context fingerprint, the configuration
 revision, a fingerprint of the settings, memory roles, and project root, the expected head, and the
 base revision. It registers sources once, then checks the captured evidence before taking the
-project mutation lock for the commit. Under the lock it checks that the head is the expected
-revision, that curation permits every written note, that learning digests and sequences match, and
-that the current effective sources, branch anchor, and configuration still support the proposal. It
-checks the live evidence and configuration again just before publishing the head, without
-registering sources or changing the latest status counts. A failed check returns a conflict naming
-both revisions and the reason: `head`, `curation`, `learning`, `evidence`, or `configuration`. When
-a disable, a session stop, or a call cancellation comes before the head is written, the commit
-reports cancellation, never a conflict. Concurrent sessions share the lock; an obsolete proposal
-must be recomputed from the accepted revision. Project-learning updates compare both the content
-digest and publication sequence, so a later publication invalidates an older proposal even when the
-text is unchanged.
+project mutation lock for the commit. Under the lock it checks that:
+
+- The head is the expected revision.
+- Curation permits every written note.
+- Learning digests and sequences match.
+- The current effective sources, branch anchor, and configuration still support the proposal.
+- No damaged revision reference on the branch can hide a revision newer than the selected one, as
+  described under [Recovery](#recovery).
+
+The writer checks the live evidence, configuration, and lineage again just before publishing the
+head, without registering sources or changing the latest status counts. A failed check returns a
+conflict naming both revisions and the reason: `head`, `curation`, `learning`, `configuration`,
+`lineage`, or `evidence`. The reasons rank in that order, and the conflict names the first one that
+fails. When a disable, a session stop, or a call cancellation comes before the head is written, the
+commit reports cancellation, never a conflict. Concurrent sessions share the lock; an obsolete
+proposal must be recomputed from the accepted revision. Project-learning updates compare both the
+content digest and publication sequence, so a later publication invalidates an older proposal even
+when the text is unchanged.
 
 An accepted commit advances the project sequence and writes, in order, the revision file, the head
 naming it, each changed note view, the learning views, and the learning provenance, then marks view
@@ -187,14 +194,45 @@ recovery has completed, though curated or newer files may differ from the head's
 head already marked as materialized is not repaired, so a note deleted after a completed commit
 stays deleted.
 
-At startup, after tree navigation, and in the refresh after a commit, a head revision that no
+At startup, after tree navigation, and in the refresh after a commit, a head revision that no valid
 session entry references is attached to the branch only when its anchor is on the branch, its base
 is the selected revision, its configuration fingerprint is current, and its evidence and curation
 still hold. A reference already appended to the branch is confirmed regardless of a configuration
 change; it is dropped only when the head, anchor, evidence, or curation no longer match.
 
-Unsupported or damaged records remain unchanged; status reports the storage error. Missing expected
-files or directories do not authorize reconstruction of old notes from historical snapshots.
+Unsupported or damaged storage records remain unchanged; status reports the storage error. Missing
+expected files or directories do not authorize reconstruction of old notes from historical
+snapshots.
+
+A revision reference entry on the Pi branch whose data fails its schema is damaged. Lineage
+selection excludes it, the extension never rewrites or removes it, and status lists every damaged
+entry on the active branch. A damaged entry can hide a revision newer than the selected one, and a
+commit based on the older selection would discard that revision's changes. The lineage is therefore
+ambiguous while the active branch has a damaged entry after the last valid reference to the selected
+revision. That reference must name the current project and the selected revision's session and
+revision. Every damaged entry makes the lineage ambiguous when any of these holds:
+
+- No revision is selected.
+- The selected revision is unavailable.
+- No reference to the selected revision is on the branch.
+
+While the lineage is ambiguous:
+
+- The selection stays on the revision that the valid references select.
+- Proposal capture refuses and names the first damaged entry that blocks commits.
+- When no earlier check fails, a commit returns a `lineage` conflict. The commit reads the current
+  branch under the project lock and again just before publishing the head, so a proposal captured
+  before navigation onto a damaged branch, or before a damaged entry was appended, is also rejected.
+
+Nothing records the ambiguity; each check derives it from the branch. The lineage stops being
+ambiguous in two ways:
+
+- Reconciliation attaches the head as described above and confirms its new reference, which follows
+  the damaged entries. It does so only when every attachment condition holds, including that the
+  head's base is the revision the valid references select.
+- Tree navigation reaches a point where no damaged entry follows the selected revision's reference,
+  such as the entry just before the first damaged entry that blocks commits. Other storage or
+  selection failures can still prevent a commit there.
 
 A symbolic link at `.pi/`, `.pi/tiered-memory/`, `sessions/`, `sessions/_project/`, `learnings/`,
 the session's directory, its `current/` or `revisions/` directory, or a project-lock directory makes

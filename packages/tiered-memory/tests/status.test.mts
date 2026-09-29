@@ -1,19 +1,25 @@
-import { mkdir, realpath, writeFile } from "node:fs/promises";
+import { link, mkdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 import { expect, vi } from "vitest";
 
+import { selectedAs } from "../src/pi/lineage.ts";
+import type { SelectedRevision } from "../src/pi/lineage.ts";
+import type { DamagedReference } from "../src/pi/revision-references.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
 import type { StatusReport } from "../src/pi/status.ts";
+import { ProcessLiveness } from "../src/storage/services.ts";
 import { MemoryStore } from "../src/storage/store.ts";
 import { fixtureModel, test } from "./pi-fixture.mts";
 import type { Fixture, FixtureOptions } from "./pi-fixture.mts";
 import {
+  blockedLine,
   committedId,
   noteContent,
+  revisionEntryType,
   runtimeFor,
   sourceReference,
   storageOf,
@@ -103,6 +109,7 @@ test("status omits configuration and reports unavailable activation without vali
     configurationRevision: 0,
     error: `Invalid JSON at ${join(f.agentDir, "tiered-memory.json")}.`,
     configuration: undefined,
+    damagedReferences: [],
     unavailable: ["workers", "pool", "compaction"],
   });
   expect(storage.state).toBe("open");
@@ -282,7 +289,9 @@ test("renders the full wording of a configured report", () => {
       latestRevision: "revision-2",
       registration: { sources: 3, curatedNotes: 1, event: "session_tree" },
       error: "Refresh failed.",
+      blockingReference: undefined,
     },
+    damagedReferences: [],
     unavailable: ["workers", "pool", "compaction"],
   };
   expect(renderStatus(report)).toBe(
@@ -318,6 +327,7 @@ test("renders the wording of a report without configuration", () => {
       error: "Invalid JSON at /agent/tiered-memory.json.",
       configuration: undefined,
       storage: { state: "unavailable", error: "Invalid JSON at /project/identity.json." },
+      damagedReferences: [],
       unavailable: ["workers", "pool", "compaction"],
     }),
   ).toBe(
@@ -367,12 +377,93 @@ test.for([
       limits: [],
     },
     storage: { state: "unavailable", error: undefined },
+    damagedReferences: [],
     unavailable: [],
   });
   expect(text.split("\n")).toContain(line);
   expect(text.split("\n")).toContain(
     "observer model: active session model (default); not resolved",
   );
+});
+
+function lineageReport(
+  selected: SelectedRevision,
+  damagedReferences: StatusReport["damagedReferences"],
+  blockingReference: DamagedReference | undefined,
+): StatusReport {
+  return {
+    enabled: true,
+    activationSource: "default",
+    configurationRevision: 1,
+    error: undefined,
+    configuration: undefined,
+    storage: {
+      state: "open",
+      projectRoot: "/project",
+      selected,
+      latestRevision: "revision-2",
+      registration: undefined,
+      error: undefined,
+      blockingReference,
+    },
+    damagedReferences,
+    unavailable: [],
+  };
+}
+
+const firstDamaged = { entryId: "7f3a", path: "/version" };
+const damagedPair = [firstDamaged, { entryId: "9c1e", path: "/revisionId" }];
+const damagedLine =
+  "Damaged revision references on the active branch: 2 excluded from lineage selection (entry 7f3a at /version, entry 9c1e at /revisionId)";
+
+test("renders the damaged-reference line, uncertain validity, and blocked-commits line for a current selected revision", () => {
+  const report = lineageReport(selectedAs("revision-1", "session-1"), damagedPair, firstDamaged);
+  expect(renderStatus(report)).toBe(
+    [
+      "Tiered memory: enabled (default)",
+      "Configuration revision: 1",
+      "Memory project root: /project",
+      "Selected memory revision: revision-1",
+      "Selected memory validity: uncertain: damaged revision references follow the selected revision",
+      "Latest durable revision: revision-2",
+      "Registered original sources: not registered",
+      "Curated session notes: not inspected",
+      damagedLine,
+      "Memory commits: blocked by damaged revision reference entry 7f3a. Navigate with /tree to a point before that entry to remove this lineage block.",
+      "Automatic work: suspended; native Pi remains available.",
+    ].join("\n"),
+  );
+});
+
+test("renders uncertain validity after the invalid reason and invalid notes", () => {
+  const invalid: SelectedRevision = {
+    ...selectedAs("revision-1", "session-1"),
+    invalidNotes: ["current-work.md"],
+    invalidReason: "curation",
+  };
+  expect(renderStatus(lineageReport(invalid, damagedPair, firstDamaged)).split("\n")).toContain(
+    "Selected memory validity: invalid: Selected revision contains an externally curated note. Invalid notes: current-work.md. Uncertain: damaged revision references follow the selected revision.",
+  );
+});
+
+test("renders the damaged-reference line with current validity and no blocked line while nothing blocks", () => {
+  const report = lineageReport(selectedAs("revision-1", "session-1"), damagedPair, undefined);
+  const lines = renderStatus(report).split("\n");
+  expect(lines).toContain("Selected memory validity: current");
+  expect(lines).toContain(damagedLine);
+  expect(lines.filter((line) => line.startsWith("Memory commits:"))).toEqual([]);
+});
+
+test("renders the damaged-reference line after the storage error while storage is unavailable", () => {
+  const lines = renderStatus({
+    ...lineageReport({ state: "none" }, damagedPair, undefined),
+    storage: { state: "unavailable", error: "Invalid JSON at /sources.json." },
+  }).split("\n");
+  expect(lines.slice(2, 5)).toEqual([
+    "Memory storage: unavailable",
+    "Storage error: Invalid JSON at /sources.json.",
+    damagedLine,
+  ]);
 });
 
 test("status reports storage unavailable with the error that stopped opening", async ({
@@ -502,3 +593,152 @@ test("status reports the latest refresh error while storage stays open", async (
     error: "Curation unreadable.",
   });
 });
+
+function appendDamaged(f: Fixture, data: unknown): string {
+  const manager = f.session.sessionManager;
+  manager.appendCustomEntry(revisionEntryType, data);
+  const entryId = manager.getLeafId();
+  if (entryId === null) {
+    throw new Error("Missing damaged entry.");
+  }
+  return entryId;
+}
+
+test("status lists a damaged reference appended after the latest refresh", async ({
+  createFixture,
+}) => {
+  const { f, runtime, ctx } = await started(createFixture);
+  const entryId = appendDamaged(f, { junk: true });
+  expect(buildStatus(runtime, ctx).damagedReferences).toEqual([{ entryId, path: "/version" }]);
+});
+
+test("status lists several damaged references in branch order", async ({ createFixture }) => {
+  const { f, runtime, ctx } = await started(createFixture);
+  const first = appendDamaged(f, { junk: true });
+  const second = appendDamaged(f, "junk");
+  expect(buildStatus(runtime, ctx).damagedReferences).toEqual([
+    { entryId: first, path: "/version" },
+    { entryId: second, path: "/" },
+  ]);
+});
+
+test("status lists a damaged reference whose data names another project", async ({
+  createFixture,
+}) => {
+  const { f, runtime, ctx } = await started(createFixture);
+  const entryId = appendDamaged(f, {
+    version: 1,
+    projectId: "b".repeat(64),
+    sessionId: 5,
+    revisionId: "revision-1",
+  });
+  expect(buildStatus(runtime, ctx).damagedReferences).toEqual([{ entryId, path: "/sessionId" }]);
+});
+
+test("status lists damaged references while storage failed to open on a damaged sources.json", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Status evidence.");
+  const sources = join((await storeFor(f)).sessionDir, "sources.json");
+  await writeFile(sources, "damaged");
+  const entryId = appendDamaged(f, { junk: true });
+  const runtime = runtimeFor(f, {}, { appendEntry: () => undefined });
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  const report = buildStatus(runtime, ctx);
+  expect(report.storage).toEqual({ state: "unavailable", error: `Invalid JSON at ${sources}.` });
+  expect(report.damagedReferences).toEqual([{ entryId, path: "/version" }]);
+});
+
+test("status lists damaged references while storage failed to open on a busy lock", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Status evidence.");
+  const entryId = appendDamaged(f, { junk: true });
+  const blocker = 2 ** 30;
+  let publications = 0;
+  let now = 0;
+  const runtime = runtimeFor(
+    f,
+    {
+      now: () => (now += 1000),
+      isRunning: (pid) => pid === blocker || ProcessLiveness.live.isRunning(pid),
+      lock: {
+        publish: async (source, ticket) => {
+          publications++;
+          if (publications > 1) {
+            await writeFile(ticket, JSON.stringify({ version: 1, pid: blocker, token: "other" }));
+          }
+          await link(source, ticket);
+        },
+      },
+    },
+    { appendEntry: () => undefined },
+  );
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  const report = buildStatus(runtime, ctx);
+  expect(report.storage).toEqual({
+    state: "unavailable",
+    error: "Tiered memory project lock is busy. Retry after the other writer finishes.",
+  });
+  expect(report.damagedReferences).toEqual([{ entryId, path: "/version" }]);
+});
+
+test.for([
+  {
+    label: "a none selection",
+    selection: ["Selected memory revision: none"],
+  },
+  {
+    label: "an unavailable selection",
+    arrange: async (f: Fixture) => {
+      const store = await storeFor(f);
+      f.session.sessionManager.appendCustomEntry(revisionEntryType, {
+        version: 1,
+        projectId: store.projectId,
+        sessionId: store.sessionId,
+        revisionId: "missing-revision",
+      });
+    },
+    selection: [
+      "Selected memory revision: unavailable (Selected revision missing-revision is unavailable.)",
+    ],
+  },
+  {
+    label: "an invalid selected revision",
+    arrange: async (f: Fixture) => {
+      const runtime = runtimeFor(f);
+      const ctx = f.session.extensionRunner.createContext();
+      await runtime.start(ctx);
+      committedId(
+        await runtime.commitProposal(
+          ctx,
+          runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [
+            await sourceReference(f, "Status evidence."),
+          ]),
+        ),
+      );
+      const store = await storeFor(f);
+      await writeFile(join(store.sessionDir, "current", "current-work.md"), "User edit\n");
+    },
+    selection: [
+      "Selected memory validity: invalid: Selected revision contains an externally curated note. Invalid notes: current-work.md. Uncertain: damaged revision references follow the selected revision.",
+    ],
+  },
+] satisfies { label: string; arrange?: (f: Fixture) => Promise<void>; selection: string[] }[])(
+  "status reports the lineage block beside $label and keeps its selection diagnostics",
+  async ({ arrange, selection }, { createFixture }) => {
+    const f = await createFixture();
+    await f.session.prompt("Status evidence.");
+    await arrange?.(f);
+    const entryId = appendDamaged(f, { junk: true });
+    const runtime = runtimeFor(f);
+    const ctx = f.session.extensionRunner.createContext();
+    await runtime.start(ctx);
+    const lines = renderStatus(buildStatus(runtime, ctx)).split("\n");
+    expect(lines).toEqual(expect.arrayContaining([...selection, blockedLine(entryId)]));
+  },
+);

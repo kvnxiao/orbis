@@ -92,8 +92,16 @@ export type MemoryProposal = Static<typeof memoryProposalSchema>;
  * Name the check that rejected a proposal under the project lock.
  *
  * `configuration` means the configuration revision or dependency fingerprint changed after capture.
+ * `lineage` means a damaged revision reference on the active branch can hide a revision newer than
+ * the selected one.
  */
-export type ConflictReason = "head" | "curation" | "learning" | "evidence" | "configuration";
+export type ConflictReason =
+  | "head"
+  | "curation"
+  | "learning"
+  | "evidence"
+  | "configuration"
+  | "lineage";
 
 /**
  * Report a commit's outcome.
