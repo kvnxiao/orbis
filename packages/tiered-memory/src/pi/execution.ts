@@ -45,8 +45,7 @@ interface ScopeState {
  *
  * Invariants:
  *
- * - Its scope uses the parallel finalizer strategy and closes only under `Effect.uninterruptible`,
- *   because an interrupted close skips its remaining finalizers.
+ * - Its scope uses the parallel finalizer strategy and closes under `Effect.uninterruptible`.
  * - Closing its scope interrupts and awaits the storage startup fiber, the storage-session work, and
  *   the jobs forked into it; only uninterruptible durable writes delay the close.
  * - Its storage-session work runs one at a time.

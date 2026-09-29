@@ -8,6 +8,11 @@ package contract. For everyday planning, see the [quick start](../README.md#try-
 
 The agent calls these tools in response to planning or implementation intent:
 
+All four tools use Pi's `model-only` exposure. They remain available to direct model calls but
+cannot be invoked through `ctx.executeTool()` or codemode scripts. Nested rejection occurs before
+Plan opens UI or changes state. Use `/plan` or the presentation API for their documented integration
+paths.
+
 | Tool             | Arguments and behavior                                                                                                                                                                                                 |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `plan_open`      | Optional `objective` and `replace` create or reopen planning. `replace: true` requires a nonblank `requestId` and confirmation before replacing existing work. It does not start implementation.                       |
@@ -66,6 +71,11 @@ clarification history and requires a current answer.
 When planning tool execution fails, Pi records a failed tool result. Cancellation and unsupported
 modes return explicit outcomes.
 
+Each tool declares an `outputSchema`. Successful execution returns `structuredContent` with the same
+projected outcome as `details`, alongside readable `content`. Both exclude private drafts; the
+schema also covers cancellation and unsupported-mode outcomes. Consumers can read the structured
+outcome without parsing display text.
+
 Failed tool results contain message text and empty `details`; thrown error fields are not included.
 The message adds the applicable recovery instruction once. Revision conflicts include
 `Current revision: <number>. Reload this revision before retrying.` Settings failures identify the
@@ -76,12 +86,12 @@ correction, and unexpected defects retain their original message without retry a
 
 When a result exceeds Pi's default text byte or line limit, the tool saves the full JSON under
 `orbis-plan-result-*/result.json` in the operating system's temporary directory and returns a
-preview. Truncated tool details contain `outcome`, `truncated: true`, and `resultPath`. Read
-`resultPath` to retrieve the full result. Input reopened through `/plan` is delivered to the agent
-as a displayed custom message of type `orbis-plan-input` that starts a turn. Its results use the
-same limits and include the file path in their truncation notice. When approved content exceeds the
-output limit, approval results retain completion instructions in the preview and request graceful
-termination.
+preview. Truncated tool details and `structuredContent` have only `outcome`, `truncated: true`, and
+`resultPath`. Read `resultPath` to retrieve the full result. Input reopened through `/plan` is
+delivered to the agent as a displayed custom message of type `orbis-plan-input` that starts a turn.
+Its results use the same limits and include the file path in their truncation notice. When approved
+content exceeds the output limit, approval results retain completion instructions in the preview and
+request graceful termination.
 
 The extension retains these files after shutdown. Operating-system cleanup or manual deletion can
 remove them; copy any result that needs lasting storage.

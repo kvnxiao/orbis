@@ -27,6 +27,11 @@ settings page explains what is missing and focuses the first missing input. When
 require color input, focus starts on the background-source row. Inventory failure displays the error
 and Close; color input cannot repair an unsupported schema.
 
+Terminal query responses can omit colors. A response without a usable background leaves preview
+blocked and exposes the same retry or supplied-background controls as a timeout. Foreground and
+palette replies do not fill or overwrite author-input rows. Guessed host defaults cannot make a
+missing-input row disappear.
+
 ```mermaid
 flowchart TD
     command[Invoke /theme-preview] --> supported{TUI and truecolor mode?}

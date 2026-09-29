@@ -64,6 +64,44 @@ test("package-name exclusions bypass release-age checks but exact-version exclus
   assert.equal(selectPackageRelease(times, now, 1440, "other", ["other@0.87.0"]), "0.86.0");
 });
 
+test("selects eligible Effect 4 release candidates by numeric RC sequence", () => {
+  const now = Date.parse("2026-09-29T12:00:00Z");
+  const times = {
+    "3.22.2": "2026-09-01T00:00:00Z",
+    "4.0.0-beta.200": "2026-09-01T00:00:00Z",
+    "4.0.0-rc.9": "2026-09-20T00:00:00Z",
+    "4.0.0-rc.10": "2026-09-28T12:00:00Z",
+    "4.0.0-rc.11": "2026-09-28T12:00:01Z",
+    "4.0.0-rc.12": "invalid",
+    "4.0.0-rc.13": "2026-09-30T00:00:00Z",
+    "4.0.0-rc.01": "2026-09-20T00:00:00Z",
+    "4.0.1-rc.14": "2026-09-20T00:00:00Z",
+    "4.0.0": "2026-09-20T00:00:00Z",
+    "5.0.0-rc.15": "2026-09-20T00:00:00Z",
+    "0.0.0-snapshot-test": "2026-09-20T00:00:00Z",
+  };
+
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", []), "4.0.0-rc.10");
+  assert.equal(
+    selectPackageRelease(times, now, 1440, "effect", ["effect@4.0.0-rc.13"]),
+    "4.0.0-rc.10",
+  );
+  assert.equal(selectPackageRelease(times, now, 1440, "other", []), "4.0.0");
+});
+
+test("does not fall back to Effect 3 when no Effect 4 RC is old enough", () => {
+  const now = Date.parse("2026-09-29T12:00:00Z");
+  const times = {
+    "3.22.2": "2026-09-01T00:00:00Z",
+    "4.0.0-beta.200": "2026-09-01T00:00:00Z",
+    "4.0.0-rc.118": "2026-09-28T12:00:01Z",
+    "4.0.0-rc.119": "malformed",
+  };
+
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", []), null);
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", ["effect"]), "4.0.0-rc.118");
+});
+
 test("rejects invalid release cutoffs and major versions", () => {
   for (const [now, age, major] of [
     [NaN, 1440, 22],

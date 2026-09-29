@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { expect } from "vitest";
 
 import { guardManagedWrite } from "../src/pi/write-guard.ts";
+import type { Fixture } from "./pi-fixture.mts";
 import { test } from "./store-fixture.mts";
 
 async function project(makeRoot: () => Promise<string>) {
@@ -185,6 +186,61 @@ test("scripted Pi built-in write and edit calls cannot change managed files", as
         entry.type === "message" && entry.message.role === "toolResult" && entry.message.isError,
     ),
   ).toBe(true);
+});
+
+async function checkNestedWrites(f: Fixture, memoryState: "enabled" | "disabled") {
+  const managed = join(f.cwd, ".pi", "tiered-memory", "sessions");
+  await mkdir(managed, { recursive: true });
+  await writeFile(join(managed, "existing.md"), "original");
+  await symlink(managed, join(f.cwd, "managed-alias"), "dir");
+  if (memoryState === "disabled") {
+    await f.command("off");
+  }
+  await f.session.prompt("Ready for guarded nested calls.");
+  const events: { toolCallId: string; parentToolCallId: string | undefined }[] = [];
+  const unsubscribe = f.session.subscribe((event) => {
+    if (event.type === "tool_execution_start" && event.parentToolCallId !== undefined) {
+      events.push({ toolCallId: event.toolCallId, parentToolCallId: event.parentToolCallId });
+    }
+  });
+  try {
+    const ctx = f.session.extensionRunner.createToolContext("memory-parent", undefined);
+    const write = await ctx.executeTool("write", {
+      path: ".pi/tiered-memory/sessions/new.md",
+      content: "blocked",
+    });
+    const edit = await ctx.executeTool("edit", {
+      path: "managed-alias/existing.md",
+      oldText: "original",
+      newText: "changed",
+    });
+    for (const result of [write, edit]) {
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.result.content)).toContain("Automatic observation records");
+    }
+    expect(events).toEqual([
+      { toolCallId: "memory-parent/1", parentToolCallId: "memory-parent" },
+      { toolCallId: "memory-parent/2", parentToolCallId: "memory-parent" },
+    ]);
+    expect(await readFile(join(managed, "existing.md"), "utf8")).toBe("original");
+    await expect(readFile(join(managed, "new.md"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  } finally {
+    unsubscribe();
+  }
+}
+
+test("nested Pi write and edit calls preserve managed files while memory is enabled", async ({
+  createFixture,
+}) => {
+  await checkNestedWrites(await createFixture({ builtinTools: true }), "enabled");
+});
+
+test("nested Pi write and edit calls preserve managed files while memory is disabled", async ({
+  createFixture,
+}) => {
+  await checkNestedWrites(await createFixture({ builtinTools: true }), "disabled");
 });
 
 test("a scripted Pi write through a symlink is blocked while memory is disabled", async ({

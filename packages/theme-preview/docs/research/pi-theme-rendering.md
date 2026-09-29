@@ -3,9 +3,6 @@
 Research date: 2026-09-22. Inspected host: Pi 0.87.0, using installed declarations and JavaScript.
 The findings are source checks; they do not establish terminal or runtime compatibility.
 
-For changes to these APIs in Pi 0.99.1, see the
-[upgrade assessment](../../../../docs/pi-0.99.1-upgrade.md#theme-preview-use-public-colors-without-accepting-guesses).
-
 ## Scope
 
 This research examines whether a Pi extension can render static theme fixtures, resolve their

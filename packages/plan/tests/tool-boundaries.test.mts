@@ -13,7 +13,10 @@ import { runtimeFixture } from "./runtime-fixture.mts";
 
 async function fixture() {
   const f = await runtimeFixture();
-  const registered = new Map<string, Pick<ToolDefinition, "execute" | "parameters">>();
+  const registered = new Map<
+    string,
+    Pick<ToolDefinition, "execute" | "parameters" | "outputSchema" | "exposure">
+  >();
   extension({
     ...f.api,
     registerTool(tool) {
@@ -40,6 +43,46 @@ test("tool fixture retains Pi's nested tool capabilities", async ({ onTestFinish
     isError: true,
     toolCall: { name: "plan-fixture-unknown" },
   });
+});
+
+test("planning tools declare model-only exposure and a shared successful-result schema", async ({
+  onTestFinished,
+}) => {
+  const f = await fixture();
+  onTestFinished(f.dispose);
+  const names = ["plan_open", "plan_round", "plan_review", "plan_implement"];
+  const schemas = names.map((name) => {
+    const tool = f.tool(name);
+    expect(tool.exposure).toBe("model-only");
+    expect(tool.outputSchema).toBeDefined();
+    return tool.outputSchema;
+  });
+  expect(schemas.every((schema) => schema === schemas[0])).toBe(true);
+  const schema = schemas[0];
+  if (schema === undefined) {
+    throw new Error("Missing Plan output schema");
+  }
+  expect(Value.Check(schema, { outcome: "error", message: "failed" })).toBe(false);
+  expect(Value.Check(schema, { outcome: "cancelled", planId: "saved-plan" })).toBe(true);
+  expect(Value.Check(schema, { outcome: "unknown", truncated: true })).toBe(false);
+  expect(
+    Value.Check(schema, { outcome: "unknown", truncated: true, resultPath: "/tmp/result" }),
+  ).toBe(false);
+  expect(
+    Value.Check(schema, { outcome: "error", truncated: true, resultPath: "/tmp/result" }),
+  ).toBe(false);
+  expect(
+    Value.Check(schema, { outcome: "cancelled", truncated: true, resultPath: "/tmp/result" }),
+  ).toBe(true);
+  const opened = await f
+    .tool("plan_open")
+    .execute("structured", { objective: "Public objective" }, undefined, undefined, f.ctx);
+  expect(opened.structuredContent).toEqual(opened.details);
+  expect(Value.Check(schema, opened.structuredContent)).toBe(true);
+  const text: unknown = JSON.parse(
+    opened.content[0]?.type === "text" ? opened.content[0].text : "",
+  );
+  expect(text).toMatchObject({ outcome: "started", plan: { objective: "Public objective" } });
 });
 
 test.each([false, true])(
@@ -193,6 +236,17 @@ test("oversized tool results return a bounded preview and retrievable full JSON"
   expect(Buffer.byteLength(text)).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
   expect(text.split("\n").length).toBeLessThanOrEqual(DEFAULT_MAX_LINES);
   expect(Buffer.byteLength(JSON.stringify(details))).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
+  expect(result.structuredContent).toEqual({
+    outcome: "started",
+    truncated: true,
+    resultPath: path,
+  });
+  const schema = f.tool("plan_open").outputSchema;
+  if (schema === undefined) {
+    throw new Error("Missing Plan output schema");
+  }
+  expect(Value.Check(schema, result.structuredContent)).toBe(true);
+  expect(JSON.stringify(result.structuredContent)).not.toContain(objective);
   expect(text).toContain(path);
   const saved: unknown = JSON.parse(await readFile(path, "utf8"));
   expect(saved).toMatchObject({ outcome: "started", plan: { objective } });

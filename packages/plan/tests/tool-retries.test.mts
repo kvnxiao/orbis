@@ -1,10 +1,11 @@
 import { writeFile } from "node:fs/promises";
 
+import { Value } from "typebox/value";
 import { expect, test, vi } from "vitest";
 
 import { PlanHandoff } from "../src/pi/handoff.ts";
 import * as terminal from "../src/pi/terminal.ts";
-import { toolResult } from "../src/pi/tool-result.ts";
+import { planToolOutputSchema, toolResult } from "../src/pi/tool-result.ts";
 import { saveLaunch } from "../src/storage/launches.ts";
 import { runPlanningOperation } from "../src/storage/operations.ts";
 import * as persistence from "../src/storage/persistence.ts";
@@ -32,6 +33,9 @@ test("completed review retries return feedback without another revision or UI", 
   };
   const first = await f.runtime.review(f.ctx, input);
   expect(first).toMatchObject({ outcome: "feedback" });
+  const reviewedTool = await toolResult(first);
+  expect(Value.Check(planToolOutputSchema, reviewedTool.structuredContent)).toBe(true);
+  expect(reviewedTool.structuredContent).toEqual(reviewedTool.details);
   expect(await f.runtime.review(f.ctx, input)).toEqual(first);
   f.runtime.restore(f.ctx);
   expect(await f.runtime.review(f.ctx, input)).toEqual(first);
@@ -101,9 +105,15 @@ test("cancelled review retries remain cancelled and explicit opening restores dr
   const cancelled = await f.runtime.review(f.ctx, input);
   f.runtime.restore(f.ctx);
   expect(await f.runtime.review(f.ctx, input)).toEqual(cancelled);
-  expect(JSON.stringify(await toolResult(cancelled))).not.toContain("Private unfinished notes");
+  const cancelledTool = await toolResult(cancelled);
+  expect(JSON.stringify(cancelledTool)).not.toContain("Private unfinished notes");
+  expect(Value.Check(planToolOutputSchema, cancelledTool.structuredContent)).toBe(true);
   expect(view).toHaveBeenCalledTimes(1);
-  await f.runtime.requestOpen(f.ctx, "", false);
+  const reopened = await f.runtime.requestOpen(f.ctx, "", false);
+  const reopenedTool = await toolResult(reopened);
+  expect(JSON.stringify(reopenedTool.structuredContent)).not.toContain("Private unfinished notes");
+  expect(Value.Check(planToolOutputSchema, reopenedTool.structuredContent)).toBe(true);
+  expect(reopenedTool.structuredContent).toEqual(reopenedTool.details);
   expect(view).toHaveBeenCalledTimes(2);
   expect(f.runtime.active?.reviews?.at(-1)?.feedbackDraft).toBe("Private unfinished notes");
 });
@@ -303,7 +313,14 @@ test("clarification and its applied response replay without exposing unfinished 
   expect(first).toMatchObject({ outcome: "clarification", draftsSubmitted: false });
   const replay = await f.runtime.round(f.ctx, input);
   expect(replay).toEqual(first);
-  expect(JSON.stringify(await toolResult(replay))).not.toContain("Private custom draft");
+  const clarifiedTool = await toolResult(replay);
+  expect(JSON.stringify(clarifiedTool)).not.toContain("Private custom draft");
+  expect(Value.Check(planToolOutputSchema, clarifiedTool.structuredContent)).toBe(true);
+  expect(clarifiedTool.structuredContent).toEqual(clarifiedTool.details);
+  expect(clarifiedTool.structuredContent).toMatchObject({
+    outcome: "clarification",
+    round: { drafts: { scope: { unfinished: "" } } },
+  });
   const update = {
     ...input,
     expectedRevision: 1,

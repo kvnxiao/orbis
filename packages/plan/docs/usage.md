@@ -180,7 +180,8 @@ plan; use the visible submission controls.
 Each generated option retains its current notes. Only the selected answer and its current notes
 enter the submission preview. Clarification returns to the owning agent with that selected context
 marked unsubmitted; unfinished custom text, other options' drafts, and unsent clarification text
-stay local. Tool results exclude private drafts before truncation or writing result files.
+stay local. Tool text and structured results exclude private drafts before truncation or writing
+result files.
 
 In question fields, Shift+Enter and Ctrl+J insert newlines, and Tab/Shift+Tab navigate active
 questions and the CTA. Other and clarification text appear directly after their row labels without

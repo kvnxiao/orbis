@@ -418,6 +418,10 @@ Requirements: REQ-complete-terminal-package, REQ-revision-validation, REQ-exclus
 REQ-terminal-interaction-boundary, REQ-session-recovery, REQ-recoverable-failures,
 REQ-public-presentation-boundary.
 
+Planning tools use direct model invocation. A nested tool or codemode script cannot open a Plan
+modal or selector; rejection leaves the current interaction and drafts unchanged under
+REQ-typed-planning-outcomes. Commands and the optional presenter retain their normal controls.
+
 | Situation                                                             | Observable outcome                                                                                                                      |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontier or plan exceeds terminal height.                             | Content scrolls with a proportional right-edge scrollbar; title and footer stay fixed. Actions and every content line remain reachable. |

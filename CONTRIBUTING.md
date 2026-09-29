@@ -17,6 +17,7 @@ follows; this guide covers the workspace, the package lifecycle, and the checks.
 | Oxlint                    | `1.86.0`                             |
 | Oxlint type-aware checker | `oxlint-tsgolint@7.0.2003`           |
 | Vitest                    | `5.0.2`                              |
+| Effect                    | `4.0.0-rc.118`, approved v4 RC track |
 | Extension runtime minimum | Node.js `22.19.0`                    |
 
 `pnpm-workspace.yaml` pins dependency versions in a shared catalog.
@@ -270,8 +271,10 @@ candidates selected under the release-age policy, and installation, scaffolding,
 loading checks. Commands emit JSON reports; compatibility decisions and new compiler or lint checks
 remain agent tasks.
 
-The [Pi 0.99.1 assessment](docs/pi-0.99.1-upgrade.md) describes the source compatibility checks and
-potential uses of its new APIs in Orbis packages.
+Effect follows the approved v4 release-candidate track. Release discovery selects the newest
+`4.0.0-rc.N` release that satisfies the same 24-hour age policy as other non-exempt dependencies. It
+does not substitute Effect 3 stable, beta releases, or snapshots. Review the selected RC's release
+notes and installed guidance, then verify the memory package's lifecycle and storage checks.
 
 ## References
 

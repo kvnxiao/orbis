@@ -32,7 +32,7 @@ The command opens the package view through `ctx.ui.custom()`. It does not accept
 subcommands. Non-whitespace arguments produce a usage message and do not open or alter a preview.
 
 The initial host contract targets the npm installation of Pi on Node.js 22.19.0 or later within Pi's
-supported runtimes. Pi 0.87.0 is the reference baseline for the public capabilities the contract
+supported runtimes. Pi 0.99.1 is the reference baseline for the public capabilities the contract
 uses, not a minimum version. Preview requires `ctx.mode === "tui"`, Pi's active theme in truecolor
 mode, and a terminal connection capable of displaying truecolor. The connection includes any SSH or
 multiplexer path. The package does not infer physical color accuracy from a mode flag. In an
@@ -54,6 +54,11 @@ optional-token fallbacks. Public Pi TUI primitives and styling callbacks may com
 reproduce the supported host's token use; instantiating Pi's internal session components is not
 required. Each fixture must retain the foreground/background relationships of the surface it
 represents. Arbitrary third-party extension UI is outside fixture coverage.
+
+Resolve concrete theme values through Pi's public color APIs, including its color conversion
+helpers. `Theme.colors` and `Theme.style()` may supply resolved values and styling where they
+preserve the fixture's actual colors. Do not parse rendered escape sequences to recover colors
+already available through public resolution, or create a second theme loader.
 
 ## Token inventory and terminal inputs
 
@@ -83,18 +88,24 @@ Before opening the gallery, the package resolves every token used by its complet
 opaque sRGB color. Selecting a group does not bypass missing inputs in another group. A shared
 terminal input resolves every token that uses it; overrides are not keyed by token name.
 
-| Effective theme value                    | Concrete fixture color                                                     |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| Hex color, including a resolved variable | Its RGB value                                                              |
-| Palette index 16-231                     | Conventional xterm RGB cube, with channel levels 0, 95, 135, 175, 215, 255 |
-| Palette index 232-255                    | Conventional grayscale value `8 + 10 × (index - 232)` for each channel     |
-| Palette index 0-15                       | Author-supplied RGB for that palette index                                 |
-| Empty foreground                         | Author-supplied terminal foreground                                        |
-| Empty background                         | Current surface background                                                 |
+| Effective theme value                                                 | Concrete fixture color                                                     |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Hex color, including a resolved variable                              | Its RGB value                                                              |
+| Other concrete theme color supported by Pi, including OKLCH and OKHSL | Its opaque sRGB value after host color resolution                          |
+| Palette index 16-231                                                  | Conventional xterm RGB cube, with channel levels 0, 95, 135, 175, 215, 255 |
+| Palette index 232-255                                                 | Conventional grayscale value `8 + 10 × (index - 232)` for each channel     |
+| Palette index 0-15                                                    | Author-supplied RGB for that palette index                                 |
+| Empty foreground                                                      | Author-supplied terminal foreground                                        |
+| Empty background                                                      | Current surface background                                                 |
 
 The package renders these resolved colors as truecolor, including numeric palette values. It does
 not rely on the terminal's indexed palette for fixture output. A token that uses an optional
 fallback resolves through the fallback's effective value and retains its original token label.
+
+Public theme color data can supply concrete effective colors, but guessed terminal defaults and
+approximated faint styling do not establish measured fixture colors. Missing terminal foreground or
+basic palette inputs remain missing even when Pi supplies a display fallback. Measurements use only
+the concrete colors rendered by the fixture.
 
 Color input accepts `#RRGGBB` with case-insensitive hex digits and surrounding whitespace trimmed.
 Empty input clears an optional supplied value. Other formats, alpha values, malformed hex, and
@@ -110,12 +121,17 @@ its terminal defaults; those colors are excluded from fixture measurements.
 
 The background source is either queried or supplied. Without saved defaults, the source is queried.
 A supplied source requires a hex color and suppresses terminal background queries. A queried source
-uses the TUI's public background RGB query with a finite timeout. The implementation documents its
-timeout; it must not leave preview readiness pending indefinitely.
+uses the TUI's public `queryTerminalColors({ timeoutMs })` API with a finite timeout and reads its
+background result. The implementation documents its timeout; it must not leave preview readiness
+pending indefinitely.
 
 When the query times out, rejects, or returns an unusable value, settings report the failure and
 require either a successful retry or a supplied background. The package does not substitute
 `COLORFGBG`, a polarity result, a built-in theme's export colors, or a guessed RGB value.
+
+A response without a usable background is a failed background query even when it reports other
+colors. Reported foreground and palette colors do not replace the author-supplied inputs required by
+REQ-color-resolution. Query answers are transient and are not saved as personal defaults.
 
 The view displays the effective background RGB and its source. The gallery paints the surface
 background across its full available surface, including unused rows and padding; fixture-specific
@@ -325,3 +341,9 @@ Real-terminal checks do not need an agent turn.
 Compatibility checks cover the supported npm Pi runtime, its loader, and terminal rendering with
 truecolor through local and SSH/multiplexer connections. Runtime support must be documented from
 those checks; TypeScript checking alone does not establish loading or rendering compatibility.
+
+Color compatibility checks include Pi's short-hex, OKLCH, and OKHSL theme values while retaining
+strict `#RRGGBB` author input. A host fallback for missing terminal defaults must not make the
+gallery ready. A partial terminal response without background must not enable measurements; a
+response with foreground or palette data must not overwrite author inputs. These checks contribute
+REQ-color-resolution and REQ-background-source.
