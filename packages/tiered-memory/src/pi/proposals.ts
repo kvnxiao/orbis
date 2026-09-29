@@ -8,7 +8,7 @@ import { recoverFailure } from "../storage/files.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
 import type { StoreCommitResult } from "../storage/store.ts";
-import { blockingReferences, selectedAs, selectedPointer } from "./lineage.ts";
+import { blockingReferences, sameBase, selectedAs, selectedPointer } from "./lineage.ts";
 import type { LineageState, ProposalBinding, ProposalContent } from "./lineage.ts";
 import { appendReference, referencesIn, tryConfirmReference } from "./revision-references.ts";
 import type { StorageSession } from "./storage-session.ts";
@@ -122,10 +122,16 @@ const evidenceStillValid = Effect.fnUntraced(function* (
  *
  * Registration writes `sources.json` before `MemoryStore.commit` takes the project lock. The
  * commit's `validate` projects current effective sources without writing and compares them and
- * `binding()` with the captured proposal. After that projection it reads the branch and returns
- * `lineage` while a damaged revision reference makes the current selection ambiguous. The reasons
- * rank `configuration`, then `lineage`, then `evidence`. `record` runs synchronously with
- * `registered` from `SourceRegistry.register`'s `onRegistered`, in the step that replaces the
+ * `binding()` with the captured proposal. After that projection it reads the branch and the current
+ * selection and returns `lineage` when:
+ *
+ * - A damaged revision reference makes the selection ambiguous.
+ * - A committed revision's branch reference is still pending.
+ * - The selection is unavailable.
+ * - The selection no longer names the proposal's base revision; a `null` base matches only `none`.
+ *
+ * The reasons rank `configuration`, then `lineage`, then `evidence`. `record` runs synchronously
+ * with `registered` from `SourceRegistry.register`'s `onRegistered`, in the step that replaces the
  * registry cache. It runs with `committed` as soon as the head is durable. A caller interrupted
  * after either write therefore still learns that progress.
  *
@@ -153,8 +159,14 @@ export const commitProposal = Effect.fnUntraced(function* (
     ) {
       return "configuration";
     }
+    const { selected, pending } = current.lineage;
     const branch = ctx.sessionManager.getBranch();
-    if (blockingReferences(branch, storage.store.projectId, current.lineage.selected).length > 0) {
+    if (
+      blockingReferences(branch, storage.store.projectId, selected).length > 0 ||
+      pending.state !== "none" ||
+      selected.state === "unavailable" ||
+      !sameBase(captured.baseRevision, selected)
+    ) {
       return "lineage";
     }
     return stillValid ? undefined : "evidence";

@@ -242,7 +242,8 @@ export const selectFromBranch = Effect.fnUntraced(function* (
   return { selected, pending };
 });
 
-function sameBase(base: RevisionPointer | null, selected: SelectedRevision): boolean {
+/** Report whether `base` names the selected revision; `null` matches both `none` and `unavailable`. */
+export function sameBase(base: RevisionPointer | null, selected: SelectedRevision): boolean {
   const pointer = selectedPointer(selected);
   return (
     (base === null && pointer === null) ||

@@ -103,6 +103,11 @@ project mutation lock for the commit. Under the lock it checks that:
 - The current effective sources, branch anchor, and configuration still support the proposal.
 - No damaged revision reference on the branch can hide a revision newer than the selected one, as
   described under [Recovery](#recovery).
+- The branch's revision selection still matches the proposal:
+  - The selected revision is available.
+  - No committed revision's branch reference is still pending.
+  - The selected revision is the proposal's base revision. A proposal captured with no revision
+    selected passes only while no revision is selected.
 
 The writer checks the live evidence, configuration, and lineage again just before publishing the
 head, without registering sources or changing the latest status counts. A failed check returns a
@@ -161,6 +166,14 @@ A disable or call cancellation that arrives while the commit's registration writ
 lets that write finish. If the write succeeds, the registration completes, and the commit returns
 cancelled and refreshes. If the write fails, the commit rejects with the write's error, even when
 the cancellation races the failure, and does not refresh.
+
+The selection checks under the lock cover selection changes that leave the head unchanged. Tree
+navigation can select another revision while the head stays the same, and reconciliation can attach
+an already durable head without writing a new one. A commit from a base that the branch no longer
+selects would either drop the notes committed after that base or replace the selected snapshot with
+content from an abandoned branch. While a reference is pending, the selection does not yet name the
+revision that reference records, so a commit could drop that revision's notes. In each case the
+commit returns a `lineage` conflict, and the caller must capture a new proposal.
 
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected
