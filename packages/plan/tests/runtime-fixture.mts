@@ -8,7 +8,11 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionToolContext,
+  ExtensionUIContext,
+} from "@earendil-works/pi-coding-agent";
 
 import type { PlanningSession } from "../src/domain/state.ts";
 import { planCommandDescription } from "../src/pi/instructions.ts";
@@ -40,7 +44,7 @@ export function appendAssistantFixture(manager: SessionManager): void {
 /** Describe a disposable planning runtime and its cleanup. */
 export interface RuntimeFixture {
   runtime: PlanRuntime;
-  ctx: ExtensionContext;
+  ctx: ExtensionToolContext;
   manager: SessionManager;
   api: ExtensionAPI;
   resources: DefaultResourceLoader;
@@ -104,35 +108,35 @@ export async function runtimeFixture(): Promise<RuntimeFixture> {
     }
     const planning = runtime;
     const extensionApi = api;
-    const base = session.extensionRunner.createContext();
-    const ctx: ExtensionContext = {
-      ...base,
-      mode: "tui",
-      ui: {
-        ...base.ui,
-        notify() {
+    const base = session.extensionRunner.createToolContext("plan-fixture", undefined);
+    const ui: ExtensionUIContext = {
+      ...base.ui,
+      notify() {
+        return undefined;
+      },
+      async select(title, _options, options) {
+        if (title === "Implement approved plan?") {
           return undefined;
-        },
-        async select(title, _options, options) {
-          if (title === "Implement approved plan?") {
-            return undefined;
+        }
+        await new Promise<undefined>((resolve) => {
+          const finish = () => {
+            resolve(undefined);
+          };
+          options?.signal?.addEventListener("abort", finish, { once: true });
+          if (options?.signal?.aborted === true) {
+            finish();
           }
-          await new Promise<undefined>((resolve) => {
-            const finish = () => {
-              resolve(undefined);
-            };
-            options?.signal?.addEventListener("abort", finish, { once: true });
-            if (options?.signal?.aborted === true) {
-              finish();
-            }
-          });
-          return undefined;
-        },
-        setStatus() {
-          return undefined;
-        },
+        });
+        return undefined;
+      },
+      setStatus() {
+        return undefined;
       },
     };
+    const ctx: ExtensionToolContext = Object.defineProperties(base, {
+      mode: { value: "tui", enumerable: true, configurable: true, writable: true },
+      ui: { value: ui, enumerable: true, configurable: true, writable: true },
+    });
     appendAssistantFixture(manager);
     return {
       runtime: planning,

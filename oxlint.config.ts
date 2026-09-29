@@ -22,6 +22,7 @@ export default defineConfig({
     "typescript/consistent-type-imports": "error",
     "typescript/await-thenable": "error",
     "typescript/no-explicit-any": "error",
+    "typescript/no-generated-empty-object-type": "error",
     "typescript/no-unsafe-assignment": "error",
     "typescript/no-unsafe-argument": "error",
     "typescript/no-unsafe-call": "error",

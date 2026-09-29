@@ -7,17 +7,17 @@ follows; this guide covers the workspace, the package lifecycle, and the checks.
 
 ## Requirements
 
-| Component                 | Workspace version                   |
-| ------------------------- | ----------------------------------- |
-| Node.js for development   | `26.9.0`, pinned in `.node-version` |
-| pnpm                      | `12.5.1`, pinned in `package.json`  |
-| TypeScript                | `7.0.2`, used for type checking     |
-| Pi coding agent           | `0.87.1`                            |
-| Oxfmt                     | `0.68.0`                            |
-| Oxlint                    | `1.83.0`                            |
-| Oxlint type-aware checker | `oxlint-tsgolint@7.0.2002`          |
-| Vitest                    | `5.0.1`                             |
-| Extension runtime minimum | Node.js `22.19.0`                   |
+| Component                 | Workspace version                    |
+| ------------------------- | ------------------------------------ |
+| Node.js for development   | `26.10.0`, pinned in `.node-version` |
+| pnpm                      | `12.8.1`, pinned in `package.json`   |
+| TypeScript                | `7.0.2`, used for type checking      |
+| Pi coding agent           | `0.99.1`                             |
+| Oxfmt                     | `0.71.0`                             |
+| Oxlint                    | `1.86.0`                             |
+| Oxlint type-aware checker | `oxlint-tsgolint@7.0.2003`           |
+| Vitest                    | `5.0.2`                              |
+| Extension runtime minimum | Node.js `22.19.0`                    |
 
 `pnpm-workspace.yaml` pins dependency versions in a shared catalog.
 
@@ -169,6 +169,12 @@ value.
 
 The TypeScript `target` and `lib` settings do not downlevel source or supply runtime APIs.
 `skipLibCheck` skips checking dependency declaration files; workspace source remains type-checked.
+It remains enabled because dependency declarations fail under NodeNext:
+
+- Pi AI has JSON imports without import attributes.
+- Google GenAI references unavailable MCP and browser types.
+- Tinybench references `DOMHighResTimeStamp` without a DOM library.
+
 Node.js 22 type definitions constrain extension code to the supported runtime generation, and a
 newer API still needs a test on the minimum supported runtime. Before adopting new JavaScript
 syntax, decorators, or Node.js APIs, load the packed extension through every supported Pi
@@ -178,8 +184,10 @@ distribution and runtime.
 
 Oxlint enables type-aware checking in its configuration and treats correctness, suspicious-code, and
 performance findings as errors. Rules reject unsafe `any` operations, unnecessary type assertions
-and conditions, deprecated API use, and non-exhaustive switches. Additional rules require type-only
-imports, braces, strict equality, and constant declarations where possible.
+and conditions, deprecated API use, and non-exhaustive switches. The type-aware
+`typescript/no-generated-empty-object-type` rule also rejects types that resolve to an empty object
+through type operations. Additional rules require type-only imports, braces, strict equality, and
+constant declarations where possible.
 
 - Compare strings and numbers explicitly in conditions, such as `name !== ""` or `count > 0`. Narrow
   nullable objects with explicit null or undefined comparisons.
@@ -261,6 +269,9 @@ supported strict checks. The skill runs
 candidates selected under the release-age policy, and installation, scaffolding, packaging, and Pi
 loading checks. Commands emit JSON reports; compatibility decisions and new compiler or lint checks
 remain agent tasks.
+
+The [Pi 0.99.1 assessment](docs/pi-0.99.1-upgrade.md) describes the source compatibility checks and
+potential uses of its new APIs in Orbis packages.
 
 ## References
 

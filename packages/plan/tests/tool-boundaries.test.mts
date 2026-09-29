@@ -32,6 +32,16 @@ async function fixture() {
   };
 }
 
+test("tool fixture retains Pi's nested tool capabilities", async ({ onTestFinished }) => {
+  const f = await fixture();
+  onTestFinished(f.dispose);
+  expect(Array.isArray(f.ctx.tools)).toBe(true);
+  await expect(f.ctx.executeTool("plan-fixture-unknown", {})).resolves.toMatchObject({
+    isError: true,
+    toolCall: { name: "plan-fixture-unknown" },
+  });
+});
+
 test.each([false, true])(
   "cancelled tools explain explicit resume without active planning instructions: %s",
   async (includeInstructions) => {

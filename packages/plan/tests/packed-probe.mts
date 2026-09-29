@@ -13,7 +13,7 @@ import {
   initTheme,
 } from "@earendil-works/pi-coding-agent";
 import type {
-  ExtensionContext,
+  ExtensionToolContext,
   ExtensionUIContext,
   KeybindingsManager,
   Theme,
@@ -91,7 +91,7 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
     });
     const extension = loader.getExtensions().extensions.find((item) => item.tools.has("plan_open"));
     assert.ok(extension !== undefined);
-    const base = session.extensionRunner.createContext();
+    const base = session.extensionRunner.createToolContext("plan-packed-probe", undefined);
     let phase: "round" | "review" = "round";
     const ui: ExtensionUIContext = {
       ...base.ui,
@@ -165,7 +165,13 @@ export async function packedProbe(order: "base" | "before" | "after" = "after"):
         return undefined;
       },
     };
-    const ctx: ExtensionContext = { ...base, mode: "tui", ui };
+    const ctx: ExtensionToolContext = Object.defineProperties(base, {
+      mode: { value: "tui", enumerable: true, configurable: true, writable: true },
+      ui: { value: ui, enumerable: true, configurable: true, writable: true },
+    });
+    assert.ok(Array.isArray(ctx.tools));
+    const unknown = await ctx.executeTool("plan-probe-unknown", {});
+    assert.equal(unknown.isError, true);
     const start = extension.tools.get("plan_open")?.definition;
     const round = extension.tools.get("plan_round")?.definition;
     const review = extension.tools.get("plan_review")?.definition;
