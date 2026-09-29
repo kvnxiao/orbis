@@ -60,6 +60,13 @@ function effectRcVersions(versions: string[]): string[] {
     });
 }
 
+function effect4Versions(versions: string[]): string[] {
+  return [
+    ...stableVersions(versions).filter((version) => version.startsWith("4.")),
+    ...effectRcVersions(versions),
+  ];
+}
+
 function eligibleVersion(
   versions: string[],
   times: Record<string, string>,
@@ -109,7 +116,7 @@ export function selectPackageRelease(
 ): string | null {
   const minimumAge = exclusions.includes(packageName) ? 0 : ageMinutes;
   if (packageName === "effect") {
-    return eligibleVersion(effectRcVersions(Object.keys(times)), times, now, minimumAge);
+    return eligibleVersion(effect4Versions(Object.keys(times)), times, now, minimumAge);
   }
   return selectRelease(times, now, minimumAge, major);
 }
@@ -363,7 +370,7 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
     );
     const major =
       name === "@types/node" ? Number(state.node.runtimeMinimum.split(".")[0]) : undefined;
-    const releaseTrack = name === "effect" ? "effect4rc" : "stable";
+    const releaseTrack = name === "effect" ? "effect4" : "stable";
     const selected = selectPackageRelease(times, now, 1440, name, exclusions, major);
     const details =
       selected === null
@@ -385,8 +392,8 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
       current: state.dependencies.filter((item) => item.name === name),
       releaseTrack,
       latestOnTrack:
-        (releaseTrack === "effect4rc"
-          ? effectRcVersions(Object.keys(times))
+        (releaseTrack === "effect4"
+          ? effect4Versions(Object.keys(times))
           : stableVersions(Object.keys(times)))[0] ?? null,
       latestStable: stableVersions(Object.keys(times))[0] ?? null,
       candidate: selected,

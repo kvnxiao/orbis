@@ -2,9 +2,9 @@
 name: update-toolchain
 description:
   Update the Orbis workspace to current stable Node.js, pnpm, TypeScript, Pi, and development
-  dependencies, including the approved Effect v4 release-candidate track. Use when refreshing the
-  toolchain or adopting newly supported compiler and type-aware lint checks while preserving
-  source-only Pi packages.
+  dependencies, including the approved Effect v4 stable and release-candidate tracks. Use when
+  refreshing the toolchain or adopting newly supported compiler and type-aware lint checks while
+  preserving source-only Pi packages.
 ---
 
 # Update the Orbis toolchain
@@ -38,15 +38,18 @@ Release discovery queries the configured npm registries through pnpm and the
 numerically and restricts `@types/node` to the declared runtime generation. It excludes npm releases
 younger than 1440 minutes at the report's `asOf` time unless the package name exactly matches a
 release-age exclusion. For an exact package-name exclusion, release discovery can select the newest
-stable release immediately. Effect uses the repository-approved `4.0.0-rc.N` track: select the highest
-numeric RC that meets the same release-age cutoff, and report that track explicitly. Do not replace it with Effect 3
-stable, a beta, a snapshot, or another major version. If no RC is eligible, report no candidate
-instead of falling back to stable. Other dependencies remain stable-only.
+stable release immediately. Effect follows the approved v4 policy under the same release-age rule:
 
-It considers versions still listed in registry metadata, includes unused
-catalog entries, and reports exact-version exclusions eligible for removal. Other exclusions require
-review. Local references appear in `localDependencies`; aliases, Git sources, and URLs appear in
-`manualDependencies` and require source-specific review.
+- Prefer the newest eligible stable `4.x` release, including migration from an RC.
+- Until a stable v4 release is eligible, select the highest eligible numeric `4.0.0-rc.N` release.
+- Report no candidate when neither is eligible. Exclude other major versions, betas, snapshots, and
+  other preview tracks.
+
+Report the Effect v4 policy explicitly. Other dependencies remain stable-only. Release discovery
+considers versions still listed in registry metadata, includes unused catalog entries, and reports
+exact-version exclusions eligible for removal. Other exclusions require review. Local references
+appear in `localDependencies`; aliases, Git sources, and URLs appear in `manualDependencies` and
+require source-specific review.
 
 npm candidates either satisfy the release-age cutoff or match an exact package-name exclusion;
 compatibility still requires review. The report includes dist-tags, engines, peers, dependencies,
@@ -72,7 +75,7 @@ versions for failed queries.
   error-handling checks. Check Oxlint and `oxlint-tsgolint` compatibility. Run
   `pnpm exec tsc --noEmit --skipLibCheck false`. When dependency declarations pass, remove
   `skipLibCheck`; otherwise record the concrete declaration errors that require it.
-- Review the selected Effect RC release notes and exact source. After installation, read its
+- Review the selected Effect release notes and exact source. After installation, read its
   `AGENTS.md` and relevant guidance under the Effect integration rules. Verify memory cancellation,
   scope teardown, durable writes, and independent packed loading on both supported runtimes.
 - Before changing syntax, APIs, `target`, or `lib`, test the supported runtimes and Pi loader.
@@ -82,8 +85,9 @@ versions for failed queries.
 
 When a candidate is incompatible, select the newest compatible version permitted by that package's
 release-age rule, record the blocker, and continue independent updates. Query metadata for any
-fallback version before selecting it. The Effect v4 RC track is already approved for routine updates.
-Other preview tracks require a developer request; do not broaden the approved track or release-age exclusions implicitly.
+fallback version before selecting it. Routine Effect v4 RC updates and migration to stable v4 are
+already approved, subject to compatibility checks. Other Effect major versions and preview tracks
+require a developer request; do not broaden the release-age exclusions implicitly.
 
 ## Place and complete adoption work
 
