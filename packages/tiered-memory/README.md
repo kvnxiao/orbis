@@ -32,8 +32,8 @@ an editor.
 The report shows activation, settings sources, memory model availability, storage state, resource
 limits, and capabilities that are unavailable. Storage state includes the source and curated-note
 counts from the latest storage refresh and the event of the source registration it used; inspecting
-status reads cached state and writes no memory files. Inspecting status does not require
-credentials. A memory model without configured credentials is reported as suspended.
+status reads cached state and the active branch and writes no memory files. Inspecting status does
+not require credentials. A memory model without configured credentials is reported as suspended.
 
 Use `/tiered-memory off` or `/tiered-memory on` to set the current session's activation override.
 Resume restores that override; a new unrelated session uses settings defaults. `/tiered-memory` also

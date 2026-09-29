@@ -28,7 +28,9 @@ Storage adds two custom entry types, which Pi also excludes from model context. 
 `orbis-tiered-memory-project` entry binds the session's branch to its canonical project root,
 project identifier, and memory session identifier. An `orbis-tiered-memory-revision` entry
 references a committed memory revision by project, session, and revision identifier; it selects that
-revision once Pi has written the entry to the session file.
+revision once Pi has written the entry to the session file. A revision entry whose data fails
+validation is damaged: it selects nothing, the extension leaves it unchanged in the session file,
+and status lists it while it is on the active branch.
 
 At session start, the extension writes identity and source records for every persisted Pi session in
 the project, including while memory is disabled. Disabling memory preserves stored records and
@@ -168,8 +170,29 @@ and storage errors. It reports the registered-source and curated-note counts fro
 refresh. A refresh runs at session start, after tree navigation, and after each commit attempt that
 registered its sources and then committed, conflicted, or was cancelled. Both counts are labeled
 with the event of the registration that refresh used: `session_start`, `session_tree`, or `commit`.
-Status reads that cached state and writes no memory files. Observations, worker accounting, recall,
-and custom compaction remain unavailable.
+Status reads that cached state and the active branch and writes no memory files. Observations,
+worker accounting, recall, and custom compaction remain unavailable.
+
+In every storage state, status lists the damaged `orbis-tiered-memory-revision` entries on the
+active branch in branch order, with each entry ID and the first path that fails validation. The line
+appears only when such entries exist:
+
+```text
+Damaged revision references on the active branch: 2 excluded from lineage selection (entry 7f3a91c2 at /version, entry 9c1e04b8 at /revisionId)
+```
+
+Memory commits are blocked while a damaged entry could hide a revision newer than the selected one;
+the [storage guide](storage.md#recovery) defines when that applies. While storage is open and
+commits are blocked, status names the first blocking entry:
+
+```text
+Memory commits: blocked by damaged revision reference entry 7f3a91c2. Navigate with /tree to a point before that entry to remove this lineage block.
+```
+
+For a selected revision, the validity line then reads
+`uncertain: damaged revision references follow the selected revision` in place of `current`. A
+selected revision that is already invalid keeps its reason and invalid notes, and the line ends with
+`Uncertain: damaged revision references follow the selected revision.`
 
 In the terminal, commands display a notification. RPC clients receive Pi's `extension_ui_request`
 event with `method: "notify"`, `notifyType: "info"`, and the report in `message`. Each report is
@@ -180,4 +203,6 @@ diagnostic messages to model context.
 
 For an unresolved model, correct the provider/model identifier or configure it in Pi, then run
 `/reload`. For missing credentials, configure the selected provider in Pi and run `/reload` to
-refresh the model checks. For invalid settings, correct the reported field and run `/reload`.
+refresh the model checks. For invalid settings, correct the reported field and run `/reload`. For
+blocked memory commits, navigate with `/tree` to the entry just before the named one; the extension
+does not repair or remove damaged entries.

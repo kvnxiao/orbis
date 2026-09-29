@@ -8,14 +8,9 @@ import { recoverFailure } from "../storage/files.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
 import type { StoreCommitResult } from "../storage/store.ts";
-import {
-  appendReference,
-  referencesIn,
-  selectedAs,
-  selectedPointer,
-  tryConfirmReference,
-} from "./lineage.ts";
+import { blockingReferences, selectedAs, selectedPointer } from "./lineage.ts";
 import type { LineageState, ProposalBinding, ProposalContent } from "./lineage.ts";
+import { appendReference, referencesIn, tryConfirmReference } from "./revision-references.ts";
 import type { StorageSession } from "./storage-session.ts";
 
 /**
@@ -32,8 +27,14 @@ export type CommitProgress =
  *
  * `sourceIds` must be registered in `storage.sources`.
  *
- * @throws Error when a reference is pending, the selected revision is unavailable, no configuration
- *   is current, the branch has no leaf, or a source id is unregistered.
+ * @throws Error, checked in this order, when:
+ *
+ *   - A damaged revision reference makes the lineage ambiguous; the message names the first blocking
+ *     entry.
+ *   - A reference is pending.
+ *   - The selected revision is unavailable.
+ *   - No configuration is current, or the branch has no leaf.
+ *   - A source id is unregistered.
  */
 export function captureProposal(
   storage: StorageSession,
@@ -43,6 +44,16 @@ export function captureProposal(
   sourceIds: readonly string[],
 ): MemoryProposal {
   const { selected, pending } = binding.lineage;
+  const [blocking] = blockingReferences(
+    ctx.sessionManager.getBranch(),
+    storage.store.projectId,
+    selected,
+  );
+  if (blocking !== undefined) {
+    throw new Error(
+      `Memory lineage is ambiguous: damaged revision reference entry ${blocking.entryId} can hide a newer revision.`,
+    );
+  }
   if (pending.state !== "none") {
     throw new Error("A committed memory revision awaits its branch reference.");
   }
@@ -111,10 +122,12 @@ const evidenceStillValid = Effect.fnUntraced(function* (
  *
  * Registration writes `sources.json` before `MemoryStore.commit` takes the project lock. The
  * commit's `validate` projects current effective sources without writing and compares them and
- * `binding()` with the captured proposal. `record` runs synchronously with `registered` from
- * `SourceRegistry.register`'s `onRegistered`, in the step that replaces the registry cache. It runs
- * with `committed` as soon as the head is durable. A caller interrupted after either write
- * therefore still learns that progress.
+ * `binding()` with the captured proposal. After that projection it reads the branch and returns
+ * `lineage` while a damaged revision reference makes the current selection ambiguous. The reasons
+ * rank `configuration`, then `lineage`, then `evidence`. `record` runs synchronously with
+ * `registered` from `SourceRegistry.register`'s `onRegistered`, in the step that replaces the
+ * registry cache. It runs with `committed` as soon as the head is durable. A caller interrupted
+ * after either write therefore still learns that progress.
  *
  * @throws Error when the proposal fails `validateProposal`.
  * @throws The failures of `SourceRegistry.register` and `MemoryStore.commit`, unchanged.
@@ -139,6 +152,10 @@ export const commitProposal = Effect.fnUntraced(function* (
       current.dependencyFingerprint !== captured.dependencyFingerprint
     ) {
       return "configuration";
+    }
+    const branch = ctx.sessionManager.getBranch();
+    if (blockingReferences(branch, storage.store.projectId, current.lineage.selected).length > 0) {
+      return "lineage";
     }
     return stillValid ? undefined : "evidence";
   });

@@ -1,11 +1,14 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 
 import type { InvalidReason } from "../domain/evidence.ts";
 import { memoryRoles } from "../domain/models.ts";
 import type { ModelResolution, Role } from "../domain/models.ts";
 import { limitKeys } from "../domain/settings.ts";
 import type { EffectiveSettings, Limits, SettingSource } from "../domain/settings.ts";
+import { blockingReferences } from "./lineage.ts";
 import type { Registration, SelectedRevision } from "./lineage.ts";
+import { damagedReferencesIn } from "./revision-references.ts";
+import type { DamagedReference } from "./revision-references.ts";
 import type { MemoryRuntime, RuntimeSnapshot } from "./runtime.ts";
 import type { StorageSnapshot } from "./storage-session.ts";
 
@@ -23,8 +26,11 @@ import type { StorageSnapshot } from "./storage-session.ts";
  * order. `storage` is `unavailable` until the store opens, carrying the error that stopped opening;
  * `open` carries the canonical project root, the selected revision, the latest durable revision,
  * the source count and event of the registration the latest refresh used, the curated-note count of
- * the curation it inspected, and the error of the latest failed refresh. `unavailable` lists the
- * capabilities this version does not provide.
+ * the curation it inspected, and the error of the latest failed refresh. Its `blockingReference` is
+ * the first damaged revision reference that blocks commits, or undefined while the lineage is not
+ * ambiguous. `damagedReferences` lists every damaged revision reference on the active branch in
+ * branch order, in every storage state. `unavailable` lists the capabilities this version does not
+ * provide.
  */
 export interface StatusReport {
   enabled: boolean;
@@ -65,7 +71,9 @@ export interface StatusReport {
         latestRevision: string | null;
         registration: Registration | undefined;
         error: string | undefined;
+        blockingReference: DamagedReference | undefined;
       };
+  damagedReferences: readonly DamagedReference[];
   unavailable: readonly ("workers" | "pool" | "compaction")[];
 }
 
@@ -93,12 +101,13 @@ const invalidReasons = {
 } satisfies Record<InvalidReason, string>;
 
 /**
- * Collect status from the runtime snapshot and the acting model's context usage; writes nothing and
- * starts no model call.
+ * Collect status from the runtime snapshot, the active branch, and the acting model's context
+ * usage; writes nothing and starts no model call.
  */
 export function buildStatus(runtime: MemoryRuntime, ctx: ExtensionContext): StatusReport {
   const { configuration, override, error, configurationRevision, roles, storage } =
     runtime.snapshot;
+  const branch = ctx.sessionManager.getBranch();
   return {
     enabled: runtime.enabled,
     activationSource:
@@ -107,12 +116,16 @@ export function buildStatus(runtime: MemoryRuntime, ctx: ExtensionContext): Stat
     error,
     configuration:
       configuration === undefined ? undefined : configurationStatus(configuration, roles, ctx),
-    storage: storageStatus(storage),
+    storage: storageStatus(storage, branch),
+    damagedReferences: damagedReferencesIn(branch),
     unavailable: ["workers", "pool", "compaction"],
   };
 }
 
-function storageStatus(storage: StorageSnapshot): StatusReport["storage"] {
+function storageStatus(
+  storage: StorageSnapshot,
+  branch: readonly SessionEntry[],
+): StatusReport["storage"] {
   if (storage.state !== "open") {
     return { state: "unavailable", error: storage.state === "failed" ? storage.error : undefined };
   }
@@ -123,6 +136,7 @@ function storageStatus(storage: StorageSnapshot): StatusReport["storage"] {
     latestRevision: storage.latestRevision,
     registration: storage.registration,
     error: storage.error,
+    blockingReference: blockingReferences(branch, storage.projectId, storage.lineage.selected)[0],
   };
 }
 
@@ -187,7 +201,7 @@ export function renderStatus(report: StatusReport): string {
   if (report.error !== undefined) {
     lines.push(`Configuration error: ${report.error}`);
   }
-  lines.push(...storageLines(report.storage));
+  lines.push(...storageLines(report.storage), ...lineageLines(report));
   if (report.configuration === undefined) {
     lines.push("Automatic work: suspended; native Pi remains available.");
   } else {
@@ -197,24 +211,25 @@ export function renderStatus(report: StatusReport): string {
   return lines.join("\n");
 }
 
-function selectedLines(selected: SelectedRevision): string[] {
+function selectedLines(selected: SelectedRevision, ambiguous: boolean): string[] {
   if (selected.state === "none") {
     return ["Selected memory revision: none"];
   }
   if (selected.state === "unavailable") {
     return [`Selected memory revision: unavailable (${selected.reason})`];
   }
-  const validity =
-    selected.invalidReason === undefined
-      ? "current"
-      : `invalid: ${invalidReasons[selected.invalidReason]}`;
+  const uncertain = "damaged revision references follow the selected revision";
   const notes =
     selected.invalidNotes.length === 0
       ? ""
       : ` Invalid notes: ${selected.invalidNotes.join(", ")}.`;
+  const validity =
+    selected.invalidReason === undefined
+      ? `${ambiguous ? `uncertain: ${uncertain}` : "current"}${notes}`
+      : `invalid: ${invalidReasons[selected.invalidReason]}${notes}${ambiguous ? ` Uncertain: ${uncertain}.` : ""}`;
   return [
     `Selected memory revision: ${selected.revisionId}`,
-    `Selected memory validity: ${validity}${notes}`,
+    `Selected memory validity: ${validity}`,
   ];
 }
 
@@ -233,11 +248,28 @@ function storageLines(storage: StatusReport["storage"]): string[] {
         ];
   return [
     `Memory project root: ${storage.projectRoot}`,
-    ...selectedLines(storage.selected),
+    ...selectedLines(storage.selected, storage.blockingReference !== undefined),
     `Latest durable revision: ${storage.latestRevision ?? "none"}`,
     ...counts,
     ...error,
   ];
+}
+
+function lineageLines(report: StatusReport): string[] {
+  const damaged = report.damagedReferences;
+  const lines =
+    damaged.length === 0
+      ? []
+      : [
+          `Damaged revision references on the active branch: ${String(damaged.length)} excluded from lineage selection (${damaged.map(({ entryId, path }) => `entry ${entryId} at ${path}`).join(", ")})`,
+        ];
+  const blocking = report.storage.state === "open" ? report.storage.blockingReference : undefined;
+  if (blocking !== undefined) {
+    lines.push(
+      `Memory commits: blocked by damaged revision reference entry ${blocking.entryId}. Navigate with /tree to a point before that entry to remove this lineage block.`,
+    );
+  }
+  return lines;
 }
 
 function configurationLines(configuration: ConfigurationStatus): string[] {

@@ -61,6 +61,8 @@ export const zeroUsage: AssistantMessage["usage"] = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
+export const revisionEntryType = "orbis-tiered-memory-revision";
+
 export const evidenceFingerprint = "e".repeat(64);
 export const configurationFingerprint = "c".repeat(64);
 
@@ -257,6 +259,25 @@ export function runtimeFor(
     await runtime.shutdown();
   });
   return runtime;
+}
+
+export function blockedLine(entryId: string): string {
+  return `Memory commits: blocked by damaged revision reference entry ${entryId}. Navigate with /tree to a point before that entry to remove this lineage block.`;
+}
+
+export function customEntry(
+  id: string,
+  data: unknown,
+  customType = revisionEntryType,
+): SessionEntry {
+  return {
+    type: "custom",
+    id,
+    parentId: null,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    customType,
+    data,
+  };
 }
 
 export function sourceEntry(f: Fixture, text: string): SessionEntry {
