@@ -9,6 +9,7 @@ import { expect, vi } from "vitest";
 
 import { evidenceMatches } from "../src/domain/evidence.ts";
 import { dependencyFingerprint } from "../src/domain/proposal.ts";
+import type { MemoryProposal } from "../src/domain/proposal.ts";
 import { blockingReferences, projectEntrySchema, selectedAs } from "../src/pi/lineage.ts";
 import type { LineageState, SelectedRevision } from "../src/pi/lineage.ts";
 import {
@@ -914,6 +915,20 @@ test("a proposal captured before tree navigation onto damaged references keeps i
   ]);
   g.session.sessionManager.branch(damagedLeaf);
   await runtime.selectBranch(ctx);
+  await expectRetainedDependencies(g, runtime, proposal);
+  expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
+    kind: "conflict",
+    reason: "lineage",
+  });
+  expect(await (await storeFor(g)).currentHead()).toBe(chain.revisions[2]);
+  expect(await viewOf(g)).toBe("R2\n");
+}, 20_000);
+
+async function expectRetainedDependencies(
+  g: Fixture,
+  runtime: MemoryRuntime,
+  proposal: MemoryProposal,
+): Promise<void> {
   const { configuration, roles, configurationRevision } = runtime.snapshot;
   const store = await storeFor(g);
   const current = await (await openRegistry(store)).current(g.session.sessionManager);
@@ -931,12 +946,156 @@ test("a proposal captured before tree navigation onto damaged references keeps i
         }),
   ).toBe(proposal.dependencyFingerprint);
   expect(evidenceMatches(current, proposal, store.projectId)).toBe(true);
+}
+
+async function reopenWithFailedSettings(
+  createFixture: (options?: FixtureOptions) => Promise<Fixture>,
+): Promise<{ g: Fixture; chain: Chain }> {
+  const f = await createFixture({ project: { limits: { queuedJobs: 3 } } });
+  const chain = await commitChain(f, ["R0\n", "R1\n", "R2\n"]);
+  await writeFile(join(f.cwd, ".pi", "tiered-memory", "settings.json"), "{not json");
+  return { g: await reopen(f, createFixture), chain };
+}
+
+test("a proposal captured on an older revision before tree navigation onto the head's reference keeps its anchor, configuration, and evidence and returns a lineage conflict that keeps the head and its views", async ({
+  createFixture,
+}) => {
+  const { g, chain } = await reopenWithFailedSettings(createFixture);
+  const [oldest, , head] = chain.revisions;
+  g.session.sessionManager.branch(String(chain.references[0]));
+  const { runtime, ctx } = await started(g);
+  expect(runtime.snapshot.error).toContain("Invalid JSON");
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: oldest });
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Rollback\n" }), [
+    await sourceReference(g, chainEvidence),
+  ]);
+  expect(proposal).toMatchObject({
+    baseRevision: { revisionId: oldest },
+    expectedRevision: head,
+  });
+  g.session.sessionManager.branch(String(chain.references[2]));
+  await runtime.selectBranch(ctx);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: head });
+  await expectRetainedDependencies(g, runtime, proposal);
   expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
     kind: "conflict",
     reason: "lineage",
   });
-  expect(await store.currentHead()).toBe(chain.revisions[2]);
+  expect(await (await storeFor(g)).currentHead()).toBe(head);
   expect(await viewOf(g)).toBe("R2\n");
+}, 20_000);
+
+test.for([
+  { label: "file is missing, which makes the selection unavailable", removeRevision: true },
+  { label: "file is intact, which selects it", removeRevision: false },
+])(
+  "a proposal with no base captured before every revision reference returns a lineage conflict after navigation onto a reference whose revision $label, adopts no orphan head, and keeps the head and its views",
+  { timeout: 20_000 },
+  async ({ removeRevision }, { createFixture }) => {
+    const { g, chain } = await reopenWithFailedSettings(createFixture);
+    const [, navigated, head] = chain.revisions;
+    const manager = g.session.sessionManager;
+    const beforeReferences = manager.getEntry(String(chain.references[0]))?.parentId;
+    if (beforeReferences === undefined || beforeReferences === null) {
+      throw new Error("Missing entry before the first reference.");
+    }
+    manager.branch(beforeReferences);
+    const { runtime, ctx } = await started(g);
+    expect(runtime.snapshot.error).toContain("Invalid JSON");
+    expect(selected(runtime)).toEqual({ state: "none" });
+    const proposal = runtime.captureProposal(
+      ctx,
+      noteContent({ "current-work.md": "Rollback\n" }),
+      [await sourceReference(g, chainEvidence)],
+    );
+    expect(proposal).toMatchObject({ baseRevision: null, expectedRevision: head });
+    const store = await storeFor(g);
+    if (removeRevision) {
+      await rm(join(store.sessionDir, "revisions", `${String(navigated)}.json`));
+    }
+    manager.branch(String(chain.references[1]));
+    await runtime.selectBranch(ctx);
+    expect(selected(runtime)).toMatchObject(
+      removeRevision ? { state: "unavailable" } : { state: "selected", revisionId: navigated },
+    );
+    expect(pending(runtime)).toEqual({ state: "none" });
+    expect(storageOf(runtime).latestRevision).toBe(head);
+    expect(references(g)).toBe(3);
+    await expectRetainedDependencies(g, runtime, proposal);
+    expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
+      kind: "conflict",
+      reason: "lineage",
+    });
+    expect(references(g)).toBe(3);
+    expect(await store.currentHead()).toBe(head);
+    expect(await viewOf(g)).toBe("R2\n");
+  },
+);
+
+test("a proposal with no base captured before the reference of a head that awaits its deferred session file returns a lineage conflict after navigation back onto that reference and keeps the head and its view", async ({
+  createFixture,
+}) => {
+  const f = await createFixture({ project: { limits: { queuedJobs: 3 } } });
+  const { runtime, ctx } = await started(f);
+  const head = committedId(
+    await runtime.commitProposal(
+      ctx,
+      runtime.captureProposal(ctx, noteContent({ "current-work.md": "H1\n" }), []),
+    ),
+  );
+  const manager = f.session.sessionManager;
+  const reference = leafOf(f);
+  const beforeReference = manager.getEntry(reference)?.parentId;
+  if (beforeReference === undefined || beforeReference === null) {
+    throw new Error("Missing entry before the head reference.");
+  }
+  await writeFile(join(f.cwd, ".pi", "tiered-memory", "settings.json"), "{not json");
+  manager.branch(beforeReference);
+  await runtime.start(ctx);
+  expect(runtime.snapshot.error).toContain("Invalid JSON");
+  expect(storageOf(runtime).lineage).toEqual({
+    selected: { state: "none" },
+    pending: { state: "none" },
+  });
+  const proposal = runtime.captureProposal(ctx, noteContent({ "journey.md": "Journey\n" }), []);
+  expect(proposal).toMatchObject({ baseRevision: null, expectedRevision: head });
+  manager.branch(reference);
+  await runtime.selectBranch(ctx);
+  expect(selected(runtime)).toEqual({ state: "none" });
+  expect(pending(runtime)).toEqual({ state: "appended", revisionId: head });
+  expect(storageOf(runtime).latestRevision).toBe(head);
+  await expectRetainedDependencies(f, runtime, proposal);
+  expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
+    kind: "conflict",
+    reason: "lineage",
+  });
+  const store = await storeFor(f);
+  expect(await store.currentHead()).toBe(head);
+  expect(await viewOf(f)).toBe("H1\n");
+}, 20_000);
+
+test("a proposal captured before later turns commits after tree navigation from the last turn back to an earlier one that keeps the selected revision", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt(chainEvidence);
+  const { runtime, ctx } = await started(f);
+  const base = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R0\n" });
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: base });
+  const proposal = runtime.captureProposal(ctx, noteContent({ "journey.md": "Journey\n" }), [
+    await sourceReference(f, chainEvidence),
+  ]);
+  await f.session.prompt("Turn B.");
+  await f.session.prompt("Turn C.");
+  f.session.sessionManager.branch(sourceEntry(f, "Turn B.").id);
+  await runtime.selectBranch(ctx);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: base });
+  await expectRetainedDependencies(f, runtime, proposal);
+  const revisionId = committedId(await runtime.commitProposal(ctx, proposal));
+  expect(await (await storeFor(f)).readRevision(revisionId)).toMatchObject({
+    baseRevision: { revisionId: base },
+    notes: { "current-work.md": "R0\n", "journey.md": "Journey\n" },
+  });
 }, 20_000);
 
 test.for([
