@@ -940,14 +940,22 @@ test("a proposal captured before tree navigation onto damaged references keeps i
 }, 20_000);
 
 test.for([
-  { stage: "before the commit starts", appendOnRead: 0, reads: 1, revisionFiles: 1 },
-  { stage: "during the final evidence read", appendOnRead: 2, reads: 2, revisionFiles: 2 },
+  { stage: "before the commit starts", armOnRevisionWrite: false, revisionFiles: 1 },
+  { stage: "during the final evidence read", armOnRevisionWrite: true, revisionFiles: 2 },
 ])(
   "a malformed reference appended $stage returns a lineage conflict and keeps the head and its views",
-  async ({ appendOnRead, reads, revisionFiles }, { createFixture, onTestFinished }) => {
+  async ({ armOnRevisionWrite, revisionFiles }, { createFixture, onTestFinished }) => {
     const f = await createFixture();
     const [head] = (await commitChain(f, ["R0\n"])).revisions;
-    const runtime = runtimeFor(f);
+    let armed = false;
+    const runtime = runtimeFor(f, {
+      write: async (path, contents) => {
+        await writeDurable(path, contents);
+        if (armOnRevisionWrite && path.includes(`${sep}revisions${sep}`)) {
+          armed = true;
+        }
+      },
+    });
     const ctx = f.session.extensionRunner.createContext();
     await runtime.start(ctx);
     const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "Late\n" }), [
@@ -958,7 +966,6 @@ test.for([
     };
     // oxlint-disable-next-line typescript/unbound-method -- The spy calls the original with its SourceRegistry receiver.
     const project = SourceRegistry.prototype.current;
-    let observed = 0;
     const current = vi.spyOn(SourceRegistry.prototype, "current").mockImplementation(function (
       this: SourceRegistry,
       manager,
@@ -966,8 +973,8 @@ test.for([
       return project.call(this, manager).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
-            observed++;
-            if (observed === appendOnRead) {
+            if (armed) {
+              armed = false;
               appendMalformed();
             }
           }),
@@ -977,7 +984,7 @@ test.for([
     onTestFinished(() => {
       current.mockRestore();
     });
-    if (appendOnRead === 0) {
+    if (!armOnRevisionWrite) {
       appendMalformed();
     }
     expect(await runtime.commitProposal(ctx, proposal)).toMatchObject({
@@ -985,7 +992,6 @@ test.for([
       reason: "lineage",
     });
     const store = await storeFor(f);
-    expect(observed).toBe(reads);
     expect(await readdir(join(store.sessionDir, "revisions"))).toHaveLength(revisionFiles);
     expect(await store.currentHead()).toBe(head);
     expect(await viewOf(f)).toBe("R0\n");

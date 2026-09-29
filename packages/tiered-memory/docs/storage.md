@@ -107,12 +107,14 @@ project mutation lock for the commit. Under the lock it checks that:
 The writer checks the live evidence, configuration, and lineage again just before publishing the
 head, without registering sources or changing the latest status counts. A failed check returns a
 conflict naming both revisions and the reason: `head`, `curation`, `learning`, `configuration`,
-`lineage`, or `evidence`. The reasons rank in that order, and the conflict names the first one that
-fails. When a disable, a session stop, or a call cancellation comes before the head is written, the
-commit reports cancellation, never a conflict. Concurrent sessions share the lock; an obsolete
-proposal must be recomputed from the accepted revision. Project-learning updates compare both the
-content digest and publication sequence, so a later publication invalidates an older proposal even
-when the text is unchanged.
+`lineage`, or `evidence`. The store checks run first, in stages: the head, then note curation, then
+each proposed learning in turn. A learning check can return `curation` or `learning`, and the first
+learning that fails sets the reason. Once the store checks pass, the conflict names the first
+failure in the order `configuration`, `lineage`, `evidence`. When a disable, a session stop, or a
+call cancellation comes before the head is written, the commit reports cancellation, never a
+conflict. Concurrent sessions share the lock; an obsolete proposal must be recomputed from the
+accepted revision. Project-learning updates compare both the content digest and publication
+sequence, so a later publication invalidates an older proposal even when the text is unchanged.
 
 An accepted commit advances the project sequence and writes, in order, the revision file, the head
 naming it, each changed note view, the learning views, and the learning provenance, then marks view
