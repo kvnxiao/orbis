@@ -1238,7 +1238,7 @@ test.for([
   { kind: "a string", make: () => "tool call cancelled" },
   { kind: "a plain object", make: () => ({ kind: "host-cancel" }) },
 ])(
-  "a host abort with $kind during commit registration returns cancelled with that exact reason",
+  "a host abort with $kind during the commit's registration write returns cancelled with that exact reason and refreshes from that registration",
   async ({ make }, { createFixture }) => {
     const f = await createFixture();
     await f.session.prompt("Reason evidence.");
@@ -1259,14 +1259,30 @@ test.for([
     });
     const ctx = contextOf(f);
     await runtime.start(ctx);
-    const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "No\n" }), [
-      await sourceReference(f, "Reason evidence."),
-    ]);
+    const source = await sourceReference(f, "Reason evidence.");
+    const selected = committedId(
+      await runtime.commitProposal(
+        ctx,
+        runtime.captureProposal(ctx, noteContent({ "current-work.md": "Kept\n" }), [source]),
+      ),
+    );
+    const proposal = runtime.captureProposal(ctx, noteContent({ "journey.md": "No\n" }), [source]);
+    f.session.sessionManager.appendContextEdit(sourceEntry(f, "Reason evidence.").id, {
+      content: "Edited reason evidence.",
+    });
+    await f.session.prompt("A turn before the cancelled commit.");
+    expect(storageOf(runtime).registration).toMatchObject({ sources: 2, event: "commit" });
     armed.value = true;
     const result = await runtime.commitProposal({ ...ctx, signal: controller.signal }, proposal);
     expect(result.kind).toBe("cancelled");
     expect(result.kind === "cancelled" ? result.reason : undefined).toBe(controller.signal.reason);
-    expect(await (await storeFor(f)).currentHead()).toBeNull();
+    expect(await (await storeFor(f)).currentHead()).toBe(selected);
+    expect(storageOf(runtime).lineage.selected).toMatchObject({
+      revisionId: selected,
+      invalidNotes: ["current-work.md"],
+      invalidReason: "note-evidence",
+    });
+    expect(storageOf(runtime).registration).toMatchObject({ sources: 4, event: "commit" });
   },
 );
 

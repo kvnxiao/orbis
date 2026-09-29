@@ -19,6 +19,7 @@ import type {
 import { fromPromise, recoverFailure } from "../storage/files.ts";
 import { liveStorage } from "../storage/services.ts";
 import type { StorageServices } from "../storage/services.ts";
+import type { SourceRecord } from "../storage/sources.ts";
 import type { MemoryStore, StoreCommitResult } from "../storage/store.ts";
 import {
   activationEntryType,
@@ -33,12 +34,7 @@ import type { BranchConfiguration, SettingsLoad } from "./configuration.ts";
 import { Execution } from "./execution.ts";
 import type { StorageScope } from "./execution.ts";
 import { attachProject, refreshLineage, selectFromBranch } from "./lineage.ts";
-import type {
-  ProposalBinding,
-  ProposalContent,
-  RegistrationEvent,
-  RegistrationUpdate,
-} from "./lineage.ts";
+import type { ProposalBinding, ProposalContent, RegistrationEvent } from "./lineage.ts";
 import { resolveRoles } from "./models.ts";
 import {
   attachCommitted,
@@ -79,10 +75,18 @@ function sessionChange(): Error {
  * Own one extension instance's configuration, activation override, role resolutions, and storage
  * state, and expose them to Pi as Promise methods and plain values.
  *
- * Each state change runs inside the fiber that owns it after that fiber's last await, so work that
- * a later transition interrupted cannot apply a late result. Branch restoration accepts only
- * entries that match their schemas, and a configuration snapshot only when its budgets are valid
- * and its paths and trust state match the current session.
+ * State changes follow these rules, so work that a later transition interrupted or replaced cannot
+ * apply a late result:
+ *
+ * - Settings, role, and storage-startup results apply inside their owning fiber after the await that
+ *   produced them.
+ * - A commit publishes its source registration synchronously from the registry's cache-replacing
+ *   step, and only while the commit's storage scope is current.
+ * - Storage-session work re-reads current storage after each await and merges its result into it,
+ *   never into state read before the await, and changes nothing once its scope is not current.
+ *
+ * Branch restoration accepts only entries that match their schemas, and a configuration snapshot
+ * only when its budgets are valid and its paths and trust state match the current session.
  */
 export class MemoryRuntime {
   private readonly pi: Pick<ExtensionAPI, "appendEntry">;
@@ -234,11 +238,12 @@ export class MemoryRuntime {
    * - `conflict` from the checks under the lock.
    *
    * After `committed`, the branch-reference append, confirmation, and refresh run as work of the
-   * commit's original storage scope. After `conflict`, or `cancelled` once registration returned, a
-   * refresh with the registration's records runs as that work instead. The scope runs such work one
-   * at a time. A disable does not stop it, and a replacement or shutdown discards it without
-   * changing the result. A failure of that work records `storage.error` while the scope is current
-   * and leaves the result unchanged.
+   * commit's original storage scope. After `conflict`, or `cancelled` once the registration write
+   * succeeded, a refresh runs as that work instead; a rejected commit runs none. Each refresh reads
+   * the scope's newest completed registration when it starts; a registration that completes during
+   * the refresh waits for the next one. The scope runs such work one at a time. A disable does not
+   * stop it, and a replacement or shutdown discards it without changing the result. A failure of
+   * that work records `storage.error` while the scope is current and leaves the result unchanged.
    *
    * @throws Error when memory is disabled, storage is not open, or shutdown has started.
    * @throws The original error of a failed commit, including a failed view write after the head.
@@ -254,17 +259,21 @@ export class MemoryRuntime {
           ctx,
           () => this.binding(scope, session.store),
           proposal,
-          record,
+          (progress) => {
+            record(progress);
+            if (progress.stage === "registered") {
+              this.publishRegistration(scope, progress.records);
+            }
+          },
         ),
     );
     const progress = job.outcome;
     if (progress?.stage === "committed") {
-      await this.runStorageWork(scope, this.applyCommitted(scope, ctx, progress));
+      await this.runStorageWork(scope, this.applyCommitted(scope, ctx, progress.revisionId));
       return { kind: "committed", revisionId: progress.revisionId };
     }
     if (progress !== undefined) {
-      const update = { sources: progress.records, event: "commit" } as const;
-      await this.runStorageWork(scope, this.refreshIn(scope, ctx, update));
+      await this.runStorageWork(scope, this.refreshIn(scope, ctx));
     }
     return job.kind === "completed" ? job.value : { kind: "cancelled", reason: job.reason };
   }
@@ -370,12 +379,11 @@ export class MemoryRuntime {
       attachProject(this.pi, ctx.sessionManager.getBranch(), session.store);
       const lineage = yield* selectFromBranch(session.store, ctx);
       const sources = yield* session.sources.register(ctx.sessionManager);
+      const update = { sources, event };
       const binding = { ...this.binding(storage, session.store), lineage };
-      const refreshed = yield* refreshLineage(this.pi, session.store, ctx, binding, {
-        sources,
-        event,
-      });
-      this.storage = { state: "open", scope: storage, session, ...refreshed, error: undefined };
+      const refreshed = yield* refreshLineage(this.pi, session.store, ctx, binding, update);
+      const opened = { scope: storage, session, newestRegistration: update };
+      this.storage = { state: "open", ...opened, ...refreshed, error: undefined };
     },
     Effect.catchCause((cause) =>
       recoverFailure(cause, (failure) => {
@@ -388,28 +396,26 @@ export class MemoryRuntime {
     this: MemoryRuntime,
     scope: StorageScope,
     ctx: ExtensionContext,
-    committed: Extract<CommitProgress, { stage: "committed" }>,
+    revisionId: string,
   ): Effect.fn.Return<void, unknown, StorageServices> {
     const before = this.openIn(scope);
     if (before === undefined) {
       return;
     }
     const { session } = before;
-    const { revisionId } = committed;
     const lineage = yield* attachCommitted(this.pi, session, ctx, before.lineage, revisionId);
     const attached = this.openIn(scope);
     if (attached === undefined) {
       return;
     }
     this.storage = { ...attached, lineage };
-    yield* this.refreshIn(scope, ctx, { sources: committed.records, event: "commit" });
+    yield* this.refreshIn(scope, ctx);
   });
 
   private readonly refreshIn = Effect.fnUntraced(function* (
     this: MemoryRuntime,
     scope: StorageScope,
     ctx: ExtensionContext,
-    update: RegistrationUpdate,
   ): Effect.fn.Return<void, unknown, StorageServices> {
     const before = this.openIn(scope);
     if (before === undefined) {
@@ -417,6 +423,7 @@ export class MemoryRuntime {
     }
     const store = before.session.store;
     const binding = this.binding(scope, store);
+    const update = before.newestRegistration;
     const refreshed = yield* refreshLineage(this.pi, store, ctx, binding, update);
     const current = this.openIn(scope);
     if (current !== undefined) {
@@ -434,6 +441,13 @@ export class MemoryRuntime {
         this.storage = { ...open, error: describeError(error) };
       }
     });
+  }
+
+  private publishRegistration(scope: StorageScope, sources: readonly SourceRecord[]): void {
+    const open = this.openIn(scope);
+    if (open !== undefined) {
+      this.storage = { ...open, newestRegistration: { sources, event: "commit" } };
+    }
   }
 
   private proposalStorage(): OpenStorage {

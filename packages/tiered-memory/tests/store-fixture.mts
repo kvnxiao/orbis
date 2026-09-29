@@ -188,8 +188,9 @@ export class TestRegistry {
   async register(
     manager: SourceSessionManager,
     times?: Readonly<Record<string, SourceTime>>,
+    onRegistered?: (records: readonly SourceRecord[]) => void,
   ): Promise<readonly SourceRecord[]> {
-    return await this.store.run(this.registry.register(manager, times));
+    return await this.store.run(this.registry.register(manager, times, onRegistered));
   }
 
   async current(manager: SourceSessionManager): Promise<readonly SourceRecord[]> {

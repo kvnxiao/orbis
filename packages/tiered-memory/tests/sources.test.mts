@@ -13,7 +13,7 @@ import { expect } from "vitest";
 import { digest } from "../src/domain/canonical.ts";
 import { writeDurable } from "../src/storage/files.ts";
 import { registrySchema } from "../src/storage/sources.ts";
-import type { SourceSessionManager } from "../src/storage/sources.ts";
+import type { SourceRecord, SourceSessionManager } from "../src/storage/sources.ts";
 import type { Fixture } from "./pi-fixture.mts";
 import { interruptedOnly } from "./storage-harness.mts";
 import type { TestWrite } from "./storage-harness.mts";
@@ -437,7 +437,7 @@ test.for([
   },
 );
 
-test("an interruption during the registry write still replaces the cache once the write settles", async ({
+test("an interruption during the registry write still replaces the cache and calls onRegistered once the write settles", async ({
   createFixture,
 }) => {
   const f = await createFixture();
@@ -453,7 +453,12 @@ test("an interruption during the registry write still replaces the cache once th
     await writeDurable(path, contents);
   });
   armed = true;
-  const fiber = store.fork(sources.registry.register(f.session.sessionManager));
+  const registered: (readonly SourceRecord[])[] = [];
+  const fiber = store.fork(
+    sources.registry.register(f.session.sessionManager, {}, (records) => {
+      registered.push(records);
+    }),
+  );
   await entered.promise;
   fiber.interruptUnsafe();
   gate.resolve(undefined);
@@ -461,6 +466,50 @@ test("an interruption during the registry write still replaces the cache once th
   const onDisk = (await openRegistry(store)).sources.map((source) => source.reference);
   expect(onDisk.length).toBeGreaterThan(0);
   expect(sources.sources.map((source) => source.reference)).toEqual(onDisk);
+  expect(registered.map((records) => records.map((source) => source.reference))).toEqual([onDisk]);
+});
+
+test("onRegistered receives each successful registration's records once, in write order, as copies of the cache", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("First ordered source.");
+  await f.session.prompt("Second ordered source.");
+  const first = sourceEntry(f, "First ordered source.");
+  const second = sourceEntry(f, "Second ordered source.");
+  const entered = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  let armed = true;
+  const { registry: target } = await registryFor(f, async (path, contents) => {
+    if (armed && path.endsWith("sources.json")) {
+      armed = false;
+      entered.resolve(undefined);
+      await gate.promise;
+    }
+    await writeDurable(path, contents);
+  });
+  const registered: string[][] = [];
+  const received: (readonly SourceRecord[])[] = [];
+  const onRegistered = (records: readonly SourceRecord[]): void => {
+    received.push(records);
+    registered.push(records.map((source) => source.entryId));
+  };
+  const registeringFirst = target.register(managerWith(f, [first]), {}, onRegistered);
+  await entered.promise;
+  const registeringSecond = target.register(managerWith(f, [second]), {}, onRegistered);
+  gate.resolve(undefined);
+  const returned = await Promise.all([registeringFirst, registeringSecond]);
+  expect(registered).toEqual([[first.id], [second.id]]);
+  expect(received).toEqual(returned);
+  const [firstRecord] = received[0] ?? [];
+  if (firstRecord === undefined) {
+    throw new Error("Missing registered record.");
+  }
+  firstRecord.time.timezone = "Mars/Phobos";
+  expect(target.sources.find((source) => source.entryId === first.id)?.time).not.toHaveProperty(
+    "timezone",
+  );
+  expect(returned[0][0]?.time).not.toHaveProperty("timezone");
 });
 
 test("two registries on the same session directory register distinct records concurrently and both survive", async ({
@@ -551,7 +600,9 @@ test("a fresh sources.json that fails the cross-field checks rejects registratio
   expect(target.sources).toEqual(cached);
 });
 
-test("a failed registry write leaves the cache unchanged", async ({ createFixture }) => {
+test("a failed registry write leaves the cache unchanged and does not call onRegistered", async ({
+  createFixture,
+}) => {
   const f = await createFixture();
   await f.session.prompt("Registered once.");
   let armed = false;
@@ -566,8 +617,14 @@ test("a failed registry write leaves the cache unchanged", async ({ createFixtur
   const cached = target.sources;
   await f.session.prompt("Registered twice.");
   armed = true;
-  await expect(target.register(f.session.sessionManager)).rejects.toBe(failure);
+  let calls = 0;
+  await expect(
+    target.register(f.session.sessionManager, {}, () => {
+      calls++;
+    }),
+  ).rejects.toBe(failure);
   expect(target.sources).toEqual(cached);
+  expect(calls).toBe(0);
 });
 
 async function lineFrom(

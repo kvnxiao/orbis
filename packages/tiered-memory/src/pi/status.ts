@@ -22,8 +22,9 @@ import type { StorageSnapshot } from "./storage-session.ts";
  * `remainingTokens` is undefined while Pi has no context-usage estimate. `limits` is in `limitKeys`
  * order. `storage` is `unavailable` until the store opens, carrying the error that stopped opening;
  * `open` carries the canonical project root, the selected revision, the latest durable revision,
- * the counts cached by the latest registration with the event that produced them, and the error of
- * the latest failed refresh. `unavailable` lists the capabilities this version does not provide.
+ * the source count and event of the registration the latest refresh used, the curated-note count of
+ * the curation it inspected, and the error of the latest failed refresh. `unavailable` lists the
+ * capabilities this version does not provide.
  */
 export interface StatusReport {
   enabled: boolean;

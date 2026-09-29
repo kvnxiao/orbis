@@ -164,10 +164,12 @@ requests and requests to the acting model.
 
 Status identifies activation and its source, effective model and limit sources, model suspension
 reasons, settings paths, the memory project root, the selected and latest durable memory revisions,
-and storage errors. It reports the registered-source and curated-note counts cached by the latest
-registration, labeled with the event that produced them: `session_start`, `session_tree`, or
-`commit`. Status reads that cached state and writes no memory files. Observations, worker
-accounting, recall, and custom compaction remain unavailable.
+and storage errors. It reports the registered-source and curated-note counts from the latest storage
+refresh. A refresh runs at session start, after tree navigation, and after each commit attempt that
+registered its sources and then committed, conflicted, or was cancelled. Both counts are labeled
+with the event of the registration that refresh used: `session_start`, `session_tree`, or `commit`.
+Status reads that cached state and writes no memory files. Observations, worker accounting, recall,
+and custom compaction remain unavailable.
 
 In the terminal, commands display a notification. RPC clients receive Pi's `extension_ui_request`
 event with `method: "notify"`, `notifyType: "info"`, and the report in `message`. Each report is

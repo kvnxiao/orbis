@@ -102,8 +102,9 @@ export interface LineageState {
 export type RegistrationEvent = "session_start" | "session_tree" | "commit";
 
 /**
- * Cache the source and curated-note counts of the latest registration, which status reports without
- * registering again.
+ * Cache the counts the latest refresh used, which status reports without registering again: the
+ * source count and event of the registration that refresh read, and the curated-note count of the
+ * curation it inspected.
  */
 export interface Registration {
   sources: number;
@@ -111,7 +112,10 @@ export interface Registration {
   event: RegistrationEvent;
 }
 
-/** Carry the records one source registration returned and the event that ran it. */
+/**
+ * Carry the records one completed source registration returned and the event that ran it; open
+ * storage keeps the newest one for the next refresh.
+ */
 export interface RegistrationUpdate {
   sources: readonly SourceRecord[];
   event: RegistrationEvent;
@@ -428,8 +432,9 @@ export const reconcilePending = Effect.fnUntraced(function* (
  * Recompute the selected revision's validity, the latest head, and the pending reference from
  * registered sources and curation.
  *
- * `sources` are the records of the latest registration, whose count and curated-note count are
- * cached under `event`. Inspecting curation takes the project lock.
+ * `update` is the newest completed registration when the refresh starts; its source count and
+ * `event`, with the count of the curation this refresh inspects, become the cached `registration`.
+ * Inspecting curation takes the project lock.
  *
  * @throws Error when a curation, head, or revision record is damaged.
  * @throws The failures of `MemoryStore.inspectCuration` and `reconcilePending`.

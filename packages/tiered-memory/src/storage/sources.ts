@@ -241,6 +241,13 @@ export class SourceRegistry {
    *
    * The lock is not reentrant, so callers do not hold it.
    *
+   * `onRegistered` receives a copy of the returned records synchronously in the uninterruptible
+   * step that replaces the cache, under the lock, and must not throw:
+   *
+   * - It runs once per successful write, in write order.
+   * - It still runs when an interruption follows the write.
+   * - It does not run after a failed write.
+   *
    * @throws Error when `manager` belongs to another session or project root, before locking.
    * @throws Error when tool-call or tool-result metadata is malformed, before anything is written.
    * @throws Error naming the path when the fresh `sources.json` is not JSON, fails
@@ -252,9 +259,10 @@ export class SourceRegistry {
   register(
     manager: SourceSessionManager,
     times: Readonly<Record<string, SourceTime>> = {},
+    onRegistered?: (records: readonly SourceRecord[]) => void,
   ): Effect.Effect<readonly SourceRecord[], unknown, StorageServices> {
     return this.assertManager(manager).pipe(
-      Effect.andThen(this.store.locked(this.mergeLocked(manager, times))),
+      Effect.andThen(this.store.locked(this.mergeLocked(manager, times, onRegistered))),
     );
   }
 
@@ -262,6 +270,7 @@ export class SourceRegistry {
     this: SourceRegistry,
     manager: SourceSessionManager,
     times: Readonly<Record<string, SourceTime>>,
+    onRegistered: ((records: readonly SourceRecord[]) => void) | undefined,
   ): Effect.fn.Return<readonly SourceRecord[], unknown, DurableWrites> {
     const fresh = yield* readRegistry(this.store);
     const records = this.recordsFor(fresh, manager.getBranch(), times);
@@ -275,6 +284,7 @@ export class SourceRegistry {
         Effect.tap(() =>
           Effect.sync(() => {
             this.registry = next;
+            onRegistered?.(structuredClone(records));
           }),
         ),
       ),
