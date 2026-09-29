@@ -24,9 +24,9 @@ serializes storage writers across sessions and processes. It rereads `sources.js
 branch's sources into it, and keeps the records of entries absent from the branch, so two Pi
 processes that resume the same session keep each other's records. A source's recorded time always
 comes from its Pi entry. Its event time and timezone on disk stay unless the registration supplies
-new time context for it, which replaces both. Status reports the source and curated-note counts from
-the latest registration, labeled with the event that produced them, and does not register again.
-Commit validation projects the current effective sources without changing `sources.json`.
+new time context for it, which replaces both. A registration completes when its `sources.json` write
+succeeds and replaces the registry's cached records under the lock. Commit validation projects the
+current effective sources without changing `sources.json`.
 
 Storage requires a persisted Pi session. Pi assigns a persisted session its file path when the
 session is created, before the first write. A session that Pi keeps only in memory has no session
@@ -124,23 +124,34 @@ session change, or shutdown discards it, and the next storage startup reconciles
 branch as described under [Recovery](#recovery). If recording the reference fails, the commit still
 reports committed, and status reports the storage error.
 
-A commit that registered its sources refreshes storage state from them once it commits, conflicts,
-or is cancelled; a committed commit refreshes after recording its reference. A commit that rejects
-does not refresh. The refresh:
+Each storage session keeps its newest completed registration, starting with the one from session
+start or tree navigation. A commit that registered its sources refreshes storage state once it
+commits, conflicts, or is cancelled; a committed commit refreshes after recording its reference. A
+commit that rejects does not refresh, and its completed registration stays available to the next
+refresh. Each refresh reads the storage session's newest completed registration once, when it
+starts, so an older attempt's refresh never replaces validity or counts computed from a newer
+registration. A registration that completes during a refresh waits for the next refresh. The
+refresh:
 
 - Reads the latest head, so a proposal captured afterward expects the accepted revision.
-- Rechecks the selected revision's notes against the sources this commit registered and the current
-  curation.
+- Rechecks the selected revision's notes against the sources of the newest completed registration
+  and the current curation.
 - Reconciles the head with the branch as described under [Recovery](#recovery), which can attach a
   head whose reference is missing from the branch.
-- Updates the latest status counts from this commit's registration, labeled `commit`.
+- Updates the counts that status reports without registering again: the source count of that
+  registration, labeled `commit`, and the curated-note count of the curation it inspected.
 
 Refreshes and reference recording for one storage session run one at a time, so none of them
-overwrites lineage state that another changes while it runs. Disabling memory or cancelling the call
-does not stop a refresh. Tree navigation, a session change, or shutdown discards it. If a refresh
-fails, the commit keeps its result, and status reports the storage error. A cancellation that
-arrives while the commit's registration writes `sources.json` stops the commit before it records
-that registration, so status keeps the previous counts until the next refresh.
+overwrites lineage state that another changes while it runs. Each merges its result into the storage
+state current when it finishes, so a registration that completes while it runs is kept. Disabling
+memory or cancelling the call does not stop a refresh. Tree navigation, a session change, or
+shutdown discards it. If a refresh fails, the commit keeps its result, and status reports the
+storage error.
+
+A disable or call cancellation that arrives while the commit's registration writes `sources.json`
+lets that write finish. If the write succeeds, the registration completes, and the commit returns
+cancelled and refreshes. If the write fails, the commit rejects with the write's error, even when
+the cancellation races the failure, and does not refresh.
 
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected

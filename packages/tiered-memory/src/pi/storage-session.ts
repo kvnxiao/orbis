@@ -5,7 +5,7 @@ import type { StorageServices } from "../storage/services.ts";
 import { SourceRegistry } from "../storage/sources.ts";
 import { canonicalProjectRoot, MemoryStore } from "../storage/store.ts";
 import type { StorageScope } from "./execution.ts";
-import type { LineageState, Registration } from "./lineage.ts";
+import type { LineageState, Registration, RegistrationUpdate } from "./lineage.ts";
 
 /** Carry the store and source registry that one storage scope opened. */
 export interface StorageSession {
@@ -18,8 +18,9 @@ export interface StorageSession {
  *
  * `stopped` holds before the first start and after shutdown; `opening` lasts from start until the
  * store and source registry are open; `failed` keeps the error that stopped opening; `open` carries
- * the canonical project root, the lineage state, the head seen by the latest refresh, the counts of
- * the latest registration, and the error of the latest failed refresh.
+ * the canonical project root, the lineage state, the head seen by the latest refresh, the source
+ * count and event of the registration that refresh used, the curated-note count of the curation it
+ * inspected, and the error of the latest failed refresh.
  */
 export type StorageSnapshot =
   | { state: "stopped" }
@@ -34,10 +35,14 @@ export type StorageSnapshot =
       error: string | undefined;
     };
 
-/** Carry open storage with the scope that owns it and the session it opened. */
+/**
+ * Carry open storage with the scope that owns it, the session it opened, and the newest completed
+ * source registration of that session, which the next refresh uses.
+ */
 export type OpenStorage = Omit<Extract<StorageSnapshot, { state: "open" }>, "projectRoot"> & {
   scope: StorageScope;
   session: StorageSession;
+  newestRegistration: RegistrationUpdate;
 };
 
 /** Carry the runtime's storage state; open storage keeps its scope and session. */
@@ -46,14 +51,14 @@ export type StorageState =
   | OpenStorage;
 
 /**
- * Return a copy of `storage` that names the canonical project root instead of the scope and
- * session.
+ * Return a copy of `storage` that names the canonical project root instead of the scope, session,
+ * and newest registration.
  */
 export function storageSnapshot(storage: StorageState): StorageSnapshot {
   if (storage.state !== "open") {
     return structuredClone(storage);
   }
-  const { scope: _scope, session, ...state } = storage;
+  const { scope: _scope, session, newestRegistration: _newest, ...state } = storage;
   return structuredClone({ ...state, projectRoot: session.store.projectRoot });
 }
 

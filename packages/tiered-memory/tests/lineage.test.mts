@@ -681,9 +681,10 @@ test("an abort of ctx.signal during commit returns cancelled with that reason, n
     this: SourceRegistry,
     manager,
     times,
+    onRegistered,
   ) {
     controller.abort(reason);
-    return this.register(manager, times);
+    return this.register(manager, times, onRegistered);
   });
   onTestFinished(() => {
     register.mockRestore();
@@ -712,8 +713,9 @@ test("shutdown right after a commit's source registration returns cancelled with
     this: SourceRegistry,
     manager,
     times,
+    onRegistered,
   ) {
-    return register.call(this, manager, times).pipe(
+    return register.call(this, manager, times, onRegistered).pipe(
       Effect.tap(() =>
         Effect.sync(() => {
           shutdown = runtime.shutdown();

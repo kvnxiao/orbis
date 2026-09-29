@@ -19,12 +19,12 @@ import type { LineageState, ProposalBinding, ProposalContent } from "./lineage.t
 import type { StorageSession } from "./storage-session.ts";
 
 /**
- * Report how far a commit got: `registered` carries the records its registration returned, and
- * `committed` adds the revision id of the durable head.
+ * Report how far a commit got: `registered` carries the records its source registration returned,
+ * and `committed` carries the revision id of the durable head.
  */
 export type CommitProgress =
   | { stage: "registered"; records: readonly SourceRecord[] }
-  | { stage: "committed"; records: readonly SourceRecord[]; revisionId: string };
+  | { stage: "committed"; revisionId: string };
 
 /**
  * Capture a proposal bound to the branch leaf, its evidence, the configuration, and the latest
@@ -111,9 +111,10 @@ const evidenceStillValid = Effect.fnUntraced(function* (
  *
  * Registration writes `sources.json` before `MemoryStore.commit` takes the project lock. The
  * commit's `validate` projects current effective sources without writing and compares them and
- * `binding()` with the captured proposal. `record` runs synchronously with `registered` as soon as
- * registration returns and with `committed` as soon as the head is durable, so a caller interrupted
- * after either point still learns that progress.
+ * `binding()` with the captured proposal. `record` runs synchronously with `registered` from
+ * `SourceRegistry.register`'s `onRegistered`, in the step that replaces the registry cache. It runs
+ * with `committed` as soon as the head is durable. A caller interrupted after either write
+ * therefore still learns that progress.
  *
  * @throws Error when the proposal fails `validateProposal`.
  * @throws The failures of `SourceRegistry.register` and `MemoryStore.commit`, unchanged.
@@ -126,8 +127,9 @@ export const commitProposal = Effect.fnUntraced(function* (
   record: (progress: CommitProgress) => void,
 ): Effect.fn.Return<StoreCommitResult, unknown, StorageServices> {
   const captured = validateProposal(structuredClone(proposal));
-  const records = yield* storage.sources.register(ctx.sessionManager);
-  record({ stage: "registered", records });
+  const records = yield* storage.sources.register(ctx.sessionManager, {}, (registered) => {
+    record({ stage: "registered", records: registered });
+  });
   const evidenceValid = yield* evidenceStillValid(storage, ctx, captured, records);
   const validate: Effect.Effect<ConflictReason | undefined, unknown> = Effect.gen(function* () {
     const stillValid = evidenceValid && (yield* evidenceStillValid(storage, ctx, captured));
@@ -143,7 +145,7 @@ export const commitProposal = Effect.fnUntraced(function* (
   return yield* storage.store.commit(captured, {
     validate,
     onHeadDurable: (revisionId) => {
-      record({ stage: "committed", records, revisionId });
+      record({ stage: "committed", revisionId });
     },
   });
 });
