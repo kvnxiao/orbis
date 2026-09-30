@@ -47,6 +47,45 @@ export function stableVersions(versions: string[]): string[] {
     });
 }
 
+function effectRcVersions(versions: string[]): string[] {
+  return versions
+    .filter((version) => /^4\.0\.0-rc\.(0|[1-9]\d*)$/.test(version))
+    .toSorted((a, b) => {
+      const left = BigInt(a.slice("4.0.0-rc.".length));
+      const right = BigInt(b.slice("4.0.0-rc.".length));
+      if (left === right) {
+        return 0;
+      }
+      return left < right ? 1 : -1;
+    });
+}
+
+function effect4Versions(versions: string[]): string[] {
+  return [
+    ...stableVersions(versions).filter((version) => version.startsWith("4.")),
+    ...effectRcVersions(versions),
+  ];
+}
+
+function eligibleVersion(
+  versions: string[],
+  times: Record<string, string>,
+  now: number,
+  ageMinutes: number,
+): string | null {
+  assert.ok(
+    Number.isFinite(now) && Number.isFinite(ageMinutes) && ageMinutes >= 0,
+    "Invalid release cutoff",
+  );
+  const cutoff = now - ageMinutes * 60_000;
+  return (
+    versions.find((version) => {
+      const published = Date.parse(times[version] ?? "");
+      return Number.isFinite(published) && published <= cutoff;
+    }) ?? null
+  );
+}
+
 export function selectRelease(
   times: Record<string, string>,
   now: number,
@@ -54,23 +93,16 @@ export function selectRelease(
   major?: number,
 ): string | null {
   assert.ok(
-    Number.isFinite(now) && Number.isFinite(ageMinutes) && ageMinutes >= 0,
-    "Invalid release cutoff",
-  );
-  assert.ok(
     major === undefined || (Number.isInteger(major) && major >= 0),
     "Invalid major version",
   );
-  const cutoff = now - ageMinutes * 60_000;
-  return (
-    stableVersions(Object.keys(times)).find((version) => {
-      const published = Date.parse(times[version] ?? "");
-      return (
-        Number.isFinite(published) &&
-        published <= cutoff &&
-        (major === undefined || Number(version.split(".")[0]) === major)
-      );
-    }) ?? null
+  return eligibleVersion(
+    stableVersions(Object.keys(times)).filter(
+      (version) => major === undefined || Number(version.split(".")[0]) === major,
+    ),
+    times,
+    now,
+    ageMinutes,
   );
 }
 
@@ -82,7 +114,11 @@ export function selectPackageRelease(
   exclusions: string[],
   major?: number,
 ): string | null {
-  return selectRelease(times, now, exclusions.includes(packageName) ? 0 : ageMinutes, major);
+  const minimumAge = exclusions.includes(packageName) ? 0 : ageMinutes;
+  if (packageName === "effect") {
+    return eligibleVersion(effect4Versions(Object.keys(times)), times, now, minimumAge);
+  }
+  return selectRelease(times, now, minimumAge, major);
 }
 
 export function collectDependencies(
@@ -334,6 +370,7 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
     );
     const major =
       name === "@types/node" ? Number(state.node.runtimeMinimum.split(".")[0]) : undefined;
+    const releaseTrack = name === "effect" ? "effect4" : "stable";
     const selected = selectPackageRelease(times, now, 1440, name, exclusions, major);
     const details =
       selected === null
@@ -353,6 +390,11 @@ async function releases(state: Awaited<ReturnType<typeof inventory>>) {
     return {
       name,
       current: state.dependencies.filter((item) => item.name === name),
+      releaseTrack,
+      latestOnTrack:
+        (releaseTrack === "effect4"
+          ? effect4Versions(Object.keys(times))
+          : stableVersions(Object.keys(times)))[0] ?? null,
       latestStable: stableVersions(Object.keys(times))[0] ?? null,
       candidate: selected,
       published: selected === null ? null : times[selected],

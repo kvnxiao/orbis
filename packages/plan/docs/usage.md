@@ -180,7 +180,8 @@ plan; use the visible submission controls.
 Each generated option retains its current notes. Only the selected answer and its current notes
 enter the submission preview. Clarification returns to the owning agent with that selected context
 marked unsubmitted; unfinished custom text, other options' drafts, and unsent clarification text
-stay local. Tool results exclude private drafts before truncation or writing result files.
+stay local. Tool text and structured results exclude private drafts before truncation or writing
+result files.
 
 In question fields, Shift+Enter and Ctrl+J insert newlines, and Tab/Shift+Tab navigate active
 questions and the CTA. Other and clarification text appear directly after their row labels without
@@ -282,7 +283,7 @@ The defaults are shown above. Symbols can be `unicode` or `emoji`. Border styles
 `square`, `double`, `ascii`, and `none`; None omits the outer frame while retaining modal content
 and CTA dividers. Hints add their own divider only when enabled. Appearance settings apply to the
 outer Plan frame and Plan-owned dividers. Pi's native editor decorations retain their own style. The
-menu uses Pi's `SettingsList`; Pi 0.87.1 does not expose an extension API for adding rows to native
+menu uses Pi's `SettingsList`; Pi 0.99.1 does not expose an extension API for adding rows to native
 `/settings`.
 
 The Planning shortcut field accepts a Pi special or modified key, such as `shift+tab` or

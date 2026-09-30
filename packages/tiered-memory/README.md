@@ -6,7 +6,7 @@ Memory extraction, consolidation, recall, and custom compaction are unavailable 
 
 ## Install
 
-Requires Node.js `>=22.19.0`. Tested with Pi `0.87.1`.
+Requires Node.js `>=22.19.0`. Tested with Pi `0.99.1`.
 
 ```sh
 pi install npm:@orbis/tiered-memory

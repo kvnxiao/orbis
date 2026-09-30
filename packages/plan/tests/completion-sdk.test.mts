@@ -436,6 +436,48 @@ function approve() {
   });
 }
 
+test("Plan stays declared to the model while nested calls cannot reach its interactions", async ({
+  onTestFinished,
+}) => {
+  const f = await fixture();
+  onTestFinished(f.dispose);
+  const session = f.runtime.session;
+  const names = ["plan_open", "plan_round", "plan_review", "plan_implement"];
+  expect(session.getActiveToolNames()).toEqual(expect.arrayContaining(names));
+  for (const name of names) {
+    expect(session.getCallableToolNames()).not.toContain(name);
+  }
+  await session.prompt("Plan the change");
+  expect(
+    session.sessionManager
+      .getBranch()
+      .some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "toolResult" &&
+          entry.message.toolName === "plan_open" &&
+          !entry.message.isError,
+      ),
+  ).toBe(true);
+  const branchBefore = session.sessionManager.getBranch();
+  const nested = session.extensionRunner.createToolContext("plan-parent", undefined);
+  const results = await Promise.all(names.map(async (name) => await nested.executeTool(name, {})));
+  for (const [index, result] of results.entries()) {
+    const name = names[index];
+    if (name === undefined) {
+      throw new Error("Missing expected Plan tool name");
+    }
+    expect(result).toMatchObject({
+      isError: true,
+      toolCall: { name },
+    });
+    expect(JSON.stringify(result.result.content)).toContain(`Tool ${name} not found`);
+  }
+  expect(session.sessionManager.getBranch()).toEqual(branchBefore);
+  expect(f.approvals).toEqual([]);
+  expect(f.launches).toEqual([]);
+});
+
 test("host interruption after approval cancels handoff during mixed-batch continuation", async ({
   onTestFinished,
 }) => {

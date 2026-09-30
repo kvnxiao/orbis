@@ -372,7 +372,7 @@ test("Plan composer submits ordinary text while Default and noninteractive sourc
   if (loaded === undefined) {
     throw new Error("Missing extension");
   }
-  const emit = async (event: ExtensionEvent, ctx = f.ctx) => {
+  const emit = async (event: ExtensionEvent, ctx: ExtensionContext = f.ctx) => {
     const results: unknown[] = [];
     for (const handler of loaded.handlers.get(event.type) ?? []) {
       // oxlint-disable-next-line no-await-in-loop -- Pi invokes extension handlers in registration order.

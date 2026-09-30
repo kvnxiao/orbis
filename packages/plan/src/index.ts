@@ -10,7 +10,7 @@ import { installPlanComposer } from "./pi/composer.ts";
 import { planningInstructions, planCommandDescription } from "./pi/instructions.ts";
 import { PlanRuntime } from "./pi/runtime.ts";
 import { showPlanSettings } from "./pi/settings-menu.ts";
-import { toolResult } from "./pi/tool-result.ts";
+import { planToolOutputSchema, toolResult } from "./pi/tool-result.ts";
 
 const openSchema = Type.Object(
   {
@@ -124,6 +124,7 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.registerTool({
     name: "plan_implement",
+    exposure: "model-only",
     label: "Implement approved plan",
     description:
       "On explicit user intent, implement an approved plan here, implement it in a fresh session, or show the implementation options again. Use action here, new, or options respectively. These are intent examples, not exact phrases. Do not invoke for quoted examples or feature questions. When the reference is unambiguous, supply planId; otherwise omit it for explicit saved-plan selection. The implementation action authorizes execution without another confirmation. A new launch with action new replaces the Pi session. Ordinary repeats reuse the recorded launch, including requests for another destination. Only an explicit user restart request permits restart: true. Approval alone does not authorize execution.",
@@ -139,6 +140,7 @@ export default function extension(pi: ExtensionAPI): void {
       },
       { additionalProperties: false },
     ),
+    outputSchema: planToolOutputSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       return await toolResult(
@@ -148,10 +150,12 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.registerTool({
     name: "plan_review",
+    exposure: "model-only",
     label: "Review plan",
     description:
       "Present complete Markdown for explicit user review. Retry with the original expectedRevision and exact arguments to retrieve a completed result; use plan_open to explicitly reopen review. Include objective, constraints, decisions, implementation approach, verification and unresolved assumptions. Only the user can approve this exact revision. Return feedback to revise the plan; approval does not authorize implementation.",
     parameters: reviewSchema,
+    outputSchema: planToolOutputSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const result = runtime.review(ctx, params, signal);
@@ -160,6 +164,7 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.registerTool({
     name: "plan_open",
+    exposure: "model-only",
     label: "Open planning",
     promptGuidelines: [
       "When the user explicitly asks to resume planning or plan review, call plan_open with replace: false before claiming saved work is unavailable. A previous cancelled result ends that interaction and preserves saved unfinished work. Do not resume for unrelated messages or replace modal approval with chat approval.",
@@ -167,6 +172,7 @@ export default function extension(pi: ExtensionAPI): void {
     description:
       "Create or reopen collaborative planning, questions, or review without starting implementation. Invoke on explicit user intent, such as enter plan mode, help me plan, resume the plan, or continue planning. These are examples, not exact phrases. Do not activate for quoted examples, questions about this feature, or unrelated conversation. Reopen pending input through this tool; preserve existing drafts. Ambiguous saved plans require user selection. Replacement requires confirmation and a stable requestId. Reuse the requestId and original arguments for retries; use a new requestId for a new replacement request.",
     parameters: openSchema,
+    outputSchema: planToolOutputSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const result = runtime.requestOpen(
@@ -181,9 +187,11 @@ export default function extension(pi: ExtensionAPI): void {
   });
   pi.registerTool({
     name: "plan_round",
+    exposure: "model-only",
     label: "Planning questions",
     description: `Present the researched, answerable frontier. Retry with the original expectedRevision and exact arguments to retrieve a completed result; use plan_open to explicitly reopen pending input. ${questionGuidance} Each option needs id, label, and explanation. Prerequisites must reference previously submitted decision IDs; defer dependent questions until those decisions are submitted. Questions in the same round and draft answers do not satisfy prerequisites. Use stable identities and expectedRevision=0 for a new round. Reuse the round identity and returned revision for clarification updates, include clarification: { id, response } for the pending request, and send the complete active questions. Clarification can steer options, recommendations, and membership. Preserve the question ID for the same decision; use a new ID for a different decision. Explicitly retire omitted active questions with retire: [{ id, status: 'withdrawn' | 'deferred', reason }]. To retire every active question, send questions: [] with retire entries. Deferred questions keep their IDs when they return. Drafts remain unsubmitted until explicit whole-round submission.`,
     parameters: roundSchema,
+    outputSchema: planToolOutputSchema,
     executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const result = runtime.round(ctx, params, signal);

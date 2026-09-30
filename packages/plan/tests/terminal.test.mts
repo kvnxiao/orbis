@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 
-import { initTheme, Theme } from "@earendil-works/pi-coding-agent";
+import {
+  getMarkdownTheme,
+  getSelectListTheme,
+  initTheme,
+  Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   getKeybindings,
@@ -586,13 +591,12 @@ test("brainstorm symbols and input colors distinguish the field roles", () => {
   expect(text(f.view, 140)).toContain("➡️ Recommendation:");
   expect(text(f.view, 140)).not.toContain("💡");
   keys(f.view, "Notes", escape, down, down, "Answer");
-  expect(f.view.render(140).join("\n")).toContain("\x1b[38;2;181;189;104m ");
   keys(f.view, enter, down, "Question");
   keys(f.view, escape);
   const rendered = f.view.render(140).join("\n");
-  expect(rendered).toContain("\x1b[38;2;181;189;104m Answer\x1b[39m");
-  expect(rendered).toContain("\x1b[38;2;129;162;190m Question\x1b[39m");
-  expect(rendered).toContain("\x1b[38;2;138;190;183m [notes: Notes]\x1b[39m");
+  expect(rendered).toContain(getMarkdownTheme().codeBlock(" Answer"));
+  expect(rendered).toContain(getMarkdownTheme().link(" Question"));
+  expect(rendered).toContain(getSelectListTheme().selectedText(" [notes: Notes]"));
 });
 
 test.for([
@@ -617,7 +621,7 @@ test.for([
     const context = plain.indexOf("Known é 中文 context");
     expect(plain[context + 1]).toBe("");
     expect(plain[context + 2]).toContain("A. Local");
-    expect(lines).toContain(`\x1b[38;2;128;128;128m${glyph.repeat(80)}\x1b[39m`);
+    expect(lines).toContain(getMarkdownTheme().hr(glyph.repeat(80)));
     keys(f.view, "\x1bOP");
     const hidden = f.view.render(80).map((line) => stripTerminalSequences(line).trimEnd());
     expect(hidden.filter((line) => line === glyph.repeat(80))).toHaveLength(2);
@@ -659,7 +663,7 @@ test("option labels are bold before selection and selected rows retain full bold
   const rendered = f.view.render(140).join("\n");
   expect(rendered.split("\n").find((line) => line.includes("A. Local"))).toContain("\x1b[1m");
   expect(rendered).toContain(
-    "\x1b[38;2;128;128;128m\x1b[1m  [ Review answers and submit ]\x1b[22m\x1b[39m",
+    getSelectListTheme().description(getMarkdownTheme().bold("  [ Review answers and submit ]")),
   );
 });
 

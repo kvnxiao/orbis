@@ -64,6 +64,75 @@ test("package-name exclusions bypass release-age checks but exact-version exclus
   assert.equal(selectPackageRelease(times, now, 1440, "other", ["other@0.87.0"]), "0.86.0");
 });
 
+test("prefers the newest eligible stable Effect 4 release over release candidates", () => {
+  const now = Date.parse("2026-09-29T12:00:00Z");
+  const old = "2026-09-20T00:00:00Z";
+  const times = {
+    "3.99.0": old,
+    "4.9.9": old,
+    "4.10.0": "2026-09-28T12:00:00Z",
+    "4.11.0": "2026-09-28T12:00:01Z",
+    "4.12.0": "invalid",
+    "4.13.0": "2026-09-30T00:00:00Z",
+    "4.0.0-rc.999": old,
+    "4.1.0-rc.1000": old,
+    "4.0.0-beta.1001": old,
+    "5.0.0": old,
+    "0.0.0-snapshot-test": old,
+  };
+
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", []), "4.10.0");
+  assert.equal(selectPackageRelease(times, now, 1440, "other", []), "5.0.0");
+});
+
+test("falls back to eligible Effect 4 release candidates while stable releases are too young", () => {
+  const now = Date.parse("2026-09-29T12:00:00Z");
+  const times = {
+    "3.22.2": "2026-09-01T00:00:00Z",
+    "4.0.0-beta.200": "2026-09-01T00:00:00Z",
+    "4.0.0-rc.9": "2026-09-20T00:00:00Z",
+    "4.0.0-rc.10": "2026-09-28T12:00:00Z",
+    "4.0.0-rc.11": "2026-09-28T12:00:01Z",
+    "4.0.0-rc.12": "invalid",
+    "4.0.0-rc.13": "2026-09-30T00:00:00Z",
+    "4.0.0-rc.01": "2026-09-20T00:00:00Z",
+    "4.0.1-rc.14": "2026-09-20T00:00:00Z",
+    "4.0.0": "2026-09-28T12:00:01Z",
+    "4.1.0": "invalid",
+    "4.2.0": "2026-09-30T00:00:00Z",
+    "5.0.0": "2026-09-20T00:00:00Z",
+    "5.0.0-rc.15": "2026-09-20T00:00:00Z",
+    "0.0.0-snapshot-test": "2026-09-20T00:00:00Z",
+  };
+
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", []), "4.0.0-rc.10");
+  assert.equal(
+    selectPackageRelease(times, now, 1440, "effect", ["effect@4.0.0-rc.13"]),
+    "4.0.0-rc.10",
+  );
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", ["effect@4.0.0"]), "4.0.0-rc.10");
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", ["effect"]), "4.0.0");
+  assert.equal(selectPackageRelease(times, now, 1440, "other", []), "5.0.0");
+});
+
+test("does not fall back to another Effect track when no Effect 4 release is eligible", () => {
+  const now = Date.parse("2026-09-29T12:00:00Z");
+  const times = {
+    "3.22.2": "2026-09-01T00:00:00Z",
+    "4.0.0": "2026-09-28T12:00:01Z",
+    "4.1.0": "malformed",
+    "4.2.0": "2026-09-30T00:00:00Z",
+    "4.0.0-beta.200": "2026-09-01T00:00:00Z",
+    "4.0.0-rc.118": "2026-09-28T12:00:01Z",
+    "4.0.0-rc.119": "malformed",
+    "5.0.0": "2026-09-01T00:00:00Z",
+    "5.0.0-rc.1": "2026-09-01T00:00:00Z",
+  };
+
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", []), null);
+  assert.equal(selectPackageRelease(times, now, 1440, "effect", ["effect"]), "4.0.0");
+});
+
 test("rejects invalid release cutoffs and major versions", () => {
   for (const [now, age, major] of [
     [NaN, 1440, 22],

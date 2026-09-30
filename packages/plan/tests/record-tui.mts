@@ -125,6 +125,7 @@ function capture(
     setTitle: noop,
     setProgress: noop,
   };
+  const rows = () => height - 2;
   const create = () => {
     closed = false;
     const editor = new Editor(new TuiMainScreen(terminal), {
@@ -134,7 +135,6 @@ function capture(
     const done = () => {
       closed = true;
     };
-    const rows = () => height - 2;
     if (kind === "round") {
       const revision = state.round?.revision ?? 0;
       return new TerminalRound({

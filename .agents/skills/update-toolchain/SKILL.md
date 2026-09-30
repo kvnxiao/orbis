@@ -2,8 +2,9 @@
 name: update-toolchain
 description:
   Update the Orbis workspace to current stable Node.js, pnpm, TypeScript, Pi, and development
-  dependencies. Use when refreshing the toolchain or adopting newly supported compiler and
-  type-aware lint checks while preserving source-only Pi packages.
+  dependencies, including the approved Effect v4 stable and release-candidate tracks. Use when
+  refreshing the toolchain or adopting newly supported compiler and type-aware lint checks while
+  preserving source-only Pi packages.
 ---
 
 # Update the Orbis toolchain
@@ -37,10 +38,18 @@ Release discovery queries the configured npm registries through pnpm and the
 numerically and restricts `@types/node` to the declared runtime generation. It excludes npm releases
 younger than 1440 minutes at the report's `asOf` time unless the package name exactly matches a
 release-age exclusion. For an exact package-name exclusion, release discovery can select the newest
-stable release immediately. It considers versions still listed in registry metadata, includes unused
-catalog entries, and reports exact-version exclusions eligible for removal. Other exclusions require
-review. Local references appear in `localDependencies`; aliases, Git sources, and URLs appear in
-`manualDependencies` and require source-specific review.
+stable release immediately. Effect follows the approved v4 policy under the same release-age rule:
+
+- Prefer the newest eligible stable `4.x` release, including migration from an RC.
+- Until a stable v4 release is eligible, select the highest eligible numeric `4.0.0-rc.N` release.
+- Report no candidate when neither is eligible. Exclude other major versions, betas, snapshots, and
+  other preview tracks.
+
+Report the Effect v4 policy explicitly. Other dependencies remain stable-only. Release discovery
+considers versions still listed in registry metadata, includes unused catalog entries, and reports
+exact-version exclusions eligible for removal. Other exclusions require review. Local references
+appear in `localDependencies`; aliases, Git sources, and URLs appear in `manualDependencies` and
+require source-specific review.
 
 npm candidates either satisfy the release-age cutoff or match an exact package-name exclusion;
 compatibility still requires review. The report includes dist-tags, engines, peers, dependencies,
@@ -66,6 +75,9 @@ versions for failed queries.
   error-handling checks. Check Oxlint and `oxlint-tsgolint` compatibility. Run
   `pnpm exec tsc --noEmit --skipLibCheck false`. When dependency declarations pass, remove
   `skipLibCheck`; otherwise record the concrete declaration errors that require it.
+- Review the selected Effect release notes and exact source. After installation, read its
+  `AGENTS.md` and relevant guidance under the Effect integration rules. Verify memory cancellation,
+  scope teardown, durable writes, and independent packed loading on both supported runtimes.
 - Before changing syntax, APIs, `target`, or `lib`, test the supported runtimes and Pi loader.
   Preserve `noEmit`, `erasableSyntaxOnly`, `.mts` scripts/tests/ configuration, source publication,
   and independent package installation. Fix findings without blanket suppressions or disabling
@@ -73,7 +85,32 @@ versions for failed queries.
 
 When a candidate is incompatible, select the newest compatible version permitted by that package's
 release-age rule, record the blocker, and continue independent updates. Query metadata for any
-fallback version before selecting it. Previews require a developer request.
+fallback version before selecting it. Routine Effect v4 RC updates and migration to stable v4 are
+already approved, subject to compatibility checks. Other Effect major versions and preview tracks
+require a developer request; do not broaden the release-age exclusions implicitly.
+
+## Place and complete adoption work
+
+Treat a requested toolchain adoption as a change to the workspace and its affected packages. Research
+release notes and source to choose work; do not substitute a recommendations document for authorized
+implementation or contract updates.
+
+Before creating an artifact, match each finding to its owner:
+
+- Put observable behavior, host compatibility, and conformance checks in the existing package SPEC
+  and interaction contract. Keep requirement IDs when the behavior is refined rather than replaced.
+- Put implementation steps in an existing issue when it already owns that outcome. Update its plan
+  and acceptance checks instead of creating a second ticket for the same work.
+- Create an issue only for a distinct deliverable that needs its own execution or decision. A new
+  API, a restated requirement, or a paragraph-sized SPEC clarification is not a separate deliverable.
+- Implement authorized changes in current packages. Track work for unavailable packages under their
+  existing delivery issues; do not imply that a SPEC change implements the package.
+
+Before PR delivery, account for every useful finding as implemented, incorporated into the contract,
+tracked in a linked issue, or declined with a concrete reason. Apply `revise-package` and
+`plan-implementation` where their routing conditions match. Put package changes, relevant SPEC
+amendments, and the toolchain update in the requested PR; verify issue relationships and Project
+membership for any work it creates or updates. Review this placement alongside code correctness.
 
 ## Apply the selected versions
 

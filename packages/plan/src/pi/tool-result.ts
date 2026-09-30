@@ -8,10 +8,27 @@ import {
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { type Static, Type } from "typebox";
 
 import { describe, isPlanningError, PlanningError } from "../domain/errors.ts";
 import type { PlanningErrorKind } from "../domain/errors.ts";
+import { runtimeResultSchema } from "../domain/state.ts";
 import type { Round, RuntimeResult } from "../domain/state.ts";
+
+const nonErrorResultSchema = Type.Exclude(
+  runtimeResultSchema,
+  Type.Object({ outcome: Type.Literal("error") }),
+);
+
+/** Validate non-error planning outcomes and bounded retrieval envelopes. */
+export const planToolOutputSchema = Type.Union([
+  nonErrorResultSchema,
+  Type.Object({
+    outcome: Type.Index(nonErrorResultSchema, ["outcome"]),
+    truncated: Type.Literal(true),
+    resultPath: Type.String(),
+  }),
+]);
 
 const remediation = {
   "invalid-input": "Correct the payload and retry.",
@@ -65,9 +82,7 @@ function submittedRound(round: Round): Round {
   };
 }
 
-type ResultDetails =
-  | Exclude<RuntimeResult, { outcome: "error" }>
-  | { outcome: RuntimeResult["outcome"]; truncated: true; resultPath: string };
+type ResultDetails = Static<typeof planToolOutputSchema>;
 
 /** Project submitted state and spill oversized JSON without exposing local-only drafts. */
 export async function toolResult(
@@ -125,7 +140,7 @@ export async function toolResult(
     case "unsupported-mode":
       break;
   }
-  const details = structuredClone(projected);
+  const { error: _error, ...details } = structuredClone(projected);
   let guidance = instructions;
   if (result.outcome === "approval") {
     guidance =
@@ -149,6 +164,7 @@ export async function toolResult(
     return {
       content: [{ type: "text", text: serialized }],
       details,
+      structuredContent: details,
       ...(result.outcome === "approval" ||
       (result.outcome === "implementation" && result.status === "requested")
         ? { terminate: true }
@@ -163,9 +179,11 @@ export async function toolResult(
     maxBytes: DEFAULT_MAX_BYTES - Buffer.byteLength(notice),
     maxLines: DEFAULT_MAX_LINES - 2,
   });
+  const truncatedDetails = { outcome: result.outcome, truncated: true as const, resultPath };
   return {
     content: [{ type: "text", text: `${preview.content}${notice}` }],
-    details: { outcome: result.outcome, truncated: true, resultPath },
+    details: truncatedDetails,
+    structuredContent: truncatedDetails,
     ...(result.outcome === "approval" ||
     (result.outcome === "implementation" && result.status === "requested")
       ? { terminate: true }

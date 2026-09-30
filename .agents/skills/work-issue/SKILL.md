@@ -49,6 +49,13 @@ the working tree and branch, then resolve the target by its kind:
   the request. Resume on a matching open issue, and treat a closed match as delivered context
   without reopening its scope. Otherwise the target is a direct request without an issue.
 
+Before creating an issue, identify its distinct deliverable and check the existing package contract
+and issue plans. Refining host compatibility or stating an existing guarantee belongs in the
+SPEC and its conformance checks. A library API choice belongs in the existing implementation plan.
+Neither alone justifies a separate ticket. Create an implementation issue for an unfinished outcome
+when no existing issue covers it, or a child for an independently deliverable part. Explain how its
+acceptance differs from existing work.
+
 ### Read the current state
 
 Read the delivery state first under the retrieval rules. For issue-backed work, read the issue body,
