@@ -2024,7 +2024,10 @@ test("a refresh that attaches a committed head before its commit applies lineage
     throw new Error(`Expected a committed revision, received ${committed.kind}.`);
   }
   const head = committed.revisionId;
-  const update = { sources: storage.sources.sources, event: "commit" as const };
+  const update = {
+    effective: storage.sources.sources,
+    newest: { sources: storage.sources.sources, event: "commit" as const },
+  };
   const lineage: LineageState = {
     selected: { state: "none" },
     pending: { state: "unappended", revisionId: head },

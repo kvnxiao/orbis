@@ -182,12 +182,12 @@ type RoleCheck = { state: "pending" } | { state: "done" } | { state: "failed"; e
  *
  * A transition is a role or activation change that makes storage unready until its own
  * reconciliation completes. The owner tracks the role check of the latest transition as pending,
- * failed, or done. Reconciliation publishes `reconciled` only while its scope is current, no later
- * transition began, and the configuration revision it ran for is unchanged; otherwise it appends no
- * reference and publishes nothing. A startup always publishes open storage with its lineage, as
- * `reconciling` when a transition superseded it or its role check is pending, and as `failed` when
- * that role check failed. Work re-reads current storage after each await and merges its result into
- * it.
+ * failed, or done. Reconciliation appends a recovered reference and publishes `reconciled` only
+ * while its scope is current, no later transition began, that transition's role check finished, and
+ * the configuration revision it ran for is unchanged; otherwise it appends no reference and
+ * publishes nothing. A startup always publishes open storage with its lineage, as `reconciling`
+ * when a transition superseded it or its role check is pending, and as `failed` when that role
+ * check failed. Work re-reads current storage after each await and merges its result into it.
  */
 export class StorageSessionOwner {
   private readonly pi: Pick<ExtensionAPI, "appendEntry">;
@@ -347,13 +347,13 @@ export class StorageSessionOwner {
       const update = { sources, event };
       const identity = this.identity(session.store);
       const binding = { ...this.binding(scope, session.store), lineage };
-      const current = (): boolean => this.sameTransition(identity, session.store);
+      const current = (): boolean => this.mayRecover(identity, session.store);
       const refreshed = yield* refreshLineage(
         this.pi,
         session.store,
         ctx,
         binding,
-        update,
+        { effective: sources, newest: update },
         current,
       );
       const roleCheck = this.roleCheck;
@@ -411,10 +411,13 @@ export class StorageSessionOwner {
   });
 
   /**
-   * Refresh lineage for `transition` from the newest registration and publish it as `reconciled`.
+   * Refresh lineage for `transition` from the active branch's current effective sources, projected
+   * without writing the registry, and publish it as `reconciled`; status counts stay those of the
+   * newest registration.
    *
    * Does nothing once `scope` is not current or a later transition began. Marks storage
-   * `reconciling` while it runs, and on failure records `failed` before propagating the error.
+   * `reconciling` while it runs, and on a failure of the projection or the refresh records `failed`
+   * before propagating the error.
    */
   readonly reconcile = Effect.fnUntraced(function* (
     this: StorageSessionOwner,
@@ -430,10 +433,13 @@ export class StorageSessionOwner {
     const store = before.session.store;
     const identity = this.identity(store);
     const current = (): boolean =>
-      this.openIn(scope) !== undefined && this.sameTransition(identity, store);
-    const update = before.newestRegistration;
+      this.openIn(scope) !== undefined && this.mayRecover(identity, store);
+    const newest = before.newestRegistration;
     const binding = this.binding(scope, store);
-    const refreshed = yield* refreshLineage(this.pi, store, ctx, binding, update, current).pipe(
+    const refreshed = yield* before.session.sources.current(ctx.sessionManager).pipe(
+      Effect.flatMap((effective) =>
+        refreshLineage(this.pi, store, ctx, binding, { effective, newest }, current),
+      ),
       Effect.tapCause(() =>
         Effect.sync(() => {
           const open = this.openIn(scope);
@@ -454,9 +460,12 @@ export class StorageSessionOwner {
     return { transition: this.transition, ...this.configurationOf(store) };
   }
 
-  private sameTransition(identity: ReadinessIdentity, store: MemoryStore): boolean {
+  // Recovery and a ready result need the transition to be current with its role check finished,
+  // since a pending check can still change the configuration the decision depends on.
+  private mayRecover(identity: ReadinessIdentity, store: MemoryStore): boolean {
     return (
       this.transition === identity.transition &&
+      this.roleCheck.state === "done" &&
       this.configurationOf(store).configurationRevision === identity.configurationRevision
     );
   }

@@ -148,15 +148,17 @@ start or tree navigation. A commit that registered its sources refreshes storage
 commits, conflicts, or is cancelled; a committed commit refreshes after recording its reference. A
 commit that rejects does not refresh, and its completed registration stays available to the next
 refresh. Each refresh reads the storage session's newest completed registration once, when it
-starts, so an older attempt's refresh never replaces validity or counts computed from a newer
-registration. Commits and refreshes take turns, as the next paragraph describes, so a registration
-cannot complete while a refresh runs. The refresh:
+starts, so an older attempt's refresh never replaces counts computed from a newer registration.
+Commits and refreshes take turns, as the next paragraph describes, so a registration cannot complete
+while a refresh runs. The refresh:
 
 - Reads the latest head, so a proposal captured afterward expects the accepted revision.
-- Rechecks the selected revision's notes against the sources of the newest completed registration
-  and the current curation.
-- Reconciles the head with the branch as described under [Recovery](#recovery), which can attach a
-  head whose reference is missing from the branch or leave it unresolved.
+- Projects the active branch's current effective sources without registering them, so a context edit
+  made since the newest registration applies. It rechecks the selected revision's notes against
+  those sources and the current curation.
+- Reconciles the head with the branch as described under [Recovery](#recovery), judging an orphan
+  head's evidence against the same sources. Reconciliation can attach a head whose reference is
+  missing from the branch or leave it unresolved.
 - Updates the counts that status reports without registering again: the source count of that
   registration, labeled `commit`, and the curated-note count of the curation it inspected.
 
@@ -322,12 +324,17 @@ as follows:
   selection. This includes the role check after a model selection or `/tiered-memory on`, and a
   change back to earlier settings or models.
 - The change completes only after a reconciliation for the new configuration revision and
-  fingerprint, which runs as storage-session work. A reconciliation whose configuration changed
-  while it ran does not append a reference or make storage ready; the newer change runs its own. A
-  change that begins while storage opens reconciles after the startup finishes; until then, the
-  startup leaves storage unready, or failed when the change's role check fails. A reference that a
-  superseded reconciliation already appended stays pending, and a later reconciliation confirms it
-  without appending another.
+  fingerprint, which runs as storage-session work. Like the refresh after a commit, it judges the
+  selected revision and any orphan head against the branch's current effective sources. A
+  reconciliation whose configuration changed while it ran does not append a reference or make
+  storage ready; the newer change runs its own. A reference that a superseded reconciliation already
+  appended stays pending, and a later reconciliation confirms it without appending another.
+- A change that begins while storage opens still gets a reconciliation for its configuration. When
+  its role check finishes after the new storage scope exists, the change's own reconciliation runs
+  after the startup finishes. When the check finishes earlier, the startup's reconciliation already
+  uses the change's configuration. Until the change's role check succeeds, the startup does not
+  append a reference for an orphan head, and it leaves storage unready, or failed when that role
+  check fails.
 - A failed reconciliation or role check keeps the previous selection and records, reports the
   storage error, and leaves storage unready until a reconciliation started by `/reload`, tree
   navigation, a model selection, or `/tiered-memory on` succeeds.

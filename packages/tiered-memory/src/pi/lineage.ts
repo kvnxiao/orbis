@@ -23,7 +23,8 @@ import {
  * `selected` names the revision and its session, which is a fork ancestor's when inherited, with
  * the notes that are no longer current and the first reason one is invalid. Start and navigation
  * derive it from the newest confirmed branch reference; commit confirmation sets it; refresh
- * recomputes `invalidNotes` and `invalidReason` from registered sources and curation.
+ * recomputes `invalidNotes` and `invalidReason` from the active branch's current effective sources
+ * and curation.
  */
 export type SelectedRevision =
   | { state: "none" }
@@ -368,14 +369,15 @@ export const reconcilePending = Effect.fnUntraced(function* (
 });
 
 /**
- * Recompute the selected revision's validity, the latest head, and the pending reference from
- * registered sources and curation.
+ * Recompute the selected revision's validity, the latest head, and the pending reference from the
+ * active branch's effective sources and curation.
  *
- * `update` is the newest completed registration when the refresh starts; its source count and
- * `event`, with the count of the curation this refresh inspects, become the cached `registration`.
- * Inspecting curation takes the project lock and first repairs this session's unfinished head.
- * `current` reports whether the refresh still belongs to the current configuration;
- * `reconcilePending` checks it immediately before appending a reference.
+ * `sources.effective` are the active branch's current effective sources, which decide note validity
+ * and orphan recovery. `sources.newest` is the newest completed registration when the refresh
+ * starts; its source count and `event`, with the count of the curation this refresh inspects,
+ * become the cached `registration`. Inspecting curation takes the project lock and first repairs
+ * this session's unfinished head. `current` reports whether the refresh still belongs to the
+ * current configuration; `reconcilePending` checks it immediately before appending a reference.
  *
  * @throws Error when a curation, head, or revision record is damaged.
  * @throws The failures of `MemoryStore.inspectCuration` and `reconcilePending`.
@@ -385,7 +387,7 @@ export const refreshLineage = Effect.fnUntraced(function* (
   store: MemoryStore,
   ctx: Pick<ExtensionContext, "sessionManager">,
   binding: ProposalBinding,
-  update: RegistrationUpdate,
+  sources: { effective: readonly SourceRecord[]; newest: RegistrationUpdate },
   current: () => boolean,
 ): Effect.fn.Return<
   { lineage: LineageState; latestRevision: string | null; registration: Registration },
@@ -401,7 +403,7 @@ export const refreshLineage = Effect.fnUntraced(function* (
       revision === undefined
         ? undefined
         : assessRevision(
-            update.sources,
+            sources.effective,
             curation.notes,
             revision,
             store.projectId,
@@ -428,13 +430,13 @@ export const refreshLineage = Effect.fnUntraced(function* (
     store,
     ctx,
     { ...binding, latestRevision, lineage: { selected, pending: binding.lineage.pending } },
-    { curation: curation.notes, sources: update.sources },
+    { curation: curation.notes, sources: sources.effective },
     current,
   );
   const registration: Registration = {
-    sources: update.sources.length,
+    sources: sources.newest.sources.length,
     curatedNotes: Object.keys(curation.notes).length,
-    event: update.event,
+    event: sources.newest.event,
   };
   return { lineage, latestRevision, registration };
 });

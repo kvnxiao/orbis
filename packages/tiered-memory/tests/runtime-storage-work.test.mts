@@ -39,6 +39,7 @@ const gates = vi.hoisted(() => {
   const confirm: Hold[] = [];
   const layout: Hold[] = [];
   const read: Hold[] = [];
+  const lockRelease: Hold[] = [];
   const created: Hold[] = [];
   const take = (queue: Hold[], path: unknown): Hold | undefined => {
     const index = queue.findIndex(
@@ -52,7 +53,7 @@ const gates = vi.hoisted(() => {
       await hold.release.promise;
     }
   };
-  return { confirm, layout, read, created, take, pass };
+  return { confirm, layout, read, lockRelease, created, take, pass };
 });
 
 // A hold left by a failed test would capture the next test's I/O, and an uninterruptible fsync
@@ -65,6 +66,7 @@ afterEach(() => {
   gates.confirm.length = 0;
   gates.layout.length = 0;
   gates.read.length = 0;
+  gates.lockRelease.length = 0;
 });
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -79,6 +81,10 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     readFile: async (...args: Parameters<typeof actual.readFile>) => {
       await pass(take(gates.read, args[0]));
       return await actual.readFile(...args);
+    },
+    rm: async (...args: Parameters<typeof actual.rm>) => {
+      await actual.rm(...args);
+      await pass(take(gates.lockRelease, args[0]));
     },
     lstat: async (...args: Parameters<typeof actual.lstat>) => {
       await pass(take(gates.layout, args[0]));
@@ -100,6 +106,14 @@ function newHold(matches?: (path: string) => boolean): Hold {
 function holdNextConfirmation(applies?: () => boolean): Hold {
   const hold = newHold(applies === undefined ? undefined : () => applies());
   gates.confirm.push(hold);
+  return hold;
+}
+
+// Holds the next project-lock release once it has finished: its last step removes the private
+// owner record, after which the lock is free.
+function holdAfterNextLockRelease(): Hold {
+  const hold = newHold((path) => path.includes(`${sep}.lock${sep}private${sep}`));
+  gates.lockRelease.push(hold);
   return hold;
 }
 
@@ -351,7 +365,7 @@ test("a rejected commit runs no refresh, and its registration supplies the next 
   expect(storageOf(runtime).registration).toMatchObject(greenCount);
 });
 
-test("a commit started while another commit confirms its branch reference registers only after that commit's refresh, which keeps the earlier registration", async ({
+test("a commit started while another commit confirms its branch reference registers only after that commit's refresh, which judges validity by the edited effective sources and keeps the earlier registration's counts", async ({
   createFixture,
 }) => {
   const f = await createFixture();
@@ -374,7 +388,7 @@ test("a commit started while another commit confirms its branch reference regist
   await secondHeld.entered.promise;
   expect(after(events, "confirmation released")).toEqual(["confirmation released", "registration"]);
   expect(storageOf(runtime).lineage.selected).toMatchObject({
-    ...blueValid,
+    ...greenInvalid,
     revisionId: committed,
   });
   expect(storageOf(runtime).registration).toMatchObject(blueCount);
@@ -667,14 +681,13 @@ test.for(orphanBases)(
   },
 );
 
-test("a retained proposal's commit does not register while a role check's reconciliation is held outside the project lock, and commits after it", async ({
+test("a retained proposal's commit does not register while a role check's reconciliation is held after it releases the project lock, and commits after it", async ({
   createFixture,
 }) => {
   const f = await createFixture();
   const { runtime, ctx, source, selected, events } = await selectBlueNote(f);
   const retained = runtime.captureProposal(ctx, noteContent({ "journey.md": "Kept\n" }), [source]);
-  let reads = 0;
-  const unlocked = holdNextRead((path) => path.endsWith(`${selected}.json`) && ++reads === 2);
+  const unlocked = holdAfterNextLockRelease();
   const checking = runtime.refreshRoles(ctx);
   await unlocked.entered.promise;
   events.push("reconciliation held");
@@ -1109,5 +1122,113 @@ test("a capture while enabling memory's role check is in flight refuses, and the
   ).toThrow("Memory storage is reconciling with the current settings and models.");
   roles.release.resolve(undefined);
   await enabling;
+  await expectReadyCommit(selection);
+});
+
+test.for(orphanBases)(
+  "a startup whose registration overlaps the start of another model's role check appends no reference to an orphan head with $label, and that check leaves it unresolved",
+  async ({ withOlder }, { createFixture }) => {
+    const f = await createFixture();
+    const { runtime, ctx, source, orphan, anchorId } = await orphanUnderFirstModel(f, withOlder);
+    const registration = holdNextRead((path) => path.endsWith("sources.json"));
+    const navigating = runtime.selectBranch(ctx);
+    await registration.entered.promise;
+    const otherCtx = { ...ctx, model: otherModel };
+    const roles = gatedRoles(otherCtx);
+    const changing = runtime.refreshRoles(roles.ctx);
+    await roles.entered.promise;
+    registration.release.resolve(undefined);
+    await navigating;
+    expect(referencesTo(f, runtime, orphan)).toEqual([]);
+    expect(storageOf(runtime).reconciliation).toBe("reconciling");
+    roles.release.resolve(undefined);
+    await changing;
+    expect(referencesTo(f, runtime, orphan)).toEqual([]);
+    expect(storageOf(runtime).lineage.pending).toEqual({
+      state: "unresolved",
+      revisionId: orphan,
+      anchorId,
+      reason: "configuration",
+    });
+    expect(() =>
+      runtime.captureProposal(otherCtx, noteContent({ "journey.md": "Other\n" }), [source]),
+    ).toThrow(`Memory revision ${orphan} is not recorded on this branch`);
+    expect(statusLines(runtime, otherCtx)).toContain(
+      unresolvedLine(orphan, anchorId, "it was committed with other settings or models"),
+    );
+  },
+);
+
+test.for(orphanBases)(
+  "a model selection after a context edit judges an orphan head with $label by the edited sources, so it stays unresolved for evidence and gets no reference",
+  async ({ withOlder }, { createFixture }) => {
+    const f = await createFixture();
+    const { runtime, ctx, source, older, orphan, anchorId } = await orphanUnderFirstModel(
+      f,
+      withOlder,
+    );
+    f.session.sessionManager.appendContextEdit(sourceEntry(f, orphanEvidence).id, {
+      content: "Edited evidence under the other model.",
+    });
+    await runtime.refreshRoles(ctx);
+    expect(referencesTo(f, runtime, orphan)).toEqual([]);
+    expect(storageOf(runtime).lineage).toMatchObject({
+      selected:
+        older === null
+          ? { state: "none" }
+          : {
+              state: "selected",
+              revisionId: older,
+              invalidNotes: ["current-work.md"],
+              invalidReason: "note-evidence",
+            },
+      pending: { state: "unresolved", revisionId: orphan, anchorId, reason: "evidence" },
+    });
+    expect(() =>
+      runtime.captureProposal(ctx, noteContent({ "journey.md": "Edited\n" }), [source]),
+    ).toThrow(`Memory revision ${orphan} is not recorded on this branch`);
+    expect(statusLines(runtime, ctx)).toContain(
+      unresolvedLine(
+        orphan,
+        anchorId,
+        "its evidence or curated notes changed after it was committed",
+      ),
+    );
+  },
+);
+
+test("a role check whose source projection fails on malformed tool-result metadata reports a failed reconciliation and refuses capture, and navigating before that entry makes storage ready", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  const selection = await selectBlueNote(f);
+  const { runtime, ctx, source } = selection;
+  const beforeMalformed = f.session.sessionManager.getLeafId();
+  const malformed = {
+    role: "toolResult" as const,
+    toolCallId: "call-missing-name",
+    toolName: "edit",
+    isError: false,
+    content: [{ type: "text" as const, text: "result" }],
+    timestamp: Date.now(),
+  };
+  Reflect.deleteProperty(malformed, "toolName");
+  f.session.sessionManager.appendMessage(malformed);
+  await runtime.refreshRoles(ctx);
+  expect(storageOf(runtime)).toMatchObject({
+    reconciliation: "failed",
+    error: "Invalid tool result source metadata.",
+  });
+  expect(statusLines(runtime, ctx)).toEqual(
+    expect.arrayContaining(["Storage error: Invalid tool result source metadata.", failedLine]),
+  );
+  expect(() =>
+    runtime.captureProposal(ctx, noteContent({ "journey.md": "Failed\n" }), [source]),
+  ).toThrow("The latest memory reconciliation failed.");
+  if (beforeMalformed === null) {
+    throw new Error("Missing entry before the malformed tool result.");
+  }
+  f.session.sessionManager.branch(beforeMalformed);
+  await runtime.selectBranch(ctx);
   await expectReadyCommit(selection);
 });
