@@ -20,6 +20,7 @@ import type {
 } from "../src/domain/proposal.ts";
 import { encodeReference } from "../src/domain/references.ts";
 import type { ProposalContent } from "../src/pi/lineage.ts";
+import { referencesIn } from "../src/pi/revision-references.ts";
 import { MemoryRuntime } from "../src/pi/runtime.ts";
 import type { StorageSnapshot } from "../src/pi/storage-session.ts";
 import type { CurationState } from "../src/storage/curation.ts";
@@ -259,6 +260,46 @@ export function runtimeFor(
     await runtime.shutdown();
   });
   return runtime;
+}
+
+/**
+ * Create a runtime whose next revision reference append after `dropNextReference` is discarded,
+ * which leaves its committed head without a reference; other appends reach the fixture's session.
+ */
+export function referenceDroppingRuntime(
+  f: Fixture,
+  services: TestServices = {},
+): { runtime: MemoryRuntime; dropNextReference: () => void } {
+  let drop = false;
+  const runtime = runtimeFor(f, services, {
+    appendEntry(type, data) {
+      if (drop && type === revisionEntryType) {
+        drop = false;
+        return;
+      }
+      f.session.sessionManager.appendCustomEntry(type, data);
+    },
+  });
+  return {
+    runtime,
+    dropNextReference() {
+      drop = true;
+    },
+  };
+}
+
+export function validReferences(f: Fixture, projectId: string): string[] {
+  return referencesIn(f.session.sessionManager.getEntries(), projectId).map(
+    (reference) => reference.revisionId,
+  );
+}
+
+export function unresolvedLine(revisionId: string, anchorId: string, reasonText: string): string {
+  return `Memory commits: blocked by revision ${revisionId}, which is not recorded on this branch: ${reasonText}. Navigate with /tree to a point before entry ${anchorId} to continue memory work without it.`;
+}
+
+export function unrecordedLine(revisionId: string): string {
+  return `Memory commits: blocked until revision ${revisionId} is recorded on this branch. If its commit failed, run /reload to record it.`;
 }
 
 export function blockedLine(entryId: string): string {

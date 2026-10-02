@@ -692,6 +692,50 @@ recompute. A multi-note consolidation is eligible for checkpoint use only after 
 revision is durable. After interruption, recovery must expose a complete prior or new revision,
 without consuming observations for a partially committed proposal.
 
+The selected lineage records which committed revision the session's memory currently reflects: the
+selected revision, or selection. A lineage that records no revision has no selection. Reconciliation
+compares the newest committed revision with the selection on startup, navigation, after each commit,
+after a settings or model change, and when memory is enabled. Each revision records its base, the
+revision whose notes it inherits; its predecessor, the revision committed before it in the same
+session; and the conversation point where its proposal was captured. A committed revision can lack a
+readable lineage record that selects it, for example when an interruption prevents that record or
+the record is damaged. Reconciliation may select such a revision only when the remaining lineage
+records establish that it directly continues the selection:
+
+- Its base is the selected revision, or none when nothing is selected.
+- Its predecessor is the selected revision, or none for the first revision of a session whose
+  selection is absent or inherited from a forked session.
+
+Shared conversation ancestry, an equal base, or commit order alone does not establish this. A
+selected revision whose committed record cannot be read is unavailable; it remains unavailable and
+reported, and reconciliation must not treat it as an empty lineage.
+
+A revision belongs to another branch when its capture point is not on the selected branch or another
+branch records it as selected. Such a revision must not replace the selection or block memory work
+on the selected branch. A revision whose base differs from an available selection also does not
+block, unless unreadable lineage records follow that selection.
+
+When reconciliation cannot establish that a revision without a readable lineage record continues the
+selected lineage, or the revision no longer matches the current settings, models, evidence, or
+curation, the extension must:
+
+- Preserve the revision, its notes, and the selection.
+- Report the unresolved recovery.
+- Refuse new memory proposals on that lineage until a later reconciliation or navigation resolves
+  it.
+
+Reconciliation need not resolve every lost record. It must not reconstruct an unavailable revision
+or let a proposal replace notes that it could not classify.
+
+Proposal capture and commits use the selection that reconciliation completed for the current
+session, settings, and models. A settings or model change, including a return to earlier values,
+makes memory unready for new proposals until reconciliation for the new values completes.
+Reconciliation that a later change superseded must not restore readiness or recover a revision whose
+record is missing. A failed reconciliation keeps memory unready until a reconciliation started by a
+reload, navigation, enabling memory, or a settings or model change succeeds. A commit waits for
+running reconciliation and validates against its result. After a revision becomes durable, capture
+refuses new proposals until the lineage records the revision as selected.
+
 ### User curation — `REQ-user-curation`
 
 Treat external edits and deletions as intentional curation. Because the extension cannot reliably
@@ -838,6 +882,13 @@ native outcome, fallback reason, cancellation, and any unverified outcome. A req
 current-work-note capacity reports its cause and recovery guidance separately from user cancellation
 or a completed compaction.
 
+Status reports the selected revision's validity separately from whether new memory proposals can
+proceed. While proposals are refused, status names the blocking causes, with a recovery action for
+each cause that does not clear on its own: an unreadable lineage record, an unavailable selected
+revision, a running or failed reconciliation, an unresolved recovery, or a committed revision whose
+lineage record is not yet durable. While reconciliation runs or has failed, status reports that
+state in place of an earlier unresolved result.
+
 Usage reporting separates observer, consolidator, instruction-specific preparation, and fallback
 usage where available. It distinguishes known provider usage from estimates, unknown cost, and
 cached-token accounting. Timing separates auxiliary work from foreground compaction waiting.
@@ -901,6 +952,8 @@ configurations.
 | `REQ-checkpoint-eligibility`, `REQ-compaction-fallback`                                                 | For every compaction reason, inject missing coverage, empty memory, stale state, malformed output, or an exhausted wait deadline.                                                                                              | Custom replacement is declined, an explicit native-fallback warning is recorded, and the eventual native success/failure is reported accurately.                                                                                                                                                                                                           | Fixture; Pi           |
 | `REQ-compaction-fallback`                                                                               | Cancel each compaction reason while a worker is pending; deliver its result late. Also cancel native automatic fallback while its summarizer is running.                                                                       | The attempt remains cancelled, no new fallback or extra retry starts, and no late attempt-owned write commits; the captured signal and host outcome consistently classify native fallback as cancelled.                                                                                                                                                    | Pi                    |
 | `REQ-session-lineage`                                                                                   | Fork, navigate `/tree`, resume, and complete an old worker after a session switch; race project-learning updates.                                                                                                              | Selected session snapshots match their lineage, stale results are rejected, and a losing writer preserves newer committed content.                                                                                                                                                                                                                         | Fixture; Pi; Terminal |
+| `REQ-session-lineage`, `REQ-memory-storage`, `REQ-user-curation`, `REQ-status-reporting`                | Lose or damage lineage records of revisions that directly follow the selection, share its base on a sibling branch, follow several unreadable records, or build on an unavailable selection; restart, navigate, and commit.    | Only the direct continuation is selected. The others do not replace the selection or clear an unavailable or unreadable-record state; their notes persist, status names the unresolved cause, and proposals are refused until resolution. A branch they do not belong to keeps ordinary memory work.                                                       | Fixture; Pi           |
+| `REQ-session-lineage`, `REQ-model-selection`, `REQ-status-reporting`                                    | Leave an unrecorded revision committed under one model; switch models and back, capturing during and after each change; pause reconciliation while a retained proposal commits; change settings during reconciliation.         | Capture refuses until reconciliation for the current settings and models completes, and status reports the cause. No commit succeeds from a selection that reconciliation replaces or could not classify: the stale proposal returns a conflict, and the recovered revision's notes persist. Superseded reconciliation recovers nothing.                   | Fixture; Pi           |
 | `REQ-user-curation`                                                                                     | Edit or delete a note during consolidation; resume with a missing expected directory; revisit an earlier conversation branch.                                                                                                  | Curated text and deletion exclusions survive; old evidence does not silently restore a live note; new evidence remains distinguishable.                                                                                                                                                                                                                    | Fixture; Pi           |
 | `REQ-controlled-writes`                                                                                 | Attempt direct acting-agent writes and edits through ordinary and aliased managed paths, then commit a valid observer proposal.                                                                                                | Direct calls are blocked within the documented guard boundary; the controlled writer can commit valid data; shell-based changes receive the external-curation policy when detected.                                                                                                                                                                        | Fixture; Pi           |
 | `REQ-activation-controls`                                                                               | Load with defaults, set a project default of disabled, override on/off, resume, reload invalid settings, and invoke an unknown subcommand.                                                                                     | Precedence and persistence match the contract; disabled work stops without deleting records; invalid settings and arguments produce explicit output.                                                                                                                                                                                                       | Pi; Terminal          |

@@ -1,3 +1,5 @@
+import { sep } from "node:path";
+
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import type * as Duration from "effect/Duration";
@@ -129,6 +131,25 @@ export function afterWrite(matches: (path: string) => boolean, onMatch: () => vo
     if (!fired && matches(path)) {
       fired = true;
       onMatch();
+    }
+  };
+}
+
+/**
+ * Write through `writeDurable`, running `onView` before the first view write under `current/` that
+ * follows a `head.json` write, which is the head becoming durable.
+ */
+export function afterHeadWrite(onView: (path: string) => Promise<void>): TestWrite {
+  let headWritten = false;
+  let fired = false;
+  return async (path, contents) => {
+    if (headWritten && !fired && path.includes(`${sep}current${sep}`)) {
+      fired = true;
+      await onView(path);
+    }
+    await writeDurable(path, contents);
+    if (path.endsWith(`${sep}head.json`)) {
+      headWritten = true;
     }
   };
 }

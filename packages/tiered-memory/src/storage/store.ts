@@ -212,20 +212,28 @@ export class MemoryStore {
   /**
    * Record external curation of this session's notes under the project lock and return it.
    *
-   * When `base` names a fork ancestor's revision, first merges the ancestor lineage's curation into
-   * this session's record with ancestor references rebound to this session, so exclusions survive
-   * the fork.
+   * First repairs overlapping pending learning publications and this session's unfinished views as
+   * `open` does, so curation never records a half-written head's absent views as deletions. When
+   * `base` names a fork ancestor's revision, then merges the ancestor lineage's curation into this
+   * session's record with ancestor references rebound to this session, so exclusions survive the
+   * fork.
    *
    * @throws Error naming the path when a curation, head, or revision record is damaged.
+   * @throws The original error of a failed repair write, before curation is inspected or written.
    * @throws The failures of `withProjectLock`.
    */
   inspectCuration(
     base: RevisionPointer | null,
   ): Effect.Effect<CurationState, unknown, StorageServices> {
-    return this.locked(
+    const inspect =
       base === null || base.sessionId === this.sessionId
         ? this.inspectOwnCuration()
-        : this.inspectOwnCuration().pipe(Effect.andThen(this.inheritLineageCuration(base))),
+        : this.inspectOwnCuration().pipe(Effect.andThen(this.inheritLineageCuration(base)));
+    return this.locked(
+      repairPendingLearnings(this, []).pipe(
+        Effect.andThen(repairViews(this)),
+        Effect.andThen(inspect),
+      ),
     );
   }
 

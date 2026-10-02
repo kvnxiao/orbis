@@ -16,16 +16,14 @@ import type {
   EffectiveSettings,
   ReportEntry,
 } from "../domain/settings.ts";
-import { fromPromise, recoverFailure } from "../storage/files.ts";
+import { fromPromise } from "../storage/files.ts";
 import { liveStorage } from "../storage/services.ts";
 import type { StorageServices } from "../storage/services.ts";
-import type { SourceRecord } from "../storage/sources.ts";
 import type { MemoryStore, StoreCommitResult } from "../storage/store.ts";
 import {
   activationEntryType,
   branchConfiguration,
   configurationEntryType,
-  describeError,
   expectedScope,
   loadSettingsFor,
   restoreOverride,
@@ -33,17 +31,15 @@ import {
 import type { BranchConfiguration, SettingsLoad } from "./configuration.ts";
 import { Execution } from "./execution.ts";
 import type { StorageScope } from "./execution.ts";
-import { attachProject, refreshLineage, selectFromBranch } from "./lineage.ts";
-import type { ProposalBinding, ProposalContent, RegistrationEvent } from "./lineage.ts";
+import type { ProposalContent, RegistrationEvent } from "./lineage.ts";
 import { resolveRoles } from "./models.ts";
 import {
-  attachCommitted,
   captureProposal as captureStorageProposal,
   commitProposal as commitStorageProposal,
 } from "./proposals.ts";
 import type { CommitProgress } from "./proposals.ts";
-import { openStorageSession, storageSnapshot } from "./storage-session.ts";
-import type { OpenStorage, StorageSnapshot, StorageState } from "./storage-session.ts";
+import { StorageSessionOwner } from "./storage-session.ts";
+import type { ConfigurationIdentity, OpenStorage, StorageSnapshot } from "./storage-session.ts";
 
 const reportEntryType = "orbis-tiered-memory-report";
 
@@ -81,9 +77,12 @@ function sessionChange(): Error {
  * - Settings, role, and storage-startup results apply inside their owning fiber after the await that
  *   produced them.
  * - A commit publishes its source registration synchronously from the registry's cache-replacing
- *   step, and only while the commit's storage scope is current.
+ *   step, and its durable head as soon as it is written, only while the commit's storage scope is
+ *   current.
  * - Storage-session work re-reads current storage after each await and merges its result into it,
  *   never into state read before the await, and changes nothing once its scope is not current.
+ * - A role or activation change is a transition: storage is unready from its start until its own
+ *   reconciliation publishes, and a superseded transition reconciles nothing.
  *
  * Branch restoration accepts only entries that match their schemas, and a configuration snapshot
  * only when its budgets are valid and its paths and trust state match the current session.
@@ -91,13 +90,13 @@ function sessionChange(): Error {
 export class MemoryRuntime {
   private readonly pi: Pick<ExtensionAPI, "appendEntry">;
   private readonly execution: Execution;
+  private readonly storage: StorageSessionOwner;
   private configuration: EffectiveSettings | undefined;
   private override: boolean | undefined;
   private error: string | undefined;
   private roles: Record<Role, ModelResolution> | undefined;
   private resolvedRoles: Record<Role, ModelResolution> | undefined;
   private configurationRevision = 0;
-  private storage: StorageState = { state: "stopped" };
   private unappliedLoad: Fiber.Fiber<SettingsLoad, unknown> | undefined;
 
   /**
@@ -111,6 +110,7 @@ export class MemoryRuntime {
   ) {
     this.pi = pi;
     this.execution = new Execution(services);
+    this.storage = new StorageSessionOwner(pi, (store) => this.configurationIdentity(store));
   }
 
   /** Return a copy of runtime state that later runtime changes do not affect. */
@@ -121,7 +121,7 @@ export class MemoryRuntime {
       error: this.error,
       configurationRevision: this.configurationRevision,
       roles: structuredClone(this.roles),
-      storage: storageSnapshot(this.storage),
+      storage: this.storage.snapshot,
     };
   }
 
@@ -146,7 +146,8 @@ export class MemoryRuntime {
    * later transition supersedes this one.
    *
    * @throws Error when shutdown has started, before any state changes.
-   * @throws The original error of a failed role check or entry append, after storage opened.
+   * @throws The original error of a failed role check or entry append, after storage opened; a
+   *   failed role check also leaves storage reporting a failed reconciliation.
    */
   async start(ctx: ExtensionContext): Promise<void> {
     await this.replaceSession(ctx, "session_start");
@@ -162,34 +163,44 @@ export class MemoryRuntime {
    * reload. Reads no settings files; storage opens after the old storage scope closed.
    *
    * @throws Error when shutdown has started, before any state changes.
-   * @throws The original error of a failed role check or entry append, after storage opened.
+   * @throws The original error of a failed role check or entry append, after storage opened; a
+   *   failed role check also leaves storage reporting a failed reconciliation.
    */
   async selectBranch(ctx: ExtensionContext): Promise<void> {
     await this.replaceSession(ctx, "session_tree");
   }
 
   /**
-   * Resolve both roles against the current configuration and store the results.
+   * Resolve both roles against the current configuration, store the results, and reconcile open
+   * storage for them.
    *
-   * Does nothing without a current configuration or after shutdown started. Replaces any running
-   * role check; a check that a later check, a disable, a replacement, or shutdown supersedes
-   * resolves without storing results.
+   * Does nothing without a current configuration or after shutdown started. Otherwise makes storage
+   * unready before any await, replaces any running role check, and resolves after the
+   * reconciliation as storage-session work, which waits for a storage startup in progress. Between
+   * a replacement and the creation of its storage scope, it resolves before storage opens, and that
+   * startup reconciles for the stored roles. A check that a later transition, a disable, a
+   * replacement, or shutdown supersedes resolves without storing results or reconciling. A failed
+   * reconciliation records the storage error, which status reports, and does not reject.
+   *
+   * @throws The original error of a failed role check, which status reports as a failed
+   *   reconciliation.
    */
   async refreshRoles(ctx: ExtensionContext): Promise<void> {
     if (this.configuration === undefined) {
       return;
     }
-    await this.execution.run(this.execution.runRoleWork(this.roleCheck(ctx)));
+    await this.transitionRoles(ctx);
   }
 
   /**
-   * Set the session activation override to enabled, append an activation entry, and resolve roles.
+   * Set the session activation override to enabled, append an activation entry, resolve roles, and
+   * reconcile open storage as `refreshRoles` does.
    *
    * After shutdown started, records the override and skips the role check.
    */
   async enable(ctx: ExtensionContext): Promise<void> {
     this.setOverride(true);
-    await this.execution.run(this.execution.runRoleWork(this.roleCheck(ctx)));
+    await this.transitionRoles(ctx);
   }
 
   /**
@@ -221,7 +232,7 @@ export class MemoryRuntime {
     return captureStorageProposal(
       open.session,
       ctx,
-      this.binding(open.scope, open.session.store),
+      this.storage.binding(open.scope, open.session.store),
       content,
       sourceIds,
     );
@@ -230,20 +241,25 @@ export class MemoryRuntime {
   /**
    * Commit a proposal as a job of the open storage scope, then apply its lineage in that scope.
    *
+   * The job waits for the scope's storage-session turn before registering sources and holds it
+   * until the job ends. As soon as the head is durable, storage records it as the latest head with
+   * a pending reference.
+   *
    * Outcomes:
    *
    * - `committed` when the head became durable, including when cancellation arrived after it.
    * - `cancelled` with the first reason when `ctx.signal`, a disable, a replacement, or shutdown
-   *   cancelled the job before the head; a pre-aborted `ctx.signal` starts no work.
+   *   cancelled the job before the head, including while it waited for its turn; a pre-aborted
+   *   `ctx.signal` starts no work.
    * - `conflict` from the checks under the lock.
    *
    * After `committed`, the branch-reference append, confirmation, and refresh run as work of the
    * commit's original storage scope. After `conflict`, or `cancelled` once the registration write
    * succeeded, a refresh runs as that work instead; a rejected commit runs none. Each refresh reads
-   * the scope's newest completed registration when it starts; a registration that completes during
-   * the refresh waits for the next one. The scope runs such work one at a time. A disable does not
-   * stop it, and a replacement or shutdown discards it without changing the result. A failure of
-   * that work records `storage.error` while the scope is current and leaves the result unchanged.
+   * the scope's newest completed registration when it starts. The scope runs its commits and such
+   * work one at a time, so no registration completes while a refresh runs. A disable does not stop
+   * it, and a replacement or shutdown discards it without changing the result. A failure of that
+   * work records `storage.error` while the scope is current and leaves the result unchanged.
    *
    * @throws Error when memory is disabled, storage is not open, or shutdown has started.
    * @throws The original error of a failed commit, including a failed view write after the head.
@@ -257,23 +273,28 @@ export class MemoryRuntime {
         commitStorageProposal(
           session,
           ctx,
-          () => this.binding(scope, session.store),
+          () => this.storage.binding(scope, session.store),
           proposal,
           (progress) => {
             record(progress);
             if (progress.stage === "registered") {
-              this.publishRegistration(scope, progress.records);
+              this.storage.publishRegistration(scope, progress.records);
+            } else {
+              this.storage.publishDurableHead(scope, progress.revisionId);
             }
           },
         ),
     );
     const progress = job.outcome;
     if (progress?.stage === "committed") {
-      await this.runStorageWork(scope, this.applyCommitted(scope, ctx, progress.revisionId));
+      await this.runStorageWork(
+        scope,
+        this.storage.applyCommitted(scope, ctx, progress.revisionId),
+      );
       return { kind: "committed", revisionId: progress.revisionId };
     }
     if (progress !== undefined) {
-      await this.runStorageWork(scope, this.refreshIn(scope, ctx));
+      await this.runStorageWork(scope, this.storage.refresh(scope, ctx));
     }
     return job.kind === "completed" ? job.value : { kind: "cancelled", reason: job.reason };
   }
@@ -293,7 +314,7 @@ export class MemoryRuntime {
   async shutdown(): Promise<void> {
     if (!this.execution.stopped) {
       this.roles = undefined;
-      this.storage = { state: "stopped" };
+      this.storage.stop();
     }
     await this.execution.shutdown(sessionChange());
   }
@@ -304,7 +325,7 @@ export class MemoryRuntime {
   ): Promise<void> {
     this.execution.replace(sessionChange());
     this.roles = undefined;
-    this.storage = { state: "opening" };
+    this.storage.replace();
     if (event === "session_start") {
       this.unappliedLoad = this.execution.startSettingsLoad(loadSettingsFor(ctx));
     }
@@ -320,7 +341,7 @@ export class MemoryRuntime {
     if (Exit.isFailure(prepared) && Cause.hasInterruptsOnly(prepared.cause)) {
       return yield* prepared;
     }
-    yield* this.execution.openStorage((storage) => this.startStorage(ctx, event, storage));
+    yield* this.execution.openStorage((scope) => this.storage.start(ctx, event, scope));
     return yield* prepared;
   });
 
@@ -340,7 +361,21 @@ export class MemoryRuntime {
       const branch = ctx.sessionManager.getBranch();
       this.applyConfiguration(branchConfiguration({ kind: "load", load: result, branch }));
     }
-    yield* this.execution.runRoleWork(this.roleCheck(ctx));
+    const transition = this.storage.beginTransition();
+    yield* this.execution.runRoleWork(this.roleCheck(ctx)).pipe(
+      Effect.tapCause((cause) =>
+        Effect.sync(() => {
+          if (!Cause.hasInterruptsOnly(cause)) {
+            this.storage.failTransition(transition, Cause.squash(cause));
+          }
+        }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          this.storage.finishRoleCheck(transition);
+        }),
+      ),
+    );
   });
 
   private applyConfiguration(decision: BranchConfiguration): void {
@@ -368,102 +403,46 @@ export class MemoryRuntime {
     this.roles = roles;
   });
 
-  private readonly startStorage = Effect.fnUntraced(
-    function* (
-      this: MemoryRuntime,
-      ctx: ExtensionContext,
-      event: Exclude<RegistrationEvent, "commit">,
-      storage: StorageScope,
-    ): Effect.fn.Return<void, unknown, StorageServices> {
-      const session = yield* openStorageSession(ctx);
-      attachProject(this.pi, ctx.sessionManager.getBranch(), session.store);
-      const lineage = yield* selectFromBranch(session.store, ctx);
-      const sources = yield* session.sources.register(ctx.sessionManager);
-      const update = { sources, event };
-      const binding = { ...this.binding(storage, session.store), lineage };
-      const refreshed = yield* refreshLineage(this.pi, session.store, ctx, binding, update);
-      const opened = { scope: storage, session, newestRegistration: update };
-      this.storage = { state: "open", ...opened, ...refreshed, error: undefined };
-    },
-    Effect.catchCause((cause) =>
-      recoverFailure(cause, (failure) => {
-        this.storage = { state: "failed", error: describeError(failure) };
-      }),
-    ),
-  );
-
-  private readonly applyCommitted = Effect.fnUntraced(function* (
-    this: MemoryRuntime,
-    scope: StorageScope,
-    ctx: ExtensionContext,
-    revisionId: string,
-  ): Effect.fn.Return<void, unknown, StorageServices> {
-    const before = this.openIn(scope);
-    if (before === undefined) {
-      return;
+  private async transitionRoles(ctx: ExtensionContext): Promise<void> {
+    const transition = this.storage.beginTransition();
+    try {
+      await this.execution.run(this.execution.runRoleWork(this.roleCheck(ctx)));
+    } catch (error) {
+      this.storage.failTransition(transition, error);
+      throw error;
+    } finally {
+      // An interrupted check also finishes, so a later startup does not wait for it forever.
+      this.storage.finishRoleCheck(transition);
     }
-    const { session } = before;
-    const lineage = yield* attachCommitted(this.pi, session, ctx, before.lineage, revisionId);
-    const attached = this.openIn(scope);
-    if (attached === undefined) {
-      return;
+    // A scope whose startup still runs admits this work after the startup publishes.
+    const scope = this.execution.currentScope;
+    if (
+      scope !== undefined &&
+      this.roles !== undefined &&
+      this.storage.isCurrentTransition(transition)
+    ) {
+      await this.runStorageWork(scope, this.storage.reconcile(scope, ctx, transition));
     }
-    this.storage = { ...attached, lineage };
-    yield* this.refreshIn(scope, ctx);
-  });
-
-  private readonly refreshIn = Effect.fnUntraced(function* (
-    this: MemoryRuntime,
-    scope: StorageScope,
-    ctx: ExtensionContext,
-  ): Effect.fn.Return<void, unknown, StorageServices> {
-    const before = this.openIn(scope);
-    if (before === undefined) {
-      return;
-    }
-    const store = before.session.store;
-    const binding = this.binding(scope, store);
-    const update = before.newestRegistration;
-    const refreshed = yield* refreshLineage(this.pi, store, ctx, binding, update);
-    const current = this.openIn(scope);
-    if (current !== undefined) {
-      this.storage = { ...current, ...refreshed, error: undefined };
-    }
-  });
+  }
 
   private async runStorageWork(
     scope: StorageScope,
     work: Effect.Effect<void, unknown, StorageServices>,
   ): Promise<void> {
     await this.execution.runInStorage(scope, work).catch((error: unknown) => {
-      const open = this.openIn(scope);
-      if (open !== undefined) {
-        this.storage = { ...open, error: describeError(error) };
-      }
+      this.storage.recordFailure(scope, error);
     });
   }
 
-  private publishRegistration(scope: StorageScope, sources: readonly SourceRecord[]): void {
-    const open = this.openIn(scope);
-    if (open !== undefined) {
-      this.storage = { ...open, newestRegistration: { sources, event: "commit" } };
-    }
-  }
-
   private proposalStorage(): OpenStorage {
-    if (!this.enabled || this.storage.state !== "open") {
+    const open = this.storage.open;
+    if (!this.enabled || open === undefined) {
       throw new Error("Memory storage is unavailable while disabled or before it opens.");
     }
-    return this.storage;
+    return open;
   }
 
-  private openIn(scope: StorageScope): OpenStorage | undefined {
-    const storage = this.storage;
-    return storage.state === "open" && storage.scope === scope ? storage : undefined;
-  }
-
-  private binding(scope: StorageScope, store: MemoryStore): ProposalBinding {
-    const open = this.openIn(scope);
+  private configurationIdentity(store: MemoryStore): ConfigurationIdentity {
     const configuration = this.configuration;
     return {
       configurationRevision: this.configurationRevision,
@@ -475,8 +454,6 @@ export class MemoryRuntime {
               roles: this.roles,
               projectRoot: store.projectRoot,
             }),
-      lineage: open?.lineage ?? { selected: { state: "none" }, pending: { state: "none" } },
-      latestRevision: open?.latestRevision ?? null,
     };
   }
 

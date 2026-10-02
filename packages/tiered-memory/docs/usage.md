@@ -167,9 +167,14 @@ requests and requests to the acting model.
 Status identifies activation and its source, effective model and limit sources, model suspension
 reasons, settings paths, the memory project root, the selected and latest durable memory revisions,
 and storage errors. It reports the registered-source and curated-note counts from the latest storage
-refresh. A refresh runs at session start, after tree navigation, and after each commit attempt that
-registered its sources and then committed, conflicted, or was cancelled. Both counts are labeled
-with the event of the registration that refresh used: `session_start`, `session_tree`, or `commit`.
+refresh. Both counts are labeled with the event of the registration that refresh used:
+`session_start`, `session_tree`, or `commit`. A refresh runs:
+
+- At session start and after tree navigation.
+- After a model selection or `/tiered-memory on`.
+- After each commit attempt that registered its sources and then committed, conflicted, or was
+  cancelled, unless a reconciliation is pending or failed.
+
 Status reads that cached state and the active branch and writes no memory files. Observations,
 worker accounting, recall, and custom compaction remain unavailable.
 
@@ -194,6 +199,38 @@ For a selected revision, the validity line then reads
 selected revision that is already invalid keeps its reason and invalid notes, and the line ends with
 `Uncertain: damaged revision references follow the selected revision.`
 
+Memory commits are also blocked for the causes below, and the validity line still describes the
+selected revision's notes. While storage is open, status prints one line for each cause that
+applies, after any damaged-reference line:
+
+- The selected revision is unavailable. The line names the branch entry that selected it.
+- Storage is not ready for proposals, as the [storage guide](storage.md#reconciliation-readiness)
+  defines: reconciliation is running, the latest reconciliation failed, or a revision is unresolved.
+  This line appears only while memory is enabled.
+- A committed revision's branch reference is not yet recorded, or is recorded but not yet saved in
+  the session file.
+
+```text
+Memory commits: blocked because the selected revision is unavailable. Navigate with /tree to a point before entry 3a7c2e19 to continue memory work without it.
+Memory commits: blocked while memory reconciles with the current settings and models.
+Memory commits: blocked because the latest memory reconciliation failed. Run /reload to retry.
+Memory commits: blocked by revision 0d6f2c1e-8a4b-4f0e-9c3d-2b7a5e1f9d40, which is not recorded on this branch: it was committed with other settings or models. Navigate with /tree to a point before entry 5b2e91aa to continue memory work without it.
+Memory commits: blocked until revision 0d6f2c1e-8a4b-4f0e-9c3d-2b7a5e1f9d40 is recorded on this branch. If its commit failed, run /reload to record it.
+Memory commits: blocked until the branch reference to revision 0d6f2c1e-8a4b-4f0e-9c3d-2b7a5e1f9d40 is saved in the session file. Pi saves a new session file after its first assistant response.
+```
+
+The first line omits its second sentence when the active branch has no valid reference to the
+selected revision. The fourth line appears when a revision's branch reference is missing and
+reconciliation leaves the revision unresolved, as the [storage guide](storage.md#orphan-heads)
+describes. It names that revision and the entry where its proposal was captured, and gives the first
+of these reasons that applies:
+
+| Reason                                                         | Cause                                                                                                                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `its lineage from the selected revision cannot be established` | The selection is unavailable, its base and parent do not continue the selection, or more damaged references block commits than recovery permits. |
+| `it was committed with other settings or models`               | Its configuration fingerprint differs from the current one. Selecting those settings and models again can recover it.                            |
+| `its evidence or curated notes changed after it was committed` | Its evidence or curation no longer holds.                                                                                                        |
+
 In the terminal, commands display a notification. RPC clients receive Pi's `extension_ui_request`
 event with `method: "notify"`, `notifyType: "info"`, and the report in `message`. Each report is
 also saved in an `orbis-tiered-memory-report` custom session entry with the report text in
@@ -204,5 +241,6 @@ diagnostic messages to model context.
 For an unresolved model, correct the provider/model identifier or configure it in Pi, then run
 `/reload`. For missing credentials, configure the selected provider in Pi and run `/reload` to
 refresh the model checks. For invalid settings, correct the reported field and run `/reload`. For
-blocked memory commits, navigate with `/tree` to the entry just before the named one; the extension
-does not repair or remove damaged entries.
+memory commits blocked by a damaged entry, an unavailable selected revision, or an unresolved
+revision, navigate with `/tree` to a point before the named entry; the extension does not repair or
+remove damaged entries or reconstruct missing revisions.
