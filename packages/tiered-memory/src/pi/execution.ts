@@ -48,7 +48,7 @@ interface ScopeState {
  * - Its scope uses the parallel finalizer strategy and closes under `Effect.uninterruptible`.
  * - Closing its scope interrupts and awaits the storage startup fiber, the storage-session work, and
  *   the jobs forked into it; only uninterruptible durable writes delay the close.
- * - Its storage-session work runs one at a time.
+ * - Its startup, its storage-session work, and its jobs run one at a time.
  */
 export interface StorageScope {
   readonly [state]: ScopeState;
@@ -133,6 +133,14 @@ export class Execution {
   }
 
   /**
+   * Return the current storage scope, including one whose startup is still running, or `undefined`
+   * between a replacement and the next scope's creation and after shutdown started.
+   */
+  get currentScope(): StorageScope | undefined {
+    return this.storage;
+  }
+
+  /**
    * Begin a session replacement: interrupt the branch step and role work, cancel the current
    * storage scope's jobs with `reason`, and start closing that scope.
    *
@@ -206,11 +214,12 @@ export class Execution {
   }
 
   /**
-   * Wait for the storage close in flight, open a new storage scope, run `startup` as a fiber in it,
-   * and wait for that fiber.
+   * Wait for the storage close in flight, open a new storage scope, run `startup` as a fiber in it
+   * holding the scope's storage-session turn, and wait for that fiber.
    *
-   * `startup` changes runtime state only after its last await. Completes without failing when the
-   * scope closes before `startup` finishes.
+   * `startup` changes runtime state only after its last await and must not await storage-session
+   * work of its scope. Storage-session work admitted while it runs starts after it. Completes
+   * without failing when the scope closes before `startup` finishes.
    *
    * @throws The original failure of `startup`.
    */
@@ -229,7 +238,10 @@ export class Execution {
       },
     };
     this.storage = storage;
-    const fiber = yield* Effect.forkIn(startup(storage), storage[state].scope);
+    const fiber = yield* Effect.forkIn(
+      storage[state].work.withPermit(startup(storage)),
+      storage[state].scope,
+    );
     yield* awaitCompletion(fiber);
   });
 
@@ -250,10 +262,13 @@ export class Execution {
   /**
    * Run a job in `storage` with a host signal and wait for it.
    *
-   * A pre-aborted `signal` resolves `cancelled` with its reason and starts no work. The job
-   * receives `record`, which replaces its recorded outcome. A host abort, a disable, a replacement,
-   * or shutdown records its reason if none is recorded, then interrupts the job. Resolves only
-   * after the job fiber ended, so its lock and transaction cleanup finished.
+   * A pre-aborted `signal` resolves `cancelled` with its reason and starts no work. The job takes
+   * the scope's storage-session turn inside its fiber and holds it until it ends, so cancellation
+   * also interrupts a job still waiting for its turn. The job receives `record`, which replaces its
+   * recorded outcome. A host abort, a disable, a replacement, or shutdown records its reason if
+   * none is recorded, then interrupts the job. Resolves only after the job fiber ended, so its lock
+   * and transaction cleanup finished. Must not be awaited from storage-session work of the same
+   * scope.
    *
    * @throws Error when shutdown has started or `storage` is no longer current; nothing runs.
    * @throws The original error or defect of a failure `Exit`, including one that also has
@@ -284,7 +299,7 @@ export class Execution {
     try {
       // The job may start before `runSync` returns, so it is bound before the scheduler runs it.
       const fiber = this.runtime.runSync(
-        Effect.forkIn(job(record), storage[state].scope).pipe(
+        Effect.forkIn(storage[state].work.withPermit(job(record)), storage[state].scope).pipe(
           Effect.tap((forked) =>
             Effect.sync(() => {
               invocation.bind(forked);
@@ -309,10 +324,10 @@ export class Execution {
   /**
    * Admit `effect` to `storage`'s scope as storage-session work and wait for it.
    *
-   * Admitted work starts only when no other storage-session work of the scope is running. A closed
-   * scope admits nothing and runs no synchronous prefix, because the fork does not start
-   * immediately. After shutdown started, resolves without running. Disable does not interrupt
-   * admitted work; closing the scope does. Resolves on success and on interruption.
+   * Admitted work starts only when no startup, job, or other storage-session work of the scope is
+   * running. A closed scope admits nothing and runs no synchronous prefix, because the fork does
+   * not start immediately. After shutdown started, resolves without running. Disable does not
+   * interrupt admitted work; closing the scope does. Resolves on success and on interruption.
    *
    * @throws The original error or defect of a failure.
    */

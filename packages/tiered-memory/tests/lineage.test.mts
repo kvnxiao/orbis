@@ -10,16 +10,17 @@ import { expect, vi } from "vitest";
 import { evidenceMatches } from "../src/domain/evidence.ts";
 import { dependencyFingerprint } from "../src/domain/proposal.ts";
 import type { MemoryProposal } from "../src/domain/proposal.ts";
-import { blockingReferences, projectEntrySchema, selectedAs } from "../src/pi/lineage.ts";
-import type { LineageState, SelectedRevision } from "../src/pi/lineage.ts";
+import { refreshLineage, selectedAs } from "../src/pi/lineage.ts";
+import type { LineageState, ProposalBinding, SelectedRevision } from "../src/pi/lineage.ts";
 import {
+  attachCommitted,
   captureProposal as captureStorageProposal,
   commitProposal as commitStorageProposal,
 } from "../src/pi/proposals.ts";
-import { referencesIn } from "../src/pi/revision-references.ts";
+import { blockingReferences, referencesIn } from "../src/pi/revision-references.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
-import { openStorageSession } from "../src/pi/storage-session.ts";
+import { projectEntrySchema, openStorageSession } from "../src/pi/storage-session.ts";
 import { writeDurable } from "../src/storage/files.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { fixtureModel } from "./pi-fixture.mts";
@@ -33,6 +34,7 @@ import {
   forkOnDisk,
   noteContent,
   openRegistry,
+  referenceDroppingRuntime,
   rejectionPaths,
   revisionEntryType,
   runtimeFor,
@@ -41,6 +43,8 @@ import {
   storageOf,
   storeFor,
   test,
+  unresolvedLine,
+  validReferences,
 } from "./store-fixture.mts";
 
 function selected(runtime: MemoryRuntime) {
@@ -135,7 +139,10 @@ test("blockingReferences returns every damaged reference when no reference match
 
 test.for([
   { label: "none", selection: { state: "none" } },
-  { label: "unavailable", selection: { state: "unavailable", reason: "Missing." } },
+  {
+    label: "unavailable",
+    selection: { state: "unavailable", revisionId: "r0", sessionId: "s", reason: "Missing." },
+  },
 ] satisfies { label: string; selection: SelectedRevision }[])(
   "blockingReferences returns every damaged reference while the selection is $label",
   ({ selection }) => {
@@ -185,6 +192,7 @@ function storageBinding(lineage: LineageState, fingerprint: string | undefined) 
     dependencyFingerprint: fingerprint,
     lineage,
     latestRevision: null,
+    reconciliation: "current" as const,
   };
 }
 
@@ -202,7 +210,12 @@ test.for([
   {
     label: "an unavailable selection",
     lineage: {
-      selected: { state: "unavailable", reason: "Selected revision r0 is unavailable." },
+      selected: {
+        state: "unavailable",
+        revisionId: "r0",
+        sessionId: "s",
+        reason: "Selected revision r0 is unavailable.",
+      },
       pending: { state: "none" },
     },
     fingerprint: "d".repeat(64),
@@ -271,6 +284,9 @@ test("a deferred session file keeps the committed revision appended until the fi
   );
   expect(pending(runtime)).toEqual({ state: "appended", revisionId: result });
   expect(selected(runtime)).toEqual({ state: "none" });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    `Memory commits: blocked until the branch reference to revision ${result} is saved in the session file. Pi saves a new session file after its first assistant response.`,
+  );
   await f.session.prompt("Write the first persisted turn.");
   await runtime.start(ctx);
   expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: result });
@@ -414,33 +430,58 @@ test("reconciliation drops a pending reference when the anchor no longer matches
   expect(references(f)).toBe(0);
 });
 
-test("reconciliation drops a pending reference when the evidence no longer matches", async ({
+async function expectUnresolvedEvidence(
+  f: Fixture,
+  runtime: MemoryRuntime,
+  ctx: ExtensionContext,
+  orphan: string,
+): Promise<void> {
+  const anchorId = String((await (await storeFor(f)).readRevision(orphan))?.anchorId);
+  expect(selected(runtime)).toEqual({ state: "none" });
+  expect(pending(runtime)).toEqual({
+    state: "unresolved",
+    revisionId: orphan,
+    anchorId,
+    reason: "evidence",
+  });
+  expect(references(f)).toBe(0);
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    unresolvedLine(
+      orphan,
+      anchorId,
+      "its evidence or curated notes changed after it was committed",
+    ),
+  );
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    `Memory revision ${orphan} is not recorded on this branch`,
+  );
+}
+
+test("reconciliation leaves an orphan head unresolved for evidence when its evidence no longer matches, which status reports and capture refuses", async ({
   createFixture,
 }) => {
   const f = await createFixture();
   await f.session.prompt("Orphan evidence.");
   const { runtime, ctx } = await started(f);
-  await orphanHead(f, runtime);
+  const orphan = await orphanHead(f, runtime);
   f.session.sessionManager.appendContextEdit(sourceEntry(f, "Orphan evidence.").id, {
     content: "Edited evidence.",
   });
   await runtime.start(ctx);
-  expect(selected(runtime)).toEqual({ state: "none" });
-  expect(references(f)).toBe(0);
+  await expectUnresolvedEvidence(f, runtime, ctx, orphan);
 });
 
-test("reconciliation drops a pending reference when the curation no longer matches", async ({
+test("reconciliation leaves an orphan head unresolved for evidence when its curation no longer matches, which status reports and capture refuses", async ({
   createFixture,
 }) => {
   const f = await createFixture();
   await f.session.prompt("Orphan evidence.");
   const { runtime, ctx } = await started(f);
-  await orphanHead(f, runtime);
+  const orphan = await orphanHead(f, runtime);
   const store = await storeFor(f);
   await writeFile(join(store.sessionDir, "current", "current-work.md"), "User edit\n");
   await runtime.start(ctx);
-  expect(selected(runtime)).toEqual({ state: "none" });
-  expect(references(f)).toBe(0);
+  await expectUnresolvedEvidence(f, runtime, ctx, orphan);
 });
 
 test("startup attaches an unreferenced head revision whose lineage and evidence match", async ({
@@ -455,7 +496,7 @@ test("startup attaches an unreferenced head revision whose lineage and evidence 
   expect(references(f)).toBe(1);
 });
 
-test("startup does not attach a revision already referenced on an abandoned branch", async ({
+test("startup does not attach a revision already referenced on an abandoned branch, and an ordinary capture there commits", async ({
   createFixture,
 }) => {
   const f = await createFixture();
@@ -477,6 +518,12 @@ test("startup does not attach a revision already referenced on an abandoned bran
   await runtime.start(ctx);
   expect(selected(runtime)).toEqual({ state: "none" });
   expect(references(f)).toBe(1);
+  const proposal = runtime.captureProposal(ctx, noteContent({ "journey.md": "Here\n" }), [
+    await sourceReference(f, "Orphan evidence."),
+  ]);
+  expect(proposal).toMatchObject({ baseRevision: null, expectedRevision: orphan });
+  const committed = committedId(await runtime.commitProposal(ctx, proposal));
+  expect((await store.readRevision(committed))?.notes).toEqual({ "journey.md": "Here\n" });
 });
 
 test("resuming a recorded session under another root rejects the previous project's memory", async ({
@@ -676,6 +723,7 @@ test.for(["waiting for lock", "before head publication"] as const)(
       dependencyFingerprint: "d".repeat(64),
       lineage: { selected: { state: "none" as const }, pending: { state: "none" as const } },
       latestRevision: null,
+      reconciliation: "current" as const,
     };
     const proposal = captureStorageProposal(
       storage,
@@ -721,6 +769,7 @@ test("a configuration change during the final source check rejects the proposal"
     dependencyFingerprint: "d".repeat(64),
     lineage: { selected: { state: "none" as const }, pending: { state: "none" as const } },
     latestRevision: null,
+    reconciliation: "current" as const,
   };
   const proposal = captureStorageProposal(
     storage,
@@ -1351,4 +1400,645 @@ test("shutdown right after a commit's source registration returns cancelled with
     "Tiered memory storage stopped for a session change or shutdown.",
   );
   expect(await (await storeFor(f)).currentHead()).toBeNull();
+});
+
+const orphanVariants = ["lost", "damaged"] as const;
+
+function unavailableLine(entryId: string): string {
+  return `Memory commits: blocked because the selected revision is unavailable. Navigate with /tree to a point before entry ${entryId} to continue memory work without it.`;
+}
+
+type OrphanVariant = (typeof orphanVariants)[number];
+
+const leafMarkerType = "orbis-tiered-memory-test-leaf";
+
+function parentOf(f: Fixture, entryId: string): string {
+  const parent = f.session.sessionManager.getEntry(entryId)?.parentId;
+  if (parent === undefined || parent === null) {
+    throw new Error(`Missing parent of entry ${entryId}.`);
+  }
+  return parent;
+}
+
+function settingsPath(f: Fixture): string {
+  return join(f.cwd, ".pi", "tiered-memory", "settings.json");
+}
+
+async function sessionLines(
+  file: string,
+  entryIds: readonly string[],
+): Promise<(string | undefined)[]> {
+  return await Promise.all(entryIds.map(async (entryId) => await sessionLine(file, entryId)));
+}
+
+interface NullBaseSibling {
+  older: string;
+  olderReference: string;
+  orphan: string;
+  anchor: string;
+  beforeAnchor: string;
+}
+
+async function commitNullBaseSibling(
+  f: Fixture,
+  variant: OrphanVariant,
+  removeOlder: boolean,
+): Promise<NullBaseSibling> {
+  await f.session.prompt(chainEvidence);
+  const { runtime, dropNextReference } = referenceDroppingRuntime(f);
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  await f.session.prompt("A turn before the first revision.");
+  const older = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R0\n" });
+  const olderReference = leafOf(f);
+  const anchor = parentOf(f, olderReference);
+  await writeFile(settingsPath(f), "{not json");
+  f.session.sessionManager.branch(anchor);
+  await runtime.start(ctx);
+  expect(runtime.snapshot.error).toContain("Invalid JSON");
+  expect(storageOf(runtime)).toMatchObject({
+    lineage: { selected: { state: "none" } },
+    latestRevision: older,
+  });
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "H\n" }), [
+    await sourceReference(f, chainEvidence),
+  ]);
+  expect(proposal).toMatchObject({ baseRevision: null, expectedRevision: older, anchorId: anchor });
+  if (variant === "lost") {
+    dropNextReference();
+  }
+  const orphan = committedId(await runtime.commitProposal(ctx, proposal));
+  f.session.sessionManager.branch(olderReference);
+  // The reopened session starts at the last entry, where the shipped extension reconciles first.
+  f.session.sessionManager.appendCustomEntry(leafMarkerType, {});
+  if (variant === "damaged") {
+    await damageReferences(f, [orphan]);
+  }
+  if (removeOlder) {
+    const store = await storeFor(f);
+    await rm(join(store.sessionDir, "revisions", `${older}.json`));
+  }
+  return { older, olderReference, orphan, anchor, beforeAnchor: parentOf(f, anchor) };
+}
+
+test.for(orphanVariants)(
+  "a null-base sibling head whose reference is $0 does not attach over an unavailable selection, which keeps the unavailable diagnostic, the head and its notes, refuses capture, and returns a lineage conflict for a retained proposal",
+  { timeout: 20_000 },
+  async (variant, { createFixture }) => {
+    const f = await createFixture({ project: { limits: { queuedJobs: 3 } } });
+    const { older, olderReference, orphan, anchor, beforeAnchor } = await commitNullBaseSibling(
+      f,
+      variant,
+      true,
+    );
+    const g = await reopen(f, createFixture);
+    const { runtime, ctx } = await started(g);
+    const store = await storeFor(g);
+    expect(selected(runtime)).toMatchObject({ state: "unavailable" });
+    expect(storageOf(runtime).latestRevision).toBe(orphan);
+    expect(validReferences(g, store.projectId)).toEqual([older]);
+    const lines = renderStatus(buildStatus(runtime, ctx)).split("\n");
+    expect(lines).toContain(
+      `Selected memory revision: unavailable (Selected revision ${older} is unavailable.)`,
+    );
+    expect(lines).toContain(`Latest durable revision: ${orphan}`);
+    expect(lines).toContain(unavailableLine(olderReference));
+    expect(lines.some((line) => line.startsWith("Selected memory validity:"))).toBe(false);
+    expect(lines).toContain(
+      unresolvedLine(
+        orphan,
+        anchor,
+        "its lineage from the selected revision cannot be established",
+      ),
+    );
+    expect(() => runtime.captureProposal(ctx, noteContent({ "journey.md": "Next\n" }), [])).toThrow(
+      `Memory revision ${orphan} is not recorded on this branch`,
+    );
+    const destination = leafOf(g);
+    g.session.sessionManager.branch(beforeAnchor);
+    await runtime.start(ctx);
+    const retained = runtime.captureProposal(ctx, noteContent({ "journey.md": "Retained\n" }), [
+      await sourceReference(g, chainEvidence),
+    ]);
+    expect(retained).toMatchObject({ baseRevision: null, expectedRevision: orphan });
+    g.session.sessionManager.branch(destination);
+    await runtime.start(ctx);
+    expect(await runtime.commitProposal(ctx, retained)).toMatchObject({
+      kind: "conflict",
+      reason: "lineage",
+    });
+    expect(selected(runtime)).toMatchObject({ state: "unavailable" });
+    expect(validReferences(g, store.projectId)).toEqual([older]);
+    expect(await store.currentHead()).toBe(orphan);
+    expect((await store.readRevision(orphan))?.notes).toEqual({ "current-work.md": "H\n" });
+    expect(await viewOf(g)).toBe("H\n");
+  },
+);
+
+test.for(orphanVariants)(
+  "a null-base sibling head whose reference is $0 does not attach over an intact selection, which stays selected and accepts a capture that expects the head",
+  { timeout: 20_000 },
+  async (variant, { createFixture }) => {
+    const f = await createFixture({ project: { limits: { queuedJobs: 3 } } });
+    const { older, orphan } = await commitNullBaseSibling(f, variant, false);
+    const g = await reopen(f, createFixture);
+    const { runtime, ctx } = await started(g);
+    const store = await storeFor(g);
+    expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: older });
+    expect(storageOf(runtime).latestRevision).toBe(orphan);
+    expect(validReferences(g, store.projectId)).toEqual([older]);
+    const proposal = runtime.captureProposal(ctx, noteContent({ "journey.md": "Next\n" }), [
+      await sourceReference(g, chainEvidence),
+    ]);
+    expect(proposal).toMatchObject({
+      baseRevision: { revisionId: older },
+      expectedRevision: orphan,
+    });
+    const committed = committedId(await runtime.commitProposal(ctx, proposal));
+    expect((await store.readRevision(committed))?.notes).toEqual({
+      "current-work.md": "R0\n",
+      "journey.md": "Next\n",
+    });
+  },
+);
+
+interface SiblingAfterHistory {
+  chain: Chain;
+  orphan: string;
+  damagedIds: [string, string];
+  damagedLines: (string | undefined)[];
+}
+
+async function commitSiblingAfterHistory(
+  f: Fixture,
+  variant: OrphanVariant,
+): Promise<SiblingAfterHistory> {
+  const chain = await commitChain(f, ["R0\n", "R1\n", "R2\n"]);
+  const [r0, r1, r2] = chain.revisions;
+  const [r0Reference, r1Reference, r2Reference] = chain.references;
+  if (
+    r0 === undefined ||
+    r1 === undefined ||
+    r2 === undefined ||
+    r0Reference === undefined ||
+    r1Reference === undefined ||
+    r2Reference === undefined
+  ) {
+    throw new Error("Missing chain revision.");
+  }
+  await writeFile(settingsPath(f), "{not json");
+  const { runtime, dropNextReference } = referenceDroppingRuntime(f);
+  const ctx = f.session.extensionRunner.createContext();
+  f.session.sessionManager.branch(r0Reference);
+  await runtime.start(ctx);
+  expect(runtime.snapshot.error).toContain("Invalid JSON");
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: r0 });
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "H\n" }), [
+    await sourceReference(f, chainEvidence),
+  ]);
+  expect(proposal).toMatchObject({
+    baseRevision: { revisionId: r0 },
+    expectedRevision: r2,
+    anchorId: r0Reference,
+  });
+  if (variant === "lost") {
+    dropNextReference();
+  }
+  const orphan = committedId(await runtime.commitProposal(ctx, proposal));
+  f.session.sessionManager.branch(r2Reference);
+  // The reopened session starts at the last entry, where the shipped extension reconciles first.
+  f.session.sessionManager.appendCustomEntry(leafMarkerType, {});
+  await damageReferences(f, variant === "lost" ? [r1, r2] : [r1, r2, orphan]);
+  const damagedIds: [string, string] = [r1Reference, r2Reference];
+  return {
+    chain,
+    orphan,
+    damagedIds,
+    damagedLines: await sessionLines(sessionFileOf(f), damagedIds),
+  };
+}
+
+test.for(orphanVariants)(
+  "a sibling head based on R0 whose reference is $0 does not attach after damaged R1 and R2 references, which keep blocking commits with their bytes, revisions, and notes, and a retained proposal returns a lineage conflict",
+  { timeout: 30_000 },
+  async (variant, { createFixture }) => {
+    const f = await createFixture({ project: { limits: { queuedJobs: 3 } } });
+    const { chain, orphan, damagedIds, damagedLines } = await commitSiblingAfterHistory(f, variant);
+    const [r0, r1, r2] = chain.revisions;
+    const [r1Reference, r2Reference] = damagedIds;
+    const g = await reopen(f, createFixture);
+    const { runtime, ctx } = await started(g);
+    const store = await storeFor(g);
+    expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: r0 });
+    expect(storageOf(runtime).latestRevision).toBe(orphan);
+    expect(validReferences(g, store.projectId)).toEqual([r0]);
+    const status = buildStatus(runtime, ctx);
+    expect(status.damagedReferences).toEqual([
+      { entryId: r1Reference, path: "/version" },
+      { entryId: r2Reference, path: "/version" },
+    ]);
+    expect(status.storage).toMatchObject({
+      blockingReference: { entryId: r1Reference, path: "/version" },
+    });
+    const lines = renderStatus(status).split("\n");
+    expect(lines).toContain(blockedLine(r1Reference));
+    expect(lines).toContain(
+      "Selected memory validity: uncertain: damaged revision references follow the selected revision",
+    );
+    expect(lines).toContain(
+      unresolvedLine(
+        orphan,
+        String(chain.references[0]),
+        "its lineage from the selected revision cannot be established",
+      ),
+    );
+    expect(() => runtime.captureProposal(ctx, noteContent({ "journey.md": "Next\n" }), [])).toThrow(
+      `entry ${r1Reference}`,
+    );
+    const destination = leafOf(g);
+    g.session.sessionManager.branch(parentOf(g, String(chain.references[0])));
+    await runtime.start(ctx);
+    const retained = runtime.captureProposal(ctx, noteContent({ "journey.md": "Retained\n" }), [
+      await sourceReference(g, chainEvidence),
+    ]);
+    expect(retained).toMatchObject({ baseRevision: null, expectedRevision: orphan });
+    g.session.sessionManager.branch(destination);
+    await runtime.start(ctx);
+    expect(await runtime.commitProposal(ctx, retained)).toMatchObject({
+      kind: "conflict",
+      reason: "lineage",
+    });
+    expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: r0 });
+    expect(validReferences(g, store.projectId)).toEqual([r0]);
+    expect(await sessionLines(sessionFileOf(g), damagedIds)).toEqual(damagedLines);
+    expect(await store.currentHead()).toBe(orphan);
+    expect((await store.readRevision(String(r1)))?.notes).toEqual({ "current-work.md": "R1\n" });
+    expect((await store.readRevision(String(r2)))?.notes).toEqual({ "current-work.md": "R2\n" });
+    expect((await store.readRevision(orphan))?.notes).toEqual({ "current-work.md": "H\n" });
+    expect(await viewOf(g)).toBe("H\n");
+  },
+);
+
+test.for(orphanVariants)(
+  "a head based on and published after R0 whose own reference is $0 attaches, clears the commit block, and becomes the next capture's base",
+  { timeout: 20_000 },
+  async (variant, { createFixture }) => {
+    const f = await createFixture();
+    await f.session.prompt(chainEvidence);
+    const { runtime, dropNextReference } = referenceDroppingRuntime(f);
+    await runtime.start(f.session.extensionRunner.createContext());
+    const r0 = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R0\n" });
+    if (variant === "lost") {
+      dropNextReference();
+    }
+    const r1 = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R1\n" });
+    const damaged = variant === "damaged" ? await damageReferences(f, [r1]) : [];
+    const damagedLines = await sessionLines(sessionFileOf(f), damaged);
+    const g = await reopen(f, createFixture);
+    const { runtime: recovered, ctx } = await started(g);
+    const store = await storeFor(g);
+    expect(selected(recovered)).toMatchObject({ state: "selected", revisionId: r1 });
+    expect(validReferences(g, store.projectId)).toEqual([r0, r1]);
+    expect(buildStatus(recovered, ctx).storage).toMatchObject({ blockingReference: undefined });
+    expect(await sessionLines(sessionFileOf(g), damaged)).toEqual(damagedLines);
+    expect(
+      recovered.captureProposal(ctx, noteContent({ "journey.md": "Next\n" }), [
+        await sourceReference(g, chainEvidence),
+      ]),
+    ).toMatchObject({ baseRevision: { revisionId: r1 }, expectedRevision: r1 });
+  },
+);
+
+async function droppingRuntime(f: Fixture): Promise<{
+  runtime: MemoryRuntime;
+  ctx: ExtensionContext;
+  dropNextReference: () => void;
+}> {
+  const { runtime, dropNextReference } = referenceDroppingRuntime(f);
+  const ctx = f.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  return { runtime, ctx, dropNextReference };
+}
+
+test.for([
+  { label: "two damaged references to the head", duplicate: true },
+  { label: "two junk entries after its lost reference", duplicate: false },
+])(
+  "a head based on and published after R0 stays unresolved behind $label, which stay listed with their bytes and keep blocking capture",
+  { timeout: 20_000 },
+  async ({ duplicate }, { createFixture }) => {
+    const f = await createFixture();
+    await f.session.prompt(chainEvidence);
+    const { runtime, dropNextReference } = await droppingRuntime(f);
+    const r0 = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R0\n" });
+    const anchor = leafOf(f);
+    const store = await storeFor(f);
+    let damaged: string[];
+    let head: string;
+    if (duplicate) {
+      head = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R1\n" });
+      f.session.sessionManager.appendCustomEntry(revisionEntryType, {
+        version: 1,
+        projectId: store.projectId,
+        sessionId: store.sessionId,
+        revisionId: head,
+      });
+      damaged = await damageReferences(f, [head]);
+    } else {
+      dropNextReference();
+      head = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R1\n" });
+      f.session.sessionManager.appendCustomEntry(revisionEntryType, { junk: true });
+      const first = leafOf(f);
+      f.session.sessionManager.appendCustomEntry(revisionEntryType, { junk: true });
+      damaged = [first, leafOf(f)];
+    }
+    const lines = await sessionLines(sessionFileOf(f), damaged);
+    const g = await reopen(f, createFixture);
+    const { runtime: recovered, ctx } = await started(g);
+    expect(selected(recovered)).toMatchObject({ state: "selected", revisionId: r0 });
+    expect(pending(recovered)).toEqual({
+      state: "unresolved",
+      revisionId: head,
+      anchorId: anchor,
+      reason: "lineage",
+    });
+    expect(validReferences(g, store.projectId)).toEqual([r0]);
+    const status = buildStatus(recovered, ctx);
+    expect(status.damagedReferences.map((reference) => reference.entryId)).toEqual(damaged);
+    const rendered = renderStatus(status).split("\n");
+    expect(rendered).toContain(blockedLine(String(damaged[0])));
+    expect(rendered).toContain(
+      unresolvedLine(head, anchor, "its lineage from the selected revision cannot be established"),
+    );
+    expect(() => recovered.captureProposal(ctx, noteContent({}), [])).toThrow(
+      `entry ${String(damaged[0])}`,
+    );
+    expect(await sessionLines(sessionFileOf(g), damaged)).toEqual(lines);
+    expect((await store.readRevision(head))?.notes).toEqual({ "current-work.md": "R1\n" });
+  },
+);
+
+test("a first session commit whose reference is lost attaches with no base and no parent, and becomes the next capture's base", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt(chainEvidence);
+  const { runtime, ctx, dropNextReference } = await droppingRuntime(f);
+  dropNextReference();
+  const head = await commitNote(f, runtime, chainEvidence, { "current-work.md": "First\n" });
+  const store = await storeFor(f);
+  expect(await store.readRevision(head)).toMatchObject({
+    baseRevision: null,
+    parentRevisionId: null,
+  });
+  await runtime.start(ctx);
+  expect(selected(runtime)).toMatchObject({ state: "selected", revisionId: head });
+  expect(pending(runtime)).toEqual({ state: "none" });
+  expect(validReferences(f, store.projectId)).toEqual([head]);
+  expect(runtime.captureProposal(ctx, noteContent({}), [])).toMatchObject({
+    baseRevision: { revisionId: head },
+  });
+});
+
+test("a first child commit inheriting its fork base whose reference is lost attaches with no parent and keeps the inherited notes", async ({
+  createFixture,
+}) => {
+  const parent = await createFixture();
+  await parent.session.prompt("Remember the parent state.");
+  const { runtime } = await started(parent);
+  const inherited = await commitNote(parent, runtime, "Remember the parent state.", {
+    "current-work.md": "Parent state\n",
+  });
+  const child = await forkOnDisk(parent, createFixture);
+  const { runtime: childRuntime, ctx, dropNextReference } = await droppingRuntime(child);
+  expect(selected(childRuntime)).toMatchObject({
+    revisionId: inherited,
+    sessionId: parent.session.sessionManager.getSessionId(),
+  });
+  dropNextReference();
+  const childHead = await commitNote(child, childRuntime, "Remember the parent state.", {
+    "journey.md": "Child journey\n",
+  });
+  const store = await storeFor(child);
+  expect(await store.readRevision(childHead)).toMatchObject({
+    baseRevision: { revisionId: inherited },
+    parentRevisionId: null,
+    notes: { "current-work.md": "Parent state\n", "journey.md": "Child journey\n" },
+  });
+  await childRuntime.start(ctx);
+  expect(selected(childRuntime)).toMatchObject({
+    state: "selected",
+    revisionId: childHead,
+    sessionId: store.sessionId,
+  });
+  expect(pending(childRuntime)).toEqual({ state: "none" });
+  expect(childRuntime.captureProposal(ctx, noteContent({}), [])).toMatchObject({
+    baseRevision: { revisionId: childHead },
+  });
+}, 20_000);
+
+test("a head based on an unavailable R0 stays unresolved, R0 stays unavailable and missing, and capture refuses", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt(chainEvidence);
+  const { runtime, dropNextReference } = await droppingRuntime(f);
+  const r0 = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R0\n" });
+  const anchor = leafOf(f);
+  dropNextReference();
+  const head = await commitNote(f, runtime, chainEvidence, { "current-work.md": "H\n" });
+  const store = await storeFor(f);
+  const r0File = join(store.sessionDir, "revisions", `${r0}.json`);
+  await rm(r0File);
+  const g = await reopen(f, createFixture);
+  const { runtime: recovered, ctx } = await started(g);
+  expect(storageOf(recovered).lineage).toEqual({
+    selected: {
+      state: "unavailable",
+      revisionId: r0,
+      sessionId: store.sessionId,
+      reason: `Selected revision ${r0} is unavailable.`,
+    },
+    pending: { state: "unresolved", revisionId: head, anchorId: anchor, reason: "lineage" },
+  });
+  expect(validReferences(g, store.projectId)).toEqual([r0]);
+  expect(renderStatus(buildStatus(recovered, ctx)).split("\n")).toEqual(
+    expect.arrayContaining([
+      `Selected memory revision: unavailable (Selected revision ${r0} is unavailable.)`,
+      unavailableLine(anchor),
+      unresolvedLine(head, anchor, "its lineage from the selected revision cannot be established"),
+    ]),
+  );
+  expect(() => recovered.captureProposal(ctx, noteContent({}), [])).toThrow(
+    `Memory revision ${head} is not recorded on this branch`,
+  );
+  await expect(readFile(r0File, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  expect((await store.readRevision(head))?.notes).toEqual({ "current-work.md": "H\n" });
+}, 20_000);
+
+test("a head committed after tree navigation whose reference is lost stays unresolved, and navigation before its anchor clears the block for an ordinary commit", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt(chainEvidence);
+  const { runtime, ctx, dropNextReference } = await droppingRuntime(f);
+  const r0 = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R0\n" });
+  const r0Reference = leafOf(f);
+  const r1 = await commitNote(f, runtime, chainEvidence, { "current-work.md": "R1\n" });
+  f.session.sessionManager.branch(r0Reference);
+  await runtime.selectBranch(ctx);
+  expect(selected(runtime)).toMatchObject({ revisionId: r0 });
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "H\n" }), [
+    await sourceReference(f, chainEvidence),
+  ]);
+  expect(proposal).toMatchObject({ baseRevision: { revisionId: r0 }, expectedRevision: r1 });
+  dropNextReference();
+  const head = committedId(await runtime.commitProposal(ctx, proposal));
+  await runtime.start(ctx);
+  expect(pending(runtime)).toEqual({
+    state: "unresolved",
+    revisionId: head,
+    anchorId: proposal.anchorId,
+    reason: "lineage",
+  });
+  expect(selected(runtime)).toMatchObject({ revisionId: r0 });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    unresolvedLine(
+      head,
+      proposal.anchorId,
+      "its lineage from the selected revision cannot be established",
+    ),
+  );
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    `Memory revision ${head} is not recorded on this branch`,
+  );
+  f.session.sessionManager.branch(r0Reference);
+  await runtime.selectBranch(ctx);
+  expect(pending(runtime)).toEqual({ state: "none" });
+  const ordinary = runtime.captureProposal(ctx, noteContent({ "journey.md": "Journey\n" }), [
+    await sourceReference(f, chainEvidence),
+  ]);
+  expect(ordinary).toMatchObject({ baseRevision: { revisionId: r0 }, expectedRevision: head });
+  const committed = committedId(await runtime.commitProposal(ctx, ordinary));
+  const store = await storeFor(f);
+  expect((await store.readRevision(committed))?.notes).toEqual({
+    "current-work.md": "R0\n",
+    "journey.md": "Journey\n",
+  });
+  expect((await store.readRevision(head))?.notes).toEqual({ "current-work.md": "H\n" });
+}, 20_000);
+
+test.for([
+  { label: "storage becomes unready", change: { reconciliation: "reconciling" } },
+  {
+    label: "an orphan head becomes unresolved",
+    change: {
+      lineage: {
+        selected: { state: "none" },
+        pending: { state: "unresolved", revisionId: "r9", anchorId: "a9", reason: "lineage" },
+      },
+    },
+  },
+  {
+    label: "another revision becomes selected",
+    change: {
+      lineage: { selected: selectedAs("r9", "s9"), pending: { state: "none" } },
+    },
+  },
+] satisfies { label: string; change: Partial<ProposalBinding> }[])(
+  "a binding change in which $label between the commit's two validations returns a lineage conflict and writes no head",
+  async ({ change }, { createFixture }) => {
+    const f = await createFixture();
+    await f.session.prompt("Stable evidence.");
+    const manager = f.session.sessionManager;
+    let binding: ProposalBinding = storageBinding(
+      { selected: { state: "none" }, pending: { state: "none" } },
+      "d".repeat(64),
+    );
+    const runtime = storageRuntime({
+      write: async (path, contents) => {
+        await writeDurable(path, contents);
+        if (path.includes(`${sep}revisions${sep}`)) {
+          binding = { ...binding, ...change };
+        }
+      },
+    });
+    const storage = await runtime.runPromise(
+      openStorageSession({ cwd: f.cwd, sessionManager: manager }),
+    );
+    await runtime.runPromise(storage.sources.register(manager));
+    const proposal = captureStorageProposal(
+      storage,
+      { sessionManager: manager },
+      binding,
+      noteContent({ "current-work.md": "Old\n" }),
+      [await sourceReference(f, "Stable evidence.")],
+    );
+    const result = await runtime.runPromise(
+      commitStorageProposal(
+        storage,
+        { sessionManager: manager },
+        () => binding,
+        proposal,
+        () => undefined,
+      ),
+    );
+    expect(result).toMatchObject({ kind: "conflict", reason: "lineage" });
+    expect(await runtime.runPromise(storage.store.currentHead())).toBeNull();
+  },
+);
+
+test("a refresh that attaches a committed head before its commit applies lineage leaves that head one reference entry", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Adopted head.");
+  const { manager, runtime, storage } = await openedStorage(f);
+  const host = {
+    appendEntry(type: string, data: unknown) {
+      manager.appendCustomEntry(type, data);
+    },
+  };
+  const ctx = { sessionManager: manager };
+  const binding = storageBinding(
+    { selected: { state: "none" }, pending: { state: "none" } },
+    "d".repeat(64),
+  );
+  const proposal = captureStorageProposal(
+    storage,
+    ctx,
+    binding,
+    noteContent({ "current-work.md": "One\n" }),
+    [await sourceReference(f, "Adopted head.")],
+  );
+  const committed = await runtime.runPromise(
+    commitStorageProposal(
+      storage,
+      ctx,
+      () => binding,
+      proposal,
+      () => undefined,
+    ),
+  );
+  if (committed.kind !== "committed") {
+    throw new Error(`Expected a committed revision, received ${committed.kind}.`);
+  }
+  const head = committed.revisionId;
+  const update = { sources: storage.sources.sources, event: "commit" as const };
+  const lineage: LineageState = {
+    selected: { state: "none" },
+    pending: { state: "unappended", revisionId: head },
+  };
+  const refreshed = await runtime.runPromise(
+    refreshLineage(host, storage.store, ctx, { ...binding, lineage }, update, () => true),
+  );
+  const attachedLineage = {
+    selected: selectedAs(head, storage.store.sessionId),
+    pending: { state: "none" },
+  };
+  expect(refreshed.lineage).toEqual(attachedLineage);
+  expect(
+    await runtime.runPromise(attachCommitted(host, storage, ctx, refreshed.lineage, head)),
+  ).toEqual(attachedLineage);
+  expect(validReferences(f, storage.store.projectId)).toEqual([head]);
 });

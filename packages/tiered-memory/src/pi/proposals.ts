@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 
 import { assessRevision, evidenceMatches, sourceReferences } from "../domain/evidence.ts";
@@ -8,9 +8,14 @@ import { recoverFailure } from "../storage/files.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
 import type { StoreCommitResult } from "../storage/store.ts";
-import { blockingReferences, sameBase, selectedAs, selectedPointer } from "./lineage.ts";
+import { sameBase, selectedAs, selectedPointer } from "./lineage.ts";
 import type { LineageState, ProposalBinding, ProposalContent } from "./lineage.ts";
-import { appendReference, referencesIn, tryConfirmReference } from "./revision-references.ts";
+import {
+  appendReference,
+  blockingReferences,
+  referencesIn,
+  tryConfirmReference,
+} from "./revision-references.ts";
 import type { StorageSession } from "./storage-session.ts";
 
 /**
@@ -31,6 +36,8 @@ export type CommitProgress =
  *
  *   - A damaged revision reference makes the lineage ambiguous; the message names the first blocking
  *     entry.
+ *   - Reconciliation has not completed for the current configuration, or it failed.
+ *   - Reconciliation left an orphan head unresolved; the message names the head.
  *   - A reference is pending.
  *   - The selected revision is unavailable.
  *   - No configuration is current, or the branch has no leaf.
@@ -43,22 +50,10 @@ export function captureProposal(
   content: ProposalContent,
   sourceIds: readonly string[],
 ): MemoryProposal {
-  const { selected, pending } = binding.lineage;
-  const [blocking] = blockingReferences(
-    ctx.sessionManager.getBranch(),
-    storage.store.projectId,
-    selected,
-  );
-  if (blocking !== undefined) {
-    throw new Error(
-      `Memory lineage is ambiguous: damaged revision reference entry ${blocking.entryId} can hide a newer revision.`,
-    );
-  }
-  if (pending.state !== "none") {
-    throw new Error("A committed memory revision awaits its branch reference.");
-  }
-  if (selected.state === "unavailable") {
-    throw new Error(`The selected memory revision is unavailable: ${selected.reason}`);
+  const { selected } = binding.lineage;
+  const refusal = lineageRefusal(binding, ctx.sessionManager.getBranch(), storage.store.projectId);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
   }
   const anchorId = ctx.sessionManager.getLeafId();
   if (binding.dependencyFingerprint === undefined || anchorId === null) {
@@ -85,6 +80,34 @@ export function captureProposal(
     ),
     excludedInheritedNotes: selected.state === "selected" ? [...selected.invalidNotes] : [],
   });
+}
+
+// Returns the first lineage condition that refuses proposals, in capture's documented order.
+function lineageRefusal(
+  binding: ProposalBinding,
+  branch: readonly SessionEntry[],
+  projectId: string,
+): string | undefined {
+  const { selected, pending } = binding.lineage;
+  const [blocking] = blockingReferences(branch, projectId, selected);
+  if (blocking !== undefined) {
+    return `Memory lineage is ambiguous: damaged revision reference entry ${blocking.entryId} can hide a newer revision.`;
+  }
+  if (binding.reconciliation === "reconciling") {
+    return "Memory storage is reconciling with the current settings and models.";
+  }
+  if (binding.reconciliation === "failed") {
+    return "The latest memory reconciliation failed.";
+  }
+  if (pending.state === "unresolved") {
+    return `Memory revision ${pending.revisionId} is not recorded on this branch and cannot be attached.`;
+  }
+  if (pending.state !== "none") {
+    return "A committed memory revision awaits its branch reference.";
+  }
+  return selected.state === "unavailable"
+    ? `The selected memory revision is unavailable: ${selected.reason}`
+    : undefined;
 }
 
 const evidenceStillValid = Effect.fnUntraced(function* (
@@ -126,7 +149,8 @@ const evidenceStillValid = Effect.fnUntraced(function* (
  * selection and returns `lineage` when:
  *
  * - A damaged revision reference makes the selection ambiguous.
- * - A committed revision's branch reference is still pending.
+ * - Reconciliation has not completed for the current configuration, or it failed.
+ * - A committed revision's branch reference is still pending, or an orphan head is unresolved.
  * - The selection is unavailable.
  * - The selection no longer names the proposal's base revision; a `null` base matches only `none`.
  *
@@ -159,13 +183,10 @@ export const commitProposal = Effect.fnUntraced(function* (
     ) {
       return "configuration";
     }
-    const { selected, pending } = current.lineage;
     const branch = ctx.sessionManager.getBranch();
     if (
-      blockingReferences(branch, storage.store.projectId, selected).length > 0 ||
-      pending.state !== "none" ||
-      selected.state === "unavailable" ||
-      !sameBase(captured.baseRevision, selected)
+      lineageRefusal(current, branch, storage.store.projectId) !== undefined ||
+      !sameBase(captured.baseRevision, current.lineage.selected)
     ) {
       return "lineage";
     }

@@ -1,6 +1,6 @@
 import type * as FsPromises from "node:fs/promises";
 
-import { expect, vi } from "vitest";
+import { afterEach, expect, vi } from "vitest";
 
 import {
   committedId,
@@ -17,6 +17,11 @@ const gate = vi.hoisted(() => ({
   release: Promise.withResolvers<undefined>(),
   finished: Promise.withResolvers<undefined>(),
 }));
+
+afterEach(() => {
+  gate.armed = false;
+  gate.release.resolve(undefined);
+});
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>();

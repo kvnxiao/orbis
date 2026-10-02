@@ -10,6 +10,7 @@ import { Value } from "typebox/value";
 import { digestSchema, safeIdSchema } from "../domain/references.ts";
 import { fromPromise, readText } from "../storage/files.ts";
 import type { MemoryStore } from "../storage/store.ts";
+import type { SelectedRevision } from "./lineage.ts";
 
 const revisionEntryType = "orbis-tiered-memory-revision";
 
@@ -82,6 +83,49 @@ export function damagedReferencesIn(entries: readonly SessionEntry[]): DamagedRe
       },
     ];
   });
+}
+
+/**
+ * Return the damaged revision references that make `selected` ambiguous, in branch order; an empty
+ * result means the lineage does not block commits.
+ *
+ * - The boundary is the last valid reference that names `projectId` and the selected session and
+ *   revision; only damaged entries after it block.
+ * - Every damaged entry blocks when `selected` is `none` or `unavailable`, or when no reference
+ *   matches it.
+ */
+export function blockingReferences(
+  branch: readonly SessionEntry[],
+  projectId: string,
+  selected: SelectedRevision,
+): DamagedReference[] {
+  const boundary = selected.state === "selected" ? selectionIndex(branch, projectId, selected) : -1;
+  return damagedReferencesIn(branch.slice(boundary + 1));
+}
+
+function selectionIndex(
+  branch: readonly SessionEntry[],
+  projectId: string,
+  pointer: Pick<RevisionReference, "sessionId" | "revisionId">,
+): number {
+  return branch.findLastIndex((entry) =>
+    referencesIn([entry], projectId).some(
+      (reference) =>
+        reference.sessionId === pointer.sessionId && reference.revisionId === pointer.revisionId,
+    ),
+  );
+}
+
+/**
+ * Return the ID of the last valid reference entry on `branch` that names `projectId` and the
+ * pointer's session and revision, the boundary `blockingReferences` uses, or `undefined`.
+ */
+export function selectionEntryId(
+  branch: readonly SessionEntry[],
+  projectId: string,
+  pointer: Pick<RevisionReference, "sessionId" | "revisionId">,
+): string | undefined {
+  return branch[selectionIndex(branch, projectId, pointer)]?.id;
 }
 
 /**

@@ -1,4 +1,13 @@
-import { link, mkdir, open as openFile, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  open as openFile,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { dirname, join, sep } from "node:path";
 
@@ -9,23 +18,28 @@ import { expect, vi } from "vitest";
 
 import type { CommitResult, MemoryProposal } from "../src/domain/proposal.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
+import { buildStatus, renderStatus } from "../src/pi/status.ts";
 import { fromPromise, writeDurable } from "../src/storage/files.ts";
 import { LockFilesystem, ProcessLiveness } from "../src/storage/services.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
+import { fixtureModel } from "./pi-fixture.mts";
 import type { Fixture } from "./pi-fixture.mts";
-import { afterWrite } from "./storage-harness.mts";
+import { afterHeadWrite, afterWrite } from "./storage-harness.mts";
 import type { TestServices, TestWrite } from "./storage-harness.mts";
 import {
   committedId,
   noteContent,
   openRegistry,
   openStore,
+  referenceDroppingRuntime,
   runtimeFor,
   sourceEntry,
   sourceReference,
   storageOf,
   storeFor,
   test,
+  unrecordedLine,
+  validReferences,
 } from "./store-fixture.mts";
 
 function contextOf(f: Fixture) {
@@ -588,97 +602,6 @@ test("a disable while the commit waits for the lock after registration returns c
     reason: { message: "Tiered memory is disabled." },
   });
   expect(storageOf(runtime).registration).toMatchObject({ event: "commit" });
-});
-
-test("a refresh that adopts a concurrent commit's head leaves that commit one reference entry", async ({
-  createFixture,
-}) => {
-  const f = await createFixture();
-  await f.session.prompt("Adopted head.");
-  const phase = { value: "idle" };
-  const cancelledPublish = {
-    entered: Promise.withResolvers<undefined>(),
-    gate: Promise.withResolvers<undefined>(),
-  };
-  const revisionWrite = {
-    entered: Promise.withResolvers<undefined>(),
-    gate: Promise.withResolvers<undefined>(),
-  };
-  const commitWaiting = Promise.withResolvers<undefined>();
-  const refreshWaiting = Promise.withResolvers<undefined>();
-  const runtime = runtimeFor(f, {
-    write: async (path, contents) => {
-      if (phase.value === "committing" && path.includes(`${sep}revisions${sep}`)) {
-        phase.value = "revision held";
-        revisionWrite.entered.resolve(undefined);
-        await revisionWrite.gate.promise;
-      }
-      await writeDurable(path, contents);
-      if (phase.value === "registering" && path.endsWith("sources.json")) {
-        phase.value = "registered";
-      }
-    },
-    lock: {
-      publish: async (source, ticket) => {
-        if (phase.value === "registered") {
-          phase.value = "publish held";
-          cancelledPublish.entered.resolve(undefined);
-          await cancelledPublish.gate.promise;
-        }
-        await link(source, ticket);
-      },
-      readTicket: async (path) => {
-        const ticket = await Effect.runPromise(LockFilesystem.live.readTicket(path));
-        if (phase.value === "publish released") {
-          phase.value = "commit waiting";
-          commitWaiting.resolve(undefined);
-        } else if (phase.value === "aborted") {
-          phase.value = "refresh waiting";
-          refreshWaiting.resolve(undefined);
-        }
-        return ticket;
-      },
-    },
-  });
-  const ctx = contextOf(f);
-  await runtime.start(ctx);
-  const source = await sourceReference(f, "Adopted head.");
-  const cancelling = runtime.captureProposal(ctx, noteContent({ "journey.md": "Zero\n" }), [
-    source,
-  ]);
-  const winning = runtime.captureProposal(ctx, noteContent({ "current-work.md": "One\n" }), [
-    source,
-  ]);
-  const controller = new AbortController();
-  phase.value = "registering";
-  const cancelled = runtime.commitProposal({ ...ctx, signal: controller.signal }, cancelling);
-  await cancelledPublish.entered.promise;
-  phase.value = "committing";
-  const committed = runtime.commitProposal(ctx, winning);
-  await revisionWrite.entered.promise;
-  phase.value = "publish released";
-  cancelledPublish.gate.resolve(undefined);
-  await commitWaiting.promise;
-  phase.value = "aborted";
-  controller.abort(new Error("cancelled behind the winning commit"));
-  await refreshWaiting.promise;
-  phase.value = "done";
-  revisionWrite.gate.resolve(undefined);
-  const winner = committedId(await committed);
-  expect(await cancelled).toMatchObject({ kind: "cancelled" });
-  expect(
-    f.session.sessionManager
-      .getEntries()
-      .flatMap((entry) =>
-        entry.type === "custom" && entry.customType === "orbis-tiered-memory-revision"
-          ? [entry.data]
-          : [],
-      ),
-  ).toEqual([expect.objectContaining({ revisionId: winner })]);
-  expect(storageOf(runtime).lineage).toMatchObject({
-    selected: { state: "selected", revisionId: winner },
-    pending: { state: "none" },
-  });
 });
 
 test("a host abort while registration waits for the lock returns cancelled and leaves the registration counts", async ({
@@ -1425,4 +1348,261 @@ test("after shutdown, role checks, transitions, and commits start no work", asyn
   expect(f.session.sessionManager.getEntries().length).toBe(entries + 1);
   expect(runtime.snapshot.storage).toEqual({ state: "stopped" });
   expect(await (await storeFor(f)).currentHead()).toBeNull();
+});
+
+test("a durable head publishes itself as the latest head with a pending reference before its views are written, so capture refuses", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Durable head.");
+  const viewEntered = Promise.withResolvers<undefined>();
+  const viewGate = Promise.withResolvers<undefined>();
+  const runtime = runtimeFor(f, {
+    write: afterHeadWrite(async () => {
+      viewEntered.resolve(undefined);
+      await viewGate.promise;
+    }),
+  });
+  const ctx = contextOf(f);
+  await runtime.start(ctx);
+  const commit = runtime.commitProposal(
+    ctx,
+    runtime.captureProposal(ctx, noteContent({ "current-work.md": "Durable\n" }), [
+      await sourceReference(f, "Durable head."),
+    ]),
+  );
+  await viewEntered.promise;
+  const head = storageOf(runtime).latestRevision;
+  expect(head).not.toBeNull();
+  expect(storageOf(runtime).lineage.pending).toEqual({ state: "unappended", revisionId: head });
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    "A committed memory revision awaits its branch reference.",
+  );
+  expect(buildStatus(runtime, ctx).storage).toMatchObject({ latestRevision: head });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    unrecordedLine(String(head)),
+  );
+  viewGate.resolve(undefined);
+  expect(committedId(await commit)).toBe(head);
+  expect(validReferences(f, storageOf(runtime).projectId)).toEqual([String(head)]);
+});
+
+interface ViewFault {
+  failing: boolean;
+  failure: Error;
+}
+
+// Fails every write to `path` after the first head write while `fault.failing` holds, as a view
+// write of the commit and of its repair would.
+function failingViewAfterHead(matches: (path: string) => boolean, fault: ViewFault): TestWrite {
+  let headWritten = false;
+  return async (path, contents) => {
+    if (headWritten && fault.failing && matches(path)) {
+      throw fault.failure;
+    }
+    await writeDurable(path, contents);
+    if (path.endsWith(`${sep}head.json`)) {
+      headWritten = true;
+    }
+  };
+}
+
+async function sessionDirOf(f: Fixture): Promise<string> {
+  const root = await realpath(f.cwd);
+  return join(root, ".pi", "tiered-memory", "sessions", f.session.sessionManager.getSessionId());
+}
+
+async function readOptional(path: string): Promise<string | undefined> {
+  return await readFile(path, "utf8").catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  });
+}
+
+const viewCases = [
+  {
+    label: "note view",
+    content: noteContent({ "current-work.md": "Unwritten\n" }),
+    view: (_f: Fixture, sessionDir: string) => join(sessionDir, "current", "current-work.md"),
+    bytes: "Unwritten\n",
+  },
+  {
+    label: "learning view",
+    content: {
+      ...noteContent({ "current-work.md": "With learning\n" }),
+      learnings: { "index.md": "Learned\n" },
+      expectedLearnings: { "index.md": { digest: null, sequence: null } },
+    },
+    view: (f: Fixture) => join(f.cwd, ".pi", "tiered-memory", "learnings", "index.md"),
+    bytes: "Learned\n",
+  },
+] as const;
+
+async function failedViewCommit(
+  f: Fixture,
+  viewCase: (typeof viewCases)[number],
+): Promise<{ runtime: MemoryRuntime; ctx: ExtensionContext; head: string; fault: ViewFault }> {
+  await f.session.prompt("Failed view.");
+  const sessionDir = await sessionDirOf(f);
+  const view = viewCase.view(f, sessionDir);
+  const fault = { failing: true, failure: new Error("Injected view write failure.") };
+  const runtime = runtimeFor(f, {
+    write: failingViewAfterHead((path) => path.endsWith(join(...view.split(sep).slice(-2))), fault),
+  });
+  const ctx = contextOf(f);
+  await runtime.start(ctx);
+  const proposal = runtime.captureProposal(ctx, viewCase.content, [
+    await sourceReference(f, "Failed view."),
+  ]);
+  await expect(runtime.commitProposal(ctx, proposal)).rejects.toBe(fault.failure);
+  const head = String(storageOf(runtime).latestRevision);
+  expect(storageOf(runtime).lineage.pending).toEqual({ state: "unappended", revisionId: head });
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    "A committed memory revision awaits its branch reference.",
+  );
+  return { runtime, ctx, head, fault };
+}
+
+test.for(viewCases)(
+  "a failed $label write after the head is repaired by the next role check in the same session, which records no curation, appends one reference, and leaves storage ready",
+  async (viewCase, { createFixture }) => {
+    const f = await createFixture();
+    const { runtime, ctx, head, fault } = await failedViewCommit(f, viewCase);
+    const sessionDir = await sessionDirOf(f);
+    fault.failing = false;
+    await runtime.refreshRoles(ctx);
+    expect(await readFile(viewCase.view(f, sessionDir), "utf8")).toBe(viewCase.bytes);
+    expect((await readOptional(join(sessionDir, "curation.json"))) ?? "").not.toContain("deleted");
+    expect(storageOf(runtime)).toMatchObject({
+      lineage: { selected: { state: "selected", revisionId: head }, pending: { state: "none" } },
+      reconciliation: "current",
+      registration: { curatedNotes: 0 },
+    });
+    expect(validReferences(f, storageOf(runtime).projectId)).toEqual([head]);
+    const next = runtime.captureProposal(ctx, noteContent({ "journey.md": "Next\n" }), [
+      await sourceReference(f, "Failed view."),
+    ]);
+    expect(next).toMatchObject({ baseRevision: { revisionId: head }, expectedRevision: head });
+    committedId(await runtime.commitProposal(ctx, next));
+  },
+);
+
+test.for(viewCases)(
+  "a $label repair that fails during a role check reports a failed reconciliation, keeps the head pending and curation unchanged, and a role check after the fault clears records one reference",
+  async (viewCase, { createFixture }) => {
+    const f = await createFixture();
+    const { runtime, ctx, head, fault } = await failedViewCommit(f, viewCase);
+    const sessionDir = await sessionDirOf(f);
+    const curation = await readOptional(join(sessionDir, "curation.json"));
+    await runtime.refreshRoles(ctx);
+    expect(storageOf(runtime)).toMatchObject({
+      reconciliation: "failed",
+      error: fault.failure.message,
+      latestRevision: head,
+      lineage: { pending: { state: "unappended", revisionId: head } },
+    });
+    expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+      "Memory commits: blocked because the latest memory reconciliation failed. Run /reload to retry.",
+    );
+    expect(await readOptional(join(sessionDir, "curation.json"))).toBe(curation);
+    expect(await readFile(join(sessionDir, "head.json"), "utf8")).toContain('"materialized":false');
+    expect(validReferences(f, storageOf(runtime).projectId)).toEqual([]);
+    fault.failing = false;
+    await runtime.refreshRoles(ctx);
+    expect(storageOf(runtime)).toMatchObject({
+      lineage: { selected: { state: "selected", revisionId: head }, pending: { state: "none" } },
+      reconciliation: "current",
+    });
+    expect(validReferences(f, storageOf(runtime).projectId)).toEqual([head]);
+    expect(await readFile(viewCase.view(f, sessionDir), "utf8")).toBe(viewCase.bytes);
+  },
+);
+
+test("a failed role-check reconciliation stays reported and keeps capture refused until a retry with unchanged results succeeds", async ({
+  createFixture,
+}) => {
+  const f = await createFixture();
+  await f.session.prompt("Failed reconciliation.");
+  const failure = new Error("Injected lock publish failure.");
+  let failNext = false;
+  const runtime = runtimeFor(f, {
+    lock: {
+      publish: async (source, ticket) => {
+        if (failNext) {
+          failNext = false;
+          throw failure;
+        }
+        await link(source, ticket);
+      },
+    },
+  });
+  const ctx = contextOf(f);
+  await runtime.start(ctx);
+  const { configurationRevision } = runtime.snapshot;
+  failNext = true;
+  await runtime.refreshRoles(ctx);
+  expect(runtime.snapshot.configurationRevision).toBe(configurationRevision);
+  expect(storageOf(runtime)).toMatchObject({
+    reconciliation: "failed",
+    error: failure.message,
+  });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    "Memory commits: blocked because the latest memory reconciliation failed. Run /reload to retry.",
+  );
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    "The latest memory reconciliation failed.",
+  );
+  await runtime.refreshRoles(ctx);
+  expect(storageOf(runtime)).toMatchObject({ reconciliation: "current", error: undefined });
+  expect(
+    renderStatus(buildStatus(runtime, ctx))
+      .split("\n")
+      .filter((line) => line.startsWith("Memory commits:")),
+  ).toEqual([]);
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).not.toThrow();
+});
+
+test("the shipped extension's reload, model selection, activation, tree navigation, and status command report and resolve an orphan head", async ({
+  createFixture,
+}) => {
+  const other = { ...fixtureModel, id: "other", name: "Other" };
+  const f = await createFixture({ models: [other] });
+  await f.session.prompt("Shipped evidence.");
+  await f.session.setModel(other);
+  const beforeAnchor = f.session.sessionManager.getLeafId();
+  const { runtime, dropNextReference } = referenceDroppingRuntime(f);
+  const ctx = { ...contextOf(f), model: fixtureModel };
+  await runtime.start(ctx);
+  const proposal = runtime.captureProposal(ctx, noteContent({ "current-work.md": "H\n" }), [
+    await sourceReference(f, "Shipped evidence."),
+  ]);
+  dropNextReference();
+  const head = committedId(await runtime.commitProposal(ctx, proposal));
+  await f.reload();
+  await f.command("status");
+  expect(f.report().split("\n")).toContain(
+    `Memory commits: blocked by revision ${head}, which is not recorded on this branch: it was committed with other settings or models. Navigate with /tree to a point before entry ${proposal.anchorId} to continue memory work without it.`,
+  );
+  await f.session.setModel(fixtureModel);
+  await f.command("status");
+  const selectedLines = f.report().split("\n");
+  expect(selectedLines).toContain(`Selected memory revision: ${head}`);
+  expect(selectedLines.filter((line) => line.startsWith("Memory commits:"))).toEqual([]);
+  await f.command("on");
+  const lines = f.report().split("\n");
+  expect(lines).toContain(`Selected memory revision: ${head}`);
+  expect(lines.filter((line) => line.startsWith("Memory commits:"))).toEqual([]);
+  const store = await storeFor(f);
+  expect(validReferences(f, store.projectId)).toEqual([head]);
+  if (beforeAnchor === null) {
+    throw new Error("Missing entry before the head's anchor.");
+  }
+  await f.session.navigateTree(beforeAnchor, { summarize: false });
+  await f.command("status");
+  const navigated = f.report().split("\n");
+  expect(navigated).toContain("Selected memory revision: none");
+  expect(navigated).toContain(`Latest durable revision: ${head}`);
+  expect(navigated.filter((line) => line.startsWith("Memory commits:"))).toEqual([]);
 });

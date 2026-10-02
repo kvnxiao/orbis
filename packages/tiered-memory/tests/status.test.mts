@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import { expect, vi } from "vitest";
 
 import { selectedAs } from "../src/pi/lineage.ts";
-import type { SelectedRevision } from "../src/pi/lineage.ts";
+import type { PendingReference, Reconciliation, SelectedRevision } from "../src/pi/lineage.ts";
 import type { DamagedReference } from "../src/pi/revision-references.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
@@ -24,6 +24,8 @@ import {
   sourceReference,
   storageOf,
   storeFor,
+  unrecordedLine,
+  unresolvedLine,
 } from "./store-fixture.mts";
 
 const limitOrder = [
@@ -290,6 +292,9 @@ test("renders the full wording of a configured report", () => {
       registration: { sources: 3, curatedNotes: 1, event: "session_tree" },
       error: "Refresh failed.",
       blockingReference: undefined,
+      reconciliation: "current",
+      pending: { state: "none" },
+      unavailableEntryId: undefined,
     },
     damagedReferences: [],
     unavailable: ["workers", "pool", "compaction"],
@@ -405,6 +410,9 @@ function lineageReport(
       registration: undefined,
       error: undefined,
       blockingReference,
+      reconciliation: "current",
+      pending: { state: "none" },
+      unavailableEntryId: undefined,
     },
     damagedReferences,
     unavailable: [],
@@ -466,6 +474,159 @@ test("renders the damaged-reference line after the storage error while storage i
   ]);
 });
 
+const readinessLines = {
+  reconciling:
+    "Memory commits: blocked while memory reconciles with the current settings and models.",
+  failed:
+    "Memory commits: blocked because the latest memory reconciliation failed. Run /reload to retry.",
+};
+const unsavedLine =
+  "Memory commits: blocked until the branch reference to revision revision-3 is saved in the session file. Pi saves a new session file after its first assistant response.";
+
+function readinessReport(
+  enabled: boolean,
+  reconciliation: Reconciliation,
+  pending: PendingReference,
+  unavailable?: { entryId: string | undefined },
+): StatusReport {
+  const selected: SelectedRevision =
+    unavailable === undefined
+      ? { state: "none" }
+      : { state: "unavailable", revisionId: "revision-1", sessionId: "s", reason: "Missing." };
+  const report = lineageReport(selected, [firstDamaged], firstDamaged);
+  const unavailableEntryId = unavailable?.entryId;
+  return report.storage.state === "open"
+    ? {
+        ...report,
+        enabled,
+        storage: { ...report.storage, reconciliation, pending, unavailableEntryId },
+      }
+    : report;
+}
+
+test.for([
+  {
+    label: "with its reference entry while enabled",
+    enabled: true,
+    entryId: "8d2c",
+    expected: [
+      "Memory commits: blocked because the selected revision is unavailable. Navigate with /tree to a point before entry 8d2c to continue memory work without it.",
+      readinessLines.failed,
+    ],
+  },
+  {
+    label: "without a reference entry while disabled",
+    enabled: false,
+    entryId: undefined,
+    expected: ["Memory commits: blocked because the selected revision is unavailable."],
+  },
+])(
+  "renders the unavailable-selection line $label after the damaged-reference line and before the readiness line",
+  ({ enabled, entryId, expected }) => {
+    const report = readinessReport(enabled, "failed", { state: "none" }, { entryId });
+    const lines = renderStatus(report).split("\n");
+    expect(lines.filter((line) => line.startsWith("Memory commits:"))).toEqual([
+      blockedLine(firstDamaged.entryId),
+      ...expected,
+    ]);
+  },
+);
+
+test.for([
+  {
+    label: "reconciling while enabled",
+    enabled: true,
+    reconciliation: "reconciling",
+    pending: {
+      state: "unresolved",
+      revisionId: "revision-3",
+      anchorId: "5b2e",
+      reason: "evidence",
+    },
+    expected: [readinessLines.reconciling],
+  },
+  {
+    label: "failed while enabled",
+    enabled: true,
+    reconciliation: "failed",
+    pending: { state: "none" },
+    expected: [readinessLines.failed],
+  },
+  {
+    label: "unresolved while enabled",
+    enabled: true,
+    reconciliation: "current",
+    pending: {
+      state: "unresolved",
+      revisionId: "revision-3",
+      anchorId: "5b2e",
+      reason: "evidence",
+    },
+    expected: [
+      unresolvedLine(
+        "revision-3",
+        "5b2e",
+        "its evidence or curated notes changed after it was committed",
+      ),
+    ],
+  },
+  {
+    label: "unrecorded while enabled",
+    enabled: true,
+    reconciliation: "current",
+    pending: { state: "unappended", revisionId: "revision-3" },
+    expected: [unrecordedLine("revision-3")],
+  },
+  {
+    label: "reconciling and unsaved while enabled",
+    enabled: true,
+    reconciliation: "reconciling",
+    pending: { state: "appended", revisionId: "revision-3" },
+    expected: [readinessLines.reconciling, unsavedLine],
+  },
+  {
+    label: "reconciling and unsaved while disabled",
+    enabled: false,
+    reconciliation: "reconciling",
+    pending: { state: "appended", revisionId: "revision-3" },
+    expected: [unsavedLine],
+  },
+  {
+    label: "failed and unrecorded while disabled",
+    enabled: false,
+    reconciliation: "failed",
+    pending: { state: "unappended", revisionId: "revision-3" },
+    expected: [unrecordedLine("revision-3")],
+  },
+  {
+    label: "unresolved while disabled",
+    enabled: false,
+    reconciliation: "current",
+    pending: {
+      state: "unresolved",
+      revisionId: "revision-3",
+      anchorId: "5b2e",
+      reason: "evidence",
+    },
+    expected: [],
+  },
+] satisfies {
+  label: string;
+  enabled: boolean;
+  reconciliation: Reconciliation;
+  pending: PendingReference;
+  expected: string[];
+}[])(
+  "renders the damaged-reference block line, then $label, as the documented blocked lines",
+  ({ enabled, reconciliation, pending, expected }) => {
+    const lines = renderStatus(readinessReport(enabled, reconciliation, pending)).split("\n");
+    expect(lines.filter((line) => line.startsWith("Memory commits:"))).toEqual([
+      blockedLine(firstDamaged.entryId),
+      ...expected,
+    ]);
+  },
+);
+
 test("status reports storage unavailable with the error that stopped opening", async ({
   createFixture,
 }) => {
@@ -516,6 +677,9 @@ test("status reports the project root, selected and latest revisions, cached cou
     latestRevision: revisionId,
     registration: { sources: 2, curatedNotes: 0, event: "commit" },
     error: undefined,
+    blockingReference: undefined,
+    reconciliation: "current",
+    pending: { state: "none" },
   });
 });
 
@@ -546,7 +710,7 @@ test("status reports an invalid selected revision with its invalid notes and rea
   });
 });
 
-test("status reports an unavailable selected revision with its reason", async ({
+test("status reports an unavailable selected revision with its reason and the entry to navigate before", async ({
   createFixture,
 }) => {
   const f = await createFixture();
@@ -557,15 +721,27 @@ test("status reports an unavailable selected revision with its reason", async ({
     sessionId: store.sessionId,
     revisionId: "missing-revision",
   });
+  const entryId = f.session.sessionManager.getLeafId();
   await f.session.prompt("Persist the reference.");
   const runtime = runtimeFor(f);
   const ctx = f.session.extensionRunner.createContext();
   await runtime.start(ctx);
-  const storage = buildStatus(runtime, ctx).storage;
-  expect(storage.state === "open" ? storage.selected : undefined).toEqual({
-    state: "unavailable",
-    reason: "Selected revision missing-revision is unavailable.",
+  const report = buildStatus(runtime, ctx);
+  expect(report.storage).toMatchObject({
+    selected: {
+      state: "unavailable",
+      revisionId: "missing-revision",
+      sessionId: store.sessionId,
+      reason: "Selected revision missing-revision is unavailable.",
+    },
+    unavailableEntryId: entryId,
   });
+  expect(renderStatus(report).split("\n")).toEqual(
+    expect.arrayContaining([
+      "Selected memory revision: unavailable (Selected revision missing-revision is unavailable.)",
+      `Memory commits: blocked because the selected revision is unavailable. Navigate with /tree to a point before entry ${String(entryId)} to continue memory work without it.`,
+    ]),
+  );
 });
 
 test("status reports the latest refresh error while storage stays open", async ({

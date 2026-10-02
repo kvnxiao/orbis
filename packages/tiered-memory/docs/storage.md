@@ -108,6 +108,9 @@ project mutation lock for the commit. Under the lock it checks that:
   - No committed revision's branch reference is still pending.
   - The selected revision is the proposal's base revision. A proposal captured with no revision
     selected passes only while no revision is selected.
+  - Storage is ready for proposals: the latest reconciliation ran for the current configuration, did
+    not fail, and did not leave a head with a missing branch reference unresolved, as described
+    under [Recovery](#recovery).
 
 The writer checks the live evidence, configuration, and lineage again just before publishing the
 head, without registering sources or changing the latest status counts. A failed check returns a
@@ -127,16 +130,18 @@ materialization complete. If one of several started view writes fails, the write
 siblings to settle before releasing the lock. Only a head names a current revision. Once the head is
 written, the commit reports the revision as committed even if the call is cancelled or the session
 stops, and the writer still finishes the remaining writes. If one of those writes fails, the commit
-rejects with that error although the head is durable, and the next storage startup repairs the
-pending head and reconciles it with the branch.
+rejects with that error although the head is durable. The next storage startup, or the next
+reconciliation in the same session, repairs the pending head and reconciles it with the branch.
 
-The writer then records the revision reference on the Pi branch. Pi can defer a new session file
-until its first assistant response, so an in-memory custom entry alone does not prove the reference
-is durable; the reference stays pending until it is confirmed in the session file, and no new
-proposal is captured meanwhile. Disabling memory does not cancel this step. Tree navigation, a
-session change, or shutdown discards it, and the next storage startup reconciles the head with the
-branch as described under [Recovery](#recovery). If recording the reference fails, the commit still
-reports committed, and status reports the storage error.
+As soon as the head is durable, storage records it as the latest head with a pending branch
+reference, before the commit ends, so a proposal cannot be captured against the previous selection,
+even if a later view write fails. The writer then records the revision reference on the Pi branch.
+Pi can defer a new session file until its first assistant response, so an in-memory custom entry
+alone does not prove the reference is durable; the reference stays pending until it is confirmed in
+the session file, and no new proposal is captured meanwhile. Disabling memory does not cancel this
+step. Tree navigation, a session change, or shutdown discards it, and the next storage startup
+reconciles the head with the branch as described under [Recovery](#recovery). If recording the
+reference fails, the commit still reports committed, and status reports the storage error.
 
 Each storage session keeps its newest completed registration, starting with the one from session
 start or tree navigation. A commit that registered its sources refreshes storage state once it
@@ -144,23 +149,26 @@ commits, conflicts, or is cancelled; a committed commit refreshes after recordin
 commit that rejects does not refresh, and its completed registration stays available to the next
 refresh. Each refresh reads the storage session's newest completed registration once, when it
 starts, so an older attempt's refresh never replaces validity or counts computed from a newer
-registration. A registration that completes during a refresh waits for the next refresh. The
-refresh:
+registration. Commits and refreshes take turns, as the next paragraph describes, so a registration
+cannot complete while a refresh runs. The refresh:
 
 - Reads the latest head, so a proposal captured afterward expects the accepted revision.
 - Rechecks the selected revision's notes against the sources of the newest completed registration
   and the current curation.
 - Reconciles the head with the branch as described under [Recovery](#recovery), which can attach a
-  head whose reference is missing from the branch.
+  head whose reference is missing from the branch or leave it unresolved.
 - Updates the counts that status reports without registering again: the source count of that
   registration, labeled `commit`, and the curated-note count of the curation it inspected.
 
-Refreshes and reference recording for one storage session run one at a time, so none of them
-overwrites lineage state that another changes while it runs. Each merges its result into the storage
-state current when it finishes, so a registration that completes while it runs is kept. Disabling
-memory or cancelling the call does not stop a refresh. Tree navigation, a session change, or
-shutdown discards it. If a refresh fails, the commit keeps its result, and status reports the
-storage error.
+Commits, refreshes, and reference recording for one storage session run one at a time, so none of
+them validates against or overwrites lineage state that another changes while it runs. A commit
+takes its turn before it acquires the project lock and keeps that turn until the commit ends; its
+reference recording and refresh take a later turn. A disable, a call cancellation, tree navigation,
+a session change, or shutdown cancels a commit still waiting for its turn, as it cancels one before
+its head is written. Refreshes and reference recording merge their results into the storage state
+current when they finish. Disabling memory or cancelling the call does not stop a refresh. Tree
+navigation, a session change, or shutdown discards it. If a refresh fails, the commit keeps its
+result, and status reports the storage error.
 
 A disable or call cancellation that arrives while the commit's registration writes `sources.json`
 lets that write finish. If the write succeeds, the registration completes, and the commit returns
@@ -172,8 +180,9 @@ navigation can select another revision while the head stays the same, and reconc
 an already durable head without writing a new one. A commit from a base that the branch no longer
 selects would either drop the notes committed after that base or replace the selected snapshot with
 content from an abandoned branch. While a reference is pending, the selection does not yet name the
-revision that reference records, so a commit could drop that revision's notes. In each case the
-commit returns a `lineage` conflict, and the caller must capture a new proposal.
+revision that reference records, so a commit could drop that revision's notes. Reconciliation can
+also change the selection, or leave storage unready, while a captured proposal waits for its turn.
+In each case the commit returns a `lineage` conflict, and the caller must capture a new proposal.
 
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected
@@ -190,13 +199,14 @@ shutdown waits for it without a timeout.
 A stop before the head is written leaves a revision file that no head names. Readers ignore it, the
 previous revision stays current, and no observations are consumed for the interrupted proposal.
 
-A pending head has not completed view materialization or recovery. When a store opens, it first
-repairs pending heads whose learning names overlap those of its own pending head, including overlaps
-connected through another pending head. It repairs the connected heads from newest publication
-sequence to oldest. A proposal that writes a learning reconciles pending heads for overlapping
-learning names before checking its expected predecessor. When a note-only proposal has no learning
-in its own pending head, it does not scan other sessions. The store then repairs its own pending
-head before exposing the session or accepting a proposal.
+A pending head has not completed view materialization or recovery. When a store opens or inspects
+curation, it first repairs pending heads whose learning names overlap those of its own pending head,
+including overlaps connected through another pending head. It repairs the connected heads from
+newest publication sequence to oldest. A proposal that writes a learning reconciles pending heads
+for overlapping learning names before checking its expected predecessor. When a note-only proposal
+has no learning in its own pending head, it does not scan other sessions. The store then repairs its
+own pending head before exposing the session, inspecting curation, or accepting a proposal, so
+curation does not mistake a view that a failed commit never wrote for a user deletion.
 
 A note view whose digest matches the head needs nothing. An absent note view, or one whose bytes
 equal the parent revision's rendering of the same note, is rewritten from the head's revision; any
@@ -208,12 +218,6 @@ committed content and does not replace newer provenance. The head is then marked
 recovery has completed, though curated or newer files may differ from the head's rendered views. A
 head already marked as materialized is not repaired, so a note deleted after a completed commit
 stays deleted.
-
-At startup, after tree navigation, and in the refresh after a commit, a head revision that no valid
-session entry references is attached to the branch only when its anchor is on the branch, its base
-is the selected revision, its configuration fingerprint is current, and its evidence and curation
-still hold. A reference already appended to the branch is confirmed regardless of a configuration
-change; it is dropped only when the head, anchor, evidence, or curation no longer match.
 
 Unsupported or damaged storage records remain unchanged; status reports the storage error. Missing
 expected files or directories do not authorize reconstruction of old notes from historical
@@ -239,15 +243,103 @@ While the lineage is ambiguous:
   branch under the project lock and again just before publishing the head, so a proposal captured
   before navigation onto a damaged branch, or before a damaged entry was appended, is also rejected.
 
-Nothing records the ambiguity; each check derives it from the branch. The lineage stops being
-ambiguous in two ways:
+Nothing records the ambiguity; each check derives it from the branch.
 
-- Reconciliation attaches the head as described above and confirms its new reference, which follows
-  the damaged entries. It does so only when every attachment condition holds, including that the
-  head's base is the revision the valid references select.
+### Orphan heads
+
+An orphan head is the latest durable head when no valid revision reference entry anywhere in the Pi
+session names it. An interruption between the head write and its reference append, or a damaged
+reference, leaves one. A head that a valid reference on another branch names is not an orphan: it
+belongs to that branch and does not change this branch's selection. A head whose reference is
+already appended to the active branch is not an orphan either. That reference stays pending until it
+is confirmed in the session file, regardless of a configuration change, and it is dropped only when
+the head, anchor, evidence, or curation no longer match.
+
+At startup, after tree navigation, and in every refresh, reconciliation decides whether an orphan
+head continues the branch's selection. Three revision fields take part, and none alone proves that
+the head belongs to this branch:
+
+- The base revision names the revision whose notes the head inherited.
+- The parent revision names the head that the commit expected: the previous publication in this
+  memory session, which can be on another branch.
+- The anchor names the Pi entry where the proposal was captured. Sibling branches can share it.
+
+Reconciliation attaches an orphan head, appending its reference, only when every condition holds:
+
+- A revision is selected and available, or no revision is selected. An unavailable selection stays
+  unavailable, with its diagnostic, even when the head names that revision as its base.
+- The head's anchor is on the branch, its configuration fingerprint is current, and its evidence and
+  curation still hold.
+- Its base, its parent, and the damaged references that block commits match one row of this table:
+
+| Selection                                 | Base and parent                                                     | Blocking damaged references |
+| ----------------------------------------- | ------------------------------------------------------------------- | --------------------------- |
+| A revision of this memory session         | The base is the selected revision, and the parent is that revision. | At most one                 |
+| No revision                               | Both are null.                                                      | None                        |
+| A revision inherited from a fork ancestor | The base is the inherited revision, and the parent is null.         | None                        |
+
+Permitting one damaged reference recovers a head that directly follows the selected revision when
+only the head's own reference is damaged. The bound limits recovery; it does not prove that the
+damaged entry names the head. Two or more blocking damaged references, including duplicates for one
+head, leave the head unattached. Reconciliation never reads a damaged entry's data and never treats
+parent revisions as content ancestry.
+
+An orphan head that reconciliation does not attach is either unrelated or unresolved:
+
+- It is unrelated when its anchor is not on the branch, or when the selected revision is available,
+  no damaged reference blocks commits, and the head's base is a different revision. An unrelated
+  head does not change the selection or block memory work on this branch. A proposal there expects
+  it as the head and keeps the branch's own base.
+- Otherwise it is unresolved. The selection, the head, and their records stay unchanged. Status
+  names the head and why it cannot be attached, proposal capture refuses, and a commit returns a
+  `lineage` conflict when no earlier check fails. A later refresh attaches the head once every
+  condition holds, for example after the models it was committed with are selected again. Tree
+  navigation to a point where the head is unrelated, such as an entry before its anchor, removes the
+  block.
+
+Some valid histories stay unresolved, such as a head committed after tree navigation whose reference
+was lost, because its parent is not the revision the branch selects. Its revision and notes remain
+stored. Recovery does not reconstruct a missing base revision.
+
+The lineage stops being ambiguous in two ways:
+
+- Reconciliation attaches an orphan head after the damaged entries and confirms its new reference.
+  It does so only for a head that directly follows the selected revision while at most one damaged
+  entry blocks commits.
 - Tree navigation reaches a point where no damaged entry follows the selected revision's reference,
   such as the entry just before the first damaged entry that blocks commits. Other storage or
   selection failures can still prevent a commit there.
+
+### Reconciliation readiness
+
+Proposals use a selection only after reconciliation completed for the current storage session and
+configuration. Storage is ready for proposals once the latest reconciliation ran for the current
+configuration revision and dependency fingerprint without failing or leaving an orphan head
+unresolved. Session start and tree navigation reconcile before storage opens. Readiness then changes
+as follows:
+
+- A settings or role change makes storage unready before a proposal can be captured with the old
+  selection. This includes the role check after a model selection or `/tiered-memory on`, and a
+  change back to earlier settings or models.
+- The change completes only after a reconciliation for the new configuration revision and
+  fingerprint, which runs as storage-session work. A reconciliation whose configuration changed
+  while it ran does not append a reference or make storage ready; the newer change runs its own. A
+  change that begins while storage opens reconciles after the startup finishes; until then, the
+  startup leaves storage unready, or failed when the change's role check fails. A reference that a
+  superseded reconciliation already appended stays pending, and a later reconciliation confirms it
+  without appending another.
+- A failed reconciliation or role check keeps the previous selection and records, reports the
+  storage error, and leaves storage unready until a reconciliation started by `/reload`, tree
+  navigation, a model selection, or `/tiered-memory on` succeeds.
+- The refresh after a commit does not run while a change's reconciliation is pending or after a
+  reconciliation or role check failed. Otherwise it keeps storage ready only when it succeeds and
+  leaves no orphan head unresolved.
+
+While storage is unready, capture refuses, and a commit returns a `lineage` conflict when no earlier
+check fails. A proposal captured before the change can wait for running reconciliation, then
+validates against its result.
+
+### Symbolic links and the project lock
 
 A symbolic link at `.pi/`, `.pi/tiered-memory/`, `sessions/`, `sessions/_project/`, `learnings/`,
 the session's directory, its `current/` or `revisions/` directory, or a project-lock directory makes

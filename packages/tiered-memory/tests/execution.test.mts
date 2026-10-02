@@ -448,14 +448,14 @@ test("repeated shutdown calls share one teardown and the first reason", async ({
   expect(await job).toEqual({ kind: "cancelled", reason, outcome: undefined });
 });
 
-test("a disable cancels jobs and role work and leaves the branch step, storage work, and scope running", async ({
+test("a disable cancels role work and a job waiting for its storage turn and leaves the branch step, storage work, and scope running", async ({
   createExecution,
 }) => {
   const execution = createExecution();
   const storage = await openScope(execution);
   const stepGate = Promise.withResolvers<undefined>();
   const workGate = Promise.withResolvers<undefined>();
-  const jobEntered = Promise.withResolvers<undefined>();
+  const workEntered = Promise.withResolvers<undefined>();
   const rolesEntered = Promise.withResolvers<undefined>();
   const log: string[] = [];
   const step = execution.run(
@@ -465,12 +465,17 @@ test("a disable cancels jobs and role work and leaves the branch step, storage w
   );
   const work = execution.runInStorage(
     storage,
-    waitFor(workGate.promise).pipe(Effect.andThen(Effect.sync(() => log.push("storage work")))),
+    Effect.sync(() => {
+      workEntered.resolve(undefined);
+    }).pipe(
+      Effect.andThen(waitFor(workGate.promise)),
+      Effect.andThen(Effect.sync(() => log.push("storage work"))),
+    ),
   );
   const roles = execution.run(execution.runRoleWork(enteredThenNever(rolesEntered)));
+  await Promise.all([workEntered.promise, rolesEntered.promise]);
   const reason = new Error("disabled");
-  const job = execution.runJob(storage, undefined, () => enteredThenNever(jobEntered));
-  await Promise.all([jobEntered.promise, rolesEntered.promise]);
+  const job = execution.runJob(storage, undefined, () => Effect.sync(() => log.push("job")));
   execution.cancelActiveWork(reason);
   await expect(roles).resolves.toBeUndefined();
   expect(await job).toEqual({ kind: "cancelled", reason, outcome: undefined });
@@ -483,6 +488,48 @@ test("a disable cancels jobs and role work and leaves the branch step, storage w
     value: "later",
     outcome: undefined,
   });
+});
+
+test("a job starts only after running storage work of its scope ends, and storage work admitted during the job runs after it", async ({
+  createExecution,
+}) => {
+  const execution = createExecution();
+  const storage = await openScope(execution);
+  const workGate = Promise.withResolvers<undefined>();
+  const workEntered = Promise.withResolvers<undefined>();
+  const jobGate = Promise.withResolvers<undefined>();
+  const jobEntered = Promise.withResolvers<undefined>();
+  const log: string[] = [];
+  const work = execution.runInStorage(
+    storage,
+    Effect.sync(() => {
+      log.push("work start");
+      workEntered.resolve(undefined);
+    }).pipe(
+      Effect.andThen(waitFor(workGate.promise)),
+      Effect.andThen(Effect.sync(() => log.push("work end"))),
+    ),
+  );
+  await workEntered.promise;
+  const job = execution.runJob(storage, undefined, () =>
+    Effect.sync(() => {
+      log.push("job start");
+      jobEntered.resolve(undefined);
+    }).pipe(
+      Effect.andThen(waitFor(jobGate.promise)),
+      Effect.andThen(Effect.sync(() => log.push("job end"))),
+    ),
+  );
+  workGate.resolve(undefined);
+  await work;
+  await jobEntered.promise;
+  const later = execution.runInStorage(
+    storage,
+    Effect.sync(() => log.push("later work")),
+  );
+  jobGate.resolve(undefined);
+  await Promise.all([job, later]);
+  expect(log).toEqual(["work start", "work end", "job start", "job end", "later work"]);
 });
 
 const hostReasonKinds = [
@@ -596,4 +643,36 @@ test("work that shutdown's interruptions resume observes that shutdown started",
   await execution.shutdown(new Error("session ended"));
   await waiting;
   expect(observed).toBe(true);
+});
+
+test("storage work admitted while the storage startup runs starts only after the startup ends", async ({
+  createExecution,
+}) => {
+  const execution = createExecution();
+  const startupEntered = Promise.withResolvers<undefined>();
+  const startupGate = Promise.withResolvers<undefined>();
+  const log: string[] = [];
+  const opening = execution.run(
+    execution.openStorage(() =>
+      Effect.sync(() => {
+        log.push("startup start");
+        startupEntered.resolve(undefined);
+      }).pipe(
+        Effect.andThen(waitFor(startupGate.promise)),
+        Effect.andThen(Effect.sync(() => log.push("startup end"))),
+      ),
+    ),
+  );
+  await startupEntered.promise;
+  const scope = execution.currentScope;
+  if (scope === undefined) {
+    throw new Error("Missing the opening storage scope.");
+  }
+  const work = execution.runInStorage(
+    scope,
+    Effect.sync(() => log.push("work")),
+  );
+  startupGate.resolve(undefined);
+  await Promise.all([opening, work]);
+  expect(log).toEqual(["startup start", "startup end", "work"]);
 });

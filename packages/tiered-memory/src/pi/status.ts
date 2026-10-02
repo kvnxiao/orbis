@@ -5,9 +5,19 @@ import { memoryRoles } from "../domain/models.ts";
 import type { ModelResolution, Role } from "../domain/models.ts";
 import { limitKeys } from "../domain/settings.ts";
 import type { EffectiveSettings, Limits, SettingSource } from "../domain/settings.ts";
-import { blockingReferences } from "./lineage.ts";
-import type { Registration, SelectedRevision } from "./lineage.ts";
-import { damagedReferencesIn } from "./revision-references.ts";
+import type {
+  PendingReference,
+  Reconciliation,
+  Registration,
+  SelectedRevision,
+  UnresolvedReason,
+} from "./lineage.ts";
+import {
+  blockingReferences,
+  damagedReferencesIn,
+  referencesIn,
+  selectionEntryId,
+} from "./revision-references.ts";
 import type { DamagedReference } from "./revision-references.ts";
 import type { MemoryRuntime, RuntimeSnapshot } from "./runtime.ts";
 import type { StorageSnapshot } from "./storage-session.ts";
@@ -28,9 +38,12 @@ import type { StorageSnapshot } from "./storage-session.ts";
  * the source count and event of the registration the latest refresh used, the curated-note count of
  * the curation it inspected, and the error of the latest failed refresh. Its `blockingReference` is
  * the first damaged revision reference that blocks commits, or undefined while the lineage is not
- * ambiguous. `damagedReferences` lists every damaged revision reference on the active branch in
- * branch order, in every storage state. `unavailable` lists the capabilities this version does not
- * provide.
+ * ambiguous; `reconciliation` reports whether reconciliation completed for the current
+ * configuration, and `pending` is the pending reference, including an unresolved orphan head.
+ * `unavailableEntryId` is the last branch reference entry to an unavailable selected revision, or
+ * undefined when the selection is available, absent, or not referenced on the branch.
+ * `damagedReferences` lists every damaged revision reference on the active branch in branch order,
+ * in every storage state. `unavailable` lists the capabilities this version does not provide.
  */
 export interface StatusReport {
   enabled: boolean;
@@ -72,6 +85,9 @@ export interface StatusReport {
         registration: Registration | undefined;
         error: string | undefined;
         blockingReference: DamagedReference | undefined;
+        reconciliation: Reconciliation;
+        pending: PendingReference;
+        unavailableEntryId: string | undefined;
       };
   damagedReferences: readonly DamagedReference[];
   unavailable: readonly ("workers" | "pool" | "compaction")[];
@@ -93,6 +109,12 @@ const unavailableNotes = {
   compaction:
     "Custom compaction and usage reports: unavailable in this version; Pi native compaction remains available.",
 } satisfies Record<StatusReport["unavailable"][number], string>;
+
+const unresolvedReasons = {
+  lineage: "its lineage from the selected revision cannot be established",
+  configuration: "it was committed with other settings or models",
+  evidence: "its evidence or curated notes changed after it was committed",
+} satisfies Record<UnresolvedReason, string>;
 
 const invalidReasons = {
   "note-evidence": "Selected revision evidence changed in effective context.",
@@ -129,14 +151,26 @@ function storageStatus(
   if (storage.state !== "open") {
     return { state: "unavailable", error: storage.state === "failed" ? storage.error : undefined };
   }
+  const { selected, pending } = storage.lineage;
+  const { projectId } = storage;
+  // A superseded or failed reconciliation can append the reference without publishing that state.
+  const recorded =
+    pending.state === "unappended" &&
+    referencesIn(branch, projectId).some(
+      (reference) => reference.revisionId === pending.revisionId,
+    );
   return {
     state: "open",
     projectRoot: storage.projectRoot,
-    selected: storage.lineage.selected,
+    selected,
     latestRevision: storage.latestRevision,
     registration: storage.registration,
     error: storage.error,
-    blockingReference: blockingReferences(branch, storage.projectId, storage.lineage.selected)[0],
+    blockingReference: blockingReferences(branch, projectId, selected)[0],
+    reconciliation: storage.reconciliation,
+    pending: recorded ? { state: "appended", revisionId: pending.revisionId } : pending,
+    unavailableEntryId:
+      selected.state === "unavailable" ? selectionEntryId(branch, projectId, selected) : undefined,
   };
 }
 
@@ -263,13 +297,51 @@ function lineageLines(report: StatusReport): string[] {
       : [
           `Damaged revision references on the active branch: ${String(damaged.length)} excluded from lineage selection (${damaged.map(({ entryId, path }) => `entry ${entryId} at ${path}`).join(", ")})`,
         ];
-  const blocking = report.storage.state === "open" ? report.storage.blockingReference : undefined;
-  if (blocking !== undefined) {
+  const storage = report.storage;
+  if (storage.state !== "open") {
+    return lines;
+  }
+  if (storage.blockingReference !== undefined) {
     lines.push(
-      `Memory commits: blocked by damaged revision reference entry ${blocking.entryId}. Navigate with /tree to a point before that entry to remove this lineage block.`,
+      `Memory commits: blocked by damaged revision reference entry ${storage.blockingReference.entryId}. Navigate with /tree to a point before that entry to remove this lineage block.`,
+    );
+  }
+  const { pending } = storage;
+  if (storage.selected.state === "unavailable") {
+    const entry = storage.unavailableEntryId;
+    lines.push(
+      `Memory commits: blocked because the selected revision is unavailable.${entry === undefined ? "" : ` Navigate with /tree to a point before entry ${entry} to continue memory work without it.`}`,
+    );
+  }
+  const readiness = report.enabled ? readinessLine(storage) : undefined;
+  if (readiness !== undefined) {
+    lines.push(readiness);
+  }
+  if (pending.state === "unappended") {
+    lines.push(
+      `Memory commits: blocked until revision ${pending.revisionId} is recorded on this branch. If its commit failed, run /reload to record it.`,
+    );
+  } else if (pending.state === "appended") {
+    lines.push(
+      `Memory commits: blocked until the branch reference to revision ${pending.revisionId} is saved in the session file. Pi saves a new session file after its first assistant response.`,
     );
   }
   return lines;
+}
+
+function readinessLine(
+  storage: Extract<StatusReport["storage"], { state: "open" }>,
+): string | undefined {
+  const { pending } = storage;
+  if (storage.reconciliation === "reconciling") {
+    return "Memory commits: blocked while memory reconciles with the current settings and models.";
+  }
+  if (storage.reconciliation === "failed") {
+    return "Memory commits: blocked because the latest memory reconciliation failed. Run /reload to retry.";
+  }
+  return pending.state === "unresolved"
+    ? `Memory commits: blocked by revision ${pending.revisionId}, which is not recorded on this branch: ${unresolvedReasons[pending.reason]}. Navigate with /tree to a point before entry ${pending.anchorId} to continue memory work without it.`
+    : undefined;
 }
 
 function configurationLines(configuration: ConfigurationStatus): string[] {
