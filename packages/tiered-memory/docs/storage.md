@@ -221,6 +221,30 @@ recovery has completed, though curated or newer files may differ from the head's
 head already marked as materialized is not repaired, so a note deleted after a completed commit
 stays deleted.
 
+A curation check or commit based on a fork ancestor's revision also repairs that ancestor's pending
+head before it inspects the curation of either session. Under the project lock that the check or
+commit already holds, it:
+
+1. Rejects a symbolic link at the ancestor's session directories.
+2. Confirms that the ancestor's identity names this project and that the base revision exists. When
+   the identity names another project or the revision is missing, it does not repair anything: a
+   curation check does not inherit curation from that base, and a commit rejects it as unavailable.
+3. Repairs pending heads whose learning names overlap those of the ancestor's pending head, newest
+   publication sequence first, then the ancestor's own views, under the rules above.
+4. Inspects the child's curation, then the ancestor's, and merges the ancestor's records into the
+   child's.
+
+A commit reads its base revision before step 1, as it does for any base, so a commit with a missing
+base is rejected as unavailable before the symbolic-link check.
+
+Once step 2 confirms the base, the pending head of the session that the base names is repaired.
+Another session's pending head, including one further up the base's lineage, is repaired only when
+its learning names overlap, as step 3 describes. Repair does not change which revision the child
+inherits: the child keeps its selected base even when the ancestor's head is a newer revision. If a
+repair write fails, the check or commit rejects with that error before either curation file is
+written, and the commit does not write a revision. Repair writes that finished before the failure
+remain, and the next repair of that head continues from them.
+
 Unsupported or damaged storage records remain unchanged; status reports the storage error. Missing
 expected files or directories do not authorize reconstruction of old notes from historical
 snapshots.
@@ -389,9 +413,12 @@ recreate them. After new evidence supports a replacement, the earlier consumed e
 excluded. Conversation navigation does not undo these exclusions.
 
 Forks inherit their parent's curation exclusions, including those for absent notes, and save them in
-the child session. Referring to the same inherited evidence through the child's source reference
-does not make it new evidence. A deletion permits a replacement supported by new evidence; an edited
-body remains protected from automatic replacement.
+the child session. The store first repairs the pending head of the ancestor session that the fork's
+base revision names, as described under [Recovery](#recovery). Views that an interrupted ancestor
+commit never wrote are therefore not recorded as edits or deletions in either session. Referring to
+the same inherited evidence through the child's source reference does not make it new evidence. A
+deletion permits a replacement supported by new evidence; an edited body remains protected from
+automatic replacement.
 
 Fork lineages have no fixed revision-count cutoff. Cycles and unavailable ancestors in a traversed
 lineage are reported as damaged instead of making inherited evidence eligible again.

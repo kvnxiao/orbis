@@ -10,6 +10,7 @@ import { expect } from "vitest";
 
 import { digest } from "../src/domain/canonical.ts";
 import type { CommitResult, ConflictReason, MemoryProposal } from "../src/domain/proposal.ts";
+import { readProjectCuration } from "../src/storage/curation.ts";
 import { readText, writeDurable } from "../src/storage/files.ts";
 import { readHead } from "../src/storage/revisions.ts";
 import { canonicalProjectRoot, MemoryStore } from "../src/storage/store.ts";
@@ -47,11 +48,13 @@ async function pendingLearningHead(
   sequence: number,
   learnings: Record<string, string>,
   expectedLearnings: MemoryProposal["expectedLearnings"],
+  overrides: Partial<MemoryProposal> = {},
 ): Promise<void> {
   const { expectedRevision, ...fields } = baseProposal(store, {
     notes: {},
     learnings,
     expectedLearnings,
+    ...overrides,
   });
   const id = randomUUID();
   await mkdir(join(store.sessionDir, "revisions"), { recursive: true });
@@ -736,6 +739,69 @@ test("pending learning heads repair a three-head overlap chain from newest to ol
   expect(await readFile(join(learnings, "y.md"), "utf8")).toBe("middle y");
   expect(await readFile(join(learnings, "z.md"), "utf8")).toBe("newer z");
 });
+
+function seeded(name: string): { digest: string; sequence: number } {
+  return { digest: digest(`old ${name}`), sequence: 1 };
+}
+
+test.for(["inspection", "commit"] as const)(
+  "a child %s based on a fork ancestor repairs the ancestor's connected pending learning heads from newest to oldest and keeps an externally edited learning",
+  async (entry, { makeRoot }) => {
+    const root = await makeRoot();
+    const seed = await openStore(root, { sessionId: "seed" });
+    const names = ["x.md", "y.md", "z.md", "w.md"];
+    committedId(
+      await commit(seed, {
+        notes: {},
+        learnings: Object.fromEntries(names.map((name) => [name, `old ${name}`])),
+        expectedLearnings: Object.fromEntries(
+          names.map((name) => [name, { digest: null, sequence: null }]),
+        ),
+      }),
+    );
+    const ancestor = await openStore(root, { sessionId: "ancestor" });
+    const r1 = committedId(await commit(ancestor, { notes: { "current-work.md": "ancestor\n" } }));
+    const middle = await openStore(root, { sessionId: "middle" });
+    const newer = await openStore(root, { sessionId: "newer" });
+    await pendingLearningHead(
+      ancestor,
+      3,
+      { "x.md": "ancestor x", "y.md": "ancestor y", "w.md": "ancestor w" },
+      { "x.md": seeded("x.md"), "y.md": seeded("y.md"), "w.md": seeded("w.md") },
+      { expectedRevision: r1 },
+    );
+    await pendingLearningHead(
+      middle,
+      4,
+      { "y.md": "middle y", "z.md": "middle z" },
+      { "y.md": seeded("y.md"), "z.md": seeded("z.md") },
+    );
+    await pendingLearningHead(newer, 5, { "z.md": "newer z" }, { "z.md": seeded("z.md") });
+    const learnings = join(seed.baseDir, "learnings");
+    await writeFile(join(learnings, "w.md"), "user w");
+    const child = await openStore(root, { sessionId: "child" });
+    const base = { sessionId: "ancestor", revisionId: r1 };
+    if (entry === "inspection") {
+      await child.inspectCuration(base);
+    } else {
+      committedId(await commit(child, { baseRevision: base, notes: { "journey.md": "child\n" } }));
+    }
+    expect(await readFile(join(learnings, "x.md"), "utf8")).toBe("ancestor x");
+    expect(await readFile(join(learnings, "y.md"), "utf8")).toBe("middle y");
+    expect(await readFile(join(learnings, "z.md"), "utf8")).toBe("newer z");
+    expect(await readFile(join(learnings, "w.md"), "utf8")).toBe("user w");
+    const { generated } = await child.run(readProjectCuration(child.baseDir));
+    expect(
+      Object.fromEntries(Object.entries(generated).map(([name, { sequence }]) => [name, sequence])),
+    ).toEqual({ "x.md": 3, "y.md": 4, "z.md": 5, "w.md": 1 });
+    const heads = await Promise.all(
+      [ancestor, middle, newer].map(
+        async (store) => await Effect.runPromise(readHead(store.sessionDir)),
+      ),
+    );
+    expect(heads.map((head) => head?.materialized)).toEqual([true, true, true]);
+  },
+);
 
 test("open keeps a present learning file for the next commit's curation inspection", async ({
   makeRoot,

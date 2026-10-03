@@ -191,7 +191,7 @@ export const readRevision = Effect.fnUntraced(function* (
 /**
  * Read the revision a head names.
  *
- * @throws Error when the revision file is missing.
+ * @throws Error naming `sessionDir` and the revision id when the revision file is missing.
  * @throws The failures of `readRevision`.
  */
 export const requireRevision = Effect.fnUntraced(function* (
@@ -201,7 +201,9 @@ export const requireRevision = Effect.fnUntraced(function* (
   const revision = yield* readRevision(sessionDir, expected);
   if (revision === undefined) {
     return yield* Effect.fail(
-      new Error(`Memory head names missing revision ${expected.revisionId}; files are preserved.`),
+      new Error(
+        `Memory head in ${sessionDir} names missing revision ${expected.revisionId}; files are preserved.`,
+      ),
     );
   }
   return revision;
