@@ -409,7 +409,8 @@ export const learningConflict = Effect.fnUntraced(function* (
  * Records the ancestor session's own external curation first, then rebinds consumed references of
  * every session in the pointed revision's base lineage to `fork.childSessionId` and merges them
  * with `inheritCuration`. `readRevision` must return a revision only when its session belongs to
- * `fork.projectId`. Must run under the project lock.
+ * `fork.projectId`. Must run under the project lock, after the caller repaired the ancestor
+ * session's pending head; otherwise views that head never wrote are recorded as curation.
  *
  * @throws Error when the ancestor's head or lineage names a missing revision, the lineage has a
  *   cycle, or a record is damaged.

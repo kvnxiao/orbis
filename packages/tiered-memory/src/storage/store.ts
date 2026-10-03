@@ -15,7 +15,7 @@ import type {
 } from "../domain/proposal.ts";
 import { safeIdSchema } from "../domain/references.ts";
 import { repairPendingLearnings, repairViews, writeCommit } from "./commit.ts";
-import type { Snapshot } from "./commit.ts";
+import type { CommitTarget, Snapshot } from "./commit.ts";
 import { inheritForkCuration, inspectCuration, learningConflict } from "./curation.ts";
 import type { CurationState } from "./curation.ts";
 import { fromPromise, readText, rejectSymlinks } from "./files.ts";
@@ -108,12 +108,18 @@ export class MemoryStore {
    * Repairs prior accepted heads for the proposal's learning names before checking that the head
    * equals `expectedRevision`, curation permits every written note, learning digests and sequences
    * equal `expectedLearnings`, and `validate` returns `undefined`; `validate` must not write and
-   * runs again before head publication. A returned reason becomes the conflict's reason. Then
-   * writes the commit through `writeCommit`, which calls `onHeadDurable` as soon as the head is
-   * durable. `proposal` must satisfy `validateProposal`.
+   * runs again before head publication. A returned reason becomes the conflict's reason. A base in
+   * a fork ancestor's session has the ancestor's pending head repaired before curation is
+   * inspected, as `inspectCuration` does; the snapshot still inherits the base revision's notes.
+   * Then writes the commit through `writeCommit`, which calls `onHeadDurable` as soon as the head
+   * is durable. `proposal` must satisfy `validateProposal`.
    *
-   * @throws Error when the proposal belongs to another project or session, or when the head's
-   *   revision or the base revision is unavailable.
+   * @throws Error when the proposal belongs to another project or session, when the head's revision
+   *   or the base revision is unavailable, or when an ancestor session directory is a symlink.
+   * @throws The original error of a failed ancestor repair write, before curation is inspected or
+   *   written and before any revision is written.
+   * @throws The failures of `repairPendingLearnings` and `repairViews`, for this session and for a
+   *   fork base's ancestor session.
    * @throws The original error of a failed write; after the head is durable the committed revision
    *   stays for the next open to repair and for reconciliation to attach.
    * @throws The failures of `withProjectLock`.
@@ -214,25 +220,27 @@ export class MemoryStore {
    *
    * First repairs overlapping pending learning publications and this session's unfinished views as
    * `open` does, so curation never records a half-written head's absent views as deletions. When
-   * `base` names a fork ancestor's revision, then merges the ancestor lineage's curation into this
-   * session's record with ancestor references rebound to this session, so exclusions survive the
-   * fork.
+   * `base` names a fork ancestor's revision, rejects symlinked ancestor session directories, then,
+   * when `inheritRevision` returns the base, repairs the ancestor's pending head the same way under
+   * the same lock. Only then inspects this session's curation and merges the ancestor lineage's
+   * curation into it with ancestor references rebound to this session, so exclusions survive the
+   * fork. An unavailable base repairs nothing and inherits nothing.
    *
+   * @throws Error when an ancestor session directory is a symlink.
    * @throws Error naming the path when a curation, head, or revision record is damaged.
-   * @throws The original error of a failed repair write, before curation is inspected or written.
+   * @throws The original error of a failed repair write, before either session's curation is
+   *   inspected or written; completed repair writes stay for the next repair.
+   * @throws The failures of `repairPendingLearnings` and `repairViews`, for this session and for a
+   *   fork base's ancestor session.
    * @throws The failures of `withProjectLock`.
    */
   inspectCuration(
     base: RevisionPointer | null,
   ): Effect.Effect<CurationState, unknown, StorageServices> {
-    const inspect =
-      base === null || base.sessionId === this.sessionId
-        ? this.inspectOwnCuration()
-        : this.inspectOwnCuration().pipe(Effect.andThen(this.inheritLineageCuration(base)));
     return this.locked(
       repairPendingLearnings(this, []).pipe(
         Effect.andThen(repairViews(this)),
-        Effect.andThen(inspect),
+        Effect.andThen(this.inspectCurationFrom(base)),
       ),
     );
   }
@@ -300,10 +308,7 @@ export class MemoryStore {
     head: Head | undefined,
   ): Effect.fn.Return<Snapshot | undefined, unknown, DurableWrites> {
     const base = yield* this.baseOf(proposal.baseRevision);
-    let curation = yield* this.inspectOwnCuration();
-    if (proposal.baseRevision !== null && proposal.baseRevision.sessionId !== this.sessionId) {
-      curation = yield* this.inheritLineageCuration(proposal.baseRevision);
-    }
+    const curation = yield* this.inspectCurationFrom(proposal.baseRevision);
     const excluded = new Set(
       proposal.excludedInheritedNotes.filter((name) => !Object.hasOwn(proposal.notes, name)),
     );
@@ -391,24 +396,37 @@ export class MemoryStore {
     );
   });
 
-  private inheritLineageCuration(
-    pointer: RevisionPointer,
-  ): Effect.Effect<CurationState, unknown, DurableWrites> {
-    return rejectSymlinks(this.sessionLayout(pointer.sessionId)).pipe(
-      Effect.andThen(
-        inheritForkCuration(
-          {
-            baseDir: this.baseDir,
-            projectId: this.projectId,
-            sessionDir: this.sessionDir,
-            childSessionId: this.sessionId,
-          },
-          pointer,
-          (next) => this.inheritRevision(next),
-        ),
-      ),
+  private readonly inspectCurationFrom = Effect.fnUntraced(function* (
+    this: MemoryStore,
+    pointer: RevisionPointer | null,
+  ): Effect.fn.Return<CurationState, unknown, DurableWrites> {
+    if (pointer === null || pointer.sessionId === this.sessionId) {
+      return yield* this.inspectOwnCuration();
+    }
+    yield* rejectSymlinks(this.sessionLayout(pointer.sessionId));
+    if ((yield* this.inheritRevision(pointer)) !== undefined) {
+      const ancestor: CommitTarget = {
+        projectRoot: this.projectRoot,
+        projectId: this.projectId,
+        sessionId: pointer.sessionId,
+        baseDir: this.baseDir,
+        sessionDir: join(this.baseDir, "sessions", pointer.sessionId),
+      };
+      yield* repairPendingLearnings(ancestor, []);
+      yield* repairViews(ancestor);
+    }
+    yield* this.inspectOwnCuration();
+    return yield* inheritForkCuration(
+      {
+        baseDir: this.baseDir,
+        projectId: this.projectId,
+        sessionDir: this.sessionDir,
+        childSessionId: this.sessionId,
+      },
+      pointer,
+      (next) => this.inheritRevision(next),
     );
-  }
+  });
 }
 
 /**

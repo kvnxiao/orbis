@@ -1,6 +1,6 @@
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { dirname, join, sep } from "node:path";
 
 import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -22,6 +22,7 @@ import type { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
 import { projectEntrySchema, openStorageSession } from "../src/pi/storage-session.ts";
 import { writeDurable } from "../src/storage/files.ts";
+import { readHead } from "../src/storage/revisions.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { fixtureModel } from "./pi-fixture.mts";
 import type { Fixture, FixtureOptions } from "./pi-fixture.mts";
@@ -34,6 +35,7 @@ import {
   forkOnDisk,
   noteContent,
   openRegistry,
+  readOptional,
   referenceDroppingRuntime,
   rejectionPaths,
   revisionEntryType,
@@ -566,6 +568,131 @@ test("a Pi disk fork selects its parent revision and preserves it in a child com
     "current-work.md": "Parent state\n",
     "journey.md": "Child journey\n",
   });
+});
+
+interface PendingParentFork {
+  parent: Fixture;
+  child: Fixture;
+  r1: string;
+  r2: string;
+  parentDir: string;
+  childDir: string;
+}
+
+async function forkBeforePendingParent(
+  createFixture: (options?: FixtureOptions) => Promise<Fixture>,
+): Promise<PendingParentFork> {
+  const parent = await createFixture();
+  await parent.session.prompt("Parent evidence.");
+  const fault = { failing: false };
+  const runtime = runtimeFor(parent, {
+    async write(path, contents) {
+      if (fault.failing && path.includes(`${sep}current${sep}`)) {
+        throw new Error("Injected parent view failure.");
+      }
+      await writeDurable(path, contents);
+    },
+  });
+  await runtime.start(parent.session.extensionRunner.createContext());
+  const r1 = await commitNote(parent, runtime, "Parent evidence.", {
+    "current-work.md": "Parent R1\n",
+  });
+  const parentDir = (await storeFor(parent)).sessionDir;
+  const child = await forkOnDisk(parent, createFixture);
+  fault.failing = true;
+  await expect(
+    commitNote(parent, runtime, "Parent evidence.", {
+      "current-work.md": "Parent R2\n",
+      "journey.md": "Parent journey\n",
+    }),
+  ).rejects.toThrow("Injected parent view failure.");
+  const head = await Effect.runPromise(readHead(parentDir));
+  if (head === undefined || head.materialized || head.revisionId === r1) {
+    throw new Error("Expected a pending parent head after R1.");
+  }
+  expect(await readFile(join(parentDir, "current", "current-work.md"), "utf8")).toBe("Parent R1\n");
+  const childDir = join(dirname(parentDir), child.session.sessionManager.getSessionId());
+  return { parent, child, r1, r2: head.revisionId, parentDir, childDir };
+}
+
+async function expectRepairedParent(fork: PendingParentFork): Promise<void> {
+  const current = join(fork.parentDir, "current");
+  expect(await readFile(join(current, "current-work.md"), "utf8")).toBe("Parent R2\n");
+  expect(await readFile(join(current, "journey.md"), "utf8")).toBe("Parent journey\n");
+  expect(await Effect.runPromise(readHead(fork.parentDir))).toMatchObject({
+    revisionId: fork.r2,
+    materialized: true,
+  });
+  expect(await readOptional(join(fork.parentDir, "curation.json"))).toBeUndefined();
+  expect(await readOptional(join(fork.childDir, "curation.json"))).toBeUndefined();
+}
+
+async function expectChildCommitInheritsR1(
+  fork: PendingParentFork,
+  runtime: MemoryRuntime,
+): Promise<void> {
+  const parentId = fork.parent.session.sessionManager.getSessionId();
+  expect(selected(runtime)).toEqual({
+    state: "selected",
+    revisionId: fork.r1,
+    sessionId: parentId,
+    invalidNotes: [],
+  });
+  const committed = await commitNote(fork.child, runtime, "Parent evidence.", {
+    "topic-child.md": "Child topic\n",
+  });
+  const revision = await (await storeFor(fork.child)).readRevision(committed);
+  expect(revision?.baseRevision).toEqual({ sessionId: parentId, revisionId: fork.r1 });
+  expect(revision?.notes).toEqual({
+    "current-work.md": "Parent R1\n",
+    "topic-child.md": "Child topic\n",
+  });
+}
+
+test("a Pi fork that selects R1 repairs its parent's pending R2 on reload, keeps R1 selected and current without curation, and a child commit inherits only R1", async ({
+  createFixture,
+}) => {
+  const fork = await forkBeforePendingParent(createFixture);
+  await fork.child.reload();
+  await fork.child.command("status");
+  const lines = fork.child.report().split("\n");
+  expect(lines).toContain(`Selected memory revision: ${fork.r1}`);
+  expect(lines).toContain("Selected memory validity: current");
+  expect(lines.filter((line) => line.startsWith("Memory commits:"))).toEqual([]);
+  await expectRepairedParent(fork);
+  const { runtime } = await started(fork.child);
+  await expectChildCommitInheritsR1(fork, runtime);
+});
+
+test("a fork whose parent repair fails at start reports the storage error and refuses capture until a navigation retry repairs the parent and keeps R1 selected", async ({
+  createFixture,
+}) => {
+  const fork = await forkBeforePendingParent(createFixture);
+  const fault = { failing: true, failure: new Error("Injected parent repair failure.") };
+  const runtime = runtimeFor(fork.child, {
+    async write(path, contents) {
+      if (fault.failing && path.startsWith(join(fork.parentDir, "current"))) {
+        throw fault.failure;
+      }
+      await writeDurable(path, contents);
+    },
+  });
+  const ctx = fork.child.session.extensionRunner.createContext();
+  await runtime.start(ctx);
+  expect(runtime.snapshot.storage).toEqual({ state: "failed", error: fault.failure.message });
+  expect(renderStatus(buildStatus(runtime, ctx)).split("\n")).toContain(
+    `Storage error: ${fault.failure.message}`,
+  );
+  expect(() => runtime.captureProposal(ctx, noteContent({}), [])).toThrow(
+    "Memory storage is unavailable while disabled or before it opens.",
+  );
+  expect((await Effect.runPromise(readHead(fork.parentDir)))?.materialized).toBe(false);
+  expect(await readOptional(join(fork.parentDir, "curation.json"))).toBeUndefined();
+  expect(await readOptional(join(fork.childDir, "curation.json"))).toBeUndefined();
+  fault.failing = false;
+  await runtime.selectBranch(ctx);
+  await expectRepairedParent(fork);
+  await expectChildCommitInheritsR1(fork, runtime);
 });
 
 test("a fork excludes its parent's externally edited note from a metadata-only child revision", async ({

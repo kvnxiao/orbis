@@ -376,8 +376,10 @@ export const reconcilePending = Effect.fnUntraced(function* (
  * and orphan recovery. `sources.newest` is the newest completed registration when the refresh
  * starts; its source count and `event`, with the count of the curation this refresh inspects,
  * become the cached `registration`. Inspecting curation takes the project lock and first repairs
- * this session's unfinished head. `current` reports whether the refresh still belongs to the
- * current configuration; `reconcilePending` checks it immediately before appending a reference.
+ * this session's unfinished head, then the fork ancestor's when the selection is inherited; a
+ * failed repair propagates before curation is written. `current` reports whether the refresh still
+ * belongs to the current configuration; `reconcilePending` checks it immediately before appending a
+ * reference.
  *
  * @throws Error when a curation, head, or revision record is damaged.
  * @throws The failures of `MemoryStore.inspectCuration` and `reconcilePending`.

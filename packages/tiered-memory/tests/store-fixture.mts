@@ -24,7 +24,7 @@ import { referencesIn } from "../src/pi/revision-references.ts";
 import { MemoryRuntime } from "../src/pi/runtime.ts";
 import type { StorageSnapshot } from "../src/pi/storage-session.ts";
 import type { CurationState } from "../src/storage/curation.ts";
-import { fromPromise, writeDurable } from "../src/storage/files.ts";
+import { fromPromise, readText, writeDurable } from "../src/storage/files.ts";
 import type { Revision } from "../src/storage/revisions.ts";
 import type { StorageServices } from "../src/storage/services.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
@@ -213,6 +213,11 @@ export async function openStore(
 
 export async function openRegistry(store: TestStore): Promise<TestRegistry> {
   return new TestRegistry(await store.run(SourceRegistry.open(store.store)), store);
+}
+
+/** Read a file's UTF-8 text, or `undefined` when it does not exist. */
+export async function readOptional(path: string): Promise<string | undefined> {
+  return await Effect.runPromise(readText(path));
 }
 
 export function interruptingWriter(interruptAt: (path: string, contents: string) => boolean): {

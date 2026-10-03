@@ -31,6 +31,7 @@ import {
   noteContent,
   openRegistry,
   openStore,
+  readOptional,
   referenceDroppingRuntime,
   runtimeFor,
   sourceEntry,
@@ -1410,15 +1411,6 @@ function failingViewAfterHead(matches: (path: string) => boolean, fault: ViewFau
 async function sessionDirOf(f: Fixture): Promise<string> {
   const root = await realpath(f.cwd);
   return join(root, ".pi", "tiered-memory", "sessions", f.session.sessionManager.getSessionId());
-}
-
-async function readOptional(path: string): Promise<string | undefined> {
-  return await readFile(path, "utf8").catch((error: unknown) => {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  });
 }
 
 const viewCases = [
