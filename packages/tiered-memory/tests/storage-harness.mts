@@ -11,7 +11,12 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 
 import type { Execution, StorageScope } from "../src/pi/execution.ts";
 import { fromPromise, writeDurable } from "../src/storage/files.ts";
-import { DurableWrites, LockFilesystem, ProcessLiveness } from "../src/storage/services.ts";
+import {
+  DurableWrites,
+  LockFilesystem,
+  ManagedReads,
+  ProcessLiveness,
+} from "../src/storage/services.ts";
 import type { StorageServices } from "../src/storage/services.ts";
 
 /** Replace a durable write with a Promise operation; a rejection becomes the write's failure. */
@@ -32,7 +37,11 @@ export interface TestServices {
   write?: TestWrite;
   lock?: TestLockFilesystem;
   isRunning?: (pid: number) => boolean;
+  /** Replace bounded managed-file reads; a rejection becomes the read's failure. */
+  read?: (path: string) => Promise<string | undefined>;
   now?: () => number;
+  /** Replace the Effect clock, including its sleeps; takes precedence over `now`. */
+  clock?: Clock.Clock;
 }
 
 function hook<Args extends unknown[], A>(
@@ -80,8 +89,12 @@ export function testServices(overrides: TestServices = {}): Layer.Layer<StorageS
     Layer.succeed(ProcessLiveness, {
       isRunning: overrides.isRunning ?? ProcessLiveness.live.isRunning,
     }),
+    Layer.succeed(ManagedReads, { read: hook(overrides.read, ManagedReads.live.read) }),
   );
-  const now = overrides.now;
+  const { now, clock } = overrides;
+  if (clock !== undefined) {
+    return Layer.mergeAll(layer, Layer.succeed(Clock.Clock, clock));
+  }
   return now === undefined
     ? layer
     : Layer.mergeAll(layer, Layer.succeed(Clock.Clock, steppingClock(now)));

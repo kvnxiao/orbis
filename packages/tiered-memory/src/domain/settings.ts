@@ -26,6 +26,7 @@ export const limitsSchema = Type.Object(
     consolidationThresholdTokens: positiveLimit,
     activeObservationTokens: positiveLimit,
     indexTokens: positiveLimit,
+    presentationTokens: positiveLimit,
     checkpointTokens: positiveLimit,
     recallTokens: positiveLimit,
     recallBytes: positiveLimit,
@@ -151,6 +152,7 @@ export const defaultLimits: Readonly<Limits> = {
   consolidationThresholdTokens: 4096,
   activeObservationTokens: 8192,
   indexTokens: 512,
+  presentationTokens: 4096,
   checkpointTokens: 4096,
   recallTokens: 2048,
   recallBytes: 16384,
@@ -200,18 +202,32 @@ function overlay<T, K extends keyof T>(
 }
 
 /**
+ * Allow this many estimated tokens for each presentation header: one component's rendered text
+ * besides its body, or a reset's opening line. Presentation tests check the maximal rendered
+ * headers against it.
+ */
+export const presentationHeaderTokens = 256;
+
+/**
  * Report whether the work note, consolidation threshold, or index exceeds its containing budget.
  *
- * A conflict exists when `workNoteTokens` exceeds `checkpointTokens` or `workerOutputTokens`, when
- * `consolidationThresholdTokens` exceeds `activeObservationTokens`, or when `workNoteTokens` plus
- * `indexTokens` exceeds `workerInputTokens`. `limits` must already satisfy `limitsSchema`.
+ * A conflict exists when any of these holds; `limits` must already satisfy `limitsSchema`:
+ *
+ * - `workNoteTokens` exceeds `checkpointTokens` or `workerOutputTokens`.
+ * - `consolidationThresholdTokens` exceeds `activeObservationTokens`.
+ * - `workNoteTokens` plus `indexTokens` exceeds `workerInputTokens`.
+ * - `workNoteTokens` plus `indexTokens` plus three `presentationHeaderTokens` (the reset's opening
+ *   line and two component headers) exceeds `presentationTokens`, so a reset baseline with a
+ *   complete note and index could not fit the accumulated presentation budget.
  */
 export function budgetsConflict(limits: Limits): boolean {
+  const baseline = limits.workNoteTokens + limits.indexTokens;
   return (
     limits.workNoteTokens > limits.checkpointTokens ||
     limits.workNoteTokens > limits.workerOutputTokens ||
     limits.consolidationThresholdTokens > limits.activeObservationTokens ||
-    limits.workNoteTokens + limits.indexTokens > limits.workerInputTokens
+    baseline > limits.workerInputTokens ||
+    baseline + 3 * presentationHeaderTokens > limits.presentationTokens
   );
 }
 

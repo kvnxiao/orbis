@@ -7,19 +7,12 @@ import type { Static } from "typebox";
 
 import { digest } from "../domain/canonical.ts";
 import { curationRecordSchema, mayUseNote } from "../domain/evidence.ts";
-import type { CurationRecord } from "../domain/evidence.ts";
-import type { MemoryProposal, NoteDependency, RevisionPointer } from "../domain/proposal.ts";
-import {
-  decodeReference,
-  digestSchema,
-  learningNameSchema,
-  noteNameSchema,
-  rebindReference,
-  sourceIdSchema,
-} from "../domain/references.ts";
+import type { CurationEvent, CurationRecord } from "../domain/evidence.ts";
+import type { NoteDependency, RevisionPointer } from "../domain/proposal.ts";
+import { noteNameSchema, rebindReference } from "../domain/references.ts";
 import { readText } from "./files.ts";
 import { parseRecord } from "./records.ts";
-import { readHead } from "./revisions.ts";
+import { earlierNoteNames, readHead } from "./revisions.ts";
 import type { Head, Revision } from "./revisions.ts";
 import type { DurableWrites } from "./services.ts";
 import { writeRecord } from "./services.ts";
@@ -33,40 +26,8 @@ export const curationSchema = Type.Object(
   { additionalProperties: false },
 );
 
-/**
- * Validate a generated learning's provenance: the digest it was written with, the evidence it
- * consumed, and the sequence that wrote it.
- */
-export const generatedLearningSchema = Type.Object(
-  {
-    digest: digestSchema,
-    consumedSourceIds: Type.Array(sourceIdSchema),
-    sequence: Type.Integer({ minimum: 1 }),
-  },
-  { additionalProperties: false },
-);
-
-/**
- * Validate project curation: generated-learning provenance and exclusions for externally edited or
- * deleted learnings.
- */
-export const projectCurationSchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    generated: Type.Record(learningNameSchema, generatedLearningSchema, {
-      additionalProperties: false,
-    }),
-    curated: Type.Record(learningNameSchema, curationRecordSchema, { additionalProperties: false }),
-  },
-  { additionalProperties: false },
-);
-
 /** Define the `sessions/<session-id>/curation.json` payload. */
 export type CurationState = Static<typeof curationSchema>;
-/** Define one `generated` entry of the `sessions/_project/state.json` payload. */
-export type GeneratedLearning = Static<typeof generatedLearningSchema>;
-/** Define the `sessions/_project/state.json` payload. */
-export type ProjectCurationState = Static<typeof projectCurationSchema>;
 
 /**
  * Read a revision by pointer, or `undefined` when it is unavailable.
@@ -81,10 +42,6 @@ function curationPath(sessionDir: string): string {
   return join(sessionDir, "curation.json");
 }
 
-function projectStatePath(baseDir: string): string {
-  return join(baseDir, "sessions", "_project", "state.json");
-}
-
 const loadCuration = Effect.fnUntraced(function* (
   path: string,
 ): Effect.fn.Return<CurationState, unknown> {
@@ -92,27 +49,9 @@ const loadCuration = Effect.fnUntraced(function* (
   return text === undefined ? { version: 1, notes: {} } : parseRecord(curationSchema, text, path);
 });
 
-const loadProjectCuration = Effect.fnUntraced(function* (
-  path: string,
-): Effect.fn.Return<ProjectCurationState, unknown> {
-  const text = yield* readText(path);
-  return text === undefined
-    ? { version: 1, generated: {}, curated: {} }
-    : parseRecord(projectCurationSchema, text, path);
-});
-
-function readAll(paths: readonly string[]): Effect.Effect<(string | undefined)[], unknown> {
+/** Read UTF-8 files concurrently, with `undefined` for each file that does not exist. */
+export function readAll(paths: readonly string[]): Effect.Effect<(string | undefined)[], unknown> {
   return Effect.forEach(paths, readText, { concurrency: "unbounded" });
-}
-
-/**
- * Read validated project learning provenance without reconciling disk views.
- *
- * @throws Error naming the path when `state.json` is not JSON or fails `projectCurationSchema`.
- * @throws The original read error other than `ENOENT`.
- */
-export function readProjectCuration(baseDir: string): Effect.Effect<ProjectCurationState, unknown> {
-  return loadProjectCuration(projectStatePath(baseDir));
 }
 
 function recordFor(
@@ -126,15 +65,30 @@ function recordFor(
     : { kind: "edited", digest: digest(content), consumedSourceIds };
 }
 
-const reconcileRecords = Effect.fnUntraced(function* (
+/**
+ * Record edited or deleted files among `generated` in `records` and report whether a record
+ * changed.
+ *
+ * A file whose digest differs from `digest` records `edited` with its digest, and a missing file
+ * records `deleted`, each consuming `consumed` together with the earlier record's sources. A
+ * `digest` of `undefined` expects the file to be absent.
+ *
+ * @throws The original read error other than `ENOENT`.
+ */
+export const reconcileRecords = Effect.fnUntraced(function* (
   records: Record<string, CurationRecord>,
-  generated: readonly { name: string; path: string; digest: string; consumed: readonly string[] }[],
+  generated: readonly {
+    name: string;
+    path: string;
+    digest: string | undefined;
+    consumed: readonly string[];
+  }[],
 ): Effect.fn.Return<boolean, unknown> {
   const contents = yield* readAll(generated.map(({ path }) => path));
   let changed = false;
   for (const [index, { name, digest: expected, consumed }] of generated.entries()) {
     const content = contents[index];
-    if (content !== undefined && digest(content) === expected) {
+    if ((content === undefined ? undefined : digest(content)) === expected) {
       continue;
     }
     const previous = records[name];
@@ -153,100 +107,93 @@ const reconcileRecords = Effect.fnUntraced(function* (
  *
  * Compares each note digest in `views` with the file under `current/`: a different digest records
  * `edited` and a missing file records `deleted`, each consuming the note's dependency sources
- * together with any earlier record's. Writes `curation.json` only when a record changes. Must run
- * under the project lock.
+ * together with any earlier record's. A note with a curation record but no digest in `views` stays
+ * inspected against its record when `earlier` reports that a view of this session tracked it, such
+ * as an edited note a later commit excluded: an `edited` record's file that is now missing records
+ * `deleted`, and one with other bytes records their digest; a `deleted` record's file that
+ * reappears records `edited`. Each keeps the record's consumed sources. Only a file that no longer
+ * matches its record asks `earlier`, so the revision chain is read only when a record can change. A
+ * record that only a fork ancestor's curation supplied names no file of this session and is not
+ * inspected. Writes `curation.json` only when a record changes. Must run under the project lock.
  *
  * @throws Error naming the path when `curation.json` is not JSON or fails `curationSchema`; its
  *   bytes are preserved.
- * @throws The original read or write error.
+ * @throws The original read or write error, and the failures of `earlier`.
  */
 export const inspectCuration = Effect.fnUntraced(function* (
   sessionDir: string,
   views: Head["views"]["notes"],
   noteDependencies: Readonly<Record<string, NoteDependency>>,
+  earlier: (names: ReadonlySet<string>) => Effect.Effect<ReadonlySet<string>, unknown>,
 ): Effect.fn.Return<CurationState, unknown, DurableWrites> {
   const path = curationPath(sessionDir);
   const state = yield* loadCuration(path);
-  const generated = Object.entries(views).map(([name, viewDigest]) => ({
+  const viewed = Object.entries(views).map(([name, viewDigest]) => ({
     name,
     path: join(sessionDir, "current", name),
     digest: viewDigest,
     consumed: noteDependencies[name]?.sourceIds ?? [],
   }));
-  if (yield* reconcileRecords(state.notes, generated)) {
+  const unviewed = Object.entries(state.notes).flatMap(([name, record]) =>
+    Object.hasOwn(views, name)
+      ? []
+      : [
+          {
+            name,
+            path: join(sessionDir, "current", name),
+            digest: record.kind === "edited" ? record.digest : undefined,
+            consumed: [],
+          },
+        ],
+  );
+  const contents = yield* readAll(unviewed.map((note) => note.path));
+  const drifted = unviewed.filter(({ digest: expected }, index) => {
+    const content = contents[index];
+    return (content === undefined ? undefined : digest(content)) !== expected;
+  });
+  const tracked =
+    drifted.length === 0
+      ? new Set<string>()
+      : yield* earlier(new Set(drifted.map(({ name }) => name)));
+  const recordedOnly = drifted.filter(({ name }) => tracked.has(name));
+  if (yield* reconcileRecords(state.notes, [...viewed, ...recordedOnly])) {
     yield* writeRecord(path, state);
   }
   return state;
 });
 
 /**
- * Record external edits and deletions of generated learnings and return the project curation.
+ * Record an observed external change of a session note and return the session's curation.
  *
- * Writes `sessions/_project/state.json` only when a record changes. Must run under the project
- * lock.
+ * Records `event` for `name` with `consumed` and any earlier record's consumed sources, unless the
+ * earlier record already forbids a note generated from `consumed`; the earlier record then stays.
+ * Records the observed event without reading the note file, so a file restored after the
+ * observation still records it. Writes `curation.json` only when it records. Must run under the
+ * project lock.
  *
- * @throws Error naming the path when `state.json` is not JSON or fails `projectCurationSchema`; its
+ * @throws Error naming the path when `curation.json` is not JSON or fails `curationSchema`; its
  *   bytes are preserved.
  * @throws The original read or write error.
  */
-export const inspectProjectCuration = Effect.fnUntraced(function* (
-  baseDir: string,
-): Effect.fn.Return<ProjectCurationState, unknown, DurableWrites> {
-  const path = projectStatePath(baseDir);
-  const state = yield* loadProjectCuration(path);
-  const generated = Object.entries(state.generated).map(([name, learning]) => ({
-    name,
-    path: join(baseDir, "learnings", name),
-    digest: learning.digest,
-    consumed: learning.consumedSourceIds,
-  }));
-  if (yield* reconcileRecords(state.curated, generated)) {
-    yield* writeRecord(path, state);
+export const recordObservedCuration = Effect.fnUntraced(function* (
+  sessionDir: string,
+  observed: { name: string; event: CurationEvent; consumed: readonly string[] },
+  scope: { projectId: string; sessionId: string },
+): Effect.fn.Return<CurationState, unknown, DurableWrites> {
+  const path = curationPath(sessionDir);
+  const state = yield* loadCuration(path);
+  const { name, event, consumed } = observed;
+  const previous = state.notes[name];
+  if (previous !== undefined && !mayUseNote(previous, consumed, scope)) {
+    return state;
   }
+  const consumedSourceIds = [...new Set([...consumed, ...(previous?.consumedSourceIds ?? [])])];
+  state.notes[name] =
+    event.kind === "edited"
+      ? { kind: "edited", digest: event.digest, consumedSourceIds }
+      : { kind: "deleted", consumedSourceIds };
+  yield* writeRecord(path, state);
   return state;
-});
-
-/**
- * Record provenance for the learnings a committed revision wrote.
- *
- * Records provenance for each learning whose file still has the committed content, and keeps an
- * entry whose sequence is newer than `sequence`. Must run under the project lock.
- *
- * @throws Error naming the path when `state.json` is damaged; its bytes are preserved.
- * @throws The original read or write error.
- */
-export const publishProjectGenerated = Effect.fnUntraced(function* (
-  baseDir: string,
-  committed: {
-    learnings: Readonly<Record<string, string>>;
-    sourceIds: readonly string[];
-    sequence: number;
-  },
-): Effect.fn.Return<void, unknown, DurableWrites> {
-  const learnings = Object.entries(committed.learnings);
-  if (learnings.length === 0) {
-    return;
-  }
-  const path = projectStatePath(baseDir);
-  const state = yield* loadProjectCuration(path);
-  const contents = yield* readAll(learnings.map(([name]) => join(baseDir, "learnings", name)));
-  let changed = false;
-  for (const [index, [name, content]] of learnings.entries()) {
-    if (
-      contents[index] === content &&
-      (state.generated[name]?.sequence ?? 0) <= committed.sequence
-    ) {
-      state.generated[name] = {
-        digest: digest(content),
-        consumedSourceIds: [...committed.sourceIds],
-        sequence: committed.sequence,
-      };
-      changed = true;
-    }
-  }
-  if (changed) {
-    yield* writeRecord(path, state);
-  }
 });
 
 /**
@@ -287,7 +234,8 @@ export const inheritCuration = Effect.fnUntraced(function* (
   return state;
 });
 
-function withReboundSources(
+/** Return a curation record whose consumed references also include their fork rebinding. */
+export function withReboundSources(
   record: CurationRecord,
   fork: { projectId: string; lineage: ReadonlySet<string>; childSessionId: string },
 ): CurationRecord {
@@ -303,7 +251,13 @@ function damagedLineage(): Error {
   return new Error("Damaged ancestor memory lineage; files are preserved for review.");
 }
 
-const lineageOf = Effect.fnUntraced(function* (
+/**
+ * Add the sessions of `revision`'s base chain to `lineage` and return it.
+ *
+ * @throws Error when the chain has a cycle or names a missing revision.
+ * @throws The failures of `readRevision`.
+ */
+export const lineageOf = Effect.fnUntraced(function* (
   revision: Revision,
   lineage: Set<string>,
   readRevision: RevisionReader,
@@ -324,83 +278,6 @@ const lineageOf = Effect.fnUntraced(function* (
     next = ancestor.baseRevision;
   }
   return lineage;
-});
-
-/**
- * Check a proposal's learnings against project curation and the state the proposer expected.
- *
- * Returns `curation` when a learning is curated against the proposal's evidence or exists without
- * generated provenance, `learning` when its digest or generated sequence differs from
- * `expectedLearnings`, and `undefined` when every learning may be written. Must run under the
- * project lock.
- *
- * @throws Error naming the path when `state.json` is damaged; its bytes are preserved.
- * @throws Error when the base lineage has a cycle or names a missing revision.
- * @throws The original read or write error.
- */
-export const learningConflict = Effect.fnUntraced(function* (
-  baseDir: string,
-  proposal: Pick<
-    MemoryProposal,
-    "learnings" | "expectedLearnings" | "sourceIds" | "projectId" | "sessionId" | "baseRevision"
-  >,
-  readRevision: RevisionReader,
-): Effect.fn.Return<"curation" | "learning" | undefined, unknown, DurableWrites> {
-  const names = Object.keys(proposal.learnings);
-  if (names.length === 0) {
-    return undefined;
-  }
-  const project = yield* inspectProjectCuration(baseDir);
-  const proposedEntries = new Set(
-    proposal.sourceIds.map((id) => decodeReference(id)?.entryId ?? id),
-  );
-  const needsRebind = names.some(
-    (name) =>
-      project.curated[name]?.consumedSourceIds.some((id) => {
-        const location = decodeReference(id);
-        return (
-          location?.projectId === proposal.projectId &&
-          location.sessionId !== proposal.sessionId &&
-          proposedEntries.has(location.entryId)
-        );
-      }) ?? false,
-  );
-  const base =
-    needsRebind && proposal.baseRevision !== null
-      ? yield* readRevision(proposal.baseRevision)
-      : undefined;
-  const lineage =
-    base === undefined || proposal.baseRevision === null
-      ? undefined
-      : yield* lineageOf(base, new Set([proposal.baseRevision.sessionId]), readRevision);
-  const disks = yield* readAll(names.map((name) => join(baseDir, "learnings", name)));
-  for (const [index, name] of names.entries()) {
-    const disk = disks[index];
-    const curated = project.curated[name];
-    const comparable =
-      curated === undefined || lineage === undefined
-        ? curated
-        : withReboundSources(curated, {
-            projectId: proposal.projectId,
-            lineage,
-            childSessionId: proposal.sessionId,
-          });
-    if (
-      !mayUseNote(comparable, proposal.sourceIds, proposal) ||
-      (disk !== undefined && project.generated[name] === undefined)
-    ) {
-      return "curation";
-    }
-    const expected = proposal.expectedLearnings[name];
-    if (
-      expected === undefined ||
-      (disk === undefined ? null : digest(disk)) !== expected.digest ||
-      (project.generated[name]?.sequence ?? null) !== expected.sequence
-    ) {
-      return "learning";
-    }
-  }
-  return undefined;
 });
 
 /**
@@ -440,6 +317,10 @@ export const inheritForkCuration = Effect.fnUntraced(function* (
     directory,
     head?.views.notes ?? {},
     generated?.noteDependencies ?? {},
+    (names) =>
+      earlierNoteNames(names, generated?.parentRevisionId ?? null, (revisionId) =>
+        readRevision({ sessionId: pointer.sessionId, revisionId }),
+      ),
   );
   const lineage = yield* lineageOf(selected, new Set([pointer.sessionId]), readRevision);
   const rebind = { projectId: fork.projectId, lineage, childSessionId: fork.childSessionId };

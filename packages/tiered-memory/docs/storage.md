@@ -1,9 +1,11 @@
 # Tiered memory storage
 
 The extension records private session metadata and original-source references under
-`.pi/tiered-memory/sessions/`. The controlled writer is extension code that validates and commits
-memory revisions containing notes and their processing metadata. Observation, consolidation, and the
-public `recall` tool are unavailable in this version.
+`.pi/tiered-memory/sessions/`. The observer, a background model job, extracts source-linked
+observations and updates the current-work note, a bounded summary of ongoing work. The controlled
+writer is extension code that validates the observer's results and commits them, with their
+processing metadata, as memory revisions. Consolidation and the public `recall` tool are unavailable
+in this version.
 
 ## Project and session scope
 
@@ -38,32 +40,44 @@ identical text retain distinct source identities. Recorded timestamps and source
 attached to their evidence; processing time does not supply missing dates or timezones. Replaced or
 omitted text remains historical evidence rather than current instructions.
 
-The source representation includes message text and tool-call metadata in their original block
-order. Tool calls retain their identifiers, names, and arguments; results retain the matching call
-identifier, tool name, error flag, and result text. Images and other non-text blocks are outside
-this representation. Effective text follows the selected branch's context edits, while raw text
+Sources are the user, assistant, and tool-result messages and the user shell commands that Pi
+includes in model context. The user runs such shell commands with `!`. Shell commands run with `!!`,
+branch summaries, compaction summaries, and other extensions' custom messages are not sources. The
+source representation includes message text and tool-call metadata in their original block order.
+Tool calls retain their identifiers, names, and arguments; results retain the matching call
+identifier, tool name, error flag, and result text. A tool result with nested calls also has a
+`Nested calls: {...}` line with Pi's bounded record of those calls, or
+`Nested calls: unrecognized record` when the record does not match the format the extension reads.
+Pi does not store a tool's `structuredContent`, so the representation does not include it. Images
+and other non-text blocks are outside this representation; a message that has only images is
+registered with empty text, so status can report its attachments. A `recall` tool result is never
+treated as new evidence. Effective text follows the selected branch's context edits, while raw text
 remains available as historical evidence.
+
+Registration computes digests from this representation.
 
 ## Records and publication
 
 Private metadata uses versioned JSON. Identity records bind each session to its project root; notes
 use UTF-8 Markdown. Session-private records stay out of model context; the extension uses Pi custom
-entries for branch-selected revision references.
+entries for branch-selected revision references. Presentation messages show committed notes to the
+acting model, which is the model that runs the main conversation. They are the one kind of record
+that enters model context, as [Presentation records](#presentation-records) describes.
 
-| Path below `.pi/tiered-memory/`                      | Contents                                                                                             |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `sessions/<session-id>/identity.json`                | Project root and session identity, written when the session's store first opens.                     |
-| `sessions/<session-id>/sources.json`                 | Registered source identities, digests, order, role, and time context.                                |
-| `sessions/<session-id>/revisions/<revision-id>.json` | One immutable revision: the committed proposal, its parent and sequence, and the full note snapshot. |
-| `sessions/<session-id>/head.json`                    | The current revision, view digests, and whether its view materialization or recovery completed.      |
-| `sessions/<session-id>/curation.json`                | External note edits and deletion exclusions, independent of the selected branch.                     |
-| `sessions/<session-id>/current/`                     | Human-readable session notes.                                                                        |
-| `sessions/_project/state.json`                       | Generated learning digests, sequences, and consumed evidence, and project-wide curation exclusions.  |
-| `sessions/_project/sequence.json`                    | The last publication sequence issued across sessions.                                                |
-| `sessions/.lock/private/`                            | Complete owner records written before their tickets are published.                                   |
-| `sessions/.lock/tickets/`                            | Numbered, immutable owner tickets; the greatest ticket also preserves the sequence high-water mark.  |
-| `sessions/.lock/done/`                               | Completion markers for published tickets.                                                            |
-| `learnings/`                                         | Shareable Markdown learning files and their index.                                                   |
+| Path below `.pi/tiered-memory/`                      | Contents                                                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `sessions/<session-id>/identity.json`                | Project root and session identity, written when the session's store first opens.                                          |
+| `sessions/<session-id>/sources.json`                 | Registered source identities, digests, order, role, and time context.                                                     |
+| `sessions/<session-id>/revisions/<revision-id>.json` | One immutable revision: the committed proposal and its observations, its parent and sequence, and the full note snapshot. |
+| `sessions/<session-id>/head.json`                    | The current revision, view digests, and whether its view materialization or recovery completed.                           |
+| `sessions/<session-id>/curation.json`                | External note edits and deletion exclusions, independent of the selected branch.                                          |
+| `sessions/<session-id>/current/`                     | Human-readable session notes.                                                                                             |
+| `sessions/_project/state.json`                       | Generated learning digests, sequences, and consumed evidence, and project-wide curation exclusions.                       |
+| `sessions/_project/sequence.json`                    | The last publication sequence issued across sessions.                                                                     |
+| `sessions/.lock/private/`                            | Complete owner records written before their tickets are published.                                                        |
+| `sessions/.lock/tickets/`                            | Numbered, immutable owner tickets; the greatest ticket also preserves the sequence high-water mark.                       |
+| `sessions/.lock/done/`                               | Completion markers for published tickets.                                                                                 |
+| `learnings/`                                         | Shareable Markdown learning files and their index.                                                                        |
 
 The `current/` directory contains `current-work.md`, `journey.md`, `topics-index.md`, and
 `topic-<name>.md` files when those notes have been committed. Project learnings use individual
@@ -71,19 +85,38 @@ Markdown files and `index.md`.
 
 Format version `1` uses JSON objects with a `version` field. Readers validate each record against
 its schema and reject other versions. Project identifiers are SHA-256 digests of canonical root
-paths; revision identifiers are UUIDs. Revision records contain note bodies, source identifiers,
-consumed observation identifiers, captured publication dependencies, and the project sequence their
-commit advanced to. Content digests use SHA-256.
+paths; revision identifiers are UUIDs. Content digests use SHA-256. Besides its identity, parent,
+sequence, and the values that the writer captures, described below, a revision record has:
+
+- `notes`, the note bodies of the full snapshot.
+- `sourceIds`, the processed interval: the whole-entry or range references, described below, whose
+  processing this revision records.
+- `observations`, only the observations that this revision accepted. Each has an `id`, `kind`,
+  `text`, `ordinal`, and `citations`. A source citation records a span reference, its branch order,
+  and its source time; a checkpoint citation records the id of a native compaction entry. Every
+  source citation names a reference in `sourceIds`.
+- `noteDependencies`, described below.
+- `consumedObservationIds`, `learnings`, and the captured publication dependencies in
+  `expectedLearnings`.
+- `excludedInheritedNotes`, the carried notes that the revision drops because their evidence or
+  curation invalidated them.
+- `curatedNotes`, the notes whose curation records the store had found when the proposal was
+  captured.
 
 Each note's `noteDependencies` retains its source references and a fingerprint of their raw text,
-effective text, and omission status. Later revisions preserve those dependencies when carrying the
-note forward. The newly processed source interval remains separate; retaining an older note does not
-mark additional evidence as processed.
+effective text, and omission status. Its optional `checkpointIds` names native compaction entries
+whose claims the note includes without their original spans being processed. Later revisions
+preserve those dependencies when carrying the note forward. The processed interval remains separate;
+retaining an older note does not mark additional evidence as processed.
 
 Source references use `tm1:<projectId>:<sessionId>:<entryId>:<span>`, separated by colons; none of
-the components can contain a colon. The current text representation uses span `0` for an entry.
-Registry records preserve raw and effective text digests, omission status, source order, role, and
-optional `recordedAt`, `eventTime`, and `timezone` values.
+the components can contain a colon. Span `0` names a whole entry. A span `<start>-<end>` names a
+range of the entry's effective text in UTF-16 code units, end exclusive. Ranges start and end on
+code-point boundaries, and their bounds have no leading zeros. Registry records always use span `0`.
+A range reference resolves to its entry's registry record, and its evidence fingerprint includes the
+range; a whole-entry reference's fingerprint has no range. Registry records preserve raw and
+effective text digests, omission status, source order, role, and optional `recordedAt`, `eventTime`,
+and `timezone` values.
 
 A proposal may name a registered Pi entry by its bare entry ID or full `tm1` reference. Proposal
 capture converts registered bare IDs to full references. For curation checks, a bare ID belongs to
@@ -118,11 +151,13 @@ conflict naming both revisions and the reason: `head`, `curation`, `learning`, `
 `lineage`, or `evidence`. The store checks run first, in stages: the head, then note curation, then
 each proposed learning in turn. A learning check can return `curation` or `learning`, and the first
 learning that fails sets the reason. Once the store checks pass, the conflict names the first
-failure in the order `configuration`, `lineage`, `evidence`. When a disable, a session stop, or a
-call cancellation comes before the head is written, the commit reports cancellation, never a
-conflict. Concurrent sessions share the lock; an obsolete proposal must be recomputed from the
-accepted revision. Project-learning updates compare both the content digest and publication
-sequence, so a later publication invalidates an older proposal even when the text is unchanged.
+failure in the order `configuration`, `curation`, `lineage`, `evidence`. A `curation` conflict at
+this stage means a detected edit or deletion of the note is not yet recorded. When a disable, a
+session stop, or a call cancellation comes before the head is written, the commit reports
+cancellation, never a conflict. Concurrent sessions share the lock; an obsolete proposal must be
+recomputed from the accepted revision. Project-learning updates compare both the content digest and
+publication sequence, so a later publication invalidates an older proposal even when the text is
+unchanged.
 
 An accepted commit advances the project sequence and writes, in order, the revision file, the head
 naming it, each changed note view, the learning views, and the learning provenance, then marks view
@@ -189,6 +224,38 @@ In each case the commit returns a `lineage` conflict, and the caller must captur
 Conversation navigation selects an immutable session snapshot in memory. It does not rewrite the
 materialized note files or rewind project learnings. Curation exclusions still apply to the selected
 snapshot.
+
+## Observations and coverage
+
+Each observer job processes one interval, a set of source spans in branch order, and commits one
+revision with its accepted observations, its current-work note result, and its interval as
+`sourceIds`. Observation identifiers derive from the interval's references, its evidence
+fingerprint, and the observation's ordinal. A retry over unchanged evidence repeats them, and
+observing changed text again produces new ones.
+
+Processing coverage is derived only from the selected revision and the chain of base revisions it
+inherited notes from. The chain includes revisions in fork ancestors, whose references are rebound
+to the child session. A revision whose recorded evidence no longer matches the active branch
+contributes no coverage. Status reports its spans as changed since processing, and the observer
+processes them again with new observation identifiers. A gap is eligible source text without
+coverage; eligible text excludes `recall` results and entries that a context edit omitted. Sources
+also include the user shell commands in model context, which Pi records as messages with the role
+`bashExecution`. Their evidence covers the command, output, exit status, cancellation, truncation,
+and the full-output path when Pi saved one. Commands excluded from model context are not sources.
+Gaps are the set difference between the branch's eligible sources and coverage, so a later interval
+never conceals an earlier gap. A damaged or missing revision in the chain makes coverage unavailable
+without failing storage start; status reports the reason, and observer scheduling pauses.
+
+The current-work note is `current/current-work.md`. The observer's note result maps to the commit as
+follows:
+
+- `updated` writes the new body. Its `noteDependencies` entry records the cited source references,
+  their evidence fingerprint, and any cited native checkpoints. Each request checks that fingerprint
+  against the conversation when a context edit targets one of the cited entries.
+- `unchanged` does not write a note, so the base revision's note and its dependency carry forward.
+- `empty` writes an empty body, whose dependency is the processed interval.
+
+External edits and deletions limit these writes, as [Curation](#curation) describes.
 
 ## Recovery
 
@@ -407,10 +474,36 @@ failure as its cause.
 
 External edits and deletions are treated as user curation, including changes made through shell
 commands. Before accepting a proposal, the writer compares managed files with their recorded
-revisions and content digests. Changed text is preserved, and proposals based on older content are
-rejected. Deleted notes are excluded from current memory; the same consumed evidence cannot silently
-recreate them. After new evidence supports a replacement, the earlier consumed evidence remains
-excluded. Conversation navigation does not undo these exclusions.
+revisions and content digests. Changed text is preserved. Deleted notes are excluded from current
+memory; the same consumed evidence cannot silently recreate them. After new evidence supports a
+replacement, the earlier consumed evidence remains excluded. Conversation navigation does not undo
+these exclusions.
+
+Between storage refreshes, the extension also checks the current-work note file. These checks do not
+take the project lock, as the [usage guide](usage.md#note-freshness) describes. A check that detects
+an edit or deletion records the observed event in memory: the edited file's digest, or the deletion.
+It then writes that event as a curation record under the project lock in the background. That record
+describes the observed event, not a later read, so restoring the original bytes before it is written
+does not undo the detection. The correction that the extension appends for the change has the same
+event. When Pi stops before the record is written, the next session start records the curation from
+the newest such correction on the branch. Until the record exists, capture refuses new proposals,
+and a commit based on the older note returns a `curation` conflict.
+
+A proposal records the notes that had curation records when it was captured. Under the project lock,
+a commit that writes a note whose edit or deletion appeared after capture returns a `curation`
+conflict, because the proposal is based on content the user has since changed or removed. The
+observer never rewrites an externally edited current-work note: its commit stores observations and
+coverage without the note. A deleted current-work note can be recreated only from evidence that it
+did not consume.
+
+After such an observation-only commit, the head's views no longer name the edited note. The store
+therefore also inspects each note that has a curation record and that an earlier revision of the
+same session wrote. It reads each such file first and reads earlier revisions only for a file that
+no longer matches its record. Deleting the edited note then changes its record to `deleted`, which
+keeps the consumed evidence. A check of the current-work note between refreshes compares such a note
+with its curation record and starts a refresh when the file no longer matches, so the deletion is
+recorded without a reload. A record inherited from a fork ancestor describes the ancestor's file, so
+the child does not record its deletion.
 
 Forks inherit their parent's curation exclusions, including those for absent notes, and save them in
 the child session. The store first repairs the pending head of the ancestor session that the fork's
@@ -427,6 +520,52 @@ Deleting a note does not delete the original Pi transcript or all historical rev
 restore only content that was previously committed. The extension does not change ignore rules,
 stage files, commit, push, or synchronize memory. A parent `.pi/` ignore rule can also exclude
 `.pi/tiered-memory/learnings/`; users choose which learning files to track.
+
+## Presentation records
+
+The extension shows committed notes to the acting model through `orbis-tiered-memory-presentation`
+custom messages. Unlike custom entries, Pi includes custom messages in model context. The extension
+sends each record with `triggerTurn: false` and no `deliverAs`, so Pi appends it at the branch tail
+while idle, or after the current turn's messages while streaming. The transcript displays each
+record with a compact renderer.
+
+Every record has `version` 1, a presentation identifier, the project and memory session it was
+written for, and an anchor: the branch leaf when it was planned. The record kinds are:
+
+- `component`: a complete changed note body with its revision and source boundary, which is the
+  newest processed span in branch order. The boundary records the span's reference and order, its
+  entry's `role`, and its `recordedAt` time when known, at most 32 characters. `supersedes` names
+  the previous presentation of the same component.
+- `boundary`: an unchanged presented body extended to a newer revision and source boundary, without
+  a copy of the body.
+- `reset`: one complete baseline of every current component, the presentation identifiers it
+  supersedes, the reason `budget`, and estimated presentation tokens before and after. The before
+  estimate includes the records that triggered the reset.
+- `correction`: a presented revision that is no longer current, with its cause:
+  - `curation`, with the observed `event`: `edited` with the file's digest, or `deleted`.
+  - `evidence`, when the evidence the note relied on changed.
+  - `fallback`, with the native compaction entry identifier.
+  - `unverified`, when the note's freshness could not be established.
+
+A record counts as presented once it is in Pi's effective projection of the selected branch. It is
+durable once its entry is confirmed in the session file after fsync. The acting model's context
+excludes these records:
+
+- Records of another project or session lineage, and records whose anchor is not on the selected
+  branch.
+- Damaged records, which fail validation. They stay unchanged in the session file, and status lists
+  them.
+- Records that a context edit omitted or replaced.
+- Records that a reset superseded.
+- Component and boundary records that a later correction of the same component follows, and the note
+  portion of a reset baseline that such a correction follows.
+- Records of a note that is invalid or whose freshness is unknown at the request.
+
+A fork recognizes its ancestors' records through the `orbis-tiered-memory-project` entries on its
+branch. Status counts reset events from the confirmed reset records among the selected branch's
+session entries, including records that a later compaction summarized. Presentation never
+establishes processing coverage or note validity; both come only from revision files and the current
+sources.
 
 ## Acting-agent writes
 

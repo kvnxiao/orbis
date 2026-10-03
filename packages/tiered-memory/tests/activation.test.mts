@@ -242,3 +242,11 @@ test("tree navigation keeps current valid settings for a later invalid reload", 
   await f.command("status");
   expect(f.report()).toContain("limits.queuedJobs: 6 (personal)");
 });
+
+test("Pi status shows the presentationTokens source and effective value", async ({
+  createFixture,
+}) => {
+  const f = await createFixture({ personal: { limits: { presentationTokens: 6000 } } });
+  await f.command("status");
+  expect(f.report()).toContain("limits.presentationTokens: 6000 (personal)");
+});

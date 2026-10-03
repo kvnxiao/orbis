@@ -28,6 +28,7 @@ const expectedDefaults = {
   consolidationThresholdTokens: 4096,
   activeObservationTokens: 8192,
   indexTokens: 512,
+  presentationTokens: 4096,
   checkpointTokens: 4096,
   recallTokens: 2048,
   recallBytes: 16384,
@@ -44,6 +45,7 @@ const defaultLimitSources = {
   consolidationThresholdTokens: "default",
   activeObservationTokens: "default",
   indexTokens: "default",
+  presentationTokens: "default",
   checkpointTokens: "default",
   recallTokens: "default",
   recallBytes: "default",
@@ -282,4 +284,25 @@ test("fixture blocks external fetch and socket connections before dispatch", asy
   expect(() => new Socket().connect(443, "example.com")).toThrow(
     "External network connections are disabled",
   );
+});
+
+test.for([
+  { label: "zero", value: 0 },
+  { label: "negative", value: -1 },
+  { label: "fractional", value: 1.5 },
+  { label: "string", value: "4096" },
+])("rejects a $label presentationTokens at /limits/presentationTokens", ({ value }) => {
+  expect(() => parseSettingsFile({ limits: { presentationTokens: value } })).toThrow(
+    "Invalid record at fixture.json: /limits/presentationTokens",
+  );
+});
+
+test("merge rejects a work note, index, and three header allowances that exceed presentationTokens", () => {
+  expect(() =>
+    mergeSettings([{ scope: "personal", overrides: { limits: { presentationTokens: 2303 } } }]),
+  ).toThrow("Tiered-memory limits conflict");
+  expect(
+    mergeSettings([{ scope: "project", overrides: { limits: { presentationTokens: 2304 } } }])
+      .sources.limits.presentationTokens,
+  ).toBe("project");
 });

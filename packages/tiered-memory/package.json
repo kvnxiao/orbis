@@ -1,7 +1,7 @@
 {
   "name": "@orbis/tiered-memory",
   "version": "0.1.0",
-  "description": "Tiered memory for Pi sessions with activation, configuration, memory-model controls, and project-local storage",
+  "description": "Keep an observer-maintained summary of ongoing work in Pi sessions and show it to the model in later requests",
   "keywords": [
     "orbis",
     "pi-package"

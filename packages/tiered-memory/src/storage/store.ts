@@ -5,7 +5,8 @@ import * as Effect from "effect/Effect";
 import { Value } from "typebox/value";
 
 import { digest } from "../domain/canonical.ts";
-import { mayUseNote } from "../domain/evidence.ts";
+import { curationEventOf, mayUseNote } from "../domain/evidence.ts";
+import type { CurationEvent } from "../domain/evidence.ts";
 import { validateProposal } from "../domain/proposal.ts";
 import type {
   CommitResult,
@@ -13,15 +14,17 @@ import type {
   MemoryProposal,
   RevisionPointer,
 } from "../domain/proposal.ts";
-import { safeIdSchema } from "../domain/references.ts";
+import { rebindToSession, safeIdSchema } from "../domain/references.ts";
 import { repairPendingLearnings, repairViews, writeCommit } from "./commit.ts";
 import type { CommitTarget, Snapshot } from "./commit.ts";
-import { inheritForkCuration, inspectCuration, learningConflict } from "./curation.ts";
+import { inheritForkCuration, inspectCuration, recordObservedCuration } from "./curation.ts";
 import type { CurationState } from "./curation.ts";
 import { fromPromise, readText, rejectSymlinks } from "./files.ts";
+import { learningConflict } from "./learning-curation.ts";
 import { withProjectLock } from "./lock.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import {
+  earlierNoteNames,
   ensureIdentity,
   readHead,
   readIdentity,
@@ -53,6 +56,7 @@ export class MemoryStore {
   readonly sessionId: string;
   readonly baseDir: string;
   readonly sessionDir: string;
+  private curated: Readonly<Record<string, CurationEvent>> = {};
 
   private constructor(projectRoot: string, sessionId: string) {
     this.projectRoot = projectRoot;
@@ -107,12 +111,15 @@ export class MemoryStore {
    *
    * Repairs prior accepted heads for the proposal's learning names before checking that the head
    * equals `expectedRevision`, curation permits every written note, learning digests and sequences
-   * equal `expectedLearnings`, and `validate` returns `undefined`; `validate` must not write and
-   * runs again before head publication. A returned reason becomes the conflict's reason. A base in
-   * a fork ancestor's session has the ancestor's pending head repaired before curation is
-   * inspected, as `inspectCuration` does; the snapshot still inherits the base revision's notes.
-   * Then writes the commit through `writeCommit`, which calls `onHeadDurable` as soon as the head
-   * is durable. `proposal` must satisfy `validateProposal`.
+   * equal `expectedLearnings`, and `validate` returns `undefined`. A written note whose curation
+   * record is absent from the proposal's `curatedNotes` conflicts with reason `curation`: the
+   * record appeared after capture, so the proposal is based on older content. A note the proposal
+   * knew as curated keeps the evidence rule of `mayUseNote`; `validate` must not write and runs
+   * again before head publication. A returned reason becomes the conflict's reason. A base in a
+   * fork ancestor's session has the ancestor's pending head repaired before curation is inspected,
+   * as `inspectCuration` does; the snapshot still inherits the base revision's notes. Then writes
+   * the commit through `writeCommit`, which calls `onHeadDurable` as soon as the head is durable.
+   * `proposal` must satisfy `validateProposal`.
    *
    * @throws Error when the proposal belongs to another project or session, when the head's revision
    *   or the base revision is unavailable, or when an ancestor session directory is a symlink.
@@ -154,6 +161,18 @@ export class MemoryStore {
     return this.assertSafeLayout().pipe(
       Effect.andThen(withProjectLock(join(this.baseDir, "sessions"), action)),
     );
+  }
+
+  /**
+   * Return the external change every curation record this store last found for the session's notes
+   * describes, from the latest curation inspection, recording, or commit snapshot; empty before the
+   * first inspection.
+   *
+   * A proposal records these names when it is captured, so a commit can tell curation it knew from
+   * curation that appeared after capture.
+   */
+  get curatedNotes(): Readonly<Record<string, CurationEvent>> {
+    return structuredClone(this.curated);
   }
 
   /**
@@ -242,6 +261,31 @@ export class MemoryStore {
         Effect.andThen(repairViews(this)),
         Effect.andThen(this.inspectCurationFrom(base)),
       ),
+    );
+  }
+
+  /**
+   * Record an observed external change of a session note under the project lock, as
+   * `recordObservedCuration` does, and return the session's curation.
+   *
+   * The change consumes the note dependency sources of `revision`, rebound to this session, or none
+   * when `revision` is `null` or unavailable.
+   *
+   * @throws Error naming the path when a curation or revision record is damaged.
+   * @throws The original read or write error, and the failures of `withProjectLock`.
+   */
+  recordCuration(
+    name: string,
+    event: CurationEvent,
+    revision: RevisionPointer | null,
+  ): Effect.Effect<CurationState, unknown, StorageServices> {
+    return this.locked(
+      Effect.gen({ self: this }, function* () {
+        const source = revision === null ? undefined : yield* this.inheritRevision(revision);
+        const consumed = rebindToSession(source?.noteDependencies[name]?.sourceIds ?? [], this);
+        const observed = { name, event, consumed };
+        return this.remember(yield* recordObservedCuration(this.sessionDir, observed, this));
+      }),
     );
   }
 
@@ -341,13 +385,15 @@ export class MemoryStore {
         evidenceFingerprint: proposal.evidenceFingerprint,
       };
       const disk = disks[index];
-      const blocked = !mayUseNote(curation.notes[name], dependency.sourceIds, {
+      const record = curation.notes[name];
+      const unknown = record !== undefined && !proposal.curatedNotes.includes(name);
+      const blocked = !mayUseNote(record, dependency.sourceIds, {
         projectId: this.projectId,
         sessionId: this.sessionId,
       });
       const foreign =
         head?.views.notes[name] === undefined && disk !== undefined && disk !== content;
-      if (explicit && (blocked || foreign)) {
+      if (explicit && (blocked || foreign || unknown)) {
         return undefined;
       }
       if (blocked && !foreign) {
@@ -393,6 +439,8 @@ export class MemoryStore {
       this.sessionDir,
       head?.views.notes ?? {},
       revision?.noteDependencies ?? {},
+      (names) =>
+        earlierNoteNames(names, revision?.parentRevisionId ?? null, (id) => this.readRevision(id)),
     );
   });
 
@@ -401,7 +449,7 @@ export class MemoryStore {
     pointer: RevisionPointer | null,
   ): Effect.fn.Return<CurationState, unknown, DurableWrites> {
     if (pointer === null || pointer.sessionId === this.sessionId) {
-      return yield* this.inspectOwnCuration();
+      return this.remember(yield* this.inspectOwnCuration());
     }
     yield* rejectSymlinks(this.sessionLayout(pointer.sessionId));
     if ((yield* this.inheritRevision(pointer)) !== undefined) {
@@ -416,7 +464,7 @@ export class MemoryStore {
       yield* repairViews(ancestor);
     }
     yield* this.inspectOwnCuration();
-    return yield* inheritForkCuration(
+    const inherited = yield* inheritForkCuration(
       {
         baseDir: this.baseDir,
         projectId: this.projectId,
@@ -426,7 +474,15 @@ export class MemoryStore {
       pointer,
       (next) => this.inheritRevision(next),
     );
+    return this.remember(inherited);
   });
+
+  private remember(curation: CurationState): CurationState {
+    this.curated = Object.fromEntries(
+      Object.entries(curation.notes).map(([name, record]) => [name, curationEventOf(record)]),
+    );
+    return curation;
+  }
 }
 
 /**

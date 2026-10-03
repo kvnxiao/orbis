@@ -10,16 +10,12 @@ import type * as Layer from "effect/Layer";
 import type { ModelResolution, Role } from "../domain/models.ts";
 import { dependencyFingerprint } from "../domain/proposal.ts";
 import type { CommitResult, MemoryProposal } from "../domain/proposal.ts";
-import type {
-  ActivationEntry,
-  ConfigurationEntry,
-  EffectiveSettings,
-  ReportEntry,
-} from "../domain/settings.ts";
+import type { ActivationEntry, ConfigurationEntry, EffectiveSettings } from "../domain/settings.ts";
 import { fromPromise } from "../storage/files.ts";
 import { liveStorage } from "../storage/services.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { MemoryStore, StoreCommitResult } from "../storage/store.ts";
+import type { MemoryStorage } from "./canonical-memory.ts";
 import {
   activationEntryType,
   branchConfiguration,
@@ -31,17 +27,17 @@ import {
 import type { BranchConfiguration, SettingsLoad } from "./configuration.ts";
 import { Execution } from "./execution.ts";
 import type { StorageScope } from "./execution.ts";
+import { FreshnessMonitor } from "./freshness-monitor.ts";
 import type { ProposalContent, RegistrationEvent } from "./lineage.ts";
 import { resolveRoles } from "./models.ts";
 import {
   captureProposal as captureStorageProposal,
   commitProposal as commitStorageProposal,
+  lineageRefusal,
 } from "./proposals.ts";
 import type { CommitProgress } from "./proposals.ts";
 import { StorageSessionOwner } from "./storage-session.ts";
 import type { ConfigurationIdentity, OpenStorage, StorageSnapshot } from "./storage-session.ts";
-
-const reportEntryType = "orbis-tiered-memory-report";
 
 /**
  * Expose the runtime state that status reads.
@@ -62,6 +58,8 @@ export interface RuntimeSnapshot {
   roles: Record<Role, ModelResolution> | undefined;
   storage: StorageSnapshot;
 }
+
+const off = "Memory storage is unavailable while disabled or before it opens.";
 
 function sessionChange(): Error {
   return new Error("Tiered memory storage stopped for a session change or shutdown.");
@@ -89,7 +87,10 @@ function sessionChange(): Error {
  */
 export class MemoryRuntime {
   private readonly pi: Pick<ExtensionAPI, "appendEntry">;
-  private readonly execution: Execution;
+  /** Own the instance's Effect runtime and storage scopes; automatic memory work forks into them. */
+  readonly execution: Execution;
+  /** Inspect the managed current-work note file for the storage session's freshness. */
+  readonly freshness: FreshnessMonitor;
   private readonly storage: StorageSessionOwner;
   private configuration: EffectiveSettings | undefined;
   private override: boolean | undefined;
@@ -111,6 +112,9 @@ export class MemoryRuntime {
     this.pi = pi;
     this.execution = new Execution(services);
     this.storage = new StorageSessionOwner(pi, (store) => this.configurationIdentity(store));
+    this.freshness = new FreshnessMonitor(this.execution, this.storage, async (scope, work) => {
+      await this.runStorageWork(scope, work);
+    });
   }
 
   /** Return a copy of runtime state that later runtime changes do not affect. */
@@ -239,6 +243,33 @@ export class MemoryRuntime {
   }
 
   /**
+   * Return open storage with its session, cached canonical memory, and a copy of the note's
+   * freshness, without a capture check.
+   */
+  get openStorage(): Pick<MemoryStorage, "session" | "canonical" | "freshness"> | undefined {
+    const open = this.storage.open;
+    return open === undefined ? undefined : { ...open, freshness: this.storage.freshness.view };
+  }
+
+  /**
+   * Return open storage with its cached canonical memory, the binding a frame captured now records,
+   * and the reason capture would refuse a proposal on the active branch, or `undefined` while
+   * storage is not open.
+   */
+  memoryStorage(ctx: Pick<ExtensionContext, "sessionManager">): MemoryStorage | undefined {
+    const open = this.storage.open;
+    if (open === undefined) {
+      return undefined;
+    }
+    const { scope, session, canonical } = open;
+    const binding = this.storage.binding(scope, session.store);
+    const branch = ctx.sessionManager.getBranch();
+    const refusal = this.enabled ? lineageRefusal(binding, branch, session.store.projectId) : off;
+    const freshness = this.storage.freshness.view;
+    return { scope, session, canonical, freshness, binding, refusal };
+  }
+
+  /**
    * Commit a proposal as a job of the open storage scope, then apply its lineage in that scope.
    *
    * The job waits for the scope's storage-session turn before registering sources and holds it
@@ -264,7 +295,10 @@ export class MemoryRuntime {
    * @throws Error when memory is disabled, storage is not open, or shutdown has started.
    * @throws The original error of a failed commit, including a failed view write after the head.
    */
-  async commitProposal(ctx: ExtensionContext, proposal: MemoryProposal): Promise<CommitResult> {
+  async commitProposal(
+    ctx: Pick<ExtensionContext, "sessionManager" | "signal">,
+    proposal: MemoryProposal,
+  ): Promise<CommitResult> {
     const { scope, session } = this.proposalStorage();
     const job = await this.execution.runJob<StoreCommitResult, CommitProgress>(
       scope,
@@ -297,11 +331,6 @@ export class MemoryRuntime {
       await this.runStorageWork(scope, this.storage.refresh(scope, ctx));
     }
     return job.kind === "completed" ? job.value : { kind: "cancelled", reason: job.reason };
-  }
-
-  /** Append a report entry with rendered status text. */
-  report(text: string): void {
-    this.pi.appendEntry(reportEntryType, { version: 1, text } satisfies ReportEntry);
   }
 
   /**
@@ -437,7 +466,7 @@ export class MemoryRuntime {
   private proposalStorage(): OpenStorage {
     const open = this.storage.open;
     if (!this.enabled || open === undefined) {
-      throw new Error("Memory storage is unavailable while disabled or before it opens.");
+      throw new Error(off);
     }
     return open;
   }

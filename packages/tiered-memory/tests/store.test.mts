@@ -10,8 +10,8 @@ import { expect } from "vitest";
 
 import { digest } from "../src/domain/canonical.ts";
 import type { CommitResult, ConflictReason, MemoryProposal } from "../src/domain/proposal.ts";
-import { readProjectCuration } from "../src/storage/curation.ts";
 import { readText, writeDurable } from "../src/storage/files.ts";
+import { readProjectCuration } from "../src/storage/learning-curation.ts";
 import { readHead } from "../src/storage/revisions.ts";
 import { canonicalProjectRoot, MemoryStore } from "../src/storage/store.ts";
 import { afterWrite, interruptedOnly, storageRuntime } from "./storage-harness.mts";

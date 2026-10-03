@@ -1,10 +1,12 @@
-import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import type { InvalidReason } from "../domain/evidence.ts";
 import { memoryRoles } from "../domain/models.ts";
 import type { ModelResolution, Role } from "../domain/models.ts";
 import { limitKeys } from "../domain/settings.ts";
 import type { EffectiveSettings, Limits, SettingSource } from "../domain/settings.ts";
+import type { MemoryStorage } from "./canonical-memory.ts";
+import { guardLines } from "./compaction-guard.ts";
+import type { CompactionGuardStatus } from "./compaction-guard.ts";
 import type {
   PendingReference,
   Reconciliation,
@@ -12,6 +14,10 @@ import type {
   SelectedRevision,
   UnresolvedReason,
 } from "./lineage.ts";
+import { storageClosed } from "./note-validity.ts";
+import { unopenedLineage } from "./presentation-log.ts";
+import { presentationLines } from "./presentation-status.ts";
+import type { PresentationStatus } from "./presentation-status.ts";
 import {
   blockingReferences,
   damagedReferencesIn,
@@ -21,6 +27,9 @@ import {
 import type { DamagedReference } from "./revision-references.ts";
 import type { MemoryRuntime, RuntimeSnapshot } from "./runtime.ts";
 import type { StorageSnapshot } from "./storage-session.ts";
+import { canonicalStatus, freshnessLines, invalidReasons, workLines } from "./work-status.ts";
+import type { FreshnessStatus, ProcessingStatus, WorkNoteStatus } from "./work-status.ts";
+import type { WorkerStatus } from "./worker.ts";
 
 /**
  * Describe tiered-memory status as data.
@@ -33,7 +42,8 @@ import type { StorageSnapshot } from "./storage-session.ts";
  * `actingModel` is `none` without an active model, `insufficient` when the work-note reserve
  * exceeds the context window or the estimated remaining context, and `available` otherwise, where
  * `remainingTokens` is undefined while Pi has no context-usage estimate. `limits` is in `limitKeys`
- * order. `storage` is `unavailable` until the store opens, carrying the error that stopped opening;
+ * order. `storage` is `unavailable` until the store opens, carrying the error that stopped opening
+ * and, when the branch has presentation records of its project, the note's unknown freshness;
  * `open` carries the canonical project root, the selected revision, the latest durable revision,
  * the source count and event of the registration the latest refresh used, the curated-note count of
  * the curation it inspected, and the error of the latest failed refresh. Its `blockingReference` is
@@ -43,7 +53,15 @@ import type { StorageSnapshot } from "./storage-session.ts";
  * `unavailableEntryId` is the last branch reference entry to an unavailable selected revision, or
  * undefined when the selection is available, absent, or not referenced on the branch.
  * `damagedReferences` lists every damaged revision reference on the active branch in branch order,
- * in every storage state. `unavailable` lists the capabilities this version does not provide.
+ * in every storage state. While storage is open, `workNote` describes the selected revision's
+ * current-work note: `valid` with its source boundary and the number of eligible sources not yet
+ * observed, `invalid` with its reason, or `absent`; `freshness` is its validity with the latest
+ * completed inspection and any detected curation awaiting recording; `processing` lists the
+ * processing gaps of the active branch, with exhausted spans as `failed`, or the reason lineage
+ * coverage is unavailable. `worker` is the observer queue's status, or undefined while no queue is
+ * open. `presentation` describes memory presentation and request capacity, and `compaction` the
+ * latest correction cancellation and correction gap, when the caller supplies them. `unavailable`
+ * lists the capabilities this version does not provide.
  */
 export interface StatusReport {
   enabled: boolean;
@@ -76,7 +94,7 @@ export interface StatusReport {
       }
     | undefined;
   storage:
-    | { state: "unavailable"; error: string | undefined }
+    | { state: "unavailable"; error: string | undefined; freshness: FreshnessStatus | undefined }
     | {
         state: "open";
         projectRoot: string;
@@ -88,9 +106,15 @@ export interface StatusReport {
         reconciliation: Reconciliation;
         pending: PendingReference;
         unavailableEntryId: string | undefined;
+        workNote: WorkNoteStatus;
+        freshness: FreshnessStatus;
+        processing: ProcessingStatus;
       };
   damagedReferences: readonly DamagedReference[];
-  unavailable: readonly ("workers" | "pool" | "compaction")[];
+  worker: WorkerStatus | undefined;
+  presentation?: PresentationStatus;
+  compaction?: CompactionGuardStatus;
+  unavailable: readonly ("consolidator" | "pool" | "compaction")[];
 }
 
 type ConfigurationStatus = NonNullable<StatusReport["configuration"]>;
@@ -104,10 +128,10 @@ const activationLabels = {
 } satisfies Record<StatusReport["activationSource"], string>;
 
 const unavailableNotes = {
-  workers: "Observer and consolidator jobs: unavailable in this version.",
-  pool: "Active pool, pending worker jobs, and recall: unavailable in this version.",
+  consolidator: "Consolidator jobs: unavailable in this version.",
+  pool: "Active pool and recall: unavailable in this version.",
   compaction:
-    "Custom compaction and usage reports: unavailable in this version; Pi native compaction remains available.",
+    "Custom compaction and its usage reports: unavailable in this version; Pi native compaction remains available.",
 } satisfies Record<StatusReport["unavailable"][number], string>;
 
 const unresolvedReasons = {
@@ -116,20 +140,22 @@ const unresolvedReasons = {
   evidence: "its evidence or curated notes changed after it was committed",
 } satisfies Record<UnresolvedReason, string>;
 
-const invalidReasons = {
-  "note-evidence": "Selected revision evidence changed in effective context.",
-  curation: "Selected revision contains an externally curated note.",
-  "assigned-evidence": "Selected revision assigned evidence changed in effective context.",
-} satisfies Record<InvalidReason, string>;
-
 /**
- * Collect status from the runtime snapshot, the active branch, and the acting model's context
- * usage; writes nothing and starts no model call.
+ * Collect status from the runtime snapshot, its cached canonical memory, the active branch, the
+ * observer queue's `worker` status, and the acting model's context usage; writes nothing and starts
+ * no model call.
  */
-export function buildStatus(runtime: MemoryRuntime, ctx: ExtensionContext): StatusReport {
+export function buildStatus(
+  runtime: MemoryRuntime,
+  ctx: ExtensionContext,
+  worker?: WorkerStatus,
+  owners: { presentation?: PresentationStatus; compaction?: CompactionGuardStatus } = {},
+): StatusReport {
+  const { presentation, compaction } = owners;
   const { configuration, override, error, configurationRevision, roles, storage } =
     runtime.snapshot;
   const branch = ctx.sessionManager.getBranch();
+  const memory = runtime.memoryStorage(ctx);
   return {
     enabled: runtime.enabled,
     activationSource:
@@ -138,18 +164,31 @@ export function buildStatus(runtime: MemoryRuntime, ctx: ExtensionContext): Stat
     error,
     configuration:
       configuration === undefined ? undefined : configurationStatus(configuration, roles, ctx),
-    storage: storageStatus(storage, branch),
+    storage: storageStatus(storage, ctx, memory, worker?.exhausted ?? new Set()),
     damagedReferences: damagedReferencesIn(branch),
-    unavailable: ["workers", "pool", "compaction"],
+    worker,
+    ...(presentation === undefined ? {} : { presentation }),
+    ...(compaction === undefined ? {} : { compaction }),
+    unavailable: ["consolidator", "pool", "compaction"],
   };
 }
 
 function storageStatus(
   storage: StorageSnapshot,
-  branch: readonly SessionEntry[],
+  ctx: ExtensionContext,
+  memory: MemoryStorage | undefined,
+  exhausted: ReadonlySet<string>,
 ): StatusReport["storage"] {
+  const branch = ctx.sessionManager.getBranch();
   if (storage.state !== "open") {
-    return { state: "unavailable", error: storage.state === "failed" ? storage.error : undefined };
+    const presented = unopenedLineage(branch, ctx.sessionManager.getSessionId()) !== undefined;
+    return {
+      state: "unavailable",
+      error: storage.state === "failed" ? storage.error : undefined,
+      freshness: presented
+        ? { validity: storageClosed, observation: undefined, detection: undefined }
+        : undefined,
+    };
   }
   const { selected, pending } = storage.lineage;
   const { projectId } = storage;
@@ -171,6 +210,7 @@ function storageStatus(
     pending: recorded ? { state: "appended", revisionId: pending.revisionId } : pending,
     unavailableEntryId:
       selected.state === "unavailable" ? selectionEntryId(branch, projectId, selected) : undefined,
+    ...canonicalStatus(memory, branch, exhausted),
   };
 }
 
@@ -235,7 +275,16 @@ export function renderStatus(report: StatusReport): string {
   if (report.error !== undefined) {
     lines.push(`Configuration error: ${report.error}`);
   }
-  lines.push(...storageLines(report.storage), ...lineageLines(report));
+  lines.push(
+    ...storageLines(report.storage),
+    ...lineageLines(report),
+    ...(report.storage.state === "unavailable" && report.storage.freshness !== undefined
+      ? freshnessLines(report.storage.freshness)
+      : []),
+    ...workLines(report.storage.state === "open" ? report.storage : undefined, report.worker),
+    ...(report.presentation === undefined ? [] : presentationLines(report.presentation)),
+    ...(report.compaction === undefined ? [] : guardLines(report.compaction)),
+  );
   if (report.configuration === undefined) {
     lines.push("Automatic work: suspended; native Pi remains available.");
   } else {
@@ -375,10 +424,10 @@ function actingModelText(acting: ConfigurationStatus["actingModel"]): string {
     return "Acting model: suspended; no active model is selected.";
   }
   if (acting.state === "insufficient") {
-    return "Acting model: mandatory work note does not fit remaining context; memory work is suspended. Free context or select a larger model.";
+    return "Acting model: mandatory work note does not fit remaining context; a request that presents the note stops before dispatch. Run /compact, or select a model with a larger context window.";
   }
   const reserve = `Acting model: ${acting.id}; mandatory work-note reserve ${String(acting.reserveTokens)} estimated tokens;`;
   return acting.remainingTokens === undefined
     ? `${reserve} remaining context unknown.`
-    : `${reserve} preliminary remaining capacity ${String(acting.remainingTokens)} estimated tokens. Request fit is unverified.`;
+    : `${reserve} preliminary remaining capacity ${String(acting.remainingTokens)} estimated tokens. See Request capacity for the latest request's fit check.`;
 }

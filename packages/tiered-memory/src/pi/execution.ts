@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -341,6 +342,105 @@ export class Execution {
     const { scope, work } = storage[state];
     const fiber = this.runtime.runSync(Effect.forkIn(work.withPermit(effect), scope));
     await Effect.runPromise(awaitCompletion(fiber));
+  }
+
+  /**
+   * Fork `consumer` into `storage`'s scope without its storage-session turn, so it runs until the
+   * scope closes.
+   *
+   * The consumer owns the scope's worker queue; closing the scope interrupts it and waits for it.
+   * Its jobs take the storage-session turn only through `runJob` for their commits.
+   *
+   * @throws Error when shutdown has started or `storage` is no longer current; nothing runs.
+   */
+  forkWorker(storage: StorageScope, consumer: Effect.Effect<void, never, StorageServices>): void {
+    if (this.stopping !== undefined || storage !== this.storage) {
+      throw new Error("Memory storage is unavailable while disabled or before it opens.");
+    }
+    this.runtime.runSync(Effect.forkIn(consumer, storage[state].scope));
+  }
+
+  /**
+   * Run one worker job as a child of the calling fiber and report how it ended, without the
+   * storage-session turn.
+   *
+   * A disable, a replacement, or shutdown records its reason if none is recorded and interrupts the
+   * job, as for `runJob`; the caller's fiber continues with the next job. Resolves only after the
+   * job fiber ended, also when the calling fiber is interrupted. A genuine failure fails with its
+   * original error even when a cancellation races it.
+   */
+  runWorkerJob<A>(
+    storage: StorageScope,
+    job: Effect.Effect<A, unknown, StorageServices>,
+  ): Effect.Effect<JobResult<A, never>, unknown, StorageServices> {
+    return Effect.suspend(() => {
+      const invocation = new Invocation();
+      storage[state].invocations.add(invocation);
+      return Effect.forkChild(job).pipe(
+        Effect.flatMap((fiber) => {
+          invocation.bind(fiber);
+          return Fiber.await(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
+        }),
+        Effect.flatMap((exit): Effect.Effect<JobResult<A, never>, unknown> => {
+          if (Exit.isSuccess(exit)) {
+            return Effect.succeed({ kind: "completed", value: exit.value, outcome: undefined });
+          }
+          return Cause.hasInterruptsOnly(exit.cause)
+            ? Effect.succeed({ kind: "cancelled", reason: invocation.reason, outcome: undefined })
+            : Effect.failCause(exit.cause);
+        }),
+        Effect.ensuring(
+          Effect.sync(() => {
+            storage[state].invocations.delete(invocation);
+          }),
+        ),
+      );
+    });
+  }
+
+  /**
+   * Run a self-bounded `effect` outside every storage scope and its turn, and wait for it.
+   *
+   * Resolves `undefined` after shutdown started, including when shutdown disposed the runtime while
+   * the effect ran.
+   *
+   * @throws The original defect of `effect`.
+   */
+  async runDetached<A>(effect: Effect.Effect<A, never, StorageServices>): Promise<A | undefined> {
+    if (this.stopping !== undefined) {
+      return undefined;
+    }
+    const exit = await this.runtime.runPromiseExit(effect).catch((error: unknown) => {
+      if (!this.stopped) {
+        throw error;
+      }
+      return undefined;
+    });
+    if (exit === undefined || this.stopped) {
+      return undefined;
+    }
+    if (Exit.isSuccess(exit)) {
+      return exit.value;
+    }
+    return await Effect.runPromise(Effect.failCause(exit.cause));
+  }
+
+  /**
+   * Report whether startup, a job, or storage-session work of `storage` holds its storage-session
+   * turn; probing takes and returns a free turn synchronously, so no waiter can intervene.
+   */
+  holdsTurn(storage: StorageScope): boolean {
+    const { work } = storage[state];
+    const free = Effect.runSync(work.takeIfAvailable(1));
+    if (free) {
+      Effect.runSync(work.release(1));
+    }
+    return !free;
+  }
+
+  /** Read the current time from the Effect clock that the instance's services provide. */
+  now(): number {
+    return this.runtime.runSync(Clock.currentTimeMillis);
   }
 
   /**

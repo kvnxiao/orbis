@@ -1,16 +1,14 @@
-import { open } from "node:fs/promises";
-
-import { parseSessionEntries } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
+import { sameRevision } from "../domain/proposal.ts";
 import { digestSchema, safeIdSchema } from "../domain/references.ts";
-import { fromPromise, readText } from "../storage/files.ts";
 import type { MemoryStore } from "../storage/store.ts";
 import type { SelectedRevision } from "./lineage.ts";
+import { confirmedInSessionFile } from "./session-file.ts";
 
 const revisionEntryType = "orbis-tiered-memory-revision";
 
@@ -109,10 +107,7 @@ function selectionIndex(
   pointer: Pick<RevisionReference, "sessionId" | "revisionId">,
 ): number {
   return branch.findLastIndex((entry) =>
-    referencesIn([entry], projectId).some(
-      (reference) =>
-        reference.sessionId === pointer.sessionId && reference.revisionId === pointer.revisionId,
-    ),
+    referencesIn([entry], projectId).some((reference) => sameRevision(reference, pointer)),
   );
 }
 
@@ -146,40 +141,9 @@ export function appendReference(
   pi.appendEntry(revisionEntryType, entry);
 }
 
-async function syncFile(path: string): Promise<void> {
-  const handle = await open(path, "r+");
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
+function revisionIds(entries: readonly { type: string }[], projectId: string): string[] {
+  return referencesIn(entries, projectId).map((entry) => entry.revisionId);
 }
-
-// An unsynced file confirms nothing when `syncFailure` is "unconfirmed". That recovery happens
-// inside the fsync's uninterruptible region, where a pending interruption cannot skip it.
-const confirmedIn = Effect.fnUntraced(function* (
-  sessionFile: string | undefined,
-  projectId: string,
-  syncFailure: "fail" | "unconfirmed",
-): Effect.fn.Return<Set<string>, unknown> {
-  const text = sessionFile === undefined ? undefined : yield* readText(sessionFile);
-  if (sessionFile === undefined || text === undefined) {
-    return new Set();
-  }
-  const ids = new Set(
-    referencesIn(parseSessionEntries(text), projectId).map((entry) => entry.revisionId),
-  );
-  if (ids.size === 0) {
-    return ids;
-  }
-  const sync = fromPromise(async () => {
-    await syncFile(sessionFile);
-  }).pipe(Effect.as(true));
-  const synced = yield* Effect.uninterruptible(
-    syncFailure === "fail" ? sync : sync.pipe(Effect.catch(() => Effect.succeed(false))),
-  );
-  return synced ? ids : new Set<string>();
-});
 
 /**
  * Return the revision IDs that the session file references for `projectId`, fsyncing the file
@@ -194,7 +158,7 @@ export function confirmedReferences(
   sessionFile: string | undefined,
   projectId: string,
 ): Effect.Effect<Set<string>, unknown> {
-  return confirmedIn(sessionFile, projectId, "fail");
+  return confirmedInSessionFile(sessionFile, (entries) => revisionIds(entries, projectId), "fail");
 }
 
 /**
@@ -207,7 +171,9 @@ export function tryConfirmReference(
   sessionFile: string | undefined,
   reference: Pick<RevisionReference, "projectId" | "revisionId">,
 ): Effect.Effect<boolean, unknown> {
-  return confirmedIn(sessionFile, reference.projectId, "unconfirmed").pipe(
-    Effect.map((ids) => ids.has(reference.revisionId)),
-  );
+  return confirmedInSessionFile(
+    sessionFile,
+    (entries) => revisionIds(entries, reference.projectId),
+    "unconfirmed",
+  ).pipe(Effect.map((ids) => ids.has(reference.revisionId)));
 }

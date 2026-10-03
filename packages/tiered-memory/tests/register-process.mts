@@ -7,7 +7,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { DurableWrites, LockFilesystem, ProcessLiveness } from "../src/storage/services.ts";
+import {
+  DurableWrites,
+  LockFilesystem,
+  ManagedReads,
+  ProcessLiveness,
+} from "../src/storage/services.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
 import { canonicalProjectRoot, MemoryStore } from "../src/storage/store.ts";
 
@@ -32,6 +37,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Layer.succeed(DurableWrites, DurableWrites.live),
     Layer.succeed(ProcessLiveness, ProcessLiveness.live),
+    Layer.succeed(ManagedReads, ManagedReads.live),
     Layer.succeed(LockFilesystem, {
       ...live,
       readTicket: (path) =>

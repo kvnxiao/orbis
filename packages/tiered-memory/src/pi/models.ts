@@ -1,3 +1,4 @@
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { modelCapacity } from "../domain/models.ts";
@@ -18,11 +19,7 @@ export async function resolveModel(
   role: Role,
 ): Promise<ModelResolution> {
   const override = settings[`${role}Model`];
-  const separator = override?.indexOf("/") ?? -1;
-  const model =
-    override === undefined
-      ? ctx.model
-      : ctx.modelRegistry.find(override.slice(0, separator), override.slice(separator + 1));
+  const model = roleModel(ctx, settings, role);
   const id = override ?? (model === undefined ? "session model" : `${model.provider}/${model.id}`);
   if (model === undefined) {
     return {
@@ -32,7 +29,6 @@ export async function resolveModel(
         override === undefined ? "No active session model." : "Model identifier is unresolved.",
     };
   }
-  // oxlint-disable-next-line typescript/no-unsafe-argument -- ExtensionContext declares ctx.model as Model<any>.
   const authenticated = await ctx.modelRegistry.getApiKeyAndHeaders(model).then(
     (auth) => auth.ok,
     () => false,
@@ -45,6 +41,27 @@ export async function resolveModel(
     };
   }
   return modelCapacity(id, settings.limits, model);
+}
+
+/**
+ * Return the model a role dispatches to now: the configured override from `ctx.modelRegistry`, or
+ * `ctx.model` when the override is omitted, with the same lookup as `resolveModel` and no
+ * substitution.
+ *
+ * Returns `undefined` when the override is unresolved or no session model is active. Credentials
+ * are checked by the request itself.
+ */
+export function roleModel(
+  ctx: Pick<ExtensionContext, "model" | "modelRegistry">,
+  settings: Settings,
+  role: Role,
+): Model<Api> | undefined {
+  const override = settings[`${role}Model`];
+  if (override === undefined) {
+    return ctx.model;
+  }
+  const separator = override.indexOf("/");
+  return ctx.modelRegistry.find(override.slice(0, separator), override.slice(separator + 1));
 }
 
 /** Resolve both memory roles concurrently through `resolveModel`. */

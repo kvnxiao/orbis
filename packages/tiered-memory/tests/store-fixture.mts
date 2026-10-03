@@ -12,6 +12,7 @@ import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 import { digest } from "../src/domain/canonical.ts";
+import type { SourceTime } from "../src/domain/evidence.ts";
 import type {
   CommitResult,
   ConflictReason,
@@ -28,7 +29,7 @@ import { fromPromise, readText, writeDurable } from "../src/storage/files.ts";
 import type { Revision } from "../src/storage/revisions.ts";
 import type { StorageServices } from "../src/storage/services.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
-import type { SourceRecord, SourceSessionManager, SourceTime } from "../src/storage/sources.ts";
+import type { SourceRecord, SourceSessionManager } from "../src/storage/sources.ts";
 import { canonicalProjectRoot, MemoryStore } from "../src/storage/store.ts";
 import type { StoreCommitResult } from "../src/storage/store.ts";
 import { test as piTest } from "./pi-fixture.mts";
@@ -83,10 +84,12 @@ export function baseProposal(
     baseRevision: null,
     notes: { "current-work.md": "generated\n" },
     noteDependencies: {},
+    observations: [],
     consumedObservationIds: [],
     learnings: {},
     expectedLearnings: {},
     excludedInheritedNotes: [],
+    curatedNotes: [],
     ...overrides,
   };
 }
@@ -391,7 +394,13 @@ export function committedId(result: CommitResult): string {
 }
 
 export function noteContent(notes: Record<string, string>): ProposalContent {
-  return { notes, consumedObservationIds: [], learnings: {}, expectedLearnings: {} };
+  return {
+    notes,
+    observations: [],
+    consumedObservationIds: [],
+    learnings: {},
+    expectedLearnings: {},
+  };
 }
 
 export function storageOf(runtime: MemoryRuntime): Extract<StorageSnapshot, { state: "open" }> {

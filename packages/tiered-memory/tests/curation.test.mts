@@ -1,4 +1,4 @@
-import { link, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 
 import * as Cause from "effect/Cause";
@@ -11,16 +11,17 @@ import { expect } from "vitest";
 import { digest } from "../src/domain/canonical.ts";
 import type { CommitResult, MemoryProposal } from "../src/domain/proposal.ts";
 import { encodeReference } from "../src/domain/references.ts";
+import { curationSchema, inspectCuration } from "../src/storage/curation.ts";
+import { writeDurable } from "../src/storage/files.ts";
 import {
-  curationSchema,
   learningConflict,
   projectCurationSchema,
   publishProjectGenerated,
   readProjectCuration,
-} from "../src/storage/curation.ts";
-import { writeDurable } from "../src/storage/files.ts";
+} from "../src/storage/learning-curation.ts";
 import { readHead, revisionSchema } from "../src/storage/revisions.ts";
 import type { StorageServices } from "../src/storage/services.ts";
+import { runStorage } from "./storage-harness.mts";
 import type { TestWrite } from "./storage-harness.mts";
 import {
   baseProposal,
@@ -80,14 +81,91 @@ test("a deletion records an exclusion that survives reopening the store", async 
   });
 });
 
+test("deleting an edited note that a later commit excluded records the deletion with its consumed evidence", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  const first = committedId(await commit(store, { notes: { "current-work.md": "generated\n" } }));
+  await writeFile(view(store), "user correction\n");
+  await store.inspectCuration(null);
+  const second = committedId(
+    await commit(store, {
+      expectedRevision: first,
+      sourceIds: ["source-2"],
+      curatedNotes: ["current-work.md"],
+      notes: {},
+    }),
+  );
+  expect((await store.readRevision(second))?.notes).toEqual({});
+  await rm(view(store));
+  expect((await store.inspectCuration(null)).notes["current-work.md"]).toEqual({
+    kind: "deleted",
+    consumedSourceIds: ["source-1"],
+  });
+});
+
 test("a deleted note is recreated only from evidence it did not consume", async ({ makeRoot }) => {
   const store = await openStore(await makeRoot());
   const first = committedId(await commit(store, { notes: { "current-work.md": "generated\n" } }));
   await rm(view(store));
   const recreate = { expectedRevision: first, notes: { "current-work.md": "again\n" } };
   expect(await commit(store, recreate)).toMatchObject({ kind: "conflict", reason: "curation" });
-  committedId(await commit(store, { ...recreate, sourceIds: ["source-2"] }));
+  committedId(
+    await commit(store, {
+      ...recreate,
+      sourceIds: ["source-2"],
+      curatedNotes: ["current-work.md"],
+    }),
+  );
   expect(await readFile(view(store), "utf8")).toBe("again\n");
+});
+
+test.for(["deleted", "edited"] as const)(
+  "a proposal captured before its note was %s conflicts on curation even with new evidence",
+  async (change, { makeRoot }) => {
+    const store = await openStore(await makeRoot());
+    const first = committedId(await commit(store, { notes: { "current-work.md": "generated\n" } }));
+    expect(store.store.curatedNotes).toEqual({});
+    if (change === "deleted") {
+      await rm(view(store));
+    } else {
+      await writeFile(view(store), "user note\n");
+    }
+    expect(
+      await commit(store, {
+        expectedRevision: first,
+        sourceIds: ["source-2"],
+        notes: { "current-work.md": "stale\n" },
+      }),
+    ).toMatchObject({ kind: "conflict", reason: "curation" });
+    expect(store.store.curatedNotes).toEqual({
+      "current-work.md":
+        change === "deleted"
+          ? { kind: "deleted" }
+          : { kind: "edited", digest: digest("user note\n") },
+    });
+    expect(await readOptional(view(store))).toBe(change === "deleted" ? undefined : "user note\n");
+  },
+);
+
+test("a proposal that knew a deletion recreates its note from new evidence", async ({
+  makeRoot,
+}) => {
+  const store = await openStore(await makeRoot());
+  const first = committedId(await commit(store, { notes: { "current-work.md": "generated\n" } }));
+  await rm(view(store));
+  await store.inspectCuration(null);
+  const curatedNotes = Object.keys(store.store.curatedNotes);
+  expect(curatedNotes).toEqual(["current-work.md"]);
+  committedId(
+    await commit(store, {
+      expectedRevision: first,
+      sourceIds: ["source-2"],
+      notes: { "current-work.md": "recreated\n" },
+      curatedNotes,
+    }),
+  );
+  expect(await readFile(view(store), "utf8")).toBe("recreated\n");
 });
 
 test.for(["reference-first", "entry-first"] as const)(
@@ -122,6 +200,7 @@ test("a deleted note's old evidence stays excluded after new evidence regenerate
       expectedRevision: first,
       sourceIds: ["source-2"],
       notes: { "current-work.md": "regenerated\n" },
+      curatedNotes: ["current-work.md"],
     }),
   );
   await rm(view(store));
@@ -314,7 +393,11 @@ test("fork inheritance keeps the exclusion against the child's reencoded evidenc
     await commit(child, { ...recreate, sourceIds: [reference(parent, "child")] }),
   ).toMatchObject({ kind: "conflict", reason: "curation" });
   committedId(
-    await commit(child, { ...recreate, sourceIds: [reference(parent, "child", "entry-2")] }),
+    await commit(child, {
+      ...recreate,
+      sourceIds: [reference(parent, "child", "entry-2")],
+      curatedNotes: ["current-work.md"],
+    }),
   );
 });
 
@@ -1012,6 +1095,7 @@ test("an inherited regenerated note does not consume its new evidence", async ({
       expectedRevision: revisionId,
       sourceIds: [reference(parent, "parent", "entry-2")],
       notes: { "current-work.md": "regenerated\n" },
+      curatedNotes: ["current-work.md"],
     }),
   );
   const child = await openStore(root, { sessionId: "child" });
@@ -1076,4 +1160,31 @@ test("a damaged curation record's bytes are preserved after the read fails", asy
   await writeFile(path, "{damaged");
   await expect(store.inspectCuration(null)).rejects.toThrow(`Invalid JSON at ${path}.`);
   expect(await readFile(path, "utf8")).toBe("{damaged");
+});
+
+test("inspectCuration reads the revision chain only for a curated note without a view whose file no longer matches its record", async ({
+  makeRoot,
+}) => {
+  const sessionDir = join(await makeRoot(), "session");
+  await mkdir(join(sessionDir, "current"), { recursive: true });
+  const edited = { kind: "edited", digest: digest("Mine.\n"), consumedSourceIds: ["s1"] } as const;
+  await writeFile(
+    join(sessionDir, "curation.json"),
+    JSON.stringify({ version: 1, notes: { "current-work.md": edited, "journey.md": edited } }),
+  );
+  await writeFile(join(sessionDir, "current", "current-work.md"), "Mine.\n");
+  const asked: string[][] = [];
+  const earlier = (names: ReadonlySet<string>) => {
+    asked.push([...names]);
+    return Effect.succeed(names);
+  };
+  const state = await runStorage(inspectCuration(sessionDir, {}, {}, earlier));
+  expect(asked).toEqual([["journey.md"]]);
+  expect(state.notes).toEqual({
+    "current-work.md": edited,
+    "journey.md": { kind: "deleted", consumedSourceIds: ["s1"] },
+  });
+  asked.length = 0;
+  await runStorage(inspectCuration(sessionDir, {}, {}, earlier));
+  expect(asked).toEqual([]);
 });

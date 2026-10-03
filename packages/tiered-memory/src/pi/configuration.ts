@@ -1,4 +1,4 @@
-import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 import { Value } from "typebox/value";
 
@@ -8,7 +8,7 @@ import {
   configurationEntrySchema,
   snapshotMatches,
 } from "../domain/settings.ts";
-import type { EffectiveSettings, SnapshotScope } from "../domain/settings.ts";
+import type { EffectiveSettings, ReportEntry, SnapshotScope } from "../domain/settings.ts";
 import { resolveProjectSettingsPath } from "../storage/project-root.ts";
 import { loadSettings, personalSettingsPath } from "../storage/settings.ts";
 
@@ -16,6 +16,12 @@ import { loadSettings, personalSettingsPath } from "../storage/settings.ts";
 export const activationEntryType = "orbis-tiered-memory-activation";
 /** Name the custom entry type that records an effective configuration snapshot. */
 export const configurationEntryType = "orbis-tiered-memory-configuration";
+const reportEntryType = "orbis-tiered-memory-report";
+
+/** Append a report entry with rendered text, so the latest report stays inspectable. */
+export function appendReport(pi: Pick<ExtensionAPI, "appendEntry">, text: string): void {
+  pi.appendEntry(reportEntryType, { version: 1, text } satisfies ReportEntry);
+}
 
 /**
  * Report one settings load.

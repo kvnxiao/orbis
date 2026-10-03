@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 
 import { assessRevision } from "../domain/evidence.ts";
 import type { CurationRecord, InvalidReason } from "../domain/evidence.ts";
+import { sameRevision } from "../domain/proposal.ts";
 import type { MemoryProposal, RevisionPointer } from "../domain/proposal.ts";
 import type { Revision } from "../storage/revisions.ts";
 import type { StorageServices } from "../storage/services.ts";
@@ -102,7 +103,7 @@ export interface RegistrationUpdate {
 /** Supply the proposal fields a caller provides; `captureProposal` adds the binding fields. */
 export type ProposalContent = Pick<
   MemoryProposal,
-  "notes" | "consumedObservationIds" | "learnings" | "expectedLearnings"
+  "notes" | "observations" | "consumedObservationIds" | "learnings" | "expectedLearnings"
 >;
 
 /**
@@ -117,7 +118,8 @@ export type Reconciliation = "reconciling" | "failed" | "current";
  *
  * `dependencyFingerprint` is `undefined` while no configuration is current. `latestRevision` is the
  * head seen by the latest refresh and becomes `expectedRevision`. Proposals proceed only while
- * `reconciliation` is `current`.
+ * `reconciliation` is `current` and no detected curation of the current-work note awaits its
+ * recording (`pendingCuration`).
  */
 export interface ProposalBinding {
   configurationRevision: number;
@@ -125,6 +127,7 @@ export interface ProposalBinding {
   lineage: LineageState;
   latestRevision: string | null;
   reconciliation: Reconciliation;
+  pendingCuration: boolean;
 }
 
 /** Return the pointer of a selected revision, or `null` when none is selected. */
@@ -188,14 +191,7 @@ export const selectFromBranch = Effect.fnUntraced(function* (
 
 /** Report whether `base` names the selected revision; `null` matches both `none` and `unavailable`. */
 export function sameBase(base: RevisionPointer | null, selected: SelectedRevision): boolean {
-  const pointer = selectedPointer(selected);
-  return (
-    (base === null && pointer === null) ||
-    (base !== null &&
-      pointer !== null &&
-      base.sessionId === pointer.sessionId &&
-      base.revisionId === pointer.revisionId)
-  );
+  return sameRevision(base, selectedPointer(selected));
 }
 
 interface Evidence {
@@ -253,7 +249,7 @@ function unconfirmedOnBranch(
   return (
     newest?.revisionId === binding.latestRevision &&
     newest.sessionId === store.sessionId &&
-    !(pointer?.sessionId === store.sessionId && pointer.revisionId === newest.revisionId)
+    !sameRevision(pointer, { sessionId: store.sessionId, revisionId: newest.revisionId })
   );
 }
 

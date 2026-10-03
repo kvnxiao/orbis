@@ -126,12 +126,28 @@ export class ProcessLiveness extends Context.Service<
   static readonly live: ProcessLiveness["Service"] = { isRunning: processRunning };
 }
 
+/**
+ * Read managed files for bounded inspections that run outside the project lock.
+ *
+ * `read` returns `undefined` when the file does not exist; interruption abandons the read.
+ *
+ * @throws The original read error other than `ENOENT`, as the failure value.
+ */
+export class ManagedReads extends Context.Service<
+  ManagedReads,
+  { readonly read: (path: string) => Effect.Effect<string | undefined, unknown> }
+>()("@orbis/tiered-memory/storage/ManagedReads") {
+  /** Read through `readText`. */
+  static readonly live: ManagedReads["Service"] = { read: readText };
+}
+
 /** Name every capability the storage modules read; time comes from Effect's `Clock`. */
-export type StorageServices = DurableWrites | LockFilesystem | ProcessLiveness;
+export type StorageServices = DurableWrites | LockFilesystem | ProcessLiveness | ManagedReads;
 
 /** Provide the production capabilities; the layer builds synchronously. */
 export const liveStorage: Layer.Layer<StorageServices> = Layer.mergeAll(
   Layer.succeed(DurableWrites, DurableWrites.live),
   Layer.succeed(LockFilesystem, LockFilesystem.live),
   Layer.succeed(ProcessLiveness, ProcessLiveness.live),
+  Layer.succeed(ManagedReads, ManagedReads.live),
 );

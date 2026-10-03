@@ -10,8 +10,8 @@ import { Value } from "typebox/value";
 import { digest } from "../domain/canonical.ts";
 import type { ConflictReason, MemoryProposal, NoteDependency } from "../domain/proposal.ts";
 import { safeIdSchema } from "../domain/references.ts";
-import { publishProjectGenerated, readProjectCuration } from "./curation.ts";
 import { fromPromise, readText, rejectSymlinks } from "./files.ts";
+import { publishProjectGenerated, readProjectCuration } from "./learning-curation.ts";
 import {
   advanceSequence,
   readHead,

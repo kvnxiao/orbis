@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 
 import { assessRevision, evidenceMatches, sourceReferences } from "../domain/evidence.ts";
 import { validateProposal } from "../domain/proposal.ts";
-import type { ConflictReason, MemoryProposal } from "../domain/proposal.ts";
+import type { ConflictReason, MemoryProposal, NoteDependency } from "../domain/proposal.ts";
 import { recoverFailure } from "../storage/files.ts";
 import type { StorageServices } from "../storage/services.ts";
 import type { SourceRecord } from "../storage/sources.ts";
@@ -16,7 +16,7 @@ import {
   referencesIn,
   tryConfirmReference,
 } from "./revision-references.ts";
-import type { StorageSession } from "./storage-session.ts";
+import type { StorageSession } from "./storage-binding.ts";
 
 /**
  * Report how far a commit got: `registered` carries the records its source registration returned,
@@ -27,10 +27,18 @@ export type CommitProgress =
   | { stage: "committed"; revisionId: string };
 
 /**
- * Capture a proposal bound to the branch leaf, its evidence, the configuration, and the latest
- * head.
+ * Carry the binding fields a proposal captures before its content exists: everything except the
+ * content and its note dependencies.
+ */
+export type ProposalFrame = Omit<MemoryProposal, keyof ProposalContent | "noteDependencies">;
+
+/**
+ * Capture a proposal frame bound to the branch leaf, `sourceIds`' evidence, the configuration, and
+ * the latest head, before worker inference starts; a frame is never rebound to another selection.
  *
- * `sourceIds` must be registered in `storage.sources`.
+ * `sourceIds` must be in `sources`, which defaults to the records registered in `storage.sources`;
+ * a range reference needs its entry's record. A worker passes the active branch's current
+ * projection, which the commit's registration then writes.
  *
  * @throws Error, checked in this order, when:
  *
@@ -40,16 +48,17 @@ export type CommitProgress =
  *   - Reconciliation left an orphan head unresolved; the message names the head.
  *   - A reference is pending.
  *   - The selected revision is unavailable.
+ *   - A detected external change to the current-work note awaits recording.
  *   - No configuration is current, or the branch has no leaf.
  *   - A source id is unregistered.
  */
-export function captureProposal(
+export function captureFrame(
   storage: StorageSession,
   ctx: Pick<ExtensionContext, "sessionManager">,
   binding: ProposalBinding,
-  content: ProposalContent,
   sourceIds: readonly string[],
-): MemoryProposal {
+  sources: readonly SourceRecord[] = storage.sources.sources,
+): ProposalFrame {
   const { selected } = binding.lineage;
   const refusal = lineageRefusal(binding, ctx.sessionManager.getBranch(), storage.store.projectId);
   if (refusal !== undefined) {
@@ -59,10 +68,8 @@ export function captureProposal(
   if (binding.dependencyFingerprint === undefined || anchorId === null) {
     throw new Error("Memory storage cannot capture a proposal without a configuration and leaf.");
   }
-  const registered = storage.sources.sources;
-  const { references, evidenceFingerprint } = sourceReferences(registered, sourceIds);
-  return validateProposal({
-    ...structuredClone(content),
+  const { references, evidenceFingerprint } = sourceReferences(sources, sourceIds);
+  return {
     sessionId: storage.store.sessionId,
     projectId: storage.store.projectId,
     anchorId,
@@ -72,18 +79,58 @@ export function captureProposal(
     configurationRevision: binding.configurationRevision,
     expectedRevision: binding.latestRevision,
     baseRevision: selectedPointer(selected),
-    noteDependencies: Object.fromEntries(
-      Object.keys(content.notes).map((name) => [
-        name,
-        { sourceIds: [...references], evidenceFingerprint },
-      ]),
-    ),
     excludedInheritedNotes: selected.state === "selected" ? [...selected.invalidNotes] : [],
+    curatedNotes: Object.keys(storage.store.curatedNotes),
+  };
+}
+
+/**
+ * Complete a frame with content produced after capture.
+ *
+ * `noteDependencies` names a dependency for every note in `content.notes`; their references must be
+ * registered or retained from the base revision.
+ *
+ * @throws Error from `validateProposal` when the result is invalid.
+ */
+export function proposalFrom(
+  frame: ProposalFrame,
+  content: ProposalContent,
+  noteDependencies: Readonly<Record<string, NoteDependency>>,
+): MemoryProposal {
+  return validateProposal({
+    ...structuredClone(frame),
+    ...structuredClone(content),
+    noteDependencies: structuredClone(noteDependencies),
   });
 }
 
-// Returns the first lineage condition that refuses proposals, in capture's documented order.
-function lineageRefusal(
+/**
+ * Capture a proposal bound to the branch leaf, its evidence, the configuration, and the latest
+ * head, with each written note depending on every captured source.
+ *
+ * @throws The refusals of `captureFrame`, in its order, and the errors of `validateProposal`.
+ */
+export function captureProposal(
+  storage: StorageSession,
+  ctx: Pick<ExtensionContext, "sessionManager">,
+  binding: ProposalBinding,
+  content: ProposalContent,
+  sourceIds: readonly string[],
+): MemoryProposal {
+  const frame = captureFrame(storage, ctx, binding, sourceIds);
+  const dependency = { sourceIds: frame.sourceIds, evidenceFingerprint: frame.evidenceFingerprint };
+  return proposalFrom(
+    frame,
+    content,
+    Object.fromEntries(Object.keys(content.notes).map((name) => [name, dependency])),
+  );
+}
+
+/**
+ * Return the first lineage or readiness condition that refuses proposals on `branch`, in the order
+ * `captureFrame` documents, or `undefined` when none applies.
+ */
+export function lineageRefusal(
   binding: ProposalBinding,
   branch: readonly SessionEntry[],
   projectId: string,
@@ -105,8 +152,11 @@ function lineageRefusal(
   if (pending.state !== "none") {
     return "A committed memory revision awaits its branch reference.";
   }
-  return selected.state === "unavailable"
-    ? `The selected memory revision is unavailable: ${selected.reason}`
+  if (selected.state === "unavailable") {
+    return `The selected memory revision is unavailable: ${selected.reason}`;
+  }
+  return binding.pendingCuration
+    ? "A detected external change to the current-work note awaits recording."
     : undefined;
 }
 
@@ -154,10 +204,11 @@ const evidenceStillValid = Effect.fnUntraced(function* (
  * - The selection is unavailable.
  * - The selection no longer names the proposal's base revision; a `null` base matches only `none`.
  *
- * The reasons rank `configuration`, then `lineage`, then `evidence`. `record` runs synchronously
- * with `registered` from `SourceRegistry.register`'s `onRegistered`, in the step that replaces the
- * registry cache. It runs with `committed` as soon as the head is durable. A caller interrupted
- * after either write therefore still learns that progress.
+ * It returns `curation` while a detected external change to the current-work note awaits recording.
+ * The reasons rank `configuration`, then `curation`, then `lineage`, then `evidence`. `record` runs
+ * synchronously with `registered` from `SourceRegistry.register`'s `onRegistered`, in the step that
+ * replaces the registry cache. It runs with `committed` as soon as the head is durable. A caller
+ * interrupted after either write therefore still learns that progress.
  *
  * @throws Error when the proposal fails `validateProposal`.
  * @throws The failures of `SourceRegistry.register` and `MemoryStore.commit`, unchanged.
@@ -182,6 +233,9 @@ export const commitProposal = Effect.fnUntraced(function* (
       current.dependencyFingerprint !== captured.dependencyFingerprint
     ) {
       return "configuration";
+    }
+    if (current.pendingCuration) {
+      return "curation";
     }
     const branch = ctx.sessionManager.getBranch();
     if (

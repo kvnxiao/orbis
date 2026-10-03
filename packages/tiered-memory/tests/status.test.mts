@@ -21,12 +21,14 @@ import {
   noteContent,
   revisionEntryType,
   runtimeFor,
+  sourceEntry,
   sourceReference,
   storageOf,
   storeFor,
   unrecordedLine,
   unresolvedLine,
 } from "./store-fixture.mts";
+import { noteReply, ScriptedObserver, workerFixture } from "./worker-fixture.mts";
 
 const limitOrder = [
   "queuedJobs",
@@ -39,6 +41,7 @@ const limitOrder = [
   "consolidationThresholdTokens",
   "activeObservationTokens",
   "indexTokens",
+  "presentationTokens",
   "checkpointTokens",
   "recallTokens",
   "recallBytes",
@@ -112,7 +115,8 @@ test("status omits configuration and reports unavailable activation without vali
     error: `Invalid JSON at ${join(f.agentDir, "tiered-memory.json")}.`,
     configuration: undefined,
     damagedReferences: [],
-    unavailable: ["workers", "pool", "compaction"],
+    worker: undefined,
+    unavailable: ["consolidator", "pool", "compaction"],
   });
   expect(storage.state).toBe("open");
 });
@@ -227,17 +231,19 @@ test("status lists every limit in schema order with its source", async ({ create
   expect(configured(buildStatus(runtime, ctx)).limits.map(({ key }) => key)).toEqual(limitOrder);
 });
 
-test("status lists workers, the active pool, and compaction as unavailable", async ({
+test("status lists the consolidator, the active pool, and compaction as unavailable", async ({
   createFixture,
 }) => {
   const { runtime, ctx } = await started(createFixture);
-  expect(buildStatus(runtime, ctx).unavailable).toEqual(["workers", "pool", "compaction"]);
+  expect(buildStatus(runtime, ctx).unavailable).toEqual(["consolidator", "pool", "compaction"]);
 });
 
+const editedEvent = { kind: "edited", digest: "f".repeat(64) } as const;
+
 const unavailableLines = [
-  "Observer and consolidator jobs: unavailable in this version.",
-  "Active pool, pending worker jobs, and recall: unavailable in this version.",
-  "Custom compaction and usage reports: unavailable in this version; Pi native compaction remains available.",
+  "Consolidator jobs: unavailable in this version.",
+  "Active pool and recall: unavailable in this version.",
+  "Custom compaction and its usage reports: unavailable in this version; Pi native compaction remains available.",
 ];
 
 test("renders the full wording of a configured report", () => {
@@ -295,9 +301,65 @@ test("renders the full wording of a configured report", () => {
       reconciliation: "current",
       pending: { state: "none" },
       unavailableEntryId: undefined,
+      workNote: { state: "invalid", revisionId: "revision-1", reason: "curation" },
+      freshness: {
+        validity: { state: "invalid", cause: { kind: "curation", event: editedEvent } },
+        observation: { state: "verified", at: 0 },
+        detection: {
+          sessionDir: "/project/.pi/tiered-memory/sessions/session-1",
+          event: editedEvent,
+          revision: null,
+          persistence: "pending",
+          error: "Disk full.",
+        },
+      },
+      processing: {
+        state: "available",
+        gaps: [
+          { kind: "unprocessed", reference: "tm1:a" },
+          { kind: "failed", reference: "tm1:b" },
+          { kind: "attachment", reference: "tm1:b", count: 1 },
+        ],
+      },
     },
     damagedReferences: [],
-    unavailable: ["workers", "pool", "compaction"],
+    worker: {
+      queued: 2,
+      running: undefined,
+      deferred: 1,
+      exhausted: new Set(["tm1:b"]),
+      last: {
+        kind: "exhausted",
+        failures: [{ kind: "provider", message: "Rate limited." }],
+        deadline: true,
+        commit: false,
+      },
+      usage: {
+        attempts: 3,
+        reported: 2,
+        input: 1200,
+        output: 300,
+        cacheRead: 0,
+        cacheWrite: undefined,
+        cost: 0.25,
+      },
+      planningStall: 40,
+      planningDeferral: {
+        state: "unknown",
+        reason: "its file has not been inspected",
+        origin: "inspection",
+      },
+    },
+    compaction: {
+      cancellation: { reason: "overflow", cause: "its file was edited outside tiered memory" },
+      gap: {
+        reason: "manual",
+        cause: "its file was edited outside tiered memory",
+        gap: "not durable",
+      },
+      error: "Disk full.",
+    },
+    unavailable: ["consolidator", "pool", "compaction"],
   };
   expect(renderStatus(report)).toBe(
     [
@@ -311,11 +373,23 @@ test("renders the full wording of a configured report", () => {
       "Registered original sources: 3 (session_tree)",
       "Curated session notes: 1 (session_tree)",
       "Storage error: Refresh failed.",
+      "Current-work note: revision revision-1 is invalid: Selected revision contains an externally curated note.",
+      "Current-work note freshness: not current because its file was edited outside tiered memory.",
+      "Current-work note curation: the detected edit awaits recording; memory proposals are refused until it is recorded. Recording failed (Disk full.); the next inspection retries it.",
+      "Processing coverage: 3 gaps (1 unprocessed, 1 failed, 1 with unsupported attachments)",
+      "Observer jobs: 2 queued, none running, 1 deferred offers, 1 exhausted spans; last outcome: exhausted after 1 failed attempts; the job deadline passed; last failure: provider error: Rate limited.",
+      "Observer usage (provider-reported): 2 of 3 attempts reported usage; input 1200 tokens, output 300 tokens, cache read 0 tokens, cache write unknown, cost 0.25",
+      "Observer outcomes and usage cover this session since tiered memory last loaded, switched sessions, or navigated the tree.",
+      "Observer planning: deferred because the current-work note's freshness is unknown: its file has not been inspected. Check that current-work.md is readable, then run /reload.",
+      "Observer planning: stalled; after the instructions, the previous note at its reserve, and its references, the observer input cap leaves 40 estimated tokens for sources, which no source span fits, even without a native checkpoint. Raise limits.workerInputTokens, lower limits.workNoteTokens, or select an observer model with a larger context window.",
+      "Latest correction cancellation: the automatic overflow compaction, because the current-work note in its input is no longer current: its file was edited outside tiered memory.",
+      "Latest correction gap: the manual compaction proceeded while the correction was not durable; the current-work note in its input is no longer current: its file was edited outside tiered memory.",
+      "Correction cancellation check failed (Disk full.); the compaction proceeded.",
       "Personal settings: /agent/tiered-memory.json",
       "Project settings: /project/.pi/tiered-memory/settings.json (ignored: project is untrusted)",
       "observer model: local/observer (personal); local/observer; suspended: No credentials.",
       "consolidator model: active session model (default); local/session; input cap 7000 estimated tokens, output cap 2048 tokens",
-      "Acting model: local/session; mandatory work-note reserve 1024 estimated tokens; preliminary remaining capacity 9000 estimated tokens. Request fit is unverified.",
+      "Acting model: local/session; mandatory work-note reserve 1024 estimated tokens; preliminary remaining capacity 9000 estimated tokens. See Request capacity for the latest request's fit check.",
       "limits.queuedJobs: 3 (project)",
       "limits.retries: 0 (personal)",
       ...unavailableLines,
@@ -331,9 +405,14 @@ test("renders the wording of a report without configuration", () => {
       configurationRevision: 0,
       error: "Invalid JSON at /agent/tiered-memory.json.",
       configuration: undefined,
-      storage: { state: "unavailable", error: "Invalid JSON at /project/identity.json." },
+      storage: {
+        state: "unavailable",
+        error: "Invalid JSON at /project/identity.json.",
+        freshness: undefined,
+      },
       damagedReferences: [],
-      unavailable: ["workers", "pool", "compaction"],
+      worker: undefined,
+      unavailable: ["consolidator", "pool", "compaction"],
     }),
   ).toBe(
     [
@@ -355,7 +434,7 @@ test.for([
   },
   {
     acting: { state: "insufficient" },
-    line: "Acting model: mandatory work note does not fit remaining context; memory work is suspended. Free context or select a larger model.",
+    line: "Acting model: mandatory work note does not fit remaining context; a request that presents the note stops before dispatch. Run /compact, or select a model with a larger context window.",
   },
   {
     acting: { state: "available", id: "local/m", reserveTokens: 1024, remainingTokens: undefined },
@@ -381,8 +460,9 @@ test.for([
       actingModel: acting,
       limits: [],
     },
-    storage: { state: "unavailable", error: undefined },
+    storage: { state: "unavailable", error: undefined, freshness: undefined },
     damagedReferences: [],
+    worker: undefined,
     unavailable: [],
   });
   expect(text.split("\n")).toContain(line);
@@ -413,8 +493,12 @@ function lineageReport(
       reconciliation: "current",
       pending: { state: "none" },
       unavailableEntryId: undefined,
+      workNote: { state: "absent", curation: undefined },
+      freshness: { validity: { state: "absent" }, observation: undefined, detection: undefined },
+      processing: { state: "available", gaps: [] },
     },
     damagedReferences,
+    worker: undefined,
     unavailable: [],
   };
 }
@@ -438,6 +522,8 @@ test("renders the damaged-reference line, uncertain validity, and blocked-commit
       "Curated session notes: not inspected",
       damagedLine,
       "Memory commits: blocked by damaged revision reference entry 7f3a. Navigate with /tree to a point before that entry to remove this lineage block.",
+      "Current-work note: none",
+      "Processing coverage: no gaps",
       "Automatic work: suspended; native Pi remains available.",
     ].join("\n"),
   );
@@ -465,7 +551,11 @@ test("renders the damaged-reference line with current validity and no blocked li
 test("renders the damaged-reference line after the storage error while storage is unavailable", () => {
   const lines = renderStatus({
     ...lineageReport({ state: "none" }, damagedPair, undefined),
-    storage: { state: "unavailable", error: "Invalid JSON at /sources.json." },
+    storage: {
+      state: "unavailable",
+      error: "Invalid JSON at /sources.json.",
+      freshness: undefined,
+    },
   }).split("\n");
   expect(lines.slice(2, 5)).toEqual([
     "Memory storage: unavailable",
@@ -657,14 +747,26 @@ test("status reports the project root, selected and latest revisions, cached cou
   const runtime = runtimeFor(f);
   const ctx = f.session.extensionRunner.createContext();
   await runtime.start(ctx);
+  const reference = await sourceReference(f, "Status evidence.");
   const revisionId = committedId(
     await runtime.commitProposal(
       ctx,
-      runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [
-        await sourceReference(f, "Status evidence."),
-      ]),
+      runtime.captureProposal(ctx, noteContent({ "current-work.md": "Note\n" }), [reference]),
     ),
   );
+  const branch = f.session.sessionManager.getBranch();
+  const evidence = sourceEntry(f, "Status evidence.");
+  const order = branch.findIndex((entry) => entry.id === evidence.id);
+  const recordedAt =
+    evidence.type === "message" ? new Date(evidence.message.timestamp).toISOString() : "missing";
+  const assistantId = branch.find(
+    (entry) => entry.type === "message" && entry.message.role === "assistant",
+  )?.id;
+  if (assistantId === undefined) {
+    throw new Error("Missing assistant source.");
+  }
+  const verifiedAt = runtime.memoryStorage(ctx)?.freshness.observation?.at;
+  expect(verifiedAt).toBeGreaterThan(0);
   expect(buildStatus(runtime, ctx).storage).toEqual({
     state: "open",
     projectRoot: await realpath(f.cwd),
@@ -680,6 +782,27 @@ test("status reports the project root, selected and latest revisions, cached cou
     blockingReference: undefined,
     reconciliation: "current",
     pending: { state: "none" },
+    unavailableEntryId: undefined,
+    workNote: {
+      state: "valid",
+      revisionId,
+      sourceBoundary: { reference, order, role: "user", recordedAt },
+      unobserved: 1,
+    },
+    freshness: {
+      validity: { state: "valid" },
+      observation: { state: "verified", at: verifiedAt },
+      detection: undefined,
+    },
+    processing: {
+      state: "available",
+      gaps: [
+        {
+          kind: "unprocessed",
+          reference: reference.replace(sourceEntry(f, "Status evidence.").id, assistantId),
+        },
+      ],
+    },
   });
 });
 
@@ -916,5 +1039,43 @@ test.for([
     await runtime.start(ctx);
     const lines = renderStatus(buildStatus(runtime, ctx)).split("\n");
     expect(lines).toEqual(expect.arrayContaining([...selection, blockedLine(entryId)]));
+  },
+);
+
+function outcomes(lines: string[]): string[] {
+  return lines.filter(
+    (line) => line.startsWith("Observer jobs:") || line.startsWith("Observer usage"),
+  );
+}
+
+test.for(["a reload", "a session switch", "tree navigation"] as const)(
+  "Pi observer outcomes and usage start empty after %s",
+  async (change, { createFixture }) => {
+    const observer = new ScriptedObserver();
+    const f = await workerFixture(createFixture, observer);
+    await f.session.prompt("Remember the blue setting.");
+    const first = await observer.next();
+    first.reply(noteReply("Use the blue setting.", first.call));
+    await f.memory().work.idle();
+    await f.command("status");
+    expect(outcomes(f.report().split("\n"))).toEqual([
+      expect.stringMatching(/last outcome: committed revision /u),
+      "Observer usage (provider-reported): 1 of 1 attempts reported usage; input 0 tokens, output 0 tokens, cache read 0 tokens, cache write 0 tokens, cost 0",
+    ]);
+    if (change === "a reload") {
+      await f.reload();
+    } else if (change === "a session switch") {
+      await f.session.extensionRunner.emit({ type: "session_start", reason: "resume" });
+    } else {
+      const response = f.session.sessionManager
+        .getBranch()
+        .findLast((entry) => entry.type === "message" && entry.message.role === "assistant");
+      await f.session.navigateTree(response?.id ?? "", { summarize: false });
+    }
+    await f.command("status");
+    expect(outcomes(f.report().split("\n"))).toEqual([
+      expect.stringMatching(/ 0 exhausted spans; last outcome: none$/u),
+      "Observer usage (provider-reported): no attempts",
+    ]);
   },
 );

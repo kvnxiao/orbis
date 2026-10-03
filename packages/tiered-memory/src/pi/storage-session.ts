@@ -1,15 +1,13 @@
-import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import { Type } from "typebox";
-import type { Static } from "typebox";
-import { Value } from "typebox/value";
 
-import { digestSchema, safeIdSchema } from "../domain/references.ts";
 import { recoverFailure } from "../storage/files.ts";
 import type { StorageServices } from "../storage/services.ts";
-import { SourceRegistry } from "../storage/sources.ts";
 import type { SourceRecord } from "../storage/sources.ts";
-import { canonicalProjectRoot, MemoryStore } from "../storage/store.ts";
+import type { MemoryStore } from "../storage/store.ts";
+import { readCanonicalMemory, workNoteName } from "./canonical-memory.ts";
+import type { CanonicalMemory } from "./canonical-memory.ts";
 import { describeError } from "./configuration.ts";
 import type { StorageScope } from "./execution.ts";
 import { refreshLineage, selectFromBranch } from "./lineage.ts";
@@ -21,67 +19,11 @@ import type {
   RegistrationEvent,
   RegistrationUpdate,
 } from "./lineage.ts";
+import { curationCorrectedOn, NoteFreshness } from "./note-freshness.ts";
+import type { NoteInspection } from "./note-inspection.ts";
 import { attachCommitted } from "./proposals.ts";
-
-const projectEntryType = "orbis-tiered-memory-project";
-
-/**
- * Validate the project entry that binds a Pi session to a canonical project root and memory
- * session.
- */
-export const projectEntrySchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    root: Type.String({ minLength: 1 }),
-    projectId: digestSchema,
-    sessionId: safeIdSchema,
-  },
-  { additionalProperties: false },
-);
-
-/** Carry the `orbis-tiered-memory-project` custom entry. */
-export type ProjectEntry = Static<typeof projectEntrySchema>;
-
-/**
- * Bind the session's branch to its project, appending a project entry when the branch has none for
- * this root and session.
- *
- * @throws Error when the branch carries a project entry for another root or project, whose memory
- *   must not attach to this session.
- */
-export function attachProject(
-  pi: Pick<ExtensionAPI, "appendEntry">,
-  branch: readonly SessionEntry[],
-  store: MemoryStore,
-): void {
-  const entries = branch.flatMap((entry) =>
-    entry.type === "custom" &&
-    entry.customType === projectEntryType &&
-    Value.Check(projectEntrySchema, entry.data)
-      ? [entry.data]
-      : [],
-  );
-  if (
-    entries.some((entry) => entry.root !== store.projectRoot || entry.projectId !== store.projectId)
-  ) {
-    throw new Error("Session memory belongs to a different project root.");
-  }
-  if (!entries.some((entry) => entry.sessionId === store.sessionId)) {
-    const entry: ProjectEntry = {
-      version: 1,
-      root: store.projectRoot,
-      projectId: store.projectId,
-      sessionId: store.sessionId,
-    };
-    pi.appendEntry(projectEntryType, entry);
-  }
-}
-
-/** Carry the store and source registry that one storage scope opened. */
-export interface StorageSession {
-  readonly store: MemoryStore;
-  readonly sources: SourceRegistry;
-}
+import { attachProject, openStorageSession } from "./storage-binding.ts";
+import type { StorageSession } from "./storage-binding.ts";
 
 /**
  * Expose the storage state that status reads.
@@ -118,7 +60,9 @@ type Readiness =
 
 /**
  * Carry open storage with the scope that owns it, the session it opened, the newest completed
- * source registration of that session, which the next refresh uses, and its readiness record.
+ * source registration of that session, which the next refresh uses, its readiness record, and the
+ * canonical memory of its selection, which start and each reconciliation, including the refresh
+ * after a commit, replace whole through `readCanonicalMemory`.
  */
 export type OpenStorage = Omit<
   Extract<StorageSnapshot, { state: "open" }>,
@@ -128,6 +72,7 @@ export type OpenStorage = Omit<
   session: StorageSession;
   newestRegistration: RegistrationUpdate;
   readiness: Readiness;
+  canonical: CanonicalMemory;
 };
 
 type StorageState =
@@ -145,29 +90,6 @@ function reconciliationOf(readiness: Readiness, current: ReadinessIdentity): Rec
   }
   return readiness.state === "failed" ? "failed" : "current";
 }
-
-/**
- * Open the store and source registry for the context's session under its canonical project root.
- *
- * @throws Error before anything is written when Pi keeps the session in memory without a session
- *   file.
- * @throws The failures of `canonicalProjectRoot`, `MemoryStore.open`, and `SourceRegistry.open`.
- */
-export const openStorageSession = Effect.fnUntraced(function* (
-  ctx: Pick<ExtensionContext, "cwd" | "sessionManager">,
-): Effect.fn.Return<StorageSession, unknown, StorageServices> {
-  if (ctx.sessionManager.getSessionFile() === undefined) {
-    return yield* Effect.fail(
-      new Error(
-        "Pi keeps this session in memory; tiered memory storage needs a persisted session.",
-      ),
-    );
-  }
-  const root = yield* canonicalProjectRoot(ctx.cwd);
-  const store = yield* MemoryStore.open(root, ctx.sessionManager.getSessionId());
-  const sources = yield* SourceRegistry.open(store);
-  return { store, sources };
-});
 
 /** Report the configuration revision and dependency fingerprint current for a store. */
 export interface ConfigurationIdentity {
@@ -188,8 +110,14 @@ type RoleCheck = { state: "pending" } | { state: "done" } | { state: "failed"; e
  * publishes nothing. A startup always publishes open storage with its lineage, as `reconciling`
  * when a transition superseded it or its role check is pending, and as `failed` when that role
  * check failed. Work re-reads current storage after each await and merges its result into it.
+ *
+ * The owner also owns the managed note's freshness: each storage start, transition, durable head of
+ * this process, and canonical-memory publication advances it, so an inspection read across one is
+ * discarded; and each start and reconciliation records a verified observation.
  */
 export class StorageSessionOwner {
+  /** Own the managed note's freshness observations and detected curation. */
+  readonly freshness = new NoteFreshness();
   private readonly pi: Pick<ExtensionAPI, "appendEntry">;
   private readonly configurationOf: (store: MemoryStore) => ConfigurationIdentity;
   private storage: StorageState = { state: "stopped" };
@@ -214,7 +142,14 @@ export class StorageSessionOwner {
     if (storage.state !== "open") {
       return structuredClone(storage);
     }
-    const { scope: _scope, session, newestRegistration: _newest, readiness, ...state } = storage;
+    const {
+      scope: _scope,
+      session,
+      newestRegistration: _n,
+      readiness,
+      canonical: _c,
+      ...state
+    } = storage;
     const { projectRoot, projectId } = session.store;
     const reconciliation = reconciliationOf(readiness, this.identity(session.store));
     return structuredClone({ ...state, projectRoot, projectId, reconciliation });
@@ -230,6 +165,7 @@ export class StorageSessionOwner {
    * replacement's own role check and startup reconcile again.
    */
   replace(): void {
+    this.freshness.advance();
     this.storage = { state: "opening" };
     if (this.roleCheck.state === "failed") {
       this.roleCheck = { state: "done" };
@@ -258,6 +194,7 @@ export class StorageSessionOwner {
       latestRevision: open?.latestRevision ?? null,
       reconciliation:
         open === undefined ? "reconciling" : reconciliationOf(open.readiness, identity),
+      pendingCuration: this.freshness.blocksProposals,
     };
   }
 
@@ -266,6 +203,7 @@ export class StorageSessionOwner {
    * transition's count.
    */
   beginTransition(): number {
+    this.freshness.advance();
     this.transition++;
     this.roleCheck = { state: "pending" };
     const storage = this.storage;
@@ -324,14 +262,17 @@ export class StorageSessionOwner {
   publishDurableHead(scope: StorageScope, revisionId: string): void {
     const open = this.openIn(scope);
     if (open !== undefined) {
+      this.freshness.advance();
       const pending = { state: "unappended", revisionId } as const;
       this.storage = { ...open, latestRevision: revisionId, lineage: { ...open.lineage, pending } };
     }
   }
 
   /**
-   * Open the store and source registry, select the branch's revision, register sources, and
-   * reconcile, then publish open storage; a failure other than interruption publishes `failed`.
+   * Open the store and source registry, record the curation that the branch's newest curation
+   * correction describes and a detection of this session that awaits recording, select the branch's
+   * revision, register sources, and reconcile, then publish open storage; a failure other than
+   * interruption publishes `failed`.
    */
   readonly start = Effect.fnUntraced(
     function* (
@@ -342,6 +283,13 @@ export class StorageSessionOwner {
     ): Effect.fn.Return<void, unknown, StorageServices> {
       const session = yield* openStorageSession(ctx);
       attachProject(this.pi, ctx.sessionManager.getBranch(), session.store);
+      this.freshness.open(session.store.sessionDir);
+      const corrected = curationCorrectedOn(ctx.sessionManager.getBranch(), session.store);
+      if (corrected !== undefined) {
+        yield* session.store.recordCuration(workNoteName, corrected.event, corrected.revision);
+      }
+      yield* this.recordDetected(session.store);
+      const started = { recorded: this.freshness.recorded, observed: this.freshness.observed };
       const lineage = yield* selectFromBranch(session.store, ctx);
       const sources = yield* session.sources.register(ctx.sessionManager);
       const update = { sources, event };
@@ -356,6 +304,8 @@ export class StorageSessionOwner {
         { effective: sources, newest: update },
         current,
       );
+      const branch = ctx.sessionManager.getBranch();
+      const canonical = yield* readCanonicalMemory(session, refreshed.lineage.selected, branch);
       const roleCheck = this.roleCheck;
       let readiness: Readiness = { state: "reconciled", identity };
       if (roleCheck.state === "failed") {
@@ -364,8 +314,10 @@ export class StorageSessionOwner {
         readiness = { state: "reconciling" };
       }
       const error = roleCheck.state === "failed" ? roleCheck.error : undefined;
-      const opened = { scope, session, newestRegistration: update, readiness };
+      const opened = { scope, session, newestRegistration: update, readiness, canonical };
+      const now = yield* Clock.currentTimeMillis;
       this.storage = { state: "open", ...opened, ...refreshed, error };
+      this.freshness.reconciled(started, now);
     },
     Effect.catchCause((cause) =>
       recoverFailure(cause, (failure) => {
@@ -374,11 +326,52 @@ export class StorageSessionOwner {
     ),
   );
 
+  /**
+   * Apply an inspection of `scope`'s managed note file that started at freshness generation
+   * `started` and completed at `at`, with the selected revision, whether canonical memory holds its
+   * note as current, and the latest head; returns whether it applied.
+   */
+  applyInspection(
+    scope: StorageScope,
+    started: number,
+    inspection: NoteInspection,
+    at: number,
+  ): boolean {
+    const open = this.openIn(scope);
+    if (open === undefined) {
+      return false;
+    }
+    const sessionDir = open.session.store.sessionDir;
+    const revision = open.canonical.revision ?? null;
+    const current = open.canonical.workNote !== undefined;
+    const latest = open.latestRevision;
+    return this.freshness.apply(started, inspection, { sessionDir, revision, current, latest, at });
+  }
+
+  /**
+   * Record a pending detected curation in `curation.json`, then refresh as `refresh` does; a failed
+   * recording stays pending with its error for a later inspection to retry.
+   */
+  readonly recordDetection = Effect.fnUntraced(function* (
+    this: StorageSessionOwner,
+    scope: StorageScope,
+    ctx: Pick<ExtensionContext, "sessionManager">,
+  ): Effect.fn.Return<void, unknown, StorageServices> {
+    const open = this.openIn(scope);
+    if (open === undefined) {
+      return;
+    }
+    yield* this.recordDetected(open.session.store);
+    if (this.freshness.view.detection?.persistence === "recorded") {
+      yield* this.refresh(scope, ctx);
+    }
+  });
+
   /** Append and confirm a committed revision's branch reference, then refresh as `refresh` does. */
   readonly applyCommitted = Effect.fnUntraced(function* (
     this: StorageSessionOwner,
     scope: StorageScope,
-    ctx: ExtensionContext,
+    ctx: Pick<ExtensionContext, "sessionManager">,
     revisionId: string,
   ): Effect.fn.Return<void, unknown, StorageServices> {
     const before = this.openIn(scope);
@@ -403,7 +396,7 @@ export class StorageSessionOwner {
   readonly refresh = Effect.fnUntraced(function* (
     this: StorageSessionOwner,
     scope: StorageScope,
-    ctx: ExtensionContext,
+    ctx: Pick<ExtensionContext, "sessionManager">,
   ): Effect.fn.Return<void, unknown, StorageServices> {
     if (this.openIn(scope)?.readiness.state === "reconciled") {
       yield* this.reconcile(scope, ctx, this.transition);
@@ -422,7 +415,7 @@ export class StorageSessionOwner {
   readonly reconcile = Effect.fnUntraced(function* (
     this: StorageSessionOwner,
     scope: StorageScope,
-    ctx: ExtensionContext,
+    ctx: Pick<ExtensionContext, "sessionManager">,
     transition: number,
   ): Effect.fn.Return<void, unknown, StorageServices> {
     const before = this.openIn(scope);
@@ -430,15 +423,22 @@ export class StorageSessionOwner {
       return;
     }
     this.storage = { ...before, readiness: { state: "reconciling" } };
+    const started = { recorded: this.freshness.recorded, observed: this.freshness.observed };
     const store = before.session.store;
     const identity = this.identity(store);
     const current = (): boolean =>
       this.openIn(scope) !== undefined && this.mayRecover(identity, store);
     const newest = before.newestRegistration;
     const binding = this.binding(scope, store);
-    const refreshed = yield* before.session.sources.current(ctx.sessionManager).pipe(
+    const { session } = before;
+    const refreshed = yield* session.sources.current(ctx.sessionManager).pipe(
       Effect.flatMap((effective) =>
         refreshLineage(this.pi, store, ctx, binding, { effective, newest }, current),
+      ),
+      Effect.flatMap((result) =>
+        readCanonicalMemory(session, result.lineage.selected, ctx.sessionManager.getBranch()).pipe(
+          Effect.map((canonical) => ({ ...result, canonical })),
+        ),
       ),
       Effect.tapCause(() =>
         Effect.sync(() => {
@@ -449,11 +449,33 @@ export class StorageSessionOwner {
         }),
       ),
     );
+    const now = yield* Clock.currentTimeMillis;
     const published = this.openIn(scope);
     if (published !== undefined && current()) {
       const readiness: Readiness = { state: "reconciled", identity };
       this.storage = { ...published, ...refreshed, error: undefined, readiness };
+      this.freshness.reconciled(started, now);
     }
+  });
+
+  private readonly recordDetected = Effect.fnUntraced(function* (
+    this: StorageSessionOwner,
+    store: MemoryStore,
+  ): Effect.fn.Return<void, never, StorageServices> {
+    const detection = this.freshness.startRecording();
+    if (detection === undefined) {
+      return;
+    }
+    yield* store.recordCuration(workNoteName, detection.event, detection.revision).pipe(
+      Effect.match({
+        onSuccess: () => {
+          this.freshness.finishRecording();
+        },
+        onFailure: (error) => {
+          this.freshness.failRecording(describeError(error));
+        },
+      }),
+    );
   });
 
   private identity(store: MemoryStore): ReadinessIdentity {

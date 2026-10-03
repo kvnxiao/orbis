@@ -20,7 +20,7 @@ import {
 import { blockingReferences, referencesIn } from "../src/pi/revision-references.ts";
 import type { MemoryRuntime } from "../src/pi/runtime.ts";
 import { buildStatus, renderStatus } from "../src/pi/status.ts";
-import { projectEntrySchema, openStorageSession } from "../src/pi/storage-session.ts";
+import { openStorageSession, projectEntrySchema } from "../src/pi/storage-binding.ts";
 import { writeDurable } from "../src/storage/files.ts";
 import { readHead } from "../src/storage/revisions.ts";
 import { SourceRegistry } from "../src/storage/sources.ts";
@@ -195,6 +195,7 @@ function storageBinding(lineage: LineageState, fingerprint: string | undefined) 
     lineage,
     latestRevision: null,
     reconciliation: "current" as const,
+    pendingCuration: false,
   };
 }
 
@@ -851,6 +852,7 @@ test.for(["waiting for lock", "before head publication"] as const)(
       lineage: { selected: { state: "none" as const }, pending: { state: "none" as const } },
       latestRevision: null,
       reconciliation: "current" as const,
+      pendingCuration: false,
     };
     const proposal = captureStorageProposal(
       storage,
@@ -897,6 +899,7 @@ test("a configuration change during the final source check rejects the proposal"
     lineage: { selected: { state: "none" as const }, pending: { state: "none" as const } },
     latestRevision: null,
     reconciliation: "current" as const,
+    pendingCuration: false,
   };
   const proposal = captureStorageProposal(
     storage,

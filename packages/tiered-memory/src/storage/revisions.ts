@@ -256,3 +256,34 @@ export const advanceSequence = Effect.fnUntraced(function* (
   yield* writeRecord(path, sequence);
   return next;
 });
+
+/**
+ * Return which of `names` the notes of a session's earlier revisions list, reading the chain of
+ * `parentRevisionId` predecessors from `revisionId` until every name is found or the chain ends. A
+ * missing predecessor ends the chain.
+ *
+ * @throws The failures of `readOwn`, such as a damaged revision.
+ */
+export const earlierNoteNames = Effect.fnUntraced(function* (
+  names: ReadonlySet<string>,
+  revisionId: string | null,
+  readOwn: (revisionId: string) => Effect.Effect<Revision | undefined, unknown>,
+): Effect.fn.Return<ReadonlySet<string>, unknown> {
+  const found = new Set<string>();
+  const visited = new Set<string>();
+  let next = revisionId;
+  while (next !== null && found.size < names.size && !visited.has(next)) {
+    visited.add(next);
+    const revision = yield* readOwn(next);
+    if (revision === undefined) {
+      break;
+    }
+    for (const name of Object.keys(revision.notes)) {
+      if (names.has(name)) {
+        found.add(name);
+      }
+    }
+    next = revision.parentRevisionId;
+  }
+  return found;
+});

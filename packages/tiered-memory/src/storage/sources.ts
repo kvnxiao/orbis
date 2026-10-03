@@ -1,31 +1,23 @@
 import { join } from "node:path";
 
-import { buildSessionProjection } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
 import * as Effect from "effect/Effect";
 import { Type } from "typebox";
 import type { Static } from "typebox";
-import { Value } from "typebox/value";
 
 import { digest } from "../domain/canonical.ts";
-import { sourceEvidenceSchema } from "../domain/evidence.ts";
+import { sourceEvidenceSchema, sourceTimeSchema } from "../domain/evidence.ts";
+import type { SourceTime } from "../domain/evidence.ts";
+import { sourceRoleSchema } from "../domain/intervals.ts";
 import { digestSchema, encodeReference, safeIdSchema } from "../domain/references.ts";
 import { readText } from "./files.ts";
 import { parseRecord } from "./records.ts";
 import { writeRecord } from "./services.ts";
 import type { DurableWrites, StorageServices } from "./services.ts";
+import { messageSources, timeOf } from "./source-projection.ts";
+import type { MessageSource } from "./source-projection.ts";
 import { canonicalProjectRoot } from "./store.ts";
 import type { MemoryStore } from "./store.ts";
-
-/** Validate supplied or recorded source time; an absent member means unknown and is never invented. */
-export const sourceTimeSchema = Type.Object(
-  {
-    recordedAt: Type.Optional(Type.String()),
-    eventTime: Type.Optional(Type.String({ maxLength: 256 })),
-    timezone: Type.Optional(Type.String({ maxLength: 128 })),
-  },
-  { additionalProperties: false },
-);
 
 /**
  * Validate a registered original source: one whole Pi message entry with its raw and effective
@@ -42,7 +34,7 @@ export const sourceRecordSchema = Type.Object(
     sessionId: safeIdSchema,
     span: Type.Literal(0),
     order: Type.Integer({ minimum: 0 }),
-    role: Type.Union([Type.Literal("user"), Type.Literal("assistant"), Type.Literal("toolResult")]),
+    role: sourceRoleSchema,
     time: sourceTimeSchema,
   },
   { additionalProperties: false },
@@ -59,8 +51,6 @@ export const registrySchema = Type.Object(
   { additionalProperties: false },
 );
 
-/** Define the `time` member of one `sources` record in `sessions/<session-id>/sources.json`. */
-export type SourceTime = Static<typeof sourceTimeSchema>;
 /** Define one `sources` record of `sessions/<session-id>/sources.json`. */
 export type SourceRecord = Static<typeof sourceRecordSchema>;
 /** Define the `sessions/<session-id>/sources.json` payload. */
@@ -71,76 +61,6 @@ export type SourceSessionManager = Pick<
   SessionManager,
   "getSessionId" | "getSessionFile" | "getHeader" | "getBranch"
 >;
-
-type MessageEntry = Extract<SessionEntry, { type: "message" }>;
-
-const textBlockSchema = Type.Object({ type: Type.Literal("text"), text: Type.String() });
-const toolCallMarkerSchema = Type.Object({ type: Type.Literal("toolCall") });
-const toolCallBlockSchema = Type.Object({
-  type: Type.Literal("toolCall"),
-  id: Type.String(),
-  name: Type.String(),
-  arguments: Type.Record(Type.String(), Type.Unknown()),
-});
-const toolResultSchema = Type.Object({
-  toolCallId: Type.String(),
-  toolName: Type.String(),
-  isError: Type.Boolean(),
-});
-const blocksSchema = Type.Array(Type.Unknown());
-
-function textOf(message: MessageEntry["message"]): string {
-  const parts: string[] = [];
-  if (message.role === "toolResult") {
-    if (!Value.Check(toolResultSchema, message)) {
-      throw new Error("Invalid tool result source metadata.");
-    }
-    const { toolCallId, toolName, isError } = message;
-    parts.push(`Tool result: ${JSON.stringify({ toolCallId, toolName, isError })}`);
-  }
-  const content: unknown = "content" in message ? message.content : undefined;
-  if (typeof content === "string") {
-    parts.push(content);
-  } else if (Value.Check(blocksSchema, content)) {
-    for (const block of content) {
-      if (Value.Check(textBlockSchema, block)) {
-        parts.push(block.text);
-      } else if (Value.Check(toolCallMarkerSchema, block)) {
-        if (!Value.Check(toolCallBlockSchema, block)) {
-          throw new Error("Invalid tool call source metadata.");
-        }
-        const { id, name, arguments: input } = block;
-        parts.push(`Tool call: ${JSON.stringify({ id, name, arguments: input })}`);
-      }
-    }
-  }
-  return parts.join("\n");
-}
-
-function sourceTimestamp(entry: MessageEntry): string | undefined {
-  const timestamp: unknown = "timestamp" in entry.message ? entry.message.timestamp : undefined;
-  if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
-    return new Date(timestamp).toISOString();
-  }
-  return /^\d{4}-\d\d-\d\dT/u.test(entry.timestamp) ? entry.timestamp : undefined;
-}
-
-function projectAllSources(branch: SessionEntry[]): ReturnType<typeof buildSessionProjection> {
-  return buildSessionProjection(
-    branch.map((entry) =>
-      entry.type === "compaction"
-        ? {
-            type: "custom",
-            id: entry.id,
-            parentId: entry.parentId,
-            timestamp: entry.timestamp,
-            customType: "orbis-tiered-memory-projection",
-            data: null,
-          }
-        : entry,
-    ),
-  );
-}
 
 function registryProblem(registry: Registry, store: MemoryStore): string | undefined {
   if (registry.projectId !== store.projectId || registry.sessionId !== store.sessionId) {
@@ -217,17 +137,43 @@ export class SourceRegistry {
   /**
    * Project the active branch's current effective sources without changing the registry.
    *
-   * @throws Error when `manager` belongs to another session or project root, or when tool-call or
-   *   tool-result metadata is malformed.
+   * @throws Error when `manager` belongs to another session or project root, or when tool-call,
+   *   tool-result, or shell-command metadata is malformed.
    */
   current(manager: SourceSessionManager): Effect.Effect<readonly SourceRecord[], unknown> {
-    return this.assertManager(manager).pipe(
-      Effect.map(() => this.recordsFor(this.registry, manager.getBranch(), {})),
-    );
+    return this.assertManager(manager).pipe(Effect.map(() => this.recordsOn(manager.getBranch())));
+  }
+
+  /**
+   * Check that `manager` belongs to this registry's session and project root, as `current` does
+   * before it projects.
+   *
+   * @throws Error when `manager` belongs to another session or project root.
+   */
+  checkManager(manager: SourceSessionManager): Effect.Effect<void, unknown> {
+    return this.assertManager(manager);
+  }
+
+  /**
+   * Project `branch`'s current effective sources with the cached registry's source times, without
+   * checking a session manager or changing the registry.
+   *
+   * @throws Error when tool-call, tool-result, or shell-command metadata is malformed.
+   */
+  recordsOn(branch: readonly SessionEntry[]): SourceRecord[] {
+    return this.recordsFor(this.registry, messageSources(branch), {});
+  }
+
+  /** Return the records of message sources that `messageSources` already read, as `recordsOn` does. */
+  recordsOf(messages: readonly MessageSource[]): SourceRecord[] {
+    return this.recordsFor(this.registry, messages, {});
   }
 
   /**
    * Register the active branch's message entries under the project lock and return their records.
+   *
+   * A message with neither text nor image blocks is not a source; an image-only message is
+   * registered with the digest of its empty text, so its attachment gap has a stable reference.
    *
    * Checks `manager`, then under the lock reads and validates `sources.json` afresh, reads the
    * active branch, projects it with that fresh registry's metadata rather than the cache, writes
@@ -249,7 +195,8 @@ export class SourceRegistry {
    * - It does not run after a failed write.
    *
    * @throws Error when `manager` belongs to another session or project root, before locking.
-   * @throws Error when tool-call or tool-result metadata is malformed, before anything is written.
+   * @throws Error when tool-call, tool-result, or shell-command metadata is malformed, before
+   *   anything is written.
    * @throws Error naming the path when the fresh `sources.json` is not JSON, fails
    *   `registrySchema`, or fails its cross-field checks; the file and the cache stay unchanged.
    * @throws The original write error, also when an interruption is pending; the cache stays
@@ -273,7 +220,7 @@ export class SourceRegistry {
     onRegistered: ((records: readonly SourceRecord[]) => void) | undefined,
   ): Effect.fn.Return<readonly SourceRecord[], unknown, DurableWrites> {
     const fresh = yield* readRegistry(this.store);
-    const records = this.recordsFor(fresh, manager.getBranch(), times);
+    const records = this.recordsFor(fresh, messageSources(manager.getBranch()), times);
     const merged = new Map(fresh.sources.map((source) => [source.reference, source]));
     for (const record of records) {
       merged.set(record.reference, record);
@@ -313,56 +260,31 @@ export class SourceRegistry {
 
   private recordsFor(
     registry: Registry,
-    branch: SessionEntry[],
+    messages: readonly MessageSource[],
     times: Readonly<Record<string, SourceTime>>,
   ): SourceRecord[] {
     const { projectId, sessionId } = this.store;
-    const effective = new Map(
-      projectAllSources(branch).entries.map((entry) => [entry.sourceEntry.id, entry.messages]),
-    );
     const recordedTimes = new Map(registry.sources.map((source) => [source.entryId, source.time]));
-    const records: SourceRecord[] = [];
-    for (const [order, entry] of branch.entries()) {
-      if (entry.type !== "message") {
-        continue;
-      }
-      const role = entry.message.role;
-      if (role !== "user" && role !== "assistant" && role !== "toolResult") {
-        continue;
-      }
-      const rawText = textOf(entry.message);
-      if (rawText === "") {
-        continue;
-      }
-      const messages = effective.get(entry.id) ?? [];
-      const effectiveText = messages
-        .map((message) => textOf(message))
-        .filter((text) => text !== "")
-        .join("\n");
+    return messages.map((source) => {
+      const { entry } = source;
       const supplied = times[entry.id];
       const context =
         supplied?.eventTime !== undefined || supplied?.timezone !== undefined
           ? supplied
           : recordedTimes.get(entry.id);
-      const recordedAt = sourceTimestamp(entry);
-      records.push({
+      return {
         reference: encodeReference({ projectId, sessionId, entryId: entry.id, span: 0 }),
         entryId: entry.id,
-        rawDigest: digest(rawText),
-        effectiveDigest: messages.length === 0 ? null : digest(effectiveText),
-        omitted: messages.length === 0,
+        rawDigest: digest(source.rawText),
+        effectiveDigest: source.effective.length === 0 ? null : digest(source.effectiveText),
+        omitted: source.effective.length === 0,
         projectId,
         sessionId,
         span: 0,
-        order,
-        role,
-        time: {
-          ...(recordedAt === undefined ? {} : { recordedAt }),
-          ...(context?.eventTime === undefined ? {} : { eventTime: context.eventTime }),
-          ...(context?.timezone === undefined ? {} : { timezone: context.timezone }),
-        },
-      });
-    }
-    return records;
+        order: source.order,
+        role: source.role,
+        time: timeOf(entry, context),
+      };
+    });
   }
 }
