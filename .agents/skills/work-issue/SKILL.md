@@ -78,6 +78,11 @@ readiness, or acceptance: its parent, open blockers, and, for an epic or initiat
 children and their blockers. Read completed children only to establish the issue's completion or
 when a current plan depends on their results.
 
+Before brainstorming a topic, read the relevant published decision summary and records from the
+issue or PR. Reuse prior exploration and settled choices; record new evidence, changed constraints,
+or developer direction when reopening a decision. Recover missing context from available public
+evidence without inventing options or approval.
+
 Read the affected SPEC and interaction contract, then inspect current source and tests. For
 workspace work without a package SPEC, use the approved request and repository constraints. When an
 issue exists, compare its recorded baseline against relevant changes. Preserve unrelated files and
@@ -150,6 +155,12 @@ unfinished child from its dependencies, approved priority, and existing active w
 completed design or duplicate current plans. State blockers and continue independent authorized
 work only within the requested target. Do not dispatch conflicting edits concurrently.
 
+For brainstorms in issue-backed PR work, publish concise decisions and explored alternatives under
+the [brainstorm publication policy](../../../docs/development-workflow.md#publish-brainstorm-records).
+When composing a brainstorm checkpoint, load the
+[record guide and example](references/brainstorm-records.md), including when another skill conducts
+the discussion. Cover substantive paths without copying the conversation.
+
 ## Pause and deliver
 
 For issue-backed work, publish checkpoints under the workflow's
@@ -160,6 +171,12 @@ the plan format's
 work, the PR is the delivery record that the work paths define. Record a package decision where the
 workflow's
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
+
+Before creating or updating an issue-backed PR, verify that published records cover the brainstorm
+to that point and the issue and prepared PR body link to a concise current summary. After publication,
+verify the stored PR body includes that link. Report missing history or publication gaps explicitly.
+Use descriptive decisions and outcomes in all issue/PR bodies and checkpoint comments; do not
+reference conversation question numbers or option letters.
 
 Prepare source delivery on a work branch against the repository's default branch. Complete
 repository verification, write commit and PR copy to draft files, audit them, and publish with
