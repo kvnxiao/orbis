@@ -192,6 +192,8 @@ replacement compactor.
 
 These comparisons support keeping source handling, coverage, bounded work, and basic recall in the
 functional core. Session-entry storage and bounded same-observer catch-up are selected directions.
-Provider optimization remains a recommendation to assess separately; broader knowledge maintenance
-and public retrieval integration belong to later companion work. Exact failure, record, and budget
-contracts remain open.
+Stable request construction is the selected MVP cache policy. Provider-specific acting-prefix reuse,
+request replay/warming, and immutable checkpoint segments with periodic rebasing remain post-MVP
+experiments; their potential benefits need measurement. Broader knowledge maintenance and public
+retrieval integration belong to later companion work. Exact failure, record, and budget contracts
+remain open.

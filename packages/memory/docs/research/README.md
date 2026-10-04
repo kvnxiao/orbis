@@ -150,29 +150,33 @@ research made no real-model calls and reports no measured Orbis quality or cache
 
 These choices guide the completed contract; the draft SPEC has not yet incorporated them.
 
-| Area                         | Selected direction                                                                                                    | Remaining detail                                                                                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Checkpoint meaning           | Self-contained semantic continuation snapshot plus deterministic file information.                                    | Exact representation, freshness, and evaluation thresholds.                                                                                                   |
-| Accepted obligations         | Preserve unchanged obligations mechanically; require explicit evidence-linked changes.                                | Proposal schema, source validation, and commit/recovery protocol. Initial extraction can still miss meaning.                                                  |
-| Exact wording                | Summarize intent while retaining wording whose paraphrase would weaken constraints, scope, or acceptance.             | Extraction and validation tests.                                                                                                                              |
-| Missing observation coverage | Bounded catch-up using the existing observer, then whole-checkpoint native fallback.                                  | Source domain, oversized inputs, deadlines, cancellation, and stale work.                                                                                     |
-| Oversized snapshot           | Bounded presentation-only condensation, then fallback if ineligible.                                                  | Canonical state remains unchanged; semantic sufficiency needs evaluation.                                                                                     |
-| Compaction entry paths       | Shared hook for automatic, manual, SDK, and extension-triggered compaction; supplied instructions shape presentation. | Instruction failure and unavailable evidence, without changing protected canonical obligations.                                                               |
-| Fallback file information    | Host native summarization plus deterministic augmentation of the displayed checkpoint.                                | Stable inventory at the checkpoint boundary is the cache recommendation; missing-inventory behavior remains open. No repaired native persistence is promised. |
-| Storage and retention        | Pi custom session entries, following session lifetime; derived-memory curation deferred.                              | Record schema, reconstruction, corruption, ephemeral sessions, and fork identity.                                                                             |
-| Historical recall            | Preserve original source with historical/effective status and applicable replacement information.                     | Precise archived-view semantics; omission is not automatic obligation retirement.                                                                             |
-| Recall surface               | One model-callable tool with bounded browse, text search, and exact reads.                                            | Arguments, pagination, errors, and invocation guidance. No vector database or semantic retrieval in the MVP.                                                  |
-| Companion integration        | Evidence identity and narrow internal reads now; public external-retrieval integration after MVP.                     | Concrete consumer/provider API and broader knowledge policies.                                                                                                |
+| Area                         | Selected direction                                                                                                    | Remaining detail                                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Checkpoint meaning           | Self-contained semantic continuation snapshot plus deterministic file information.                                    | Exact representation, freshness, and evaluation thresholds.                                                                                |
+| Accepted obligations         | Preserve unchanged obligations mechanically; require explicit evidence-linked changes.                                | Proposal schema, source validation, and commit/recovery protocol. Initial extraction can still miss meaning.                               |
+| Exact wording                | Summarize intent while retaining wording whose paraphrase would weaken constraints, scope, or acceptance.             | Extraction and validation tests.                                                                                                           |
+| Missing observation coverage | Bounded catch-up using the existing observer, then whole-checkpoint native fallback.                                  | Source domain, oversized inputs, deadlines, cancellation, and stale work.                                                                  |
+| Oversized snapshot           | Bounded presentation-only condensation, then fallback if ineligible.                                                  | Canonical state remains unchanged; semantic sufficiency needs evaluation.                                                                  |
+| Compaction entry paths       | Shared hook for automatic, manual, SDK, and extension-triggered compaction; supplied instructions shape presentation. | Instruction failure and unavailable evidence, without changing protected canonical obligations.                                            |
+| Fallback file information    | Host native summarization plus deterministic augmentation of the displayed checkpoint.                                | The inventory stays fixed at the checkpoint boundary; missing-inventory behavior remains open. No repaired native persistence is promised. |
+| Storage and retention        | Pi custom session entries, following session lifetime; derived-memory curation deferred.                              | Record schema, reconstruction, corruption, ephemeral sessions, and fork identity.                                                          |
+| Historical recall            | Preserve original source with historical/effective status and applicable replacement information.                     | Precise archived-view semantics; omission is not automatic obligation retirement.                                                          |
+| Recall surface               | One model-callable tool with bounded browse, text search, and exact reads.                                            | Arguments, pagination, errors, and invocation guidance. No vector database or semantic retrieval in the MVP.                               |
+| Companion integration        | Evidence identity and narrow internal reads now; public external-retrieval integration after MVP.                     | Concrete consumer/provider API and broader knowledge policies.                                                                             |
 
-The [cache analysis](prompt-caching-and-compaction.md) compares stable construction, request replay,
-warming, and immutable checkpoint segments. The cache-specific MVP choice remains open. None of
-these choices promises lossless extraction, measured native parity, or lower total cost.
+The selected
+[cache policy](prompt-caching-and-compaction.md#selected-mvp-policy-and-post-mvp-experiments) uses
+stable request construction, fixed checkpoint presentation, and provider-request fixtures in the
+MVP. Provider-specific acting-prefix reuse, request replay/warming, and immutable checkpoint
+segments with periodic rebasing remain potential improvements to explore after MVP. Evaluation
+compares full-task cost and continuation quality. None of these choices promises lossless
+extraction, measured native parity, or lower total cost.
 
 ## Next design discussion
 
 Use the [SPEC evidence map](spec-evidence.md) to discuss only changes supported by these findings.
 Complete the remaining source, acceptance, failure, and budget contracts within the selected
-directions above. Decide the scope of cache optimization after distinguishing summary generation
-from first and later continuation costs. Define observer scheduling/model controls, recall behavior,
-and evaluation acceptance before implementation. Reopen a selected direction when evidence reveals a
+directions above. Define observer scheduling/model controls, recall behavior, and evaluation
+acceptance before implementation. Distinguish summary generation from first and later continuation
+costs when evaluating the selected cache policy. Reopen a selected direction when evidence reveals a
 better way to meet the continuation objective.

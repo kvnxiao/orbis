@@ -46,8 +46,9 @@ establish Orbis quality. A field in a proposed schema does not prove correct ext
 The [selected-direction table](README.md#selected-directions-and-open-details) records the approved
 product choices, including bounded catch-up, a self-contained semantic snapshot, explicit obligation
 changes, presentation-only condensation, shared-hook instruction handling, session-entry storage,
-displayed fallback file information, and basic recall. Public external-retrieval integration is a
-post-MVP follow-up. These choices do not make the unchanged draft SPEC implementation-ready.
+displayed fallback file information, basic recall, and stable request construction. Public
+external-retrieval integration is a post-MVP follow-up. These choices do not make the unchanged
+draft SPEC implementation-ready.
 
 ## Contract work supported by the research
 
@@ -61,13 +62,17 @@ post-MVP follow-up. These choices do not make the unchanged draft SPEC implement
 | `REQ-unified-compaction`, `REQ-source-recall`     | Use host native fallback and augment its displayed cumulative file inventory while enabled.                                  | Inventory reconstruction/unavailability and repeated custom/native transitions; persisted native metadata is not repaired. |
 | `REQ-source-recall`, `REQ-session-lineage`        | Bounded browse/search/read over selected session records, with historical originals and effective-view status.               | Reference identity, archived context edits, pagination, truncation, errors, and unavailable source.                        |
 | `REQ-modular-memory`                              | Narrow internal evidence reads now; public external-retrieval API after MVP.                                                 | Actual consumer/provider needs, versioning, absent-core behavior, and broader claim retraction.                            |
-| `REQ-resource-budgets`                            | Finite preparation, presentation, and recall work with complete accounting.                                                  | Numerical limits, model configuration, scheduling, cancellation, cache policy, and separately authorized live evaluation.  |
+| `REQ-resource-budgets`                            | Finite preparation, presentation, and recall work with complete accounting.                                                  | Numerical limits, model configuration, scheduling, cancellation, and separately authorized live evaluation.                |
 
-Cache stability, provider-payload reuse, warming, and immutable checkpoint segments remain compared
-options. The [cache analysis](prompt-caching-and-compaction.md) supports stable construction as a
-recommendation, not a selected optimization contract. The evaluation includes source-read versus
-processing versus semantic coverage, unknown-ID discovery, failed recall invocation, meaningful
-compaction boundaries, and full task costs.
+For `REQ-unified-compaction` and `REQ-resource-budgets`, incorporate the selected
+[stable-construction policy](prompt-caching-and-compaction.md#stable-checkpoint-presentation): fixed
+checkpoint/file presentation, stable tool definitions and observer instruction/schema prefixes, and
+provider-request fixtures. Actual cache hits and full-task cost remain evaluation questions.
+Provider-specific acting-prefix reuse, request replay/warming, and immutable checkpoint segments
+with periodic rebasing remain post-MVP experiments.
+
+The evaluation includes source-read versus processing versus semantic coverage, unknown-ID
+discovery, failed recall invocation, meaningful compaction boundaries, and full task costs.
 
 ## Supported core direction
 

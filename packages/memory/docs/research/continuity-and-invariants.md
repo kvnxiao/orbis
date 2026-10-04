@@ -194,7 +194,7 @@ uses the public context hook to add deterministic cumulative file information to
 checkpoint. It adds no second summary or model call. The guarantee applies while the core is
 enabled; Pi's persisted native summary and later `previousSummary` do not receive this augmentation.
 
-The [cache recommendation](prompt-caching-and-compaction.md#stable-checkpoint-presentation) fixes
+The [selected cache policy](prompt-caching-and-compaction.md#stable-checkpoint-presentation) fixes
 that inventory at the checkpoint boundary rather than rebuilding it from later activity. The core
 still needs missing-inventory behavior, reconstruction tests, and custom/native transition fixtures.
 Preserving file names generatively in summary prose alone is not the selected parity mechanism.
