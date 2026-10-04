@@ -101,36 +101,18 @@ tells the model to assume past planned actions happened unless contradicted. Tha
 transfer to the core's distinction between attempted and verified work. This is a prompt-content
 finding, not a measured rate of false completion.
 
-## Comparison against the selected core direction
+## Comparison against the core
 
-| Concern                 | Amos                                       | Elpapi development HEAD                         | Mastra stable                                    | Proposed Orbis direction                                                 |
-| ----------------------- | ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
-| Preparation             | Background Pi workers                      | In-process role pipeline                        | Buffered observer with activation                | One observer response for snapshot and observations.                     |
-| Current work            | Descriptive journey, no protected snapshot | No separate protected snapshot                  | Structured task extractor, omitted in async path | Explicit continuation snapshot; exact freshness contract open.           |
-| Older detail            | External topics and historical ledger      | Retained observations/reflections, active drops | Reflected log with optional source paging        | Retain observations and original evidence; no required consolidation.    |
-| Coverage at replacement | Incomplete-span risks                      | Catch-up, gap retention, fallback               | Preparation and activation checks                | Bounded same-observer catch-up, then native fallback; preserve Pi's cut. |
-| Retrieval               | Ordinary detailed-file access              | Exact-ID recall                                 | Discovery and paging, optional semantic search   | One bounded browse/text-search/exact-read tool; schema open.             |
-| Scope                   | Mixed ledger and mutable session files     | Selected branch                                 | Thread/resource configuration                    | Selected session lineage; broader knowledge deferred.                    |
-| Bounds                  | Chunk and role defaults                    | Context-relative selection and role limits      | Retry policy and thresholds                      | Finite input/output/work/recall limits; values open.                     |
+| Concern                 | Amos                                       | Elpapi development HEAD                             | Mastra stable                                    |
+| ----------------------- | ------------------------------------------ | --------------------------------------------------- | ------------------------------------------------ |
+| Preparation             | Background Pi workers                      | In-process role pipeline                            | Buffered observer with activation                |
+| Current work            | Descriptive journey, no protected snapshot | No separate protected snapshot                      | Structured task extractor, omitted in async path |
+| Older detail            | External topics and historical ledger      | Retained observations and reflections, active drops | Reflected log with optional source paging        |
+| Coverage at replacement | Incomplete-span risks                      | Catch-up, gap retention, fallback                   | Preparation and activation checks                |
+| Retrieval               | Ordinary detailed-file access              | Exact-ID recall                                     | Discovery and paging, optional semantic search   |
+| Scope                   | Mixed ledger and mutable session files     | Selected branch                                     | Thread/resource configuration                    |
 
-The Orbis column records the agreed direction and unresolved details; it is not a statement that the
-package is implemented or outperforms the comparators.
-
-## Supported implications and unanswered questions
-
-**Keep the selected one-response current-work maintenance direction.** Mastra shows that the output
-shape is practical, but its async exception shows why the update policy must be explicit. There is
-no evidence here that the added snapshot is free in tokens or latency.
-
-**Keep source discovery separate from exact-ID lookup.** A model cannot use an ID it never received.
-The combination of search and source expansion addresses a different failure from returning a
-well-attributed known record.
-
-**Defer extra model roles unless they solve a measured problem.** Reflection and active-record
-dropping are options for maintaining a bounded representation, not prerequisites for the selected
-MVP. If archival growth or poor discovery later causes failures, evaluate a specific remedy.
-
-**Keep capability and efficacy separate.** No controlled Pi coding comparison establishes an optimal
-tier count or role pipeline. Vendor benchmark scores do not establish Orbis continuation quality.
-Framework dependencies and storage integration also differ from a standalone Pi extension; adopting
-an idea does not imply adopting that stack.
+These differences informed the [memory contract](../../SPEC.md): one response updates current state
+and observations, source discovery is separate from known-ID lookup, and broader consolidation is
+deferred. The comparisons establish available mechanisms, not an optimal role pipeline or measured
+continuation advantage for Orbis.

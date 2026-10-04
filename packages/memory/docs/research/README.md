@@ -1,45 +1,45 @@
 # Memory design research
 
-Research date: 2026-10-04. This survey supports the draft design of `@orbis/memory`: a small,
-independently useful continuation package that can provide evidence to future knowledge packages. It
-examines current primary sources, implementation mechanisms, and evaluation evidence. Research
-findings and recommendations are informative; they do not amend the draft SPEC.
+Research date: 2026-10-04. This research explains the evidence and trade-offs behind
+`@orbis/memory`. The [SPEC](../../SPEC.md) defines behavior; the [evidence map](spec-evidence.md)
+links each requirement to supporting work and unmeasured outcomes. Its
+[four evidence kinds](spec-evidence.md#how-to-read-a-claim) distinguish host facts, product
+decisions, design inferences, and evaluation results.
 
-The evidence supports keeping the chosen core direction. It also exposes requirements that a small
-implementation must still address: complete processing coverage, visible active obligations,
-discoverable original evidence, correction ordering, and precise native fallback behavior. No
-inspected package or paper establishes that Orbis already achieves native checkpoint parity.
+## Core reading path
 
-## Reading map
+Read a topic when its evidence affects implementation or evaluation. The core hypothesis remains
+unmeasured: whether prepared memory improves continuation enough to justify its auxiliary work.
 
-Start with the synthesis below, then use the topic documents to examine a specific design question.
-The SPEC evidence map separates source facts, product choices, and outcomes that need evaluation.
+| Document                                                              | Evidence to use                                                                            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [Pi compaction](pi-compaction.md)                                     | Native inputs, custom checkpoints, cancellation, persistence, and host integration limits. |
+| [Continuity and invariants](continuity-and-invariants.md)             | Native information categories, obligation preservation, capacity, and recovery trade-offs. |
+| [Prompt caching and compaction](prompt-caching-and-compaction.md)     | Stable request construction and the limits of provider-cache claims.                       |
+| [Evidence and evaluation](evidence-and-evaluation.md)                 | Construction, retrieval, and continuation failures; baselines and cost accounting.         |
+| [Observational-memory packages](observational-memory.md)              | The two Pi projects, their released behavior, and relevant mechanisms.                     |
+| [Observational-memory comparison](observational-memory-comparison.md) | Mastra's approach and the costs of additional maintenance stages.                          |
+| [Pi cache and compaction ecosystem](pi-cache-compaction-ecosystem.md) | Concrete integration examples and post-MVP cache experiments.                              |
 
-| Document                                                              | Question it answers                                                                                                             |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [Memory layers](memory-layers.md)                                     | Which purposes, scopes, representations, and maintenance policies are independent choices?                                      |
-| [Agent memory systems](agent-memory-systems.md)                       | What do current frameworks and memory products actually store, expose, and maintain?                                            |
-| [Continuity and invariants](continuity-and-invariants.md)             | How should every native category be represented, and what are the recommended answers to the eight compaction policy questions? |
-| [Evidence and evaluation](evidence-and-evaluation.md)                 | Which results transfer to coding continuation, and how should construction, retrieval, and use be evaluated?                    |
-| [Observational-memory packages](observational-memory.md)              | How do the two same-named Pi projects differ, including released and unreleased behavior?                                       |
-| [Observational-memory comparison](observational-memory-comparison.md) | What does Mastra add, and which mechanisms are useful or unnecessary for this core?                                             |
-| [Pi compaction](pi-compaction.md)                                     | What do Pi 0.99.1 and 1.0.1 expose for summary inputs, persistence, inference, correction, and retry?                           |
-| [Prompt caching and compaction](prompt-caching-and-compaction.md)     | How do provider compaction, cache reuse, and Pi's request paths differ?                                                         |
-| [Pi cache and compaction ecosystem](pi-cache-compaction-ecosystem.md) | What do Blackhole, cache-oriented compactors, pruning, and cache packages demonstrate?                                          |
-| [Modularity and knowledge](modularity-and-knowledge.md)               | How can the core support future companions without adopting their maintenance responsibilities?                                 |
-| [SPEC evidence map](spec-evidence.md)                                 | What supports each draft requirement, what remains unproven, and which additions need discussion?                               |
+## Future-companion surveys
+
+These surveys provide background for a concrete future consumer. They do not expand the core MVP.
+
+| Document                                                | Future question                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Memory layers](memory-layers.md)                       | How do purpose, scope, representation, and maintenance differ?     |
+| [Agent memory systems](agent-memory-systems.md)         | Which broader storage and maintenance mechanisms exist?            |
+| [Modularity and knowledge](modularity-and-knowledge.md) | What policies would project knowledge or developer habits require? |
 
 ## Sources and method
 
 The investigation used primary source, published package archives, official documentation, and
-papers. Each topic identifies source revisions or publication status where relevant. Mutable
-documentation was read on the research date. Repository HEAD is not silently treated as a published
-release.
+papers. Topic documents identify inspected revisions and publication status. Source inspection,
+scripted probes, and live-model outcomes are distinct evidence.
 
-Installed Pi 0.99.1 was compared with published Pi 1.0.1, the latest release verified during this
-pass. The latter was released on 2026-10-03 at 16:14 UTC. Relevant core compaction files were
-byte-identical, while surrounding provider and tool behavior changed. This is source inspection, not
-a claim that an Orbis implementation was tested with Pi 1.0.1.
+The host corrections in this review were verified against installed Pi 0.99.1. The earlier research
+recorded an archive comparison with published 1.0.1; that comparison was not repeated in this review
+and is not runtime compatibility evidence.
 
 Important comparison pins are:
 
@@ -55,128 +55,9 @@ Important comparison pins are:
 Additional pins appear in the system and ecosystem documents. Each comparison distinguishes
 published releases, inspected source revisions, and mutable documentation.
 
-## Synthesis
+## Verification boundary
 
-The core's scope follows its responsibilities: continuation and evidence access belong here; broader
-knowledge maintenance belongs in companions. Choose mechanisms for how well they satisfy those
-requirements. Reducing implementation work alone is not a reason to omit needed core behavior.
-
-### Keep the selected core
-
-The chosen product combines a continuation snapshot and source-linked observations in one observer
-response. Checkpoints present the snapshot; recall accesses older observations and recorded source.
-It does not require topics, a generated journey, reflection, or project-learning maintenance.
-
-This separation remains coherent. The snapshot makes active obligations visible. Observations
-organize evidence, while original source can recover omitted details. Future companions decide which
-experience justifies broader knowledge. A retained observation does not become a reusable lesson
-merely because it is old or frequently retrieved.
-
-The research does not select a universal memory hierarchy, shared database, or plugin framework. It
-also does not show that removing all interpreted memory and keeping raw search would be worse. That
-is a useful diagnostic alternative, but changing the settled observer direction requires relevant
-evaluation rather than terminology or a vendor score.
-
-### Treat native parity as an information and action obligation
-
-Native Pi asks for goals, constraints, progress, blockers, decisions and rationale, next steps, and
-critical context. It supplies the previous summary as input and adds split-turn handling and file
-lists. The [parity table](continuity-and-invariants.md#category-level-parity) maps every category to
-proposed core content and identifies the remaining gap.
-
-Recall cannot establish parity merely because omitted obligations exist somewhere in storage.
-Conversely, native compaction is not lossless: it truncates serialized tool text, omits images,
-separates some turns, and relies on earlier summary text. Evaluate the actual baseline rather than
-an idealized one. No native summary of the same processed evidence should be layered into the
-package's checkpoint; that settled exclusion remains.
-
-### Use the newer Pi capabilities precisely
-
-Public APIs permit nested inference, credential resolution, selected-lineage reads, custom records,
-and custom compaction. They do not provide one operation that reproduces the host's exact native
-routing and stream wrapper. Native credentials are resolved after a hook declines.
-
-Custom checkpoint prose becomes later native `previousSummary`. Custom file-operation metadata is
-excluded from native metadata inheritance. `/compact` instructions reach the history summarizer, but
-not the separate turn-prefix call. Cancellation can suppress the host retry, and a thrown hook error
-does not reliably veto native fallthrough. These distinctions affect the recovery contract.
-
-Pi 1.0.1 does not add a supported native-summary correction hook. Current provider compaction APIs
-also require representations and replay semantics that Pi's inspected adapters do not preserve.
-Provider capability is not automatically an extension capability.
-
-### Complete coverage before replacing source
-
-The selected [compaction policy](continuity-and-invariants.md) uses bounded catch-up through the
-existing observer when missing coverage prevents an otherwise eligible checkpoint. Recheck accepted
-state afterward and use whole-checkpoint native fallback if coverage or another eligibility
-condition still fails. This reuses the core's extraction contract without adding another model role.
-A separate summary of only an uncovered span would add another representation to reconcile.
-
-Checkpoint-only presentation does not require an ordinary-request snapshot-fitting abort. It also
-avoids repeated standalone snapshot messages that could become stale. Visible chronological
-corrections differ from off-transcript curation or erasure promises. The latter need a separate
-contract before choosing a special correction summarizer or host change.
-
-The selected recovery direction uses bounded catch-up, presentation-only snapshot condensation, and
-instruction-aware checkpoint generation. Their acceptance and failure protocols still need a
-complete contract. Native fallback remains the host's summarizer, with deterministic cumulative file
-information added to its displayed checkpoint while the core is enabled. That augmentation does not
-repair Pi's persisted native summary or its later native metadata inheritance.
-
-### Build modularity around evidence and scope
-
-The MVP follows Pi session retention, uses custom session entries as its authoritative store, and
-defers user curation of derived memory. The record format, corruption handling, fork behavior, and
-unavailable-source results still need a contract.
-
-The core preserves evidence references, attribution, verification state, and bounded internal read
-operations. A public companion API is deferred until a concrete consumer determines its needs.
-Project learning and developer preferences need admission, applicability, contradiction, and
-retirement policies beyond session continuation.
-
-### Evaluate what the acting model does
-
-Source inspection proves mechanisms, and scripted providers prove selected control-flow properties.
-Neither establishes semantic preservation. The proposed evaluation separates construction loss,
-retrieval failure, and incorrect use of available evidence. It compares native Pi with the core on
-actual continuation tasks as well as category-level checkpoint diagnostics.
-
-The total accounting includes observer work, retries, fallback, retrieval, cache writes and reads
-where exposed, and acting work. A smaller checkpoint is not automatically cheaper overall. This
-research made no real-model calls and reports no measured Orbis quality or cache savings.
-
-## Selected directions and open details
-
-These choices guide the completed contract; the draft SPEC has not yet incorporated them.
-
-| Area                         | Selected direction                                                                                                    | Remaining detail                                                                                                                           |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Checkpoint meaning           | Self-contained semantic continuation snapshot plus deterministic file information.                                    | Exact representation, freshness, and evaluation thresholds.                                                                                |
-| Accepted obligations         | Preserve unchanged obligations mechanically; require explicit evidence-linked changes.                                | Proposal schema, source validation, and commit/recovery protocol. Initial extraction can still miss meaning.                               |
-| Exact wording                | Summarize intent while retaining wording whose paraphrase would weaken constraints, scope, or acceptance.             | Extraction and validation tests.                                                                                                           |
-| Missing observation coverage | Bounded catch-up using the existing observer, then whole-checkpoint native fallback.                                  | Source domain, oversized inputs, deadlines, cancellation, and stale work.                                                                  |
-| Oversized snapshot           | Bounded presentation-only condensation, then fallback if ineligible.                                                  | Canonical state remains unchanged; semantic sufficiency needs evaluation.                                                                  |
-| Compaction entry paths       | Shared hook for automatic, manual, SDK, and extension-triggered compaction; supplied instructions shape presentation. | Instruction failure and unavailable evidence, without changing protected canonical obligations.                                            |
-| Fallback file information    | Host native summarization plus deterministic augmentation of the displayed checkpoint.                                | The inventory stays fixed at the checkpoint boundary; missing-inventory behavior remains open. No repaired native persistence is promised. |
-| Storage and retention        | Pi custom session entries, following session lifetime; derived-memory curation deferred.                              | Record schema, reconstruction, corruption, ephemeral sessions, and fork identity.                                                          |
-| Historical recall            | Preserve original source with historical/effective status and applicable replacement information.                     | Precise archived-view semantics; omission is not automatic obligation retirement.                                                          |
-| Recall surface               | One model-callable tool with bounded browse, text search, and exact reads.                                            | Arguments, pagination, errors, and invocation guidance. No vector database or semantic retrieval in the MVP.                               |
-| Companion integration        | Evidence identity and narrow internal reads now; public external-retrieval integration after MVP.                     | Concrete consumer/provider API and broader knowledge policies.                                                                             |
-
-The selected
-[cache policy](prompt-caching-and-compaction.md#selected-mvp-policy-and-post-mvp-experiments) uses
-stable request construction, fixed checkpoint presentation, and provider-request fixtures in the
-MVP. Provider-specific acting-prefix reuse, request replay/warming, and immutable checkpoint
-segments with periodic rebasing remain potential improvements to explore after MVP. Evaluation
-compares full-task cost and continuation quality. None of these choices promises lossless
-extraction, measured native parity, or lower total cost.
-
-## Next design discussion
-
-Use the [SPEC evidence map](spec-evidence.md) to discuss only changes supported by these findings.
-Complete the remaining source, acceptance, failure, and budget contracts within the selected
-directions above. Define observer scheduling/model controls, recall behavior, and evaluation
-acceptance before implementation. Distinguish summary generation from first and later continuation
-costs when evaluating the selected cache policy. Reopen a selected direction when evidence reveals a
-better way to meet the continuation objective.
+The [conformance scenarios](../../SPEC.md#conformance-scenarios) define the required checks. An
+early scripted native-baseline harness can verify host mechanics without model calls. Semantic
+preservation, subsequent actions, provider-cache savings, and full-task cost need separate
+measurements. No live-model evaluation of this package is reported here.

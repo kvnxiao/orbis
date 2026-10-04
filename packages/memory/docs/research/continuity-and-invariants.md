@@ -4,9 +4,9 @@ Research date: 2026-10-04. The product objective is effective continuation: afte
 acting model can perform the right next action under the current instructions. A shorter checkpoint,
 a successful observer call, and an available archive are each insufficient evidence of that outcome.
 
-This document examines eight compaction policy questions for the core. Selected directions are
-identified separately from recommendations and do not amend the draft SPEC by themselves. The
-[Pi audit](pi-compaction.md) establishes host mechanics;
+The policy comparisons below fall under **Design inference** in the
+[evidence map](spec-evidence.md#how-to-read-a-claim). They record trade-offs behind the
+[continuation contract](../../SPEC.md). The [Pi audit](pi-compaction.md) establishes host mechanics;
 [evidence and evaluation](evidence-and-evaluation.md) distinguishes measured results from proposed
 checks.
 
@@ -51,7 +51,7 @@ obligation the model has no reason to search for.
 | Done work                       | Snapshot records confirmed completion and verification status relevant to continuation.                            | Observations retain outcomes and supporting command/tool evidence.                              | A planned action or successful tool invocation is not proof of the whole task's completion.                               |
 | In-progress work                | Snapshot states partial work and the next continuation point.                                                      | Observations retain exact partial artifacts and attempted approaches.                           | Preserve unfinished work across topic changes and repeated checkpoints.                                                   |
 | Blocked and paused work         | Snapshot names the blocker, waiting condition, and still-open obligation.                                          | Source evidence explains failure and previous attempts.                                         | A pause is neither completion nor cancellation.                                                                           |
-| Key decisions and rationale     | Include decisions that govern next actions with enough rationale to avoid repeating rejected work.                 | Historical alternatives and supporting evidence remain recallable.                              | The draft's note fields do not yet allocate rationale explicitly.                                                         |
+| Key decisions and rationale     | Include decisions that govern next actions with enough rationale to avoid repeating rejected work.                 | Historical alternatives and supporting evidence remain recallable.                              | Check whether the acting model retains the reason for a decision.                                                         |
 | Next steps                      | Snapshot identifies the next action or waiting condition.                                                          | Recall supplies detailed procedures when needed.                                                | A suggestion must remain distinct from user authorization and confirmed execution.                                        |
 | Critical context                | Snapshot states necessary environment and task facts.                                                              | Source lookup retrieves longer evidence.                                                        | An observation index alone cannot establish that critical facts are visible.                                              |
 | Exact paths, names, and errors  | Preserve exact values when they constrain the next action.                                                         | Search and source reads recover other recorded details without relying only on observation IDs. | Extraction may omit a detail; original source must remain discoverable independently.                                     |
@@ -67,16 +67,10 @@ should not describe native compaction as a lossless read of every byte.
 
 ## 1. Allocate native information without duplicating a summary
 
-**Selected direction: a self-contained semantic snapshot plus deterministic file information.** The
-snapshot presents every applicable native semantic category, including current obligations, decision
-rationale, blockers, and split-turn continuation. Observations retain supporting history for recall.
-They are not required to compensate for missing semantic checkpoint categories. Deterministic
-rendering can assemble accepted records; this does not require a complete generative rewrite after
-every observation.
-
-This preserves the settled architecture and gives it a falsifiable contract. A separate native
-summary of the same messages remains rejected: it duplicates content and makes the custom sections'
-sufficiency impossible to assess independently.
+The [continuation snapshot](../../SPEC.md#continuation-snapshot--req-current-work-note) is
+self-contained for current semantic state; observations support historical recall. This distinction
+makes missing active obligations visible in evaluation. A separate native summary of the same
+messages would duplicate content and obscure which representation preserved the obligation.
 
 An observation-only checkpoint is a viable experimental comparison, but neither inspected
 observational-memory package proves that selection by recency or importance protects all active
@@ -84,34 +78,17 @@ obligations. A snapshot-only checkpoint also has merit as a diagnostic arm; drop
 observations would change a settled direction without evidence that their discovery role is
 unnecessary.
 
-The schema should distinguish statements of intent, attempts, observed outcomes, and verified
-completion. Exact field names and format remain design choices. A prompt requesting these categories
-is not a semantic guarantee.
-
-Accepted obligations persist unless an explicit, evidence-linked proposal changes, completes,
-cancels, or supersedes them. An omitted item in a later proposal is not a deletion. This mechanical
-rule protects already accepted state; it cannot detect every initial extraction miss or prove that a
-proposed semantic change is correct. Preserve exact source wording when paraphrase would weaken
-conditions, prohibitions, scope, or acceptance criteria. The precise update schema remains open.
+The obligation rule protects accepted state from omission in a later response. It cannot detect an
+initial extraction miss or prove that a proposed supersession is correct. Preserve exact source
+wording when paraphrase would weaken a condition, prohibition, scope, or acceptance criterion.
 
 ## 2. Handle unprocessed evidence at the prepared cut
 
-**Selected direction: bounded catch-up through the existing observer, then whole-checkpoint native
-fallback if the candidate remains ineligible.** Return an already eligible checkpoint immediately.
-If missing coverage is the reason a custom checkpoint cannot be used, wait for or extend observer
-work within a finite budget. Reuse the same extraction, validation, and commit protocol as
-background preparation.
-
-After catch-up, reread accepted state and check coverage through Pi's prepared cut. Return a custom
-checkpoint only when the source selection, snapshot, and capacity checks also pass. Otherwise,
-decline and let Pi produce the whole checkpoint. Keep the prepared `firstKeptEntryId` and the host's
-retry decision throughout; moving the cut is not a recovery option for this package.
-
-This puts work needed to preserve continuation inside the core. It does not introduce a separate
-model role, reflection pipeline, or broader knowledge maintenance. The implementation still needs
-foreground coordination: a deadline must include waiting for existing work, late results must not
-commit after invalidation, and competing jobs must not process or publish the same span twice. A
-chunk-count bound alone is not an elapsed deadline.
+The [unified compaction contract](../../SPEC.md#unified-compaction--req-unified-compaction) uses
+bounded catch-up through the existing observer, followed by whole-checkpoint native fallback when
+the candidate remains ineligible. A deadline must include waiting for existing work; a chunk-count
+bound alone is not an elapsed deadline. Late or competing work must not commit after the selected
+lineage changes.
 
 ### Basis in inspected implementations
 
@@ -154,180 +131,67 @@ and still end in native fallback.
 | Move the cut to the last observed source               | Retains unprocessed material verbatim and appears in other packages.                            | Conflicts with the requirement to preserve Pi's prepared boundary.                                                                                      |
 | Treat scheduled or partially completed work as covered | Increases apparent eligibility.                                                                 | Provides no accepted account of the missing sources. Reject it.                                                                                         |
 
-Exact limits and queue/cancellation behavior need design and model-free fixtures. Evaluation should
-measure how often catch-up completes, foreground waiting, fallback frequency, and subsequent
-continuation. Whole-checkpoint fallback still cannot recover information omitted from a prior custom
-checkpoint automatically. Catch-up also does not fix native inheritance of custom file metadata;
-that obligation uses the selected displayed-inventory augmentation described below.
+Exact limits and queue mechanisms remain implementation choices within the
+[resource budget contract](../../SPEC.md#resource-budgets--req-resource-budgets); model-free
+fixtures verify limits and cancellation. Evaluation should measure how often catch-up completes,
+foreground waiting, fallback frequency, and subsequent continuation. Whole-checkpoint fallback still
+cannot recover information omitted from a prior custom checkpoint automatically. Catch-up also does
+not fix native inheritance of custom file metadata; that obligation uses the selected model-facing
+inventory augmentation described below.
 
 ## 3. Define whole-checkpoint fallback and its reports
 
-**(Recommended) Decline before returning any custom checkpoint when eligibility fails, and report
-the specific failed condition.** Do not combine a partially accepted checkpoint with a full native
-summary of the same messages. A fallback attempt does not imply that native summarization succeeded.
+The host's [hook outcomes](pi-compaction.md#hook-outcomes-failure-and-retry) distinguish a complete
+custom result, decline, and cancellation. Decline invokes native compaction; it does not establish
+that the native attempt succeeded. Cancellation can stop an overflow retry, while a thrown hook
+error is reported and swallowed. Observer credentials matter only if preparation needs them; native
+credentials are resolved after decline.
 
-Candidate conditions for the completed contract are:
-
-- Accepted coverage does not include the required prepared source span.
-- The snapshot is missing, invalid, or inconsistent with accepted processing state.
-- The complete candidate checkpoint exceeds its declared capacity.
-- Observation failed, was cancelled, or became stale after lineage navigation.
-- Source or persisted state needed to prove eligibility is unavailable or invalid.
-- Manual instructions require a transformation the package has not defined.
-
-Missing observer credentials are relevant when they prevented preparation; they need not invalidate
-an already prepared checkpoint. Native credentials are resolved only after the hook declines in the
-inspected Pi versions. Report an attempted fallback and then its actual outcome separately.
-
-A useful bounded report identifies the trigger, missing span or invalid record where applicable,
-incoming reason and retry decision, selected path, and final outcome. It should avoid dumping source
-content. Exact UI, event names, and persistence remain open. The report must not claim Pi retried
-merely because compaction was triggered by overflow.
-
-Cancellation and throwing are rejected as generic substitutes for fallback. Cancellation can stop
-the pending overflow retry. A thrown hook error is reported and swallowed by Pi, so it does not
-provide a reliable veto. Stale or unverified partial rendering is also rejected.
-
-Native fallback receives custom checkpoint prose but not its deterministic file metadata through the
-native inheritance path. The selected integration lets the host produce its native checkpoint and
-uses the public context hook to add deterministic cumulative file information to the displayed
-checkpoint. It adds no second summary or model call. The guarantee applies while the core is
-enabled; Pi's persisted native summary and later `previousSummary` do not receive this augmentation.
-
-The [selected cache policy](prompt-caching-and-compaction.md#stable-checkpoint-presentation) fixes
-that inventory at the checkpoint boundary rather than rebuilding it from later activity. The core
-still needs missing-inventory behavior, reconstruction tests, and custom/native transition fixtures.
-Preserving file names generatively in summary prose alone is not the selected parity mechanism.
+Native fallback reads prior custom summary prose but does not inherit its file metadata. The
+[file-operation analysis](pi-compaction.md#file-operation-history-is-an-exception) explains why the
+[contract](../../SPEC.md#unified-compaction--req-unified-compaction) supplements the model-facing
+cumulative inventory through the context hook. Recognized tool invocations do not prove successful
+filesystem effects. The inventory remains fixed at a checkpoint boundary under the
+[request construction policy](prompt-caching-and-compaction.md#stable-checkpoint-presentation).
 
 ## 4. Handle an oversized snapshot
 
-**Selected direction: bounded presentation-only condensation, then fallback if the complete
-candidate still cannot fit.** Keep ordinary requests independent of snapshot fitting:
-checkpoint-only presentation does not routinely inject the snapshot between compactions.
-
-First remove optional checkpoint material under the chosen selection policy. If the complete
-snapshot still exceeds capacity, a bounded repair can restate its obligations more compactly. Retain
-the authoritative accepted state unchanged; condensation produces a checkpoint presentation rather
-than replacing canonical obligations. A condensed checkpoint is not fresh independent evidence.
-Validate presentation eligibility for the current source selection. Limit attempts and elapsed work;
-exact defaults remain open. Report capacity fallback separately from invalid output.
-
-Condensation serves current continuation. It does not introduce topic consolidation, reflection on
-broader knowledge, or a new model role. It is still lossy inference: structural validation cannot
-prove every obligation survived, so evaluation must test repeated repair and corrections. Native
-fallback also summarizes through inference; avoiding an additional repair call alone does not
-establish that immediate fallback preserves more information.
-
-Priority sections can allocate space among optional historical details and indexes. They must not
-silently discard an active obligation to make a checkpoint fit. Truncating the snapshot and calling
-the remaining prefix sufficient is rejected. Aborting an ordinary request because an uninjected
-snapshot is oversized is also rejected unless the product adds a request-time snapshot
-responsibility.
-
-Immediate native fallback remains appropriate when repair cannot make the candidate eligible or
-exhausts its budget. Neither repair nor native fallback can promise that every possible set of
-active obligations fits a fixed budget. The recommendation is a bounded recovery policy whose
-quality and cost require evaluation.
+The [resource budget contract](../../SPEC.md#resource-budgets--req-resource-budgets) permits bounded
+condensation of checkpoint presentation while keeping accepted obligations authoritative. This is
+lossy inference: structural validation cannot prove that every obligation survived. Repeated repair,
+corrections, and overflow need evaluation. Neither condensation nor native fallback guarantees that
+arbitrarily large active state fits a fixed context budget.
 
 ## 5. Choose when the snapshot appears
 
-**(Recommended) Keep checkpoint-only presentation.** This is settled direction and remains suitable
-for the MVP. Recent conversation provides the immediate task state between compactions. The observer
-can prepare a new snapshot without repeatedly inserting it into that conversation.
-
-Routine revisions would add freshness, duplication, prompt-size, and ordinary-request failure
-behavior. Stable append-only notes or change notifications are possible future experiments if
-measured failures between compactions justify them. No current evidence establishes that they are
-needed for the selected core. Cache or token savings from checkpoint-only presentation remain
-unmeasured.
+The [continuation snapshot](../../SPEC.md#continuation-snapshot--req-current-work-note) appears in
+checkpoints. Ordinary turns supply recent changes between checkpoints. Routine snapshot insertion
+would add duplication, capacity, and freshness behavior. Any cache or token benefit from the chosen
+placement remains unmeasured.
 
 ## 6. Honor `/compact <instructions>`
 
-**Selected direction: bounded instruction-aware checkpoint presentation through the shared
-compaction hook.** The hook participates in automatic, manual, SDK, and extension-triggered
-compaction. Supplied instructions shape the checkpoint, including relevant split-turn content; they
-do not silently change canonical obligations. The package must not accept instructions and return
-its ordinary rendering without considering them.
-
-Native Pi passes instructions to the history summary, but not the separate turn-prefix summary. When
-only the prefix is summarized, no inference call receives those instructions. Native delegation
-therefore preserves host semantics but does not establish that instructions govern every summarized
-span.
-
-The bounded package-owned generation path uses the instructions and eligible checkpoint inputs,
-reusing observer capabilities where their contract fits. It needs explicit behavior for routing,
-capacity, cancellation, and unsuccessful generation. Presentation instructions must not silently
-rewrite canonical task state or weaken required continuation content. The exact output and failure
-contract need design; this is not a claim that the ordinary observer already implements instructed
-compaction. The hook's instruction string is not itself a persisted user message, and a manual
-reason can originate from SDK or extension code. Presentation scope does not prove human authorship
-or authorization to retire an obligation.
-
-A host fix could make native delegation cover the split prefix as well as history. That would
-benefit native and extension-assisted compaction, but depends on host support. Native delegation
-without that fix remains a comparison and recovery candidate with a known semantic limit. Avoiding
-package-owned inference is not sufficient reason to accept the limit silently.
-
-Ignoring instructions and trying to interpret arbitrary instructions through deterministic section
-selection are rejected. No option may append a native summary of the same processed messages below
-the package's memory sections.
+Pi passes supplied instructions to a history-summary call, but not to a separate turn-prefix call.
+If only the prefix needs summarization, native inference does not receive the supplied compaction
+instructions. This host limit motivates the contract's bounded instruction-aware presentation path.
+The hook's instruction string is not a persisted user message; an SDK or extension can initiate a
+manual compaction. Instructions about presentation do not themselves authorize retiring an
+obligation.
 
 ## 7. Handle corrections without blanket cancellation
 
-**(Recommended) Do not cancel compaction solely because a previous checkpoint has a superseded
-statement.** Checkpoint-only presentation avoids repeated standalone note messages. A visible later
-correction can supersede an earlier checkpoint statement in chronological context, as it does in
-native Pi.
-
-For a custom checkpoint, inconsistent accepted state should make the candidate ineligible. That is
-different from declaring native fallback unsafe whenever an older statement exists. Whole-checkpoint
-fallback remains a reasonable recovery for ordinary visible corrections.
-
-Off-transcript edits and erasure promises are separate product decisions. Deleting a stored record
-cannot automatically retract a sentence already summarized into a previous checkpoint. Native
-fallback cannot discover an invisible correction. User curation of derived records is outside the
-MVP. Historical recall retains originals with their status/provenance and applicable replacement
-information. New observation uses the effective source view; omission is not automatic retirement of
-an obligation. Exact archived-view and disable behavior still need a contract. The core does not
-promise invisible retraction through a speculative guard.
-
-Using cancellation without that distinction is rejected because it complicates recovery and can
-suppress host retry. A package-owned correction summarizer or host enhancement remains an option if
-a future curation contract requires it. Neither is currently proven necessary for the core.
+Visible later corrections can supersede older checkpoint prose in chronological context, as in
+native Pi. Off-transcript edits and deletion differ: native summarization cannot discover a change
+that is absent from its input. The
+[effective-context analysis](pi-compaction.md#original-records-and-effective-context) explains the
+distinction. It does not justify blanket cancellation, which can suppress host retry. The
+[lineage contract](../../SPEC.md#session-lineage--req-session-lineage) governs which sources are
+current; source attribution remains necessary when historical originals and effective edits differ.
 
 ## 8. Evaluate category parity and actual continuation
 
-**(Recommended) Keep qualitative native parity and evaluate both checkpoint information and
-subsequent actions.** For each category in the table, identify applicable source facts, whether they
-are visible after compaction, whether they remain accurate after corrections, and whether the acting
-model uses them correctly. Score an applicable omission separately from a category that was absent
-from the source.
-
-Use native Pi as the baseline with the same acting model, tools, starting repository, and native
-settings. Compare fixed compaction milestones separately from automatic-compaction runs. Add
-repeated custom-to-native transitions, split turns, paused work, failed verification, and selected
-branch navigation. Record recall discovery and source availability independently of answer quality.
-
-A hand-authored expected checkpoint can test the renderer, but it cannot establish real extraction
-quality. Scripted providers test mechanics without charges. Separately authorized live evaluations
-must execute meaningful continuation tasks and report the total cost of preparation, retrieval,
-fallback, and acting work. Numerical thresholds and live-run budgets remain open.
-
-Equal token counts, compression ratios, and vendor QA scores are rejected as substitutes for this
-comparison. They can be measurements or diagnostics, but they do not define success.
-
-## Findings that support keeping the selected direction
-
-The native mechanism already supplies a useful fallback and stores custom checkpoint prose for later
-summarization. Public session entries and source reads make a small continuation package plausible
-without an external memory service. Neither observational-memory implementation proves that
-reflection, topics, or a journey are prerequisites for effective continuation.
-
-The snapshot protects information whose omission may prevent the model from knowing it should use
-recall. Source-linked observations organize historical evidence without claiming it is generally
-applicable knowledge. Checkpoint-only presentation avoids routine note freshness and capacity
-mechanisms. These are coherent responsibilities for an independently useful core.
-
-The unresolved choices remain material. A minimally viable custom checkpoint must still define
-coverage, prior-summary reconciliation, source discovery, capacity failure, and host interaction.
-Removing knowledge maintenance does not remove these continuation obligations.
+The [evaluation protocol](evidence-and-evaluation.md#proposed-evaluation-design) compares applicable
+source facts, checkpoint visibility, and subsequent action. A hand-authored expected checkpoint can
+test rendering, while scripted providers test host mechanics. Neither measures real extraction
+quality. Token count, compression ratio, and vendor question-answering scores are useful diagnostics
+but cannot substitute for actual continuation tasks.

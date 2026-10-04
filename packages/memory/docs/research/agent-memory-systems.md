@@ -195,17 +195,11 @@ selected-lineage recall, checkpoint parity, retention, or instruction-authority 
 
 ## What transfers to the core
 
-| Finding                                                       | Candidate core response                                                  | Limit                                                                                |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Extraction can miss a detail or return no records.            | Keep source discovery independent of generated observations.             | Retention and indexing still need explicit scope and availability rules.             |
-| Broad knowledge can outlive its source session.               | Preserve provenance and let companions own applicability and retraction. | Stable references alone do not implement correction propagation.                     |
-| Source time differs from processing time.                     | Keep ordering and available source timestamps.                           | A timestamp is not proof that a claim is true or still applicable.                   |
-| Some obligations cannot be recovered by an unprompted search. | Keep active constraints in visible continuation state.                   | A snapshot can itself omit or misstate them.                                         |
-| Several representations require reconciliation.               | Add representations only for a concrete caller or measured failure.      | One representation can also become inadequate; simplicity is not a proof of quality. |
-
-The [memory-layer analysis](memory-layers.md) covers LangGraph, LangMem, and AgentCore's scope and
-processing distinctions. The [companion analysis](modularity-and-knowledge.md) turns these findings
-into integration options without selecting a common backend.
+The source cases distinguish retained data, accepted processing, and discoverable evidence. They
+also show why occurrence time differs from processing time and why cross-session claims need
+applicability and retraction rules. The [memory contract](../../SPEC.md) uses these distinctions for
+session continuity and recall; the [companion analysis](modularity-and-knowledge.md) considers
+broader knowledge without selecting a shared backend.
 
 ## Mechanisms to defer, and evidence that could reopen them
 
@@ -217,6 +211,6 @@ into integration options without selecting a common backend.
 | Automatic skill or instruction generation                 | Knowledge admission does not authorize changing operating policy.         | A separate user-facing capability defines approval and verification.                                       |
 | Shared storage service or generalized backend abstraction | Current continuation does not establish a multi-consumer deployment need. | Actual consumers require shared behavior or a supported deployment cannot use the simple store.            |
 
-The selected core uses Pi session records and basic browse/search/read recall. External semantic
-retrieval remains outside its MVP. These comparisons inform future companions; they do not approve a
-public interface, knowledge-admission policy, or broader retention guarantee.
+The [modular-memory requirement](../../SPEC.md#modular-memory--req-modular-memory) defers public
+companion and external retrieval APIs. The comparisons above identify when a concrete consumer or
+measured failure might justify them.

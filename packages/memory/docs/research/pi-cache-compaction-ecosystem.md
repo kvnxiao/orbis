@@ -176,24 +176,14 @@ shared label “recall” does not establish equivalent behavior.
 
 ## Implications for Orbis composition
 
-| Mechanism                        | Useful lesson                                                   | Reason not to adopt wholesale                                                  |
-| -------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Prepared observations            | Move useful extraction ahead of compaction.                     | Coverage and freshness remain explicit obligations.                            |
-| Deterministic structural summary | Derive known file/activity data without another inference call. | Structural selection does not recover goals or rationale automatically.        |
-| Query plus reference recall      | Discover omitted events and inspect precise sources.            | Search scope, source availability, and output bounds still need a contract.    |
-| Request reconstruction/capture   | Compare actual provider-prefix behavior.                        | Wire formats and later transformations add compatibility obligations.          |
-| Warming and immutable segments   | Explore later-request cost when measurements justify it.        | Additional calls, retained history, and rebase behavior are separate policies. |
-| Prompt/result pruning            | Reduce repetitive tool context.                                 | Persisted-source loss can conflict with later evidence recovery.               |
+The packages demonstrate distinct mechanisms: prepared observations, deterministic file/activity
+summaries, bounded source recall, provider request reconstruction, warming, immutable segments, and
+prompt/result pruning. Each solves a different problem and has different source, cost, and
+compatibility limits. Pi does not merge independent replacement checkpoints; the
+[unified compaction requirement](../../SPEC.md#unified-compaction--req-unified-compaction) assumes
+one owner while checking actual stored ownership.
 
-**One checkpoint owner remains the supported starting point.** Multiple extensions may contribute
-ordinary context, but Pi does not merge independent replacement checkpoints. Future knowledge
-companions should consume evidence and manage their own knowledge rather than each install a
-replacement compactor.
-
-These comparisons support keeping source handling, coverage, bounded work, and basic recall in the
-functional core. Session-entry storage and bounded same-observer catch-up are selected directions.
-Stable request construction is the selected MVP cache policy. Provider-specific acting-prefix reuse,
-request replay/warming, and immutable checkpoint segments with periodic rebasing remain post-MVP
-experiments; their potential benefits need measurement. Broader knowledge maintenance and public
-retrieval integration belong to later companion work. Exact failure, record, and budget contracts
-remain open.
+The [resource budget requirement](../../SPEC.md#resource-budgets--req-resource-budgets) selects
+stable request construction. Provider replay, warming, and immutable segments remain later
+experiments; these source examples do not measure their benefit for Orbis. Persist-time pruning can
+also remove evidence that source recall would need.

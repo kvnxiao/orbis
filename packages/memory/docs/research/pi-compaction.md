@@ -1,17 +1,17 @@
 # Pi compaction and public integration contracts
 
-Research date: 2026-10-04. The installed reference is Pi 0.99.1. The current published release
-checked is [Pi 1.0.1](https://github.com/earendil-works/pi/releases/tag/v1.0.1), released on
+Research date: 2026-10-04. **Host fact:** The installed reference is Pi 0.99.1. The published
+release checked is [Pi 1.0.1](https://github.com/earendil-works/pi/releases/tag/v1.0.1), released on
 2026-10-03 at 16:14 UTC from
 [a7229dd](https://github.com/earendil-works/pi/commit/a7229ddc21810d6245105978033b7df645ecc2f7).
 GitHub release metadata and npm metadata agreed. These are inspected source baselines, not tested
 runtime compatibility claims for the proposed package.
 
-Published 1.0.1 archives were compared in memory with installed 0.99.1. Compaction, compaction
-utilities, session manager, message conversion, and cache-warmer JavaScript files were
-byte-identical. Other changed files add tool, rendering, namespace, and image-generation behavior;
-they do not add a compaction-input correction API. The findings below therefore apply to both
-inspected versions.
+The initial research compared published 1.0.1 archives in memory with installed 0.99.1 and recorded
+byte-identical compaction, compaction utilities, session manager, message conversion, and
+cache-warmer JavaScript files. It found tool, rendering, namespace, and image-generation changes
+elsewhere, without a compaction-input correction API. That archive comparison was not repeated in
+this review. All follow-up host corrections below were checked against installed Pi 0.99.1 only.
 
 ## Pi's existing continuity mechanisms
 
@@ -102,8 +102,11 @@ operations, not verified filesystem effects. Arbitrary shell effects and omitted
 metadata are outside that deterministic account.
 
 A later native summary might retain old filenames from custom summary text, but that is generative
-retention rather than inherited file metadata. The package needs an explicit policy for current-span
-lists, cumulative custom lists, and custom-to-native-to-custom transitions.
+retention rather than inherited file metadata. The
+[file-preservation contract](../../SPEC.md#unified-compaction--req-unified-compaction) supplements
+the model-facing checkpoint through the context hook while enabled. The context hook transforms
+cloned request messages; it does not repair the stored entry, TUI view, or later native
+`previousSummary` input.
 [Inheritance rule](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts),
 [file tracking](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/utils.ts).
 
@@ -117,9 +120,9 @@ not receive them. If only a turn prefix needs summarization, no new call receive
 instructions. Thus native fallback follows the host's behavior but does not guarantee that manual
 instructions govern every native subcall.
 
-This is a concrete decision for the package: native delegation is simple, while improving
-instruction handling would require an explicit package-owned inference contract. It must not be
-silently inferred from a promise to honor instructions.
+This host limit explains the
+[instruction path](../../SPEC.md#unified-compaction--req-unified-compaction): package-owned bounded
+generation applies supplied instructions to eligible prepared inputs before a custom result.
 [Call construction](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts).
 
 ## Public inference capabilities
@@ -156,10 +159,10 @@ to override. There is no supported preparation-replacement or instruction-overri
 | Hook outcome           | Host consequence                                                  | Design implication                                                                          |
 | ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Valid custom result    | Pi saves the checkpoint and follows its normal continuation flow. | Preserve the original prepared boundary and supplied retry intent.                          |
-| Decline                | Native compaction runs.                                           | This is whole-checkpoint fallback, not a partial native section.                            |
+| Decline                | Native compaction runs while the host operation remains active.   | This is whole-checkpoint fallback, not a partial native section.                            |
 | Cancel                 | Compaction stops.                                                 | Overflow retry can be suppressed; cancellation is not equivalent to preserving `willRetry`. |
 | Throw                  | Error is reported and swallowed by the extension runner.          | Throwing is not a fail-closed veto; another hook or native summarization may run.           |
-| Later replacement hook | A later nonempty result can replace an earlier result.            | Independent checkpoint owners do not compose into one reliable result.                      |
+| Later replacement hook | Any later truthy result, including `{}`, replaces an earlier one. | Independent checkpoint owners do not compose into one reliable result.                      |
 
 Sources:
 [hook dispatch](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/runner.ts),
@@ -169,6 +172,9 @@ The compaction reason does not substitute for incoming `willRetry`. In automatic
 the implementation reports `willRetry: false`, despite declaration wording about whether the aborted
 turn would have retried. Attempt telemetry should preserve the incoming decision separately from the
 final outcome. Manual compaction does not create an automatic retry.
+
+A package-owned helper timeout can permit decline while the host signal remains active. An aborted
+host signal ends compaction; returning no override does not restore the pending retry.
 
 ### Observe completion separately from initiation
 
@@ -180,16 +186,34 @@ completion and the earlier decision to decline. An exception thrown by `onComple
 [Extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts),
 [wrapper and outcomes](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/agent-session.ts).
 
-Both success paths locate the event's `compactionEntry` by the first stored summary-text match.
-Identical summary text can therefore identify an earlier checkpoint. A consumer needing the new
-checkpoint identity should check current selected state and test repeated identical summaries; the
-success event alone does not establish that identity. This is a source-derived caveat, not a
-reproduced runtime failure.
+Both hook-driven success paths locate the event's `compactionEntry` by the first summary-text match
+in `getEntries()`, which spans branches. Identical summary text can identify an earlier checkpoint,
+including one on another branch. A consumer needing the new checkpoint identity should check current
+selected state and test repeated identical summaries; the success event alone does not establish
+that identity. This is a source-derived caveat, not a reproduced runtime failure.
+
+A failure event does not imply that a before-compaction hook ran. Manual preparation can fail before
+hook dispatch, and exhausted overflow recovery can emit `session_compact_failed` without starting
+another compaction attempt.
+
+### Boundary drafts and checkpoint ownership
+
+In installed Pi 0.99.1, `turn_end` and `agent_before_settle` handlers can return compaction drafts.
+Pi stores these checkpoints directly with `fromHook: true`, refreshes context, and emits
+`entry_appended`. This path bypasses both `session_before_compact` and `session_compact`.
+
+Pi does not enforce single checkpoint ownership. A later before-compaction handler can replace a
+candidate, and a boundary draft can introduce a checkpoint outside that hook. Eligibility must be
+reconstructed from selected stored state. Another writer's checkpoint is derived evidence; it does
+not prove observer coverage of its originals.
+[Boundary application](https://github.com/earendil-works/pi/blob/v0.99.1/packages/coding-agent/src/core/agent-session.ts),
+[public boundary drafts](https://github.com/earendil-works/pi/blob/v0.99.1/packages/coding-agent/src/core/extensions/types.ts).
 
 ### Threshold, output allowance, and actual request size
 
-Pi's automatic predicate is `contextTokens > contextWindow - reserveTokens` when enabled. Effective
-settings include model-specific overrides. Accounting can use provider usage plus estimated trailing
+Pi's threshold predicate is `contextTokens > contextWindow - reserveTokens` when enabled. Overflow
+recovery and recoverable length stops can also trigger automatic compaction. Effective settings
+include model-specific overrides. Accounting can use provider usage plus estimated trailing
 messages, or estimate projected context when earlier usage is stale. Later provider usage can
 reflect context transformations; a pre-dispatch estimate is not a measurement of the final request.
 
@@ -214,7 +238,9 @@ rewrite. Native summarization calls its stream directly. The SDK header hook can
 only changes headers. Durable context edits affect future preparation for supported ordinary
 entries; compaction and branch-summary entries are not editable targets. An edit appended after
 preparation does not rebuild the already supplied object. Mutating that object is not a documented
-correction protocol.
+correction protocol. In installed 0.99.1, hook handlers share the preparation object with native
+fallthrough, so mutating `preparation.fileOps` before declining can affect native output. That
+object-identity behavior is undocumented and is not a supported integration path.
 
 Sources:
 [SDK callbacks](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/sdk.ts),
@@ -238,6 +264,9 @@ The public extension reads have different scopes:
 | `getEntries()` or `getTree()` | All stored branches.                                                          |
 | `buildContextEntries()`       | Active compaction-aware entry window, without substituting edited content.    |
 | `buildSessionProjection()`    | Active effective messages associated with their original `sourceEntry`.       |
+
+Entry IDs are unique within a session index, not globally unique. An edited source retains its
+original entry ID, so that ID alone cannot identify an effective content revision.
 
 The active projection is not an effective overlay over the whole archive. Historical recall needs
 explicit view semantics and cannot substitute an all-entry scan for selected ancestry. Omission does
@@ -280,8 +309,20 @@ entries, and the tree. Ancestry reads and all-entry scans have different scopes.
 original stored entries. Fork operations can copy selected ancestry or broader stored history, so
 source IDs, session identity, and eligible ancestry must remain distinguishable.
 
-`pi.appendEntry()` stores custom data outside model context. This makes session records a supported
-storage candidate, not a decision about schema, atomicity, curation, deletion, or source lifetime.
+`pi.appendEntry()` stores custom data outside model context. In installed 0.99.1, it returns `void`
+after synchronous append work. The session manager updates its in-memory entries, index, and leaf
+before filesystem persistence, so an exception can leave the record visible in memory. Initial
+persistence waits for a user or assistant message; a state-only session can remain unflushed, and an
+in-memory session never writes a file. This path does not provide `fsync`, transactional rollback,
+or a durable receipt.
+
+One validated record can associate snapshot changes, observations, and coverage as one logical
+replay unit. That does not establish crash-safe storage atomicity. The host retains the supplied
+custom data by reference, so later mutation would also change the in-memory record. Forks use a new
+session ID while copying entry IDs; eligibility therefore needs session identity, selected ancestry,
+and effective source versions.
+[Append and fork behavior in 0.99.1](https://github.com/earendil-works/pi/blob/v0.99.1/packages/coding-agent/src/core/session-manager.ts),
+[extension append adapter](https://github.com/earendil-works/pi/blob/v0.99.1/packages/coding-agent/src/core/agent-session.ts).
 Tree navigation can change ancestry without replacing the whole extension runtime; pending worker
 results still need a selection check. Ephemeral sessions and user deletion remain availability
 limits.

@@ -1,8 +1,8 @@
 # Memory responsibilities and scope
 
-Research date: 2026-10-04. This document compares documented architectures and derives implications
-for the proposed core. These implications do not amend the draft SPEC. Framework capabilities are
-not evidence that a particular Orbis implementation improves continuation.
+Research date: 2026-10-04. This document compares documented architectures that informed the
+[memory contract](../../SPEC.md). Framework capabilities do not establish that an Orbis
+implementation improves continuation.
 
 Semantic memory describes knowledge content; semantic search describes a retrieval mechanism. A
 package can retain reusable knowledge in ordinary text without embeddings, and a vector index can
@@ -51,8 +51,8 @@ changed. A remembered passing test is evidence of a prior result, not proof of t
 
 ## Responsibilities in the core MVP
 
-The following allocation reflects the agreed product direction. Its mechanisms and interfaces still
-need design decisions.
+The following allocation explains the [approved contract](../../SPEC.md) in terms of memory
+responsibilities.
 
 | Responsibility     | Core contribution                                                                                   | Boundary                                                                                                             |
 | ------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -109,14 +109,14 @@ broader retrieval service would need a separate acquisition and update policy.
 
 **Text and attachments.** Retaining an image reference, returning the image, and interpreting it are
 three different capabilities. Neither native text serialization nor a text-only observer establishes
-full preservation of visual constraints. The source-format and unsupported-input policies remain
-open in the draft.
+full preservation of visual constraints. The
+[observation contract](../../SPEC.md#session-observations--req-session-observations) does not claim
+image text coverage.
 
 ## Implications and reconsideration conditions
 
 **Keep the core independently useful.** Observation, checkpoint creation, and evidence recall form a
-complete continuation product. The research does not require a storage-only foundation package
-before that product can exist.
+continuation product without a storage-only foundation package.
 
 **Keep broader knowledge optional.** Project retrospectives and developer habits require promotion,
 correction, and applicability decisions beyond session continuation. The
@@ -127,6 +127,5 @@ the companion package count in advance.
 mechanisms to assess against observed failure modes. They are not missing requirements merely
 because another framework gives them names.
 
-Select a mechanism when comparative evidence shows it better satisfies continuation or retrieval
-requirements within the core's scope. A concrete companion can also establish a need for additional
-evidence access. Popularity and a larger feature inventory are not comparative evidence.
+Comparative continuation results or a concrete companion can establish the need for another
+mechanism. Popularity and a larger feature inventory are not comparative evidence.

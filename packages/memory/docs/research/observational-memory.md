@@ -168,10 +168,11 @@ Sources at the inspected development revision:
 [scheduler](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/hooks/consolidation-trigger.ts),
 [projection](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/session-ledger/projection.ts).
 
-These are source findings, not measured failure rates. They motivate separate checks for source
-presentation, accepted processing, and semantic preservation. The core still needs an explicit
-policy for oversized individual sources and interrupted proposals; retaining an original for recall
-does not prove it was processed.
+These source findings are not measured failure rates. They motivate separate checks for source
+presentation, accepted processing, and semantic preservation. The
+[observation contract](../../SPEC.md#session-observations--req-session-observations) treats an
+oversized input portion and interrupted proposal accordingly; retaining an original for recall does
+not prove it was processed.
 
 The active observation target is also different from a hard storage bound. A maintenance pass may
 produce no new reflection or decline removal. Reflections append rather than replacing conflicting
@@ -190,13 +191,10 @@ snapshot was evaluated and rejected.
 
 ## Implications for the core MVP
 
-Both implementations support preparing memory outside the acting agent's maintenance workflow.
-Neither establishes that topics, a journey, reflections, or a dropper are necessary for a useful
-observer-plus-snapshot-plus-recall core.
-
-The core needs meaningful safeguards: accepted source coverage, source discovery, selection
-identity, finite work, and explicit handling of previous checkpoints and native categories. A small
-number of model roles does not remove the need to detect lost input.
+Both implementations prepare memory outside the acting agent's maintenance workflow. Neither
+establishes that topics, a journey, reflections, or a dropper improve the
+[core continuation contract](../../SPEC.md). A small number of model roles does not itself detect
+lost input.
 
 The [comparison with Mastra](observational-memory-comparison.md) examines preparation versus
 activation, structured current-work extraction, and different meanings of reflection. The

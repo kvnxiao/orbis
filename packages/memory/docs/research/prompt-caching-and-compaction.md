@@ -191,33 +191,20 @@ or session ID alone does not establish shared-prefix reuse.
 
 ### Stable checkpoint presentation
 
-Pi renders the persisted summary as a user message under a fixed wrapper before retained history.
-Entry IDs and token estimates are not interpolated into that text. The selected checkpoint-only
-direction can therefore avoid routine changes to the early memory content.
+Pi renders a persisted summary as a user message under a fixed wrapper before retained history.
+Entry IDs and token estimates are not interpolated into that text.
 [Message conversion](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/messages.ts).
 
-The selected MVP invariants are:
-
-- Fix the displayed cumulative file inventory at the checkpoint boundary; later activity remains in
-  the ordinary tail.
-- Render the same checkpoint deterministically and idempotently, including ordering and block shape.
-- Keep changing observer counters, timestamps, and observation indexes out of early instructions and
-  tool definitions; ordinary recall results append through the tool-result path.
-- Keep background state commits independent of acting-prefix changes until the next checkpoint.
-- Put stable observer instructions and output schemas before changing continuation state and source
-  batches; do not assume this shares the acting conversation's cache.
-
-These properties prevent package-induced churn under unchanged selection/configuration. They do not
-promise provider hits or prevent another extension from changing the request. Prefix matching must
-not override correct lineage reconstruction, a real correction, or a required configuration change.
-Provider-request fixtures must check these construction properties, including repeated requests
-while background state changes. Such fixtures establish request stability, not real cache hits.
+The [resource budget contract](../../SPEC.md#resource-budgets--req-resource-budgets) selects stable
+request construction. Its checkpoint inventory is fixed at the checkpoint boundary; later activity
+stays in recent history. Deterministic rendering can avoid package-induced prefix churn under
+unchanged selection and configuration. It cannot guarantee provider hits, and an actual correction
+or lineage change may alter the prefix. Request fixtures establish construction stability; only
+provider measurements can establish cache reuse.
 
 Pi also supports structured system/tool updates as transcript changes in compatible paths. A forced
-system-prompt string instead replaces the leading prompt for that run. Native warming is another
-independent variable: settings distinguish streaming and optional idle behavior, eligibility checks,
-and usage included in session totals. Record those settings when comparing an extension's immediate
-post-compaction warming, and count each request once.
+system-prompt string replaces the leading prompt for that run. Native warming is an independent
+variable with its own eligibility, settings, usage, and latency.
 [Extension events](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/extensions.md#events),
 [native warming settings](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/settings.md#models-and-thinking).
 
@@ -263,31 +250,14 @@ those limits. Source retention, active presentation, and cache reuse remain sepa
 
 ## Selected MVP policy and post-MVP experiments
 
-**Use stable request construction in the MVP.** Keep the checkpoint and its file inventory fixed
-between compactions, with stable tool definitions and observer instruction/schema prefixes. An
-eligible checkpoint renders prepared memory without a foreground summarization call. Observer work,
-catch-up, condensation, instructed generation, and native fallback still need complete accounting.
+The [contract](../../SPEC.md#implementation-defined-choices) selects stable construction and defers
+provider-specific acting-prefix reuse, request replay or warming, and immutable checkpoint segments.
+These alternatives warrant measurement only if full-task cost or foreground latency identifies a
+problem. Replay must preserve payload, credentials, headers, routing, cancellation, and budget
+accounting. Immutable segments need correction, lineage, growth, and rebase rules. The
+[ecosystem comparison](pi-cache-compaction-ecosystem.md) records source precedents, not measured
+benefits for Orbis.
 
-Two potential improvement paths remain post-MVP experiments:
-
-| Experiment                                                         | Potential benefit                                                                                              | Questions to resolve before adoption                                                                                                                           |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Provider-specific acting-prefix reuse, request replay, and warming | Reuse eligible acting input during summary generation or prepare the new compacted prefix before continuation. | Actual payload compatibility, provider settings, credential/header handling, cancellation, and total cost. Warming moves work earlier and may add unused work. |
-| Immutable checkpoint segments with periodic rebasing               | Preserve older checkpoint prefixes across some later compactions by appending new segments.                    | Bounded context growth, correction and supersession semantics, lineage, and when rebasing justifies replacing the prefix.                                      |
-
-Neither path is rejected permanently or required by the MVP. Evaluate them when full-task cost or
-foreground latency indicates a useful target. Compare continuation quality and native-category
-coverage alongside cost; a cache improvement must preserve those requirements and Pi's prepared
-boundary. The [ecosystem comparison](pi-cache-compaction-ecosystem.md) records mechanism precedents,
-not measured benefits for Orbis.
-
-**Keep native settings and the prepared boundary.** Optimizing memory is not evidence for changing
-when the host compacts or how much source it retains. This is a settled constraint, not a finding
-that one native setting is universally optimal.
-
-**Compare total work, not cache percentages.** A higher hit rate can coexist with more extraction,
-longer output, redundant work, or worse continuation. Measurements need the complete accounting and
-action outcomes described in [evaluation](evidence-and-evaluation.md).
-
-This selected policy guides the completed contract; the draft SPEC has not yet incorporated it. No
-specific provider compaction endpoint, cache default, or optional package integration is selected.
+Compare total work and continuation quality, not cache-hit percentages alone. A higher hit rate can
+coexist with greater extraction cost, redundant work, or worse actions. The
+[evaluation protocol](evidence-and-evaluation.md) separates those outcomes.

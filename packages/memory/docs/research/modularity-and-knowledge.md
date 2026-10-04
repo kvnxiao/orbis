@@ -1,32 +1,17 @@
 # Modularity and future knowledge packages
 
-Research date: 2026-10-04. The selected core prepares session continuation and provides evidence
-recall. A future companion can turn experience into project knowledge or developer habits without
-making that processing a prerequisite for the core. This document compares integration directions;
-it records the selected session-entry storage direction but does not approve a public companion API,
-persisted record schema, or additional package name.
+Research date: 2026-10-04. **Design inference:** This document compares integration options for
+future knowledge companions based on inspected host and companion mechanisms. The
+[core contract](../../SPEC.md) defines current behavior.
 
 ## Separate the product responsibilities
 
-Continuation asks what the acting model needs to do next in the selected conversation. Knowledge
-maintenance asks which claims should apply beyond that conversation, why they are credible, and when
-they should stop applying. The latter requires additional judgments even when both products read the
-same source.
-
-| Responsibility                        | Core continuation                                                     | Possible companion                                                                    |
-| ------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Current objective and unfinished work | Preserve applicable task state for the next action.                   | Use it as evidence about the session, not as a permanent project rule.                |
-| Source evidence                       | Identify recorded messages, tool results, and their eligible lineage. | Cite evidence supporting a broader claim.                                             |
-| Project learning                      | No automatic promotion in the core MVP.                               | Assess repository applicability, verification, contradiction, and retirement.         |
-| Developer habits                      | Preserve instructions applicable to this conversation.                | Distinguish explicit preferences from inferred habits and decide cross-project scope. |
-| Retrospective or reflection           | Not required to make a checkpoint.                                    | Analyze outcomes and propose lessons with supporting evidence.                        |
-| Reusable procedure                    | Recall an earlier attempted procedure when relevant.                  | Decide whether a verified procedure should become a maintained artifact or skill.     |
-| Correction and deletion               | Define current evidence and availability under the core contract.     | Decide what happens to claims derived from corrected or unavailable evidence.         |
-
-This separation is consistent with the independently scoped processing and storage systems in
-[memory layers](memory-layers.md) and [agent memory systems](agent-memory-systems.md). It does not
-establish a mandatory one-package-per-row architecture. The first real companion may combine some
-responsibilities or use a different interface than later companions.
+Continuation concerns the acting model's next action in the selected conversation. Knowledge
+maintenance decides which claims apply beyond that conversation, why they are credible, and when
+they stop applying. The [memory contract](../../SPEC.md#modular-memory--req-modular-memory) keeps
+the latter outside the core. The [memory-layer analysis](memory-layers.md) and
+[system comparison](agent-memory-systems.md) show why scope, promotion, and correction need separate
+policies.
 
 ## Evidence is not an instruction channel
 
@@ -73,23 +58,14 @@ a general tool-execution service for lifecycle handlers. Nested execution throug
 [extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts),
 [loader](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/loader.ts).
 
-**Selected direction: preserve explicit evidence identity and narrow internal reads; defer the
-public companion integration until a concrete consumer needs it.** The core's recall operation
-already requires bounded reading and scope checks. Those responsibilities can inform a later
-interface without publishing a generic plugin framework now. A fixture consumer can test the
-eventually selected boundary; it should not become an excuse to invent requirements unsupported by a
-use case.
-
-This does not preclude an optional runtime API or shared reader library. Extract shared code when
-multiple packages need the same behavior. Select whether the first companion depends on the core
-when its evidence requirements are concrete.
+The [modular-memory requirement](../../SPEC.md#modular-memory--req-modular-memory) defers a public
+interface until a concrete consumer supplies its evidence needs. The options above remain useful
+when that need is defined.
 
 ## Persistence for the core MVP
 
-The MVP follows Pi session retention and defers user curation of derived records. It needs to
-persist accepted continuation state and retrieve eligible evidence within that scope. Editable
-files, independent retention, and broader knowledge indexes would introduce additional
-responsibilities.
+Pi session retention provides the core's storage scope. Editable files, independent retention, and
+broader knowledge indexes introduce additional responsibilities.
 
 | Candidate                              | Fit for the selected core                                                                                        | Cost or uncertainty                                                                                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -98,15 +74,10 @@ responsibilities.
 | Separate database                      | Can support broader indexing and cross-session queries.                                                          | Adds schema/index lifecycle, deployment, backup, and reconciliation before the core needs broad knowledge search.                                                          |
 | Session records plus rebuildable index | Keeps one evidence authority while accelerating retrieval.                                                       | Index invalidation and rebuilding still need a contract; no measured need for it yet.                                                                                      |
 
-**Selected direction: use Pi custom session entries as authoritative core storage.** Pi retains
-recorded source through compaction, and custom entries do not enter model context automatically. A
-single accepted observer result could associate snapshot, observations, and coverage in one record;
-the exact commit and failure semantics still need specification. This is not a claim that Pi
-supplies a transactional memory database.
-
-Independent retention or manual file curation could justify a different store in a future product.
-They are outside this MVP. A generic abstraction over every candidate would increase the core
-without resolving the candidates' behavioral differences.
+The [session-lineage contract](../../SPEC.md#session-lineage--req-session-lineage) selects Pi custom
+entries. They survive compaction but do not enter model context automatically. Pi's append path does
+not supply a crash-durable transaction; the
+[host audit](pi-compaction.md#persistence-and-selected-lineage) records its limits.
 
 Sources:
 [session storage](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
@@ -115,18 +86,10 @@ Sources:
 ## State validity and delayed work
 
 Pi's selected ancestry can change while an observer runs. Stored order and callback completion order
-do not establish that a result belongs to the current selection. These are design obligations for
-any persistence option:
-
-- Accept a delayed result only when its source and selected-lineage assumptions are still valid.
-- Prevent an older result from replacing newer accepted state.
-- Distinguish invalid or unavailable state from a valid empty result.
-- Use conversation ancestry when deciding which evidence is eligible; publication order alone is
-  insufficient.
-
-The exact acceptance and recovery protocol remains open. These obligations follow from the selected
-lineage requirement and Pi's asynchronous lifecycle; they do not require an external registry,
-publication-head protocol, or general recovery framework.
+do not establish that a result belongs to the current selection. The
+[lineage contract](../../SPEC.md#session-lineage--req-session-lineage) therefore requires a
+selection check before acceptance. Pi's session manager and extension lifecycle expose the relevant
+change points.
 [Session manager](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
 [extension lifecycle](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
 
@@ -150,24 +113,11 @@ or workflow capability. They may help when prose repeatedly loses task relations
 transition maintenance and can still encode an incorrect model judgment. The core's explicit
 obligation preservation does not require a general task-management system.
 
-A public integration API for external retrieval is a selected post-MVP follow-up. Basic internal
-reads should preserve identity, attribution, scope, and unavailable-source outcomes so that a real
-consumer can define that API later. Vector indexes, query-time reasoning, and separate knowledge
-stores remain optional companion mechanisms, not prerequisites for the core's `recall` tool.
+A public external-retrieval API is deferred. Internal reads preserve identity, attribution, scope,
+and unavailable-source outcomes; the eventual consumer can define its interface from those needs.
 
 ## A possible product family
 
-`@orbis/memory` remains the selected core name. Future names should describe user-visible jobs, for
-example project knowledge or developer preferences, once those jobs are defined. No companion name,
-count, or dependency graph is selected by this research.
-
-The product has three distinct responsibilities: Pi manages conversation history and native
-compaction; the core prepares continuation and source recall; optional companions assess broader
-knowledge. Provider compaction is a separate API mechanism, not a synonym for any of these products.
-
-## Decisions still required
-
-Define the record schema, source availability, and exact bounded browse/search/read contract within
-Pi session retention. Design the public companion interface, broader knowledge admission, and
-correction policy when a concrete companion needs them. These dependencies allow the core to remain
-extensible without making future knowledge maintenance part of its first release.
+Pi manages conversation history and native compaction. The core prepares continuation and source
+recall. Optional companions may assess broader knowledge. Provider compaction is a separate API
+mechanism. Companion names and count depend on defined user-facing jobs.
