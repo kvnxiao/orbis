@@ -1,6 +1,6 @@
 # Pi compaction and public integration contracts
 
-Research date: 2026-10-03. The installed reference is Pi 0.99.1. The current published release
+Research date: 2026-10-04. The installed reference is Pi 0.99.1. The current published release
 checked is [Pi 1.0.1](https://github.com/earendil-works/pi/releases/tag/v1.0.1), released on
 2026-10-03 at 16:14 UTC from
 [a7229dd](https://github.com/earendil-works/pi/commit/a7229ddc21810d6245105978033b7df645ecc2f7).
@@ -170,6 +170,43 @@ the implementation reports `willRetry: false`, despite declaration wording about
 turn would have retried. Attempt telemetry should preserve the incoming decision separately from the
 final outcome. Manual compaction does not create an automatic retry.
 
+### Observe completion separately from initiation
+
+`ctx.compact({ customInstructions, onComplete, onError })` returns `void`. Returning from, or
+awaiting, that call does not establish completion. The callbacks report the asynchronous operation;
+`session_compact` and `session_compact_failed` expose host outcomes independently of observer
+completion and the earlier decision to decline. An exception thrown by `onComplete` also reaches
+`onError` in the inspected wrapper, so callback failure and compaction failure need distinction.
+[Extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts),
+[wrapper and outcomes](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/agent-session.ts).
+
+Both success paths locate the event's `compactionEntry` by the first stored summary-text match.
+Identical summary text can therefore identify an earlier checkpoint. A consumer needing the new
+checkpoint identity should check current selected state and test repeated identical summaries; the
+success event alone does not establish that identity. This is a source-derived caveat, not a
+reproduced runtime failure.
+
+### Threshold, output allowance, and actual request size
+
+Pi's automatic predicate is `contextTokens > contextWindow - reserveTokens` when enabled. Effective
+settings include model-specific overrides. Accounting can use provider usage plus estimated trailing
+messages, or estimate projected context when earlier usage is stale. Later provider usage can
+reflect context transformations; a pre-dispatch estimate is not a measurement of the final request.
+
+Trigger threshold, summarizer output allowance, actual checkpoint size, and retained recent context
+are different quantities. Pi's reserve affects both the trigger and summary generation allowance;
+split-turn generation and deterministic file metadata can add to the final checkpoint. An output
+limit is not an observed size or a recommended core budget.
+
+Budget a rendered checkpoint with its file inventory, wrappers, system/tool context, retained tail,
+and generation headroom. This matters when a context hook adds information absent from the stored
+summary. Immediately after compaction, `getContextUsage()` can return null token/percentage values
+until an eligible assistant response supplies valid nonzero usage. Without a usable model context
+window, it returns `undefined`. Neither outcome is the compaction result's `estimatedTokensAfter`.
+[Compaction accounting](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts),
+[session accounting](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/agent-session.ts),
+[settings](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/settings-manager.ts).
+
 ## Correction paths and their limits
 
 Acting-context hooks and provider-request callbacks do not provide a hidden native-summary body
@@ -183,6 +220,38 @@ Sources:
 [SDK callbacks](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/sdk.ts),
 [context edits](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
 [extension dispatch](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/runner.ts).
+
+### Original records and effective context
+
+A `context_edit` can omit or replace the complete content of an earlier selected-branch user,
+assistant, tool-result, or custom-message entry. It preserves the original role and other message
+metadata, while the original raw entry remains available. The edit has its own entry identity and
+time, but no explicit editor identity or semantic reason. Preserved role metadata does not prove
+that the original speaker authored the replacement text.
+
+The public extension reads have different scopes:
+
+| Read                          | Representation                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| `getBranch(fromId?)`          | Raw ancestry, defaulting to the selected leaf.                                |
+| `getEntry(id)`                | Raw stored entry; membership in the permitted lineage needs a separate check. |
+| `getEntries()` or `getTree()` | All stored branches.                                                          |
+| `buildContextEntries()`       | Active compaction-aware entry window, without substituting edited content.    |
+| `buildSessionProjection()`    | Active effective messages associated with their original `sourceEntry`.       |
+
+The active projection is not an effective overlay over the whole archive. Historical recall needs
+explicit view semantics and cannot substitute an all-entry scan for selected ancestry. Omission does
+not prove that an obligation was withdrawn, and editing a tool result does not undo a filesystem
+operation. Navigating before an edit removes that edit from selected ancestry; it does not revise
+claims already embedded in an applicable checkpoint.
+[Session projection and edits](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts).
+
+Request-local filtering also does not alter persisted evidence or an already prepared compaction.
+Context-handler errors are reported and swallowed rather than serving as a dispatch veto. Queued
+custom messages and custom state appends have different delivery semantics; return from
+`pi.sendMessage()` or `pi.appendEntry()` does not prove a model consumed anything.
+[Extension runner](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/runner.ts),
+[public APIs](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
 
 ### Ordinary correction is not off-transcript invalidation
 
@@ -220,6 +289,25 @@ limits.
 
 The [modularity analysis](modularity-and-knowledge.md) covers public runtime communication and
 artifact readers. Neither requires a second replacement-compaction hook.
+
+### Derived evidence and original-source coverage
+
+A native checkpoint can summarize originals the observer never processed. The observer may use it as
+derived evidence, preserving checkpoint identity and provenance. Processing that summary does not
+establish processing coverage of its original messages. Repeated appearances of one checkpoint are
+not independent supporting evidence. Recovery after fallback or re-enabling must distinguish these
+two kinds of accepted input. This is a design implication of Pi's previous-summary reuse, not a
+coverage guarantee supplied by the host.
+[Preparation](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts).
+
+### Persistence does not validate the retained boundary
+
+`appendCompaction()` stores a supplied non-null `firstKeptEntryId` without checking selected-branch
+membership. Reconstruction starts retaining earlier entries only after it encounters that ID. If it
+does not, those earlier entries are omitted; the checkpoint and subsequent entries remain.
+Successful persistence therefore does not prove the boundary is valid. Preserve Pi's prepared ID
+exactly and include a malformed-ID fixture as a diagnostic, rather than selecting a different cut.
+[Append and reconstruction](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts).
 
 ## Verification limits and next fixtures
 

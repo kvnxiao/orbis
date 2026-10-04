@@ -1,8 +1,12 @@
 # Memory responsibilities and scope
 
-Research date: 2026-10-03. This document compares documented architectures and derives implications
+Research date: 2026-10-04. This document compares documented architectures and derives implications
 for the proposed core. These implications do not amend the draft SPEC. Framework capabilities are
 not evidence that a particular Orbis implementation improves continuation.
+
+Semantic memory describes knowledge content; semantic search describes a retrieval mechanism. A
+package can retain reusable knowledge in ordinary text without embeddings, and a vector index can
+search episodic source without turning it into verified knowledge.
 
 ## Separate the design dimensions
 

@@ -1,6 +1,6 @@
 # Pi memory, cache, and pruning packages
 
-Research date: 2026-10-03. This survey compares current source and publication boundaries. It does
+Research date: 2026-10-04. This survey compares current source and publication boundaries. It does
 not report installation, runtime compatibility, cache measurements, or model-quality tests.
 
 ## Version inventory
@@ -75,6 +75,8 @@ Optional
 projects immutable prior segments, current memory/recall content, and recent history, then rebases
 under pressure. Its fixture prefix checks are not provider cache-hit or continuation-quality
 measurements. A fallback inside this mode can mean a complete Blackhole replacement, not native Pi.
+The current-memory portion can still change ahead of retained messages; immutable older segments
+therefore do not establish reuse of the entire conversation prefix.
 
 ## pi-cache-compact: reconstruct the discarded prefix
 
@@ -91,6 +93,12 @@ concatenates prepared spans if projection lookup fails.
 [Fixture-server tests](https://github.com/lennartschoch/pi-cache-compact/blob/a905ed86c3844f1759a9f194dbe4c84d279ac8ca/test/e2e.test.ts)
 verify request construction and persistence, not actual provider cache savings.
 
+Its `toolChoice: "none"` differs from the acting request and can affect provider cache matching. A
+reconstructed shorter prefix also needs a compatible earlier cache entry at an eligible boundary;
+matching text does not establish that such an entry was written. The package's
+[documented caveats](https://github.com/lennartschoch/pi-cache-compact/blob/a905ed86c3844f1759a9f194dbe4c84d279ac8ca/README.md#caveats)
+explicitly distinguish summary-request reuse from the new prefix on first continuation.
+
 It illustrates foreground summary-request optimization. It does not maintain observations or provide
 historical recall, and therefore addresses a different responsibility from the proposed core.
 
@@ -104,11 +112,31 @@ not necessarily after every later transformation.
 [Extension](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/index.ts),
 [builder](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/core.ts).
 
+OpenAI Responses payloads are unsupported, and hosted Anthropic is excluded by default. Supporting
+an Anthropic-shaped endpoint is not the same as enabling every hosted Anthropic configuration. The
+inspected
+[configuration](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/index.ts)
+therefore needs to be considered alongside the payload-shape claim.
+
 Optional one-token warming is skipped when the host will retry, but otherwise awaited. Warming usage
 is not added to reported compaction usage. The
 [README](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/README.md)
 includes author smoke runs on Pi 0.99.1 and a correction about a proxy removing cache-count fields.
 Those observations are not reproduced here and do not establish native-information parity.
+
+The author reports a 229-second native median across 132 compactions and an 86-second extension run
+on a local server. These are not matched trials and do not establish a causal speedup. Reported
+summary-cache counts include 56,192 of 56,216 input tokens for DeepSeek and 131,072 of 135,414 in an
+oMLX contributor run. These remain reports for those configurations, not reproduced Orbis results.
+[Author measurements](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/README.md),
+[contributor report](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/pull/3).
+
+The source history also identifies concrete compatibility failures: changing thinking settings
+changed the rendered prefix, and captured headers omitted SDK-added credentials. The implementation
+removed the thinking override and resolves authentication at request time. These examples explain
+why replay requires more than copying conversation text.
+[Thinking-setting correction](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/commit/c06fa4ba9c93847dca6b8e83d2cd9eda6d89c0f1),
+[authentication report](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/issues/2).
 
 ## cprune: reduction can change the source archive
 
@@ -162,7 +190,8 @@ ordinary context, but Pi does not merge independent replacement checkpoints. Fut
 companions should consume evidence and manage their own knowledge rather than each install a
 replacement compactor.
 
-These comparisons support keeping source handling, coverage, bounded work, and recall in the
-functional core while deferring provider optimization and broader knowledge maintenance. They do not
-choose the store, public integration interface, or final catch-up policy. Those remain decisions for
-the next brainstorm.
+These comparisons support keeping source handling, coverage, bounded work, and basic recall in the
+functional core. Session-entry storage and bounded same-observer catch-up are selected directions.
+Provider optimization remains a recommendation to assess separately; broader knowledge maintenance
+and public retrieval integration belong to later companion work. Exact failure, record, and budget
+contracts remain open.

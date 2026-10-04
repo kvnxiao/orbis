@@ -1,6 +1,6 @@
 # Memory systems and knowledge maintenance
 
-Research date: 2026-10-03. This comparison examines memory systems relevant to session continuation
+Research date: 2026-10-04. This comparison examines memory systems relevant to session continuation
 and complementary knowledge maintenance. It records source-inspected behavior and documented
 capabilities separately from proposed Orbis implications. No system was executed or benchmarked in
 this investigation.
@@ -77,6 +77,35 @@ superseded claims are different states. Additive storage avoids one destructive 
 not decide which conflicting fact is currently applicable. The earlier Mem0 paper remains research
 evidence for its evaluated system, not documentation of current OSS behavior.
 
+## Retrieval and reasoning as optional companion mechanisms
+
+The systems expose concrete alternatives beyond basic source search:
+
+| System                | Documented mechanism                                                                                                                               | Design limit                                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hindsight recall      | Semantic, keyword, entity-graph, and temporal routes; reciprocal-rank fusion and reranking; separate search-effort and returned-token controls.    | More retrieval routes do not prove better continuation. Native PostgreSQL keyword search uses `tsvector`/`ts_rank_cd`, so not every backend is BM25. |
+| Hindsight `reflect()` | Additional reasoning over curated mental models, observations, and facts, with chunk/document expansion and citations restricted to retrieved IDs. | Available cited IDs do not prove that the cited evidence supports the answer. Query-time reflection differs from background consolidation.           |
+| Honcho Chat           | Peer and workspace reasoning over representations and source-message segments, with observer/observed attribution and optional evidence reporting. | Reported evidence identifies what was read, not what caused the answer.                                                                              |
+| Mem0 Platform Dream   | Superseding and merging during addition processing, plus optional background synthesis with contributing memory references.                        | Hosted capability, not OSS behavior. Synthesis is prospective rather than an automatic replay of all stored records.                                 |
+
+Sources checked on 2026-10-04:
+[Hindsight retrieval](https://hindsight.vectorize.io/developer/retrieval),
+[Hindsight reflect](https://hindsight.vectorize.io/developer/reflect),
+[Honcho Chat](https://honcho.dev/docs/v3/documentation/features/chat),
+[Mem0 Dream](https://docs.mem0.ai/platform/features/dream).
+
+Honcho records messages before asynchronous derivation. Its queue reports representation, summary,
+and dream work, but excludes some infrastructure work; an empty queue is explicitly not a
+synchronization barrier. Admission and readiness need an observable contract beyond “background work
+finished.” [Reasoning](https://honcho.dev/docs/v3/documentation/core-concepts/reasoning),
+[queue status](https://honcho.dev/docs/v3/documentation/features/advanced/queue-status).
+
+Mem0 Platform's default reads include active and superseded records with historical status while
+hiding merged duplicates. That is a retrieval policy, not deletion of all prior evidence. Platform
+Dream, temporal reasoning, and decay must remain separate from OSS CRUD/search and its independently
+provisioned model, embedding, and storage dependencies.
+[Platform versus OSS](https://docs.mem0.ai/platform/platform-vs-oss).
+
 ## Letta: distinguish current MemFS from MemGPT
 
 The current [Letta SDK memory documentation](https://docs.letta.com/agent-sdk/memory) describes a
@@ -139,6 +168,31 @@ describes synchronization, corruption recovery, index repair, and source retenti
 Unreleased entries. These are concrete costs of maintaining multiple representations. Attribute the
 inspected behavior to its source revision, not automatically to published version 0.9.10.
 
+## Pi adapters and operational footprint
+
+| Integration              | Source or documentation evidence                                                                                                                                                                | Operational boundary                                                                                                                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hindsight coding agents  | Inspected manifest is `@vectorize-io/hindsight-coding-agents` 0.8.0; its Pi adapter registers tools, injects memory at `before_agent_start`, and forwards completed transcripts at `agent_end`. | Source-manifest version, not a verified npm release. The default deployment uses PostgreSQL/pgvector, including an embedded development option; Oracle AI Database is an enterprise alternative. |
+| Honcho community adapter | Official guide identifies `@agney/pi-honcho-memory`, message synchronization, cached profile/project context, and search/chat/remember tools.                                                   | Requires Honcho credentials. The self-hosted example has API, deriver, MCP, PostgreSQL/pgvector, and Redis services; not every deployment necessarily needs every example service.               |
+| Mem0 Pi adapter          | Official documentation identifies `@mem0/pi-agent-plugin` 0.3.0, capture at `agent_end`, semantic recall before turns, and project/session/global scope.                                        | Documentation-reported version, not independently checked against npm. Requires Platform credentials.                                                                                            |
+
+Sources:
+[Hindsight manifest](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-integrations/coding-agents/package.json),
+[Pi adapter](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-integrations/coding-agents/src/harness/pi-extension.ts),
+[Hindsight storage](https://hindsight.vectorize.io/developer/storage),
+[Honcho Pi guide](https://honcho.dev/docs/v3/guides/community/pi-honcho-memory),
+[deployment example](https://github.com/plastic-labs/honcho/blob/8e4df990d974c146a100e96ab4b3957a6591ceab/docker-compose.yml.example),
+[Mem0 Pi guide](https://docs.mem0.ai/integrations/pi-agent).
+
+Hindsight's default bank template is `coding-agent::{gitProject}`, where `gitProject` uses the main
+worktree root's basename. Without explicit mappings or overrides, unrelated repositories with the
+same basename select the same bank in the same backend namespace. A readable project name is not a
+unique identity; worktree-aware naming alone does not resolve this collision.
+[Bank selection](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-integrations/coding-agents/src/core/bank.ts).
+
+These adapters demonstrate optional services composed with Pi. They do not establish the same
+selected-lineage recall, checkpoint parity, retention, or instruction-authority policy as the core.
+
 ## What transfers to the core
 
 | Finding                                                       | Candidate core response                                                  | Limit                                                                                |
@@ -163,5 +217,6 @@ into integration options without selecting a common backend.
 | Automatic skill or instruction generation                 | Knowledge admission does not authorize changing operating policy.         | A separate user-facing capability defines approval and verification.                                       |
 | Shared storage service or generalized backend abstraction | Current continuation does not establish a multi-consumer deployment need. | Actual consumers require shared behavior or a supported deployment cannot use the simple store.            |
 
-These are research recommendations, not approved implementation choices. The sources do not choose
-session entries versus files, user-edit semantics, or the public companion interface for Orbis.
+The selected core uses Pi session records and basic browse/search/read recall. External semantic
+retrieval remains outside its MVP. These comparisons inform future companions; they do not approve a
+public interface, knowledge-admission policy, or broader retention guarantee.

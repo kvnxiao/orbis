@@ -1,9 +1,10 @@
 # Modularity and future knowledge packages
 
-Research date: 2026-10-03. The selected core prepares session continuation and provides evidence
+Research date: 2026-10-04. The selected core prepares session continuation and provides evidence
 recall. A future companion can turn experience into project knowledge or developer habits without
 making that processing a prerequisite for the core. This document compares integration directions;
-it does not approve a public API, storage format, or additional package name.
+it records the selected session-entry storage direction but does not approve a public companion API,
+persisted record schema, or additional package name.
 
 ## Separate the product responsibilities
 
@@ -97,7 +98,7 @@ responsibilities.
 | Separate database                      | Can support broader indexing and cross-session queries.                                                          | Adds schema/index lifecycle, deployment, backup, and reconciliation before the core needs broad knowledge search.                                                          |
 | Session records plus rebuildable index | Keeps one evidence authority while accelerating retrieval.                                                       | Index invalidation and rebuilding still need a contract; no measured need for it yet.                                                                                      |
 
-**(Recommended) Prefer session entries as the persistence candidate for the MVP.** Pi retains
+**Selected direction: use Pi custom session entries as authoritative core storage.** Pi retains
 recorded source through compaction, and custom entries do not enter model context automatically. A
 single accepted observer result could associate snapshot, observations, and coverage in one record;
 the exact commit and failure semantics still need specification. This is not a claim that Pi
@@ -129,6 +130,31 @@ publication-head protocol, or general recovery framework.
 [Session manager](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
 [extension lifecycle](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
 
+## Companion-specific integration obligations
+
+A companion managing editable files needs its own revision and conflict policy. A direct tool-call
+guard or cooperating writer queue does not prevent shell writes or external editors. File existence
+also does not establish project trust; public `ctx.isProjectTrusted()` supplies the host's trust
+state when project-local behavior depends on it.
+[Extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
+
+Pi's default session discovery is keyed by working directory, not an Orbis-defined project root.
+Cross-session knowledge therefore needs an explicit scope/index policy. Repository basenames are not
+unique, and deliberate forks can cross directories. Define applicability from actual identity and
+user intent rather than imposing an absolute path-equality rule.
+[Session discovery](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
+[adapter examples](agent-memory-systems.md#pi-adapters-and-operational-footprint).
+
+Structured task identities, dependencies, and validated transitions are another possible companion
+or workflow capability. They may help when prose repeatedly loses task relationships, but introduce
+transition maintenance and can still encode an incorrect model judgment. The core's explicit
+obligation preservation does not require a general task-management system.
+
+A public integration API for external retrieval is a selected post-MVP follow-up. Basic internal
+reads should preserve identity, attribution, scope, and unavailable-source outcomes so that a real
+consumer can define that API later. Vector indexes, query-time reasoning, and separate knowledge
+stores remain optional companion mechanisms, not prerequisites for the core's `recall` tool.
+
 ## A possible product family
 
 `@orbis/memory` remains the selected core name. Future names should describe user-visible jobs, for
@@ -141,7 +167,7 @@ knowledge. Provider compaction is a separate API mechanism, not a synonym for an
 
 ## Decisions still required
 
-Define the persistence format, source availability, and recall surface within Pi session retention.
-Design the public companion interface, broader knowledge admission, and correction policy when a
-concrete companion needs them. These dependencies allow the core to remain extensible without making
-future knowledge maintenance part of its first release.
+Define the record schema, source availability, and exact bounded browse/search/read contract within
+Pi session retention. Design the public companion interface, broader knowledge admission, and
+correction policy when a concrete companion needs them. These dependencies allow the core to remain
+extensible without making future knowledge maintenance part of its first release.

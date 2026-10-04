@@ -1,6 +1,6 @@
 # Evidence and evaluation
 
-Research date: 2026-10-03. Memory quality depends on construction, retrieval, and the acting model's
+Research date: 2026-10-04. Memory quality depends on construction, retrieval, and the acting model's
 use of evidence. This document assesses published results and their limits, then proposes an Orbis
 evaluation protocol. It reports no Orbis model-quality experiment.
 
@@ -22,7 +22,10 @@ retrieval, and reading. Original dialogue rounds outperform replacement with ext
 overall, although facts help some categories; enriched retrieval keys can improve discovery without
 replacing the original material. The benchmark is conversational question answering, not repository
 continuation. Reader capacity and retrieval depth affect results, so it does not establish a
-universal recall budget.
+universal recall budget. Section 5.2 reports degradation for Llama 3.1 8B as retrieved context
+grows, while GPT-4o improves over the tested larger contexts. Appendix E.4 also shows an inferred
+time range excluding relevant evidence. These findings motivate reader-specific output bounds and
+filtering diagnostics, not fixed thresholds for coding continuation.
 
 [Reproducing LightMem](https://arxiv.org/html/2607.29104v1) is a July 2026 preprint. It evaluates
 444 LongMemEval-S questions after excluding 56 assistant-memory cases, using one Qwen3-30B-A3B
@@ -91,15 +94,27 @@ Keep source unavailability distinct from a query returning no matches. A valid e
 different from a failed worker. These distinctions make the result useful for choosing the next
 change rather than attributing every failure to memory size.
 
+Failure to invoke recall is another observable outcome. Separate an agent that never searches from
+one whose query misses, and from one that misuses a correct result. Candidate tool guidance should
+identify missing historical details, conflicting claims, and precision-sensitive references as
+reasons to recall. Mandatory retrieval on every turn adds work without establishing better use.
+Recall guidance cannot substitute for required information in the checkpoint.
+
+Larger retrieved context is not an assumed improvement. Vary retrieval depth and reader capacity,
+and inspect cases where filtering excludes the correct source or extra context distracts the reader.
+Retained originals also permit targeted re-extraction when a concrete omission is found. Changing
+the observer model does not, by itself, justify automatically replaying the whole archive.
+
 ### Required baseline and diagnostic arms
 
-| Arm                                                  | Purpose                                                                       | Control                                                                     |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Native Pi, extension unloaded                        | Establish the host baseline.                                                  | Same initial repository, history, acting model, tools, and native settings. |
-| Proposed core enabled from session start             | Measure end-to-end continuation with preparation and recall.                  | Separate session/storage state; count all auxiliary work.                   |
-| Native Pi plus source recall, optional               | Isolate the benefit of historical access.                                     | Do not silently add the core snapshot to this arm.                          |
-| Correct supplied continuation state, optional oracle | Identify remaining acting-model failures when necessary evidence is provided. | Label the oracle; do not report it as deployable treatment performance.     |
-| Snapshot/observation diagnostic variants, optional   | Isolate a mechanism only after its semantics are defined.                     | Vary one policy at a time and declare the changed budget or exposure.       |
+| Arm                                                  | Purpose                                                                         | Control                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Native Pi, extension unloaded                        | Establish the host baseline.                                                    | Same initial repository, history, acting model, tools, and native settings. |
+| Proposed core enabled from session start             | Measure end-to-end continuation with preparation and recall.                    | Separate session/storage state; count all auxiliary work.                   |
+| Native Pi plus source recall, optional               | Isolate the benefit of historical access.                                       | Do not silently add the core snapshot to this arm.                          |
+| Correct supplied continuation state, optional oracle | Identify remaining acting-model failures when necessary evidence is provided.   | Label the oracle; do not report it as deployable treatment performance.     |
+| Full recorded context when it fits, optional         | Diagnose construction loss without treating an unlimited context as deployable. | Keep native automatic settings; report only histories that fit.             |
+| Snapshot/observation diagnostic variants, optional   | Isolate a mechanism only after its semantics are defined.                       | Vary one policy at a time and declare the changed budget or exposure.       |
 
 Manual compaction at matched milestones controls when evidence leaves recent context. Automatic runs
 preserve the same native settings and treat different compaction counts as an outcome. They answer
@@ -126,6 +141,28 @@ The category-level rubric in [continuity and invariants](continuity-and-invarian
 checkpoint diagnostics. A good prose answer about next steps is supporting evidence; actual edits,
 commands, and repository acceptance checks determine action outcomes.
 
+### Evidence identity and recovery fixtures
+
+These cases distinguish source access from successful extraction:
+
+- An accepted observer response has no observations. Search still discovers an exact identifier in
+  its retained source without a previously visible source ID.
+- A nonempty response omits the identifier. The same discovery and exact-read path still works.
+- Two distinct attempts produce identical error text. Both events retain their source attribution;
+  retrying an already accepted batch does not create a third event.
+- Delayed processing encounters “yesterday.” Resolve it only from adequate source-time evidence;
+  otherwise preserve uncertainty. An old log encountered later does not become a newer outcome.
+- A source exceeds one observer request, or a stream fails after producing some records. Record
+  which source content was actually presented and which result was accepted. A progress marker alone
+  does not establish either property.
+- A native checkpoint describes unprocessed originals. Accepting the checkpoint as derived evidence
+  does not mark those originals as observed or count repeated summary text as new corroboration.
+
+Record the discarded and retained boundaries for each compaction. Verify that the fact being tested
+actually left recent context; otherwise successful continuation does not test preservation. Keep
+answer keys and grader-only expectations outside files and tools available to the acting agent. The
+selected boundary and native automatic settings remain unchanged by these controls.
+
 ### Reporting and controls
 
 Declare fixture versions, source histories, compaction points, steering, writer and reader models,
@@ -142,6 +179,42 @@ observed data.
 Aggregate uncertainty across histories and runs. Several checkpoints within one history are
 correlated observations, not independent trials. Include failed and inconclusive runs. Avoid
 claiming superiority from one successful example, a larger compression ratio, or a vendor score.
+
+Count each inference once within a declared measurement interval. Separate inherited session usage
+from new work and avoid counting a persisted usage record again as another request. Local source
+reads have no independent model bill; their returned text can add acting-model input cost. Report
+component durations and end-to-end wall time separately because background work can overlap.
+
+Use matched histories and paired comparisons. Randomize or counterbalance run order and control
+shared-server contention for local models. Distinguish exploratory tuning histories from independent
+validation. Cost per verified success includes unsuccessful attempts and is undefined when no run
+succeeds. Report the first intervention or evidence-based repair point against compaction count and
+steering density, alongside whether recall restored continuation.
+
+### Cache-specific evaluation
+
+Request fixtures and provider measurements answer different questions. Fixtures can inspect actual
+adapter-bound messages, tool definitions, cache markers, and routing options without calling a
+model. Check consecutive requests after unchanged state, accepted background observations, recall,
+new file activity, reload, and each custom/native checkpoint transition. Compare message and block
+boundaries as well as text. Intentional checkpoint replacement differs from incidental churn.
+
+A separately authorized live comparison should:
+
+- Distinguish warm, expired, and unavailable-cache conditions; record relevant timing and settings.
+- Prevent one comparison arm from warming the other's cache where the provider permits isolation, or
+  disclose the shared-cache limitation.
+- Compare matching and different observer/acting models without assuming a shared cache namespace.
+- Record native cache warming and extension warming separately, including their usage and waiting.
+- Count observer preparation, catch-up, summary generation, the first continuation, and later turns.
+- Replay identical accepted memory to isolate presentation cost, then run end-to-end trials where
+  different context can affect extraction, retrieval, and subsequent actions.
+
+A higher cache-hit percentage is not sufficient: a smaller uncached request may cost less than a
+larger cached one. Report total task cost and continuation quality alongside provider cache reads,
+writes, ordinary input, and unavailable counters. The
+[cache analysis](prompt-caching-and-compaction.md) explains why identical text alone does not
+establish a reusable provider entry.
 
 ## Mechanical checks and live evaluation
 

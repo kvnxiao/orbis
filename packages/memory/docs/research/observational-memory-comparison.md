@@ -1,6 +1,6 @@
 # Observational memory, activation, and current work
 
-Research date: 2026-10-03. This comparison uses the two pinned Pi implementations described in
+Research date: 2026-10-04. This comparison uses the two pinned Pi implementations described in
 [observational memory](observational-memory.md) and Mastra's published memory package. It compares
 mechanisms, not measured superiority or runtime compatibility with Orbis.
 
@@ -103,24 +103,24 @@ finding, not a measured rate of false completion.
 
 ## Comparison against the selected core direction
 
-| Concern                 | Amos                                       | Elpapi development HEAD                         | Mastra stable                                    | Proposed Orbis direction                                              |
-| ----------------------- | ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
-| Preparation             | Background Pi workers                      | In-process role pipeline                        | Buffered observer with activation                | One observer response for snapshot and observations.                  |
-| Current work            | Descriptive journey, no protected snapshot | No separate protected snapshot                  | Structured task extractor, omitted in async path | Explicit continuation snapshot; exact freshness contract open.        |
-| Older detail            | External topics and historical ledger      | Retained observations/reflections, active drops | Reflected log with optional source paging        | Retain observations and original evidence; no required consolidation. |
-| Coverage at replacement | Incomplete-span risks                      | Catch-up, gap retention, fallback               | Preparation and activation checks                | Preserve Pi's cut; incomplete-source policy remains open.             |
-| Retrieval               | Ordinary detailed-file access              | Exact-ID recall                                 | Discovery and paging, optional semantic search   | Bounded source discovery and exact lookup; interface open.            |
-| Scope                   | Mixed ledger and mutable session files     | Selected branch                                 | Thread/resource configuration                    | Selected session lineage; broader knowledge deferred.                 |
-| Bounds                  | Chunk and role defaults                    | Context-relative selection and role limits      | Retry policy and thresholds                      | Finite input/output/work/recall limits; values open.                  |
+| Concern                 | Amos                                       | Elpapi development HEAD                         | Mastra stable                                    | Proposed Orbis direction                                                 |
+| ----------------------- | ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
+| Preparation             | Background Pi workers                      | In-process role pipeline                        | Buffered observer with activation                | One observer response for snapshot and observations.                     |
+| Current work            | Descriptive journey, no protected snapshot | No separate protected snapshot                  | Structured task extractor, omitted in async path | Explicit continuation snapshot; exact freshness contract open.           |
+| Older detail            | External topics and historical ledger      | Retained observations/reflections, active drops | Reflected log with optional source paging        | Retain observations and original evidence; no required consolidation.    |
+| Coverage at replacement | Incomplete-span risks                      | Catch-up, gap retention, fallback               | Preparation and activation checks                | Bounded same-observer catch-up, then native fallback; preserve Pi's cut. |
+| Retrieval               | Ordinary detailed-file access              | Exact-ID recall                                 | Discovery and paging, optional semantic search   | One bounded browse/text-search/exact-read tool; schema open.             |
+| Scope                   | Mixed ledger and mutable session files     | Selected branch                                 | Thread/resource configuration                    | Selected session lineage; broader knowledge deferred.                    |
+| Bounds                  | Chunk and role defaults                    | Context-relative selection and role limits      | Retry policy and thresholds                      | Finite input/output/work/recall limits; values open.                     |
 
 The Orbis column records the agreed direction and unresolved details; it is not a statement that the
 package is implemented or outperforms the comparators.
 
 ## Supported implications and unanswered questions
 
-**Keep one-response current-work maintenance as a candidate implementation.** Mastra shows that the
-output shape is practical, but its async exception shows why the update policy must be explicit.
-There is no evidence here that the added snapshot is free in tokens or latency.
+**Keep the selected one-response current-work maintenance direction.** Mastra shows that the output
+shape is practical, but its async exception shows why the update policy must be explicit. There is
+no evidence here that the added snapshot is free in tokens or latency.
 
 **Keep source discovery separate from exact-ID lookup.** A model cannot use an ID it never received.
 The combination of search and source expansion addresses a different failure from returning a

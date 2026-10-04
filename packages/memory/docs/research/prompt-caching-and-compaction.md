@@ -1,6 +1,6 @@
 # Provider compaction, prompt caching, and memory
 
-Research date: 2026-10-03. This analysis compares provider documentation with Pi 1.0.1 source. It
+Research date: 2026-10-04. This analysis compares provider documentation with Pi 1.0.1 source. It
 separates provider API contracts, Pi's integration, and proposed Orbis behavior. No provider
 requests or cache measurements were run.
 
@@ -15,6 +15,58 @@ requests or cache measurements were run.
 Preparing observations can avoid a foreground summary call when a checkpoint is ready. It adds
 background work and does not automatically reduce total task cost. Replacing context can require new
 cache computation even if the summary itself was prepared efficiently.
+
+## Why compaction-related caching matters
+
+A long acting conversation can have a large reusable prefix. A separate summary request that changes
+its early instructions or message structure may process that history again. This work occurs near
+context pressure, when the input can be largest. The cost is especially visible when local prefill
+is slow or hosted uncached input is expensive relative to cache reads.
+
+That summary-generation cost is distinct from continuing with a shorter history:
+
+| Request                        | Simplified prefix                                                            | Reuse opportunity                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Before compaction              | Stable instructions/tools, old conversation, recent turns.                   | Previously established conversation prefix.                                                    |
+| Summary with compatible layout | Same instructions/tools and source prefix, followed by summary instructions. | Eligible cached source prefix, if request settings also match.                                 |
+| First continuation             | Stable instructions/tools, new checkpoint, retained turns.                   | Eligible unchanged content before replacement; the changed conversation needs new computation. |
+| Later continuation             | Same checkpoint and retained turns, then appended activity.                  | Newly established compacted prefix while it remains compatible and available.                  |
+
+Retaining recent messages verbatim preserves their information and tool relationships, but moving
+them after a new checkpoint changes their prefix position. A stable routing key cannot repair that
+change. Compaction does not create a permanently uncached session: later turns can reuse the new
+prefix. Warming moves initial processing earlier and can reduce visible waiting; it still incurs
+work. A smaller context can also outweigh the one-time cache disruption over subsequent turns.
+[OpenAI caching guidance](https://developers.openai.com/api/docs/guides/prompt-caching),
+[Anthropic caching guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+
+For a prepared-memory design, checkpoint rendering can avoid the usual foreground summary call. That
+does not eliminate observer inference, bounded catch-up, instructed presentation, capacity repair,
+or native fallback. Their frequency and complete task cost determine whether further cache
+optimization is worthwhile. No numerical break-even point is established by this research.
+
+## Harness request construction
+
+| Path                        | Inspected or documented construction                                                                                                                          | Qualification                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Claude Code compaction fork | Preserves parent system context, tools, and conversation, then appends summary instructions.                                                                  | Anthropic's engineering account, not independent tracing of every current request.                                     |
+| Pi 1.0.1 native summary     | Dedicated summarization instructions and a transcript flattened into one user message.                                                                        | Does not preserve the acting request's rendered prefix.                                                                |
+| Codex local compaction      | History copy plus user compaction prompt and current base instructions; remaining prompt fields default to empty top-level tools and disabled parallel calls. | Copied messages alone do not establish a complete prefix match; history can also contain incremental tool definitions. |
+| Codex remote v2             | Current base instructions and acting-path tool policy, parallel calls enabled, and a compaction trigger.                                                      | Can trim tool history and clears the output schema; compaction effort selection differs.                               |
+
+The Codex findings use public source HEAD `b8dceb0d4f29e49e73daa08f57fcf5181186f354`, dated
+2026-10-04. Relevant files differ from released `rust-v0.160.0`; these are not release claims.
+Remote v2 can supply tool definitions through history and then leave top-level tools empty. Its
+cache accounting records measurement fields, not a demonstrated hit rate or the private service's
+summarization algorithm.
+
+Sources:
+[Claude Code account](https://claude.dev/blog/lessons-from-building-claude-code-prompt-caching-is-everything/#compacting-without-breaking-the-cache),
+[Pi summary construction](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts),
+[Codex local builder](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/compact.rs),
+[prompt defaults](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/client_common.rs),
+[remote builder](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/compact_remote_v2_attempt.rs),
+[remote stream/accounting](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/compact_remote_v2.rs).
 
 ## OpenAI compaction
 
@@ -77,10 +129,23 @@ settings can affect reuse. Reads, writes, and uncached input have different acco
 description of automatic caching is not a universal description of every current model or transport.
 
 [Anthropic caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) follows
-the ordered tools/system/messages prefix and explicit breakpoints. Five-minute and one-hour
-lifetimes have different write costs. The lifetime begins with the request, not after generation.
-Stable system/tool prefixes can remain reusable when the conversational prefix changes; replacing
-history still requires computation for the new conversation prefix.
+the ordered tools/system/messages prefix. It supports explicit breakpoints and top-level automatic
+`cache_control`. Writes occur at designated breakpoints; lookup searches up to 20 block positions
+for previously written entries, not arbitrary unchanged text. Five-minute and one-hour lifetimes
+have different write costs. Lifetimes begin at request start, reads refresh them, and longer-lived
+breakpoints precede shorter-lived ones when mixed.
+
+The
+[compaction guidance](https://platform.claude.com/docs/en/build-with-claude/compaction-threshold#prompt-caching)
+recommends a separate system-prompt breakpoint. Without an eligible prior entry, unchanged system
+text can still need recaching after history replacement. Current documentation also permits
+`max_tokens: 0` prewarming under stated restrictions and normal cache-write charges. Neither stable
+text nor warming makes checkpoint replacement free.
+
+OpenAI's guidance likewise makes message/block boundaries relevant. Extending the final message is
+not necessarily equivalent to appending another message at an eligible cache boundary. Cache modes
+and controls depend on the actual model and transport; use observed adapter payloads rather than one
+universal rule about automatic caching.
 
 This research does not select cache settings or promise a hit rate. It records the current contract
 shape because it changes the interpretation of package measurements and default behavior.
@@ -107,6 +172,51 @@ request-level tool list where supported. Therefore, a blanket claim that every t
 invalidates the entire tool prefix is outdated. This feature does not make checkpoint replacement
 free.
 [Release source](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/anthropic-messages.ts).
+
+### Observer requests have their own cache opportunities
+
+Stable observer instructions and output schemas can precede changing continuation state and new
+source batches. This permits reuse of the worker's static prefix without reproducing the acting
+conversation. If every request starts its changing section with a rewritten snapshot, reuse after
+that point may be limited. A rolling worker history or an acting-prefix fork is an alternative, with
+additional state, input size, and model/configuration constraints.
+
+Pi's public model registry exposes cache retention and an optional session routing identity. These
+are controls and hints, not cache handles. Direct observer calls do not automatically reproduce the
+SDK's acting-context projections, header/retry wrappers, or cache warming. Matching the acting model
+or session ID alone does not establish shared-prefix reuse.
+[Registry](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/model-registry.ts),
+[request options](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/types.ts),
+[SDK orchestration](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/sdk.ts).
+
+### Stable checkpoint presentation
+
+Pi renders the persisted summary as a user message under a fixed wrapper before retained history.
+Entry IDs and token estimates are not interpolated into that text. The selected checkpoint-only
+direction can therefore avoid routine changes to the early memory content.
+[Message conversion](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/messages.ts).
+
+Candidate package invariants are:
+
+- Derive the displayed file inventory for the checkpoint boundary, not each newly appended file
+  operation; later activity remains in the ordinary tail.
+- Render the same checkpoint deterministically and idempotently, including ordering and block shape.
+- Keep changing observer counters, timestamps, and observation indexes out of early instructions and
+  tool definitions; ordinary recall results append through the tool-result path.
+- Keep background state commits independent of acting-prefix changes until the next checkpoint.
+
+These properties prevent package-induced churn under unchanged selection/configuration. They do not
+promise provider hits or prevent another extension from changing the request. Prefix matching must
+not override correct lineage reconstruction, a real correction, or a required configuration change.
+The cache-specific MVP policy remains an open design decision.
+
+Pi also supports structured system/tool updates as transcript changes in compatible paths. A forced
+system-prompt string instead replaces the leading prompt for that run. Native warming is another
+independent variable: settings distinguish streaming and optional idle behavior, eligibility checks,
+and usage included in session totals. Record those settings when comparing an extension's immediate
+post-compaction warming, and count each request once.
+[Extension events](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/extensions.md#events),
+[native warming settings](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/settings.md#models-and-thinking).
 
 ## Separate preparation, compaction, and continuation costs
 
@@ -141,6 +251,12 @@ Checkpoint-only presentation does not require ordinary requests to fit a routine
 snapshot. Its effect on total cost remains unmeasured. The
 [Pi ecosystem comparison](pi-cache-compaction-ecosystem.md) separates source-reconstruction, payload
 capture, warming, and structural pruning from this memory presentation choice.
+
+Presentation experiments should render the same accepted canonical state under the same validity
+rules before their costs are compared. Accumulated full revisions or segments need their own growth
+bound. Request-local filtering does not establish durable correction or alter already prepared
+summary input; the [host analysis](pi-compaction.md#original-records-and-effective-context) explains
+those limits. Source retention, active presentation, and cache reuse remain separate properties.
 
 ## Candidate MVP stance
 

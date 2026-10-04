@@ -1,6 +1,6 @@
 # The two Pi observational-memory implementations
 
-Research date: 2026-10-03. Two unrelated repositories use the name `pi-observational-memory`. Their
+Research date: 2026-10-04. Two unrelated repositories use the name `pi-observational-memory`. Their
 architectures and failure policies must not be attributed to each other. This document records
 inspected source behavior; neither package was installed or run for this research.
 
@@ -68,6 +68,23 @@ Orbis or small local models. The
 has unrestricted Pi peers and 0.74.0 development dependencies; that does not demonstrate current Pi
 compatibility.
 
+Amos's chunk formation preserves whole-entry and tool-boundary relationships; an unfinished small
+chunk can wait. Its observer prompt asks for corrections, completion signals, identifiers, and error
+details, but the code does not validate semantic completeness. Source defaults also include a 10k
+active-pool target, 20k retained tail, 1k journey target, and the configured
+`openrouter/z-ai/glm-5.3` memory model. These describe the inspected implementation, not portable
+core defaults.
+[Observer trigger](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/src/hooks/observer-trigger.ts),
+[observer prompt](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/agent/observer/prompt.ts),
+[configuration](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/src/config.ts).
+
+New Amos sessions start disabled; the gate persists on resume, and disabling aborts workers. Its
+commands expose activation, status, compaction, and consolidation. Worker errors can notify the
+user, but command completion does not prove accepted discarded-span coverage. Operator controls and
+persistent fallback reporting are distinct contracts.
+[Entry point](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/src/index.ts),
+[runtime](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/src/runtime.ts).
+
 ## Elpapi v3: branch records and source-linked recall
 
 V3 schedules an in-process serial observer, reflector, and dropper. Observations have IDs,
@@ -130,6 +147,46 @@ the session model with a warning.
 [configuration](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/config.ts).
 
 This source review does not establish failure atomicity across every V3 worker error path.
+
+## Coverage, partial output, and bounded input
+
+The Elpapi source exposes several distinctions that matter beyond its particular architecture:
+
+| Mechanism                  | Inspected behavior                                                                                                | Limit                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Reflection coverage        | Counts supporting reflection references: zero, one, or at least two.                                              | Reference count does not measure preserved meaning or processed source.                    |
+| Observation identity       | Hashes observation content and skips matching IDs.                                                                | Identical wording can describe distinct source events.                                     |
+| Oversized source           | Serializes a marked head/tail excerpt and records the original entry ID.                                          | The omitted middle was not presented to the observer.                                      |
+| Progress after extraction  | Accepted records advance the source marker to the last serialized entry ID; excerpt IDs are logged.               | Entry-level progress can advance over content the observer did not read.                   |
+| Terminal stream failure    | Throws when nothing was recorded, but can return accumulated records after an error when the result is nonempty.  | Nonempty output does not establish successful completion of the whole assigned extraction. |
+| Full versus visible memory | Uses separate observation and maintenance boundaries; newer reflection/drop state becomes visible at a full fold. | Stored state, worker input, and the latest checkpoint can differ.                          |
+
+Sources at the inspected development revision:
+[coverage counts](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/agents/dropper/coverage.ts),
+[observer](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/agents/observer/agent.ts),
+[serialization](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/serialize.ts),
+[scheduler](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/hooks/consolidation-trigger.ts),
+[projection](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/session-ledger/projection.ts).
+
+These are source findings, not measured failure rates. They motivate separate checks for source
+presentation, accepted processing, and semantic preservation. The core still needs an explicit
+policy for oversized individual sources and interrupted proposals; retaining an original for recall
+does not prove it was processed.
+
+The active observation target is also different from a hard storage bound. A maintenance pass may
+produce no new reflection or decline removal. Reflections append rather than replacing conflicting
+conclusions in the inspected projection, while checkpoint and worker renderers impose their own
+bounds. A bounded prompt therefore does not establish bounded archival storage or correct retirement
+of old claims.
+
+Amos supplies a different caution: a successful consolidator drains a selected batch, but worker
+completion does not prove each observation was faithfully filed. Its journey supplies retrospective
+orientation rather than a current action plan. The
+[public plan](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/PLAN.md)
+and
+[ledger fold](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/src/ledger/fold.ts)
+support predictable transitions as an implementation goal, not proof that a protected continuation
+snapshot was evaluated and rejected.
 
 ## Implications for the core MVP
 
