@@ -20,8 +20,10 @@ responsibilities. [Work the design tree](#work-the-design-tree) defines the fall
 
 For issue-backed PR work, follow the
 [brainstorm publication policy](../../../docs/development-workflow.md#publish-brainstorm-records)
-with either interaction method. Read relevant prior decisions before exploring a topic again. When
-composing a brainstorm checkpoint, load the
+with either interaction method. Apply the
+[full-design approval gate](../../../docs/development-workflow.md#approve-the-complete-design-before-edits)
+before repository edits or decision publication. Read relevant prior decisions before exploring a
+topic again. When composing a brainstorm checkpoint, load the
 [record guide and example](../work-issue/references/brainstorm-records.md).
 
 ## Establish context and research
@@ -30,9 +32,9 @@ When the intended outcome can be named, create or reuse an issue at the appropri
 workflow's [work hierarchy](../../../docs/development-workflow.md#work-hierarchy),
 [issue labels](../../../docs/development-workflow.md#issue-labels), and
 [design and PR boundaries](../../../docs/development-workflow.md#design-and-pr-boundaries). Add it
-to the Project and keep unresolved decisions visible there. A package-delivery epic remains open
-after design approval; a design-only issue has its own design deliverable. Do not create
-implementation children for unsettled behavior.
+to the Project. Keep provisional decisions in chat or private scratch until full-design approval.
+A package-delivery epic remains open after design approval; a design-only issue has its own design
+deliverable. Do not create implementation children for unsettled behavior.
 
 Read the [specification guidance](../../../docs/specifications.md) and the repository `README.md`.
 When the request concerns an existing package, inspect its specification and source. Read its
@@ -55,29 +57,6 @@ and constraints, not facts available in the repository or documentation. When on
 unavailable, report the gap and continue from installed documentation and verified local context;
 defer decisions that require missing evidence.
 
-## Persist the research synthesis
-
-When the session conducts research, save its synthesis as Markdown in
-`packages/<name>/docs/research/` before writing any `SPEC.md`, including a draft or starter. Create
-that directory directly without scaffolding runtime files. If the package name is undecided, settle
-it before choosing the package path or writing the spec. A simple, settled package may not need
-research documents; do not create an empty folder or ceremonial report.
-
-Use descriptive topic filenames and a structure appropriate to the research. Record the research
-date, questions investigated, source links and relevant versions, verified findings, comparisons,
-implications for this package, and remaining gaps. Synthesize the evidence; do not substitute a link
-list or raw tool output. Distinguish observed behavior, author claims, inference, and design
-recommendations. When research includes papers, identify publication status and evaluation limits.
-When online access is unavailable, persist the local evidence and limitations before drafting the
-spec. Research documents cite external sources, not Orbis implementation code. Persist research
-performed during the brainstorm even when the design is already approved.
-
-As later rounds resolve factual gaps, update the synthesis before incorporating those findings into
-the spec. When revising an existing spec, read and verify the relevant research first; if research
-is needed and docs are missing, gather evidence and save the synthesis before editing the contract.
-Do not reconstruct missing evidence from memory or present retrospective research as preceding an
-existing spec.
-
 ## Work the design tree
 
 Keep the package focused on the developer's intended responsibility. Explore relevant boundaries
@@ -99,9 +78,10 @@ Consider an unconventional option when it serves the problem; do not manufacture
 quota. Use a structured question tool when available, or numbered questions in chat. Then wait for
 the developer's answers.
 
-After a reply, incorporate additions and corrections, preserve settled choices, and recompute the
-frontier. Defer dependent decisions to the next round. A recommendation or an unanswered question is
-not a developer decision. Research new factual gaps before asking the next round.
+After a reply, preserve settled choices in chat or private scratch and recompute the frontier.
+Defer dependent decisions to the next round. A recommendation or an unanswered question is not a
+developer decision. Research new factual gaps before asking the next round; wait for complete-design
+confirmation before editing or publishing.
 
 ## Explore terminal interactions
 
@@ -115,20 +95,45 @@ controls, local drafts, submitted input, and completed actions. Explore failure 
 paths as well as successful completion; do not infer an interaction merely from a proposed widget or
 hotkey.
 
-After shared design confirmation, write the document with the agreed interaction in its examples;
-do not impose another package's keybindings, modal layout, or approval workflow. Before reporting
+After full-design approval, record the agreed interactions in the document and its examples. Do not
+impose another package's keybindings, modal layout, or approval workflow. Before reporting
 completion, check that the document exists, the SPEC links to it, and its scenarios cover the agreed
 flows and match the requirements.
 
+## Confirm the complete design
+
+When the frontier is empty, present the integrated design and obtain confirmation under the
+[full-design approval gate](../../../docs/development-workflow.md#approve-the-complete-design-before-edits).
+An answer selecting an individual option does not confirm the complete design. Existing explicit
+approval of the complete requested scope is sufficient; do not request it again.
+
+## Persist the research synthesis
+
+After full-design approval, save any research synthesis as Markdown in
+`packages/<name>/docs/research/` before writing any `SPEC.md`, including a draft or starter. Create
+that directory directly without scaffolding runtime files. If the package name is undecided, settle
+it before choosing the package path or writing the spec. A simple, settled package may not need
+research documents; do not create an empty folder or ceremonial report.
+
+Use descriptive topic filenames and a structure appropriate to the research. Record the research
+date, questions investigated, source links and relevant versions, verified findings, comparisons,
+implications for this package, and remaining gaps. Synthesize the evidence; do not substitute a link
+list or raw tool output. Distinguish observed behavior, author claims, inference, and design
+recommendations. When research includes papers, identify publication status and evaluation limits.
+When online access is unavailable, persist the local evidence and limitations before drafting the
+spec. Research documents cite external sources, not Orbis implementation code. Persist research
+performed during the brainstorm even when the design is already approved.
+
+When revising an existing spec, read and verify relevant research during investigation. Keep new
+findings in chat or private scratch until approval, then save them before editing the contract.
+Do not reconstruct missing evidence from memory or present retrospective research as preceding an
+existing spec.
+
 ## Write the specification
 
-When research informed the design, confirm that its synthesis exists on disk and reflects the
-evidence used.
-
-Once the decisions are settled, summarize the resulting contract and confirm shared understanding.
-Under the [approval rule](../../../AGENTS.md#contract-before-code), existing explicit agreement is
-sufficient; do not ask for the same decision again. When uncertainty remains, mark the document as a
-draft and name the unresolved questions instead of claiming an approved contract.
+After full-design approval, confirm that any research synthesis exists on disk and reflects the
+evidence used. Update the requirements and conformance scenarios together, including the linked
+interaction contract, and remove resolved open questions.
 
 Write `packages/<name>/SPEC.md` as the guide's
 [Specify a package](../../../docs/specifications.md#specify-a-package) section requires, with

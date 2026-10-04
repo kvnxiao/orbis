@@ -19,7 +19,10 @@ Read the [specification guidance](../../../docs/specifications.md) and the targe
 scope, specification revision, and approval evidence from the current conversation or repository.
 Under the [approval rule](../../../AGENTS.md#contract-before-code), explicit developer direction
 approves the behavior it specifies, even before the SPEC file's status is updated. The existence of
-a specification does not establish approval.
+a specification does not establish approval. For a brainstormed change, verify approval of the
+complete requested design under the
+[full-design approval gate](../../../docs/development-workflow.md#approve-the-complete-design-before-edits)
+before editing or publishing plans; individual selections are insufficient.
 
 When the specification is missing or material design questions remain, research the current
 implementation and identify the missing contract. Use [design-package](../design-package/SKILL.md)

@@ -48,8 +48,11 @@ the requirements and must agree with them.
 Distinguish an implementation-defined choice from an unresolved decision. For an
 implementation-defined choice, state the allowed variation and require the implementation to
 document its selection. A draft can contain unresolved questions; resolve those that affect a task
-before implementing it. Do not let an agent infer answers from its own recommendation or the current
-implementation.
+before implementing it. For brainstormed changes, apply the
+[full-design approval gate](development-workflow.md#approve-the-complete-design-before-edits): keep
+provisional decisions in chat or private scratch, then update all affected requirements and
+scenarios together after approval. Remove resolved open questions in that update. Do not let an
+agent infer answers from its own recommendation or the current implementation.
 
 Write requirements against Pi's public capabilities. Independent implementations must satisfy the
 complete package contract, including the interfaces and workflows required by Orbis. Portability to

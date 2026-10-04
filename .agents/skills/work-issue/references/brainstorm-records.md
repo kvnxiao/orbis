@@ -4,8 +4,10 @@ Read when composing a brainstorm checkpoint or backfilling missing decision cont
 
 Preserve concise historical context under the workflow's
 [brainstorm publication policy](../../../../docs/development-workflow.md#publish-brainstorm-records).
-Record enough for a future session to reuse explored alternatives and decisions without repeating
-the investigation. Cover every substantive path; do not reproduce the full conversation.
+Publish only after the developer approves the complete design and the affected contract is updated.
+Until then, keep discussion notes in chat or private scratch, including at a handoff. Record enough
+for a future session to reuse explored alternatives and decisions without repeating the
+investigation. Cover every substantive path; do not reproduce the full conversation.
 
 ## Record decisions concisely
 
@@ -30,9 +32,10 @@ Use descriptive names throughout GitHub issue/PR bodies and comments. Do not ref
 conversation number or choices by option letter, even when the local chat used them. Expand a short
 answer into the selected behavior. No numbered question list is required in a shared record.
 
-An unanswered question is not rejected. A clarification or recommendation is not approval. A
-selected direction does not approve a complete SPEC or authorize implementation. Keep research
-hypotheses distinguishable from measured findings.
+An unanswered question is not rejected. A clarification or recommendation is not approval. An
+individual selection does not authorize repository edits or decision publication; apply the
+[full-design approval gate](../../../../docs/development-workflow.md#approve-the-complete-design-before-edits).
+Keep research hypotheses distinguishable from measured findings.
 
 ## Summarize and reuse
 
@@ -41,10 +44,10 @@ direction, important constraints, deferred work, unresolved decisions, and the n
 For a small discussion, one comment can serve as both record and summary. For a longer discussion,
 append only new decisions or changes and link earlier context; do not repeat the full history.
 
-State whether the design is ongoing or confirmed, including the scope of confirmation. At a handoff,
-a pending shared confirmation remains pending even if individual choices were approved. The issue
-body and any existing issue-backed PR link to the current summary, which indexes supporting records.
-Include and verify that link when publishing a new PR.
+State the confirmed scope and explicit deferrals. Link the current requirements instead of
+restating the contract in detail. The issue body and any existing issue-backed PR link to the
+current summary, which indexes supporting records. Include and verify that link when publishing a
+new PR.
 
 Before proposing options on an existing topic, read its summary and relevant records. Reuse their
 findings and rationale. If new evidence, changed constraints, or developer direction reopens a
@@ -71,20 +74,20 @@ would obscure the relationships. The normal checkpoint metadata remains required
 
 ### Result
 
-Use session-backed storage for the MVP. Retrieval remains open.
+The developer approved the complete MVP storage and retrieval design. The [memory requirements](<shared SPEC requirement URL>) specify its behavior.
 
 | Decision | Alternatives explored | Outcome and rationale | Follow-up |
 | --- | --- | --- | --- |
 | Storage authority | Pi session entries; separate store. | Selected Pi entries to align memory with session retention. A separate store is deferred. | Revisit if memory must outlive Pi sessions. |
-| Retrieval | Text search; vector search. | Open. The agent recommends text search for exact identifiers; comparative quality is unverified. | Developer chooses the MVP approach. |
+| Retrieval | Text search; vector search. | Selected text search for exact identifiers; vector search is deferred. Comparative quality is unverified. | Revisit if semantic retrieval becomes a requirement. |
 
 ### Evidence
 
-The developer confirmed the storage choice; complete design approval is pending. [Storage research](<shared evidence URL>) records the retention constraints. No live-model evaluation was performed.
+The developer confirmed the integrated design after reviewing its behavior, limits, and failure paths. [Storage research](<shared evidence URL>) records the retention constraints. No live-model evaluation was performed.
 
 ### Next action
 
-Developer: settle retrieval. Orchestrator: incorporate the selected directions after the remaining design decisions are resolved.
+Orchestrator: verify and deliver the approved SPEC changes. Runtime implementation remains outside this design-only request.
 ```
 
 For a later update, record only the new selection or changed reasoning and link the prior checkpoint.

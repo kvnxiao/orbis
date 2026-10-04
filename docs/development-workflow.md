@@ -231,6 +231,38 @@ deliveries can combine the SPEC and implementation in one PR. Later scoped revis
 combine approved SPEC amendments, code, and tests. Use a separate design PR when the decision needs
 independent review. The delivery issue persists across these PRs. Draft PRs share unfinished work.
 
+### Approve the complete design before edits
+
+For work that needs a brainstorm, complete the discussion and obtain approval of the full design for
+the requested scope before changing affected repository artifacts or publishing its decisions. Use
+read-only investigation to resolve facts. Keep provisional choices, evidence, and open questions in
+chat or private scratch under the [local evidence rules](#decisions-and-local-evidence). Individual
+answers settle parts of the discussion; they do not authorize edits or publication.
+
+Present the integrated design before requesting confirmation. Cover the scope, behavior and
+interfaces, state and lifecycle, failure and recovery paths, limits and controls, verification, and
+explicit deferrals that apply. Resolve every question that affects the requested scope; identify
+out-of-scope work without making dependent work appear ready. Ask the developer to confirm this
+complete picture, then wait. Preserve settled choices rather than asking each question again.
+
+Apply this gate to new designs and revisions, including SPECs, interaction contracts, research,
+plans, and implementation. Keep provisional decisions out of issue and PR bodies, comments, and wiki
+records, including interruption checkpoints. At an interrupted brainstorm, report pending approval
+in chat and retain private notes; a handoff or draft PR does not bypass the gate.
+
+When explicit direction already settles the complete requested change, proceed within that scope
+without inventing a brainstorm or requesting the same approval again. Full-design approval does not
+expand execution or publication authority under [Authorization](#authorization).
+
+After approval, persist any research synthesis, then update all affected requirements and
+conformance scenarios together. Remove resolved open questions and update the interaction contract
+before dependent implementation or decision publication. Keep the SPEC as the current behavioral
+contract, research as evidence and trade-offs, and decision records as choices and rationale. Link
+current summaries to requirements instead of maintaining additional versions of the contract.
+
+If new evidence reopens a material decision, pause affected edits and publication, preserve
+unaffected approvals, and confirm the complete revised scope before resuming.
+
 ## Delegation
 
 The orchestrator keeps `work-issue` and `verify-changes` coordination, decisions, obtaining the
@@ -314,6 +346,16 @@ The orchestrator inspects each returned diff, then verifies the accumulated chan
 roles from the [model table](#agent-models), and pass scoped write permissions to documentation and
 prose delegates instead of a read-only role. Reviewers follow their assigned skill.
 
+For design changes, compare the approved scope with the SPEC and interaction contract, even when no
+runtime implementation exists. Check that:
+
+- Each approved in-scope behavior has a requirement and conformance scenario.
+- Resolved questions are removed from open lists; remaining questions concern explicit deferrals.
+- Current summaries and research agree with the contract without adding requirements of their own.
+
+Report contract inconsistencies separately from runtime verification gaps. Passing repository checks
+do not establish agreement with the approved design.
+
 Review agent instructions and configuration for correctness when changes affect routing,
 authorization, delegation, checkpoints, or execution. These files govern agent behavior regardless
 of their Markdown or configuration extension.
@@ -332,9 +374,11 @@ For authorized issue-backed work, the orchestrator publishes a checkpoint at eac
 at a blocked or interrupted handoff, and at delivery. The checkpoint covers delegated assignments,
 the orchestrator's own bounded work, and reviews with no findings; an intermediate assignment does
 not get its own comment. The request's explicit scope limits under [Authorization](#authorization)
-also apply to publication. Publish when the checkpoint is reached instead of deferring all records
-until the session ends. A sudden process termination may prevent publication; report any resulting
-gap when resuming.
+also apply to publication. The
+[full-design approval gate](#approve-the-complete-design-before-edits) controls brainstorm
+checkpoints; keep them private until approval. For other work, publish when the checkpoint is
+reached instead of deferring all records until the session ends. A sudden process termination may
+prevent publication; report any resulting gap when resuming.
 
 Author a summary from the work and verified results, or verify a separately authored delegate packet
 before publishing it. For brainstorms, also preserve the explored choices and decisions under
@@ -370,11 +414,12 @@ choices and prior exploration. Reopen a decision when the developer requests it 
 changed constraints justify it, and record why. Do not repeat the exploration merely because a new
 agent session lacks the local chat.
 
-After an answered round or a material clarification, publish only the new decisions and changes
-before advancing to the next round or dependent work. At a planned handoff, PR creation or update,
-or the end of the brainstorm:
+Wait for [full-design approval](#approve-the-complete-design-before-edits) and reconcile the
+affected contract before publishing. Answered rounds, material clarifications, and planned handoffs
+do not authorize partial records. After approval:
 
-- Publish any remaining decisions and open topics, plus a brief current summary.
+- Publish one consolidated record and brief current summary covering the approved scope, explored
+  alternatives, and explicit deferrals.
 - Link the summary from the issue body and any existing issue-backed PR. Include the link when
   creating a PR and verify it after publication. Link prior records instead of repeating them.
 - State the discussion's coverage, missing history, unresolved decisions, and authorization limits.
@@ -385,11 +430,11 @@ preserving every substantive path, not reproducing the conversation. Do not past
 rounds or repeat the full session in each checkpoint. Use the descriptive references required by
 [Write GitHub Markdown](#write-github-markdown).
 
-Keep later selections and corrections append-only under the
-[checkpoint policy](#publish-checkpoint-artifacts). Follow explicit publication limits under
-[Authorization](#authorization). If publication is unavailable, retain drafts and report the gap; do
-not describe local records as shared. PR-only work does not acquire an issue or issue-comment
-requirement from this rule.
+Apply the same approval gate to later brainstormed revisions. Keep approved updates append-only
+under the [checkpoint policy](#publish-checkpoint-artifacts). Follow explicit publication limits
+under [Authorization](#authorization). If publication is unavailable, retain drafts and report the
+gap; do not describe local records as shared. PR-only work does not acquire an issue or
+issue-comment requirement from this rule.
 
 ## Write GitHub Markdown
 
