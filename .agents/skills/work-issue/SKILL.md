@@ -83,10 +83,13 @@ issue or PR. Reuse prior exploration and settled choices; record new evidence, c
 or developer direction when reopening a decision. Recover missing context from available public
 evidence without inventing options or approval.
 
-Read the affected SPEC and interaction contract, then inspect current source and tests. For
-workspace work without a package SPEC, use the approved request and repository constraints. When an
-issue exists, compare its recorded baseline against relevant changes. Preserve unrelated files and
-concurrent work. Distinguish developer-approved behavior, execution authorization, and verification
+Read the affected SPEC and interaction contract, then inspect current source and tests. Compare
+approved decisions with the contract and identify stale open questions or pending amendments. Apply
+the [full-design approval gate](../../../docs/development-workflow.md#approve-the-complete-design-before-edits)
+before reconciling them: keep provisional changes in chat or private scratch until the complete
+requested scope is confirmed. For workspace work without a package SPEC, use the approved request
+and repository constraints. When an issue exists, compare its recorded baseline against relevant
+changes. Preserve unrelated files and concurrent work. Distinguish developer-approved behavior, execution authorization, and verification
 still required.
 
 ### Classify and state
@@ -155,7 +158,8 @@ unfinished child from its dependencies, approved priority, and existing active w
 completed design or duplicate current plans. State blockers and continue independent authorized
 work only within the requested target. Do not dispatch conflicting edits concurrently.
 
-For brainstorms in issue-backed PR work, publish concise decisions and explored alternatives under
+For brainstorms in issue-backed PR work, wait for full-design approval and contract reconciliation,
+then publish concise decisions and explored alternatives under
 the [brainstorm publication policy](../../../docs/development-workflow.md#publish-brainstorm-records).
 When composing a brainstorm checkpoint, load the
 [record guide and example](references/brainstorm-records.md), including when another skill conducts
@@ -163,7 +167,8 @@ the discussion. Cover substantive paths without copying the conversation.
 
 ## Pause and deliver
 
-For issue-backed work, publish checkpoints under the workflow's
+For an unconfirmed brainstorm, retain pending decisions privately and report the approval still
+needed in chat. For other issue-backed work, publish checkpoints under the workflow's
 [checkpoint policy](../../../docs/development-workflow.md#publish-checkpoint-artifacts) in the
 [checkpoint packet format](references/checkpoint-format.md), and update the Current handoff table by
 the plan format's
@@ -172,9 +177,10 @@ work, the PR is the delivery record that the work paths define. Record a package
 workflow's
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
 
-Before creating or updating an issue-backed PR, verify that published records cover the brainstorm
-to that point and the issue and prepared PR body link to a concise current summary. After publication,
-verify the stored PR body includes that link. Report missing history or publication gaps explicitly.
+Before creating or updating an issue-backed PR with brainstorm results, verify full-design approval,
+contract reconciliation, and publication of the consolidated decisions. Verify that the issue and
+prepared PR body link to a concise current summary. After publication, verify the stored PR body
+includes that link. Report missing history or publication gaps explicitly.
 Use descriptive decisions and outcomes in all issue/PR bodies and checkpoint comments; do not
 reference conversation question numbers or option letters.
 

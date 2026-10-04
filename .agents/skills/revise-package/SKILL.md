@@ -81,8 +81,11 @@ waiting. A request to improve an experience does not settle its submission, canc
 persistence behavior.
 
 When design decisions remain, use [design-package](../design-package/SKILL.md) for the affected
-design. Preserve settled requirements and keep research proportional to factual uncertainty; persist
-research under that skill's
+design. Apply the
+[full-design approval gate](../../../docs/development-workflow.md#approve-the-complete-design-before-edits)
+before contract, research, plan, or implementation edits and before decision publication. Preserve
+settled requirements and keep research proportional to factual uncertainty; persist research under
+that skill's
 [research synthesis rules](../design-package/SKILL.md#persist-the-research-synthesis).
 
 Before implementing changed behavior, update the approved requirements and their conformance
