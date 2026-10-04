@@ -337,11 +337,11 @@ until the session ends. A sudden process termination may prevent publication; re
 gap when resuming.
 
 Author a summary from the work and verified results, or verify a separately authored delegate packet
-before publishing it. Do not copy ordinary conversation turns, delegate replies, tool-call dumps, or
-raw JSONL into the journal. Record conclusions and their supporting rationale, not private
-deliberation. Scale detail to the work: a clean review may need only its scope, verdict, checks, and
-remaining obligations. Group related artifacts in one comment when practical, retaining each
-packet's attribution and outcome. Use the
+before publishing it. For brainstorms, also preserve the explored choices and decisions under
+[Publish brainstorm records](#publish-brainstorm-records). Do not publish raw session logs, delegate
+replies, tool-call dumps, or private deliberation. Scale other checkpoint detail to the work: a
+clean review may need only its scope, verdict, checks, and remaining obligations. Group related
+artifacts in one comment when practical, retaining each packet's attribution and outcome. Use the
 [checkpoint packet format](../.agents/skills/work-issue/references/checkpoint-format.md), which
 defines the packet's identifier, metadata table, sections, and attribution rules.
 
@@ -357,7 +357,46 @@ an outage, retain an unpublished draft locally and report the publication gap. P
 access returns without inventing missing evidence. An unpublished draft is not a shared handoff, and
 a checkpoint does not transfer unpushed code to another machine.
 
+## Publish brainstorm records
+
+For brainstorms in issue-backed work that produces or updates a PR, publish concise decision records
+and a current summary as comments on the owning issue. Cover every substantive question, explored
+alternative, and developer decision, including unanswered or deferred topics. Preserve enough
+context for future sessions to reuse the exploration without the originating chat. Use the
+[brainstorm record format](../.agents/skills/work-issue/references/brainstorm-records.md).
+
+Before exploring a topic, read the relevant published decisions and their rationale. Reuse settled
+choices and prior exploration. Reopen a decision when the developer requests it or new evidence or
+changed constraints justify it, and record why. Do not repeat the exploration merely because a new
+agent session lacks the local chat.
+
+After an answered round or a material clarification, publish only the new decisions and changes
+before advancing to the next round or dependent work. At a planned handoff, PR creation or update,
+or the end of the brainstorm:
+
+- Publish any remaining decisions and open topics, plus a brief current summary.
+- Link the summary from the issue body and any existing issue-backed PR. Include the link when
+  creating a PR and verify it after publication. Link prior records instead of repeating them.
+- State the discussion's coverage, missing history, unresolved decisions, and authorization limits.
+
+Prefer a compact decision table or short bullets. Summarize questions and alternatives in words;
+retain rationale, consequential clarifications, and reconsideration conditions. Full coverage means
+preserving every substantive path, not reproducing the conversation. Do not paste entire question
+rounds or repeat the full session in each checkpoint. Use the descriptive references required by
+[Write GitHub Markdown](#write-github-markdown).
+
+Keep later selections and corrections append-only under the
+[checkpoint policy](#publish-checkpoint-artifacts). Follow explicit publication limits under
+[Authorization](#authorization). If publication is unavailable, retain drafts and report the gap; do
+not describe local records as shared. PR-only work does not acquire an issue or issue-comment
+requirement from this rule.
+
 ## Write GitHub Markdown
+
+Use descriptive decision names and explicit outcomes in issue bodies, PR bodies, and comments,
+including checkpoints on both work paths. Do not refer to questions by their conversation numbers or
+to choices by option letters. Translate a local answer into its meaning, such as “use Pi session
+entries as authoritative storage,” and link the decision record when more context is needed.
 
 For issue bodies, issue comments, PR bodies, and PR comments, write each prose paragraph or list
 item on one physical line and let the browser wrap it. Preserve structural newlines for headings,

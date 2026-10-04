@@ -30,9 +30,9 @@ records:
   uses its explicit model selection: the spawn call's model override or, without one, the `model`
   field of its agent definition.
 
-For retrospective packets, use that turn's model rather than a later selection. Inspect only the
-identity metadata; do not publish session logs. Use `Unknown` only when the relevant metadata and
-explicit selection cannot be obtained, and state the lookup gap in Evidence. A repository default
+For retrospective packets, use that turn's model rather than a later selection. For model
+attribution, inspect only identity metadata; do not publish session logs. Use `Unknown` only when
+relevant metadata and explicit selection cannot be obtained, and state the lookup gap in Evidence. A repository default
 alone does not establish the model used for a turn.
 
 Agent and Model identify who authored the packet, not the account that posted the comment. When an
@@ -49,6 +49,12 @@ Follow the table with these sections:
   unverified results. Include useful commands and shared links; make the result understandable
   without ignored local files.
 - **Next action:** remaining obligations, blockers, and the responsible role's next action, or None.
+
+For a brainstorm, use the concise [decision record format](brainstorm-records.md). Link prior
+records rather than repeating the discussion. Describe questions, alternatives, and outcomes in
+words; do not reference conversation question numbers or option letters. Apply the same rule to
+issue and PR body updates under
+[Write GitHub Markdown](../../../../docs/development-workflow.md#write-github-markdown).
 
 GitHub's comment creation timestamp records publication time. Do not add a recording timestamp, work
 interval, or duration to the packet. When an observation's time affects its meaning, state that time

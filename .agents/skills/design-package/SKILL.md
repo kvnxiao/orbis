@@ -18,6 +18,12 @@ confirmation of shared understanding. Resolve it through the host's available sk
 machine-specific path, and keep this skill's Orbis research, contract, and delivery
 responsibilities. [Work the design tree](#work-the-design-tree) defines the fallback interaction.
 
+For issue-backed PR work, follow the
+[brainstorm publication policy](../../../docs/development-workflow.md#publish-brainstorm-records)
+with either interaction method. Read relevant prior decisions before exploring a topic again. When
+composing a brainstorm checkpoint, load the
+[record guide and example](../work-issue/references/brainstorm-records.md).
+
 ## Establish context and research
 
 When the intended outcome can be named, create or reuse an issue at the appropriate scope under the
