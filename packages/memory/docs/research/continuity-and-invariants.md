@@ -4,11 +4,10 @@ Research date: 2026-10-03. The product objective is effective continuation: afte
 acting model can perform the right next action under the current instructions. A shorter checkpoint,
 a successful observer call, and an available archive are each insufficient evidence of that outcome.
 
-This document answers the original eight compaction questions against the smaller core. All
-recommendations are proposals for discussion. They do not amend the draft SPEC or import the former
-package's policies. The [Pi audit](pi-compaction.md) establishes host mechanics;
-[evidence and evaluation](evidence-and-evaluation.md) distinguishes measured results from proposed
-checks.
+This document examines eight compaction policy questions for the core. Recommendations are proposals
+for discussion and do not amend the draft SPEC. The [Pi audit](pi-compaction.md) establishes host
+mechanics; [evidence and evaluation](evidence-and-evaluation.md) distinguishes measured results from
+proposed checks.
 
 ## What continuation evidence establishes
 
@@ -89,25 +88,69 @@ is not a semantic guarantee.
 
 ## 2. Handle unprocessed evidence at the prepared cut
 
-**(Recommended) Start with whole-checkpoint native fallback when accepted observation coverage is
-incomplete.** Background preparation remains useful, but the MVP does not require a new foreground
-extraction or summarization path. Preserve the prepared cut even when the observer is behind.
+**(Recommended) Attempt bounded catch-up through the existing observer, then use whole-checkpoint
+native fallback if the candidate remains ineligible.** Return an already eligible checkpoint
+immediately. If missing coverage is the reason a custom checkpoint cannot be used, wait for or
+extend observer work within a finite budget. Reuse the same extraction, validation, and commit
+protocol as background preparation.
 
-This keeps one accepted-processing protocol and uses the host's existing recovery. It is viable only
-if fallback frequency and resulting continuation are acceptable. Measure those outcomes before
-claiming the custom checkpoint is normally available. This policy cannot repair information already
-lost from a prior custom checkpoint.
+After catch-up, reread accepted state and check coverage through Pi's prepared cut. Return a custom
+checkpoint only when the source selection, snapshot, and capacity checks also pass. Otherwise,
+decline and let Pi produce the whole checkpoint. Keep the prepared `firstKeptEntryId` and the host's
+retry decision throughout; moving the cut is not a recovery option for this package.
 
-| Alternative                                            | Benefit                                                                      | Reason to defer or reject for this MVP                                                                                                                       |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bounded observer catch-up                              | Reuses the observer contract and can make more custom checkpoints eligible.  | Adds foreground latency, cancellation, deadline, partial-commit, and navigation races. Consider it if measured lag makes fallback common.                    |
-| Native-style summary of only the uncovered span        | Avoids duplicating processed content and can address an unusually large gap. | Adds a second extraction representation and reconciliation rules. Prior checkpoint updates, corrections, and split turns still require coherent integration. |
-| Move the cut to the last observed source               | Retains unprocessed material verbatim and appears in other packages.         | Conflicts with the settled requirement to preserve Pi's prepared `firstKeptEntryId`.                                                                         |
-| Treat scheduled or partially completed work as covered | Increases apparent eligibility.                                              | Provides no accepted account of the missing sources. Reject it.                                                                                              |
+This puts work needed to preserve continuation inside the core. It does not introduce a separate
+model role, reflection pipeline, or broader knowledge maintenance. The implementation still needs
+foreground coordination: a deadline must include waiting for existing work, late results must not
+commit after invalidation, and competing jobs must not process or publish the same span twice. A
+chunk-count bound alone is not an elapsed deadline.
 
-Bounded catch-up is technically feasible through public APIs. Source inspection does not establish
-that its extra complexity produces better continuation or lower total cost. If selected later, a
-finite number of chunks is not a substitute for an elapsed deadline and cancellation policy.
+### Basis in inspected implementations
+
+The inspected systems do not converge on one recovery policy. Incremental preparation is common;
+catch-up, retention of uncovered source, and another compaction representation are different ways to
+handle lag.
+
+| Implementation              | Handling of incomplete preparation                                                             | Limit of the comparison                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Amos observational memory   | Waits for observer work and adjusts the cut toward observed chunks.                            | Waiting does not prove every chunk succeeded; changing the prepared cut is outside Orbis's contract. |
+| Elpapi released 3.1.4       | Renders available observations and delegates when the result is empty.                         | A nonempty checkpoint does not prove complete coverage.                                              |
+| Elpapi development revision | Attempts bounded catch-up, rereads committed state, then changes the cut or delegates.         | Direct precedent for catch-up, with a boundary adjustment Orbis excludes.                            |
+| Mastra stable 1.35.0        | Prepares buffers ahead of time and can observe synchronously when preparation is insufficient. | Supports foreground completion, but operates in its own context processor without Pi fallback.       |
+| Blackhole 0.5.10            | Builds a structural summary from source plus available observations.                           | Structural output is a separate representation; full observation coverage is not required.           |
+| Hermes                      | Attempts a bounded memory save and then permits native Pi compaction.                          | Pi owns the checkpoint throughout, so this is not recovery from a custom checkpoint.                 |
+
+Sources and pinned implementation details:
+[both observational-memory projects](observational-memory.md),
+[Mastra](observational-memory-comparison.md), [Blackhole](pi-cache-compaction-ecosystem.md),
+[Hermes](agent-memory-systems.md).
+
+The supported design principle is to avoid treating unprocessed source as covered: finish its
+representation, retain it, or let another complete compaction path process it. Not every inspected
+package enforces that principle completely. Catch-up has the clearest direct precedent in current
+Elpapi and a related mechanism in Mastra. None of these inspected paths implements a native-style
+model summary of only the uncovered span.
+
+### Trade-offs and alternatives
+
+Catch-up addresses a specific failure: a small missing span prevents use of otherwise useful
+prepared memory. Reusing the observer keeps one accepted representation for the snapshot and
+observations. This is an engineering recommendation for the continuation objective, not measured
+evidence of better quality, lower cost, or lower latency in Orbis. Catch-up can add foreground delay
+and still end in native fallback.
+
+| Alternative                                            | Benefit                                                                                         | Reason not to select it as the default                                                                                                                  |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Immediate whole-checkpoint native fallback             | Avoids foreground observer coordination and remains the recovery when catch-up cannot complete. | Even a small fillable gap discards the opportunity to use prepared memory. Prefer it directly when catch-up cannot make the candidate eligible.         |
+| Native-style summary of only the uncovered span        | Avoids duplicating processed content and can address an unusually large gap.                    | Adds a second representation and reconciliation rules for corrections, ongoing work, and prior checkpoints; no direct precedent in the inspected paths. |
+| Move the cut to the last observed source               | Retains unprocessed material verbatim and appears in other packages.                            | Conflicts with the requirement to preserve Pi's prepared boundary.                                                                                      |
+| Treat scheduled or partially completed work as covered | Increases apparent eligibility.                                                                 | Provides no accepted account of the missing sources. Reject it.                                                                                         |
+
+Exact limits and queue/cancellation behavior need design and model-free fixtures. Evaluation should
+measure how often catch-up completes, foreground waiting, fallback frequency, and subsequent
+continuation. Whole-checkpoint fallback still cannot recover information omitted from a prior custom
+checkpoint automatically. Catch-up also does not fix native inheritance of custom file metadata;
+that parity obligation needs a separate solution.
 
 ## 3. Define whole-checkpoint fallback and its reports
 
@@ -137,32 +180,42 @@ Cancellation and throwing are rejected as generic substitutes for fallback. Canc
 the pending overflow retry. A thrown hook error is reported and swallowed by Pi, so it does not
 provide a reliable veto. Stale or unverified partial rendering is also rejected.
 
-There is one inherited-host limitation: later native fallback receives custom checkpoint prose but
-not its deterministic file metadata through the native inheritance path. Preserving a visible file
-list in the prose helps, but does not prove exact cumulative native file lists. If the product
-requires that stronger guarantee across every fallback, discuss a host change or a different
-recovery contract explicitly; do not claim it already exists.
+Native fallback receives custom checkpoint prose but not its deterministic file metadata through the
+native inheritance path. Preserving a visible file list in the prose helps, but does not by itself
+establish preservation of cumulative file information. The selected parity requirement applies
+across custom/native transitions. The integration must provide equivalent information, whether
+through host support or another recovery mechanism; deterministic metadata inheritance is one
+possible mechanism, not the requirement itself.
 
 ## 4. Handle an oversized snapshot
 
-**(Recommended) Keep ordinary requests independent of snapshot fitting; decline custom compaction if
-the complete eligible checkpoint cannot fit.** This follows checkpoint-only presentation and avoids
-copying the former ordinary-request abort. Set finite generation and rendering budgets, and report
-capacity fallback separately from invalid output.
+**(Recommended) Attempt bounded condensation through the existing observer when the snapshot can
+plausibly be reduced, then fall back if the complete candidate still cannot fit.** Keep ordinary
+requests independent of snapshot fitting: checkpoint-only presentation does not routinely inject the
+snapshot between compactions.
 
-Observer condensation is a reasonable later option: the observer can restate the same obligations
-more compactly. It adds another semantic-loss opportunity and needs a bounded repair protocol. A
-successful rewrite still needs validation and continuity evaluation. It cannot promise that every
-possible set of active obligations fits a fixed budget.
+First remove optional checkpoint material under the chosen selection policy. If the complete
+snapshot still exceeds capacity, a bounded repair can restate its obligations more compactly. Retain
+the previously accepted state until a replacement passes validation and is eligible for the current
+source selection. Limit attempts and elapsed work; exact defaults remain open. Report capacity
+fallback separately from invalid output.
+
+Condensation serves current continuation. It does not introduce topic consolidation, reflection on
+broader knowledge, or a new model role. It is still lossy inference: structural validation cannot
+prove every obligation survived, so evaluation must test repeated repair and corrections. Native
+fallback also summarizes through inference; avoiding an additional repair call alone does not
+establish that immediate fallback preserves more information.
 
 Priority sections can allocate space among optional historical details and indexes. They must not
-silently discard an old active obligation to make a checkpoint fit. Truncating the complete snapshot
-and calling the remaining prefix sufficient is rejected. Returning the former request-time abort is
-also rejected for this checkpoint-only product unless a new ordinary-request responsibility is
-explicitly selected.
+silently discard an active obligation to make a checkpoint fit. Truncating the snapshot and calling
+the remaining prefix sufficient is rejected. Aborting an ordinary request because an uninjected
+snapshot is oversized is also rejected unless the product adds a request-time snapshot
+responsibility.
 
-Native fallback has its own context and summary limits. This recommendation is a recovery policy,
-not proof that the native model can always fit or perfectly preserve an arbitrarily large task.
+Immediate native fallback remains appropriate when repair cannot make the candidate eligible or
+exhausts its budget. Neither repair nor native fallback can promise that every possible set of
+active obligations fits a fixed budget. The recommendation is a bounded recovery policy whose
+quality and cost require evaluation.
 
 ## 5. Choose when the snapshot appears
 
@@ -178,28 +231,39 @@ unmeasured.
 
 ## 6. Honor `/compact <instructions>`
 
-**(Recommended) Initially delegate instructed compaction to native Pi and document the host's exact
-behavior.** The extension should not accept instructions and silently ignore them while returning
-its ordinary checkpoint. Native delegation avoids a separate package-owned instruction interpreter
-or rewriting call in the first implementation.
+**(Recommended) Assess instruction-aware checkpoint generation as core continuation behavior before
+selecting native delegation as the policy.** The extension should apply manual instructions to the
+checkpoint it returns, including relevant split-turn content. It should not accept instructions and
+silently return its ordinary rendering. The choice between a package-owned generation path and
+complete host delegation remains open.
 
-This recommendation has a material qualification: native Pi passes instructions to the history
-summary, but not the separate turn-prefix summary. When only the prefix is summarized, no inference
-call receives those instructions. Delegation therefore preserves native semantics; it does not
-promise that every instruction governs every summarized span.
+Native Pi passes instructions to the history summary, but not the separate turn-prefix summary. When
+only the prefix is summarized, no inference call receives those instructions. Native delegation
+therefore preserves host semantics but does not establish that instructions govern every summarized
+span.
 
-If the product requires stronger instructed-compaction behavior, select it explicitly. One option is
-a bounded package-owned checkpoint rewrite using the instructions and all eligible inputs. That is
-feasible through public inference APIs, but needs routing, failure, and capacity rules. Ignoring
-instructions or trying to infer arbitrary instructions through deterministic section selection is
-rejected. A host-level fix is another option for improving native behavior without introducing a
-second package inference path.
+A bounded package-owned generation path could use the instructions and all eligible checkpoint
+inputs, reusing observer capabilities where their contract fits. It needs explicit behavior for
+routing, capacity, cancellation, and unsuccessful generation. Presentation instructions must not
+silently rewrite canonical task state or weaken required continuation content. The exact output and
+state-update contract need design; this is not a claim that the ordinary observer already implements
+instructed compaction.
 
-## 7. Reassess stale-note cancellation
+A host fix could make native delegation cover the split prefix as well as history. That would
+benefit native and extension-assisted compaction, but depends on host support. Native delegation
+without that fix remains a comparison and recovery candidate with a known semantic limit. Avoiding
+package-owned inference is not sufficient reason to accept the limit silently.
 
-**(Recommended) Do not import the former blanket cancellation guard.** Checkpoint-only presentation
-removes repeated standalone note messages. A visible later correction can supersede an earlier
-checkpoint statement in chronological context, as it does in native Pi.
+Ignoring instructions and trying to interpret arbitrary instructions through deterministic section
+selection are rejected. No option may append a native summary of the same processed messages below
+the package's memory sections.
+
+## 7. Handle corrections without blanket cancellation
+
+**(Recommended) Do not cancel compaction solely because a previous checkpoint has a superseded
+statement.** Checkpoint-only presentation avoids repeated standalone note messages. A visible later
+correction can supersede an earlier checkpoint statement in chronological context, as it does in
+native Pi.
 
 For a custom checkpoint, inconsistent accepted state should make the candidate ineligible. That is
 different from declaring native fallback unsafe whenever an older statement exists. Whole-checkpoint
@@ -207,10 +271,11 @@ fallback remains a reasonable recovery for ordinary visible corrections.
 
 Off-transcript edits and erasure promises are separate product decisions. Deleting a stored record
 cannot automatically retract a sentence already summarized into a previous checkpoint. Native
-fallback cannot discover an invisible correction. If user curation is deferred, these stronger
-retraction semantics need not enter the MVP through a speculative guard.
+fallback cannot discover an invisible correction. User curation of derived records is outside the
+MVP. The core still needs explicit context-edit and disable behavior, but does not promise invisible
+retraction through a speculative guard.
 
-Retaining cancellation without that distinction is rejected because it complicates recovery and can
+Using cancellation without that distinction is rejected because it complicates recovery and can
 suppress host retry. A package-owned correction summarizer or host enhancement remains an option if
 a future curation contract requires it. Neither is currently proven necessary for the core.
 

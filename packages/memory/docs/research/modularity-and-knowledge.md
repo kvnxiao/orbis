@@ -72,21 +72,23 @@ a general tool-execution service for lifecycle handlers. Nested execution throug
 [extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts),
 [loader](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/loader.ts).
 
-**(Recommended) Preserve explicit evidence identity and narrow internal reads, then choose the
-public integration with a real companion.** The core's recall operation already requires bounded
-reading and scope checks. Those responsibilities can inform a later interface without publishing a
-generic plugin framework now. A fixture consumer can test the eventually selected boundary; it
-should not become an excuse to invent requirements unsupported by a use case.
+**Selected direction: preserve explicit evidence identity and narrow internal reads; defer the
+public companion integration until a concrete consumer needs it.** The core's recall operation
+already requires bounded reading and scope checks. Those responsibilities can inform a later
+interface without publishing a generic plugin framework now. A fixture consumer can test the
+eventually selected boundary; it should not become an excuse to invent requirements unsupported by a
+use case.
 
 This does not preclude an optional runtime API or shared reader library. Extract shared code when
 multiple packages need the same behavior. Select whether the first companion depends on the core
 when its evidence requirements are concrete.
 
-## Persistence for the smaller core
+## Persistence for the core MVP
 
-The former package's external store supported editable files, topic and learning maintenance,
-independent publication, and durable revisions. The new core has fewer responsibilities. Its storage
-choice should be reevaluated against those responsibilities rather than inherited by name.
+The MVP follows Pi session retention and defers user curation of derived records. It needs to
+persist accepted continuation state and retrieve eligible evidence within that scope. Editable
+files, independent retention, and broader knowledge indexes would introduce additional
+responsibilities.
 
 | Candidate                              | Fit for the selected core                                                                                        | Cost or uncertainty                                                                                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -95,39 +97,37 @@ choice should be reevaluated against those responsibilities rather than inherite
 | Separate database                      | Can support broader indexing and cross-session queries.                                                          | Adds schema/index lifecycle, deployment, backup, and reconciliation before the core needs broad knowledge search.                                                          |
 | Session records plus rebuildable index | Keeps one evidence authority while accelerating retrieval.                                                       | Index invalidation and rebuilding still need a contract; no measured need for it yet.                                                                                      |
 
-**(Recommended) Prefer session entries as the next design candidate if editable external memory is
-outside the MVP.** Pi retains recorded source through compaction, and custom entries do not enter
-model context automatically. A single accepted observer result could associate snapshot,
-observations, and coverage in one record; the exact commit and failure semantics still need
-specification. This is not a claim that Pi supplies a transactional memory database.
+**(Recommended) Prefer session entries as the persistence candidate for the MVP.** Pi retains
+recorded source through compaction, and custom entries do not enter model context automatically. A
+single accepted observer result could associate snapshot, observations, and coverage in one record;
+the exact commit and failure semantics still need specification. This is not a claim that Pi
+supplies a transactional memory database.
 
-The external-file option remains reasonable if independent retention or manual file curation is a
-hard requirement. The storage recommendation therefore depends on settling those requirements first.
-A generic abstraction over every candidate would increase the MVP without resolving their behavioral
-differences.
+Independent retention or manual file curation could justify a different store in a future product.
+They are outside this MVP. A generic abstraction over every candidate would increase the core
+without resolving the candidates' behavioral differences.
 
 Sources:
 [session storage](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
 [extension state management](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/extensions.md#state-management).
 
-## What the earlier decisions still teach
+## State validity and delayed work
 
-The [decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) and recorded tiered-memory
-positions describe a different, larger package. They remain useful evidence of failure mechanisms.
-They are not obsolete merely because the new core has less functionality.
+Pi's selected ancestry can change while an observer runs. Stored order and callback completion order
+do not establish that a result belongs to the current selection. These are design obligations for
+any persistence option:
 
-| Recorded position                                                                                           | Original reason                                                                                                                           | Consequence for the new design                                                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Keep MVP caching within memory](https://github.com/kvnxiao/orbis/issues/12#issuecomment-5808141625)        | Preserve native triggers, cut, and fallback; defer optimizing native/provider summarization.                                              | Keep this constraint. Current provider capabilities do not make a second compaction owner compose safely.                                                                    |
-| [Append complete memory revisions](https://github.com/kvnxiao/orbis/issues/12#issuecomment-5808979268)      | Give the acting model a self-contained current note while retaining a stable earlier prefix; accept accumulated input and bounded resets. | The user selected checkpoint-only presentation for the new core. The former ordinary-request note-fitting/reset rules no longer follow automatically.                        |
-| [Use the newest completed registration](https://github.com/kvnxiao/orbis/issues/12#issuecomment-5879378417) | Prevent an older refresh from restoring stale validity and counts.                                                                        | Preserve the invariant that delayed work cannot restore old state. The external registry and refresh protocol need not be copied.                                            |
-| [Block ambiguous or changed lineage](https://github.com/kvnxiao/orbis/issues/12#issuecomment-5879378739)    | Prevent a proposal based on an older or damaged selection from rolling back current memory.                                               | Pending observer results still require source/selection validation under whichever persistence scheme is chosen.                                                             |
-| [Recover orphan heads conservatively](https://github.com/kvnxiao/orbis/issues/12#issuecomment-5884541595)   | Publication order and a matching base did not prove that an orphan belonged to the current conversation.                                  | Avoid inventing content ancestry from publication order. Session storage may remove a separate publication head, but its own ancestry and corruption rules still need tests. |
+- Accept a delayed result only when its source and selected-lineage assumptions are still valid.
+- Prevent an older result from replacing newer accepted state.
+- Distinguish invalid or unavailable state from a valid empty result.
+- Use conversation ancestry when deciding which evidence is eligible; publication order alone is
+  insufficient.
 
-The earlier request-time abort and stale-note cancellation were responses to their surrounding
-presentation and curation contract. [The continuity analysis](continuity-and-invariants.md) explains
-why they should not transfer unchanged. This is a scope-dependent reassessment, not evidence that
-the earlier decisions were irrational.
+The exact acceptance and recovery protocol remains open. These obligations follow from the selected
+lineage requirement and Pi's asynchronous lifecycle; they do not require an external registry,
+publication-head protocol, or general recovery framework.
+[Session manager](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
+[extension lifecycle](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
 
 ## A possible product family
 
@@ -135,14 +135,13 @@ the earlier decisions were irrational.
 example project knowledge or developer preferences, once those jobs are defined. No companion name,
 count, or dependency graph is selected by this research.
 
-The package README can explain three separate layers of behavior: Pi manages conversation history
-and native compaction; the core prepares continuation and source recall; optional companions assess
-broader knowledge. Provider compaction is a separate API mechanism, not a synonym for any of these
-products.
+The product has three distinct responsibilities: Pi manages conversation history and native
+compaction; the core prepares continuation and source recall; optional companions assess broader
+knowledge. Provider compaction is a separate API mechanism, not a synonym for any of these products.
 
 ## Decisions still required
 
-Settle curation and source lifetime before choosing persistence guarantees. Define the actual recall
-surface before publishing a consumer interface. Define broader knowledge admission and correction
-when a companion is designed. These dependencies allow the core to remain extensible without making
+Define the persistence format, source availability, and recall surface within Pi session retention.
+Design the public companion interface, broader knowledge admission, and correction policy when a
+concrete companion needs them. These dependencies allow the core to remain extensible without making
 future knowledge maintenance part of its first release.

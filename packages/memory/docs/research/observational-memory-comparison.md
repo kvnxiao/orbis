@@ -131,6 +131,6 @@ dropping are options for maintaining a bounded representation, not prerequisites
 MVP. If archival growth or poor discovery later causes failures, evaluate a specific remedy.
 
 **Keep capability and efficacy separate.** No controlled Pi coding comparison establishes an optimal
-tier count or role pipeline. Older vendor LongMemEval percentages were not refreshed here and are
-not carried forward as current evidence. Framework dependencies and storage integration also differ
-from a standalone Pi extension; adopting an idea does not imply adopting that stack.
+tier count or role pipeline. Vendor benchmark scores do not establish Orbis continuation quality.
+Framework dependencies and storage integration also differ from a standalone Pi extension; adopting
+an idea does not imply adopting that stack.

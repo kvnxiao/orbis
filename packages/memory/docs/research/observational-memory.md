@@ -8,13 +8,12 @@ inspected source behavior; neither package was installed or run for this researc
 
 | Project                                | Baseline                                                                                                                      | Release qualification                                                                                                                |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Amos Blomqvist's topics implementation | [78a1efc](https://github.com/amosblomqvist/pi-observational-memory/tree/78a1efcfdd46332253fb289724f05b26dfc7769e), 2026-08-24 | Manifest 0.1.0; GitHub's latest-release endpoint returned 404. Source unchanged from the earlier survey.                             |
+| Amos Blomqvist's topics implementation | [78a1efc](https://github.com/amosblomqvist/pi-observational-memory/tree/78a1efcfdd46332253fb289724f05b26dfc7769e), 2026-08-24 | Manifest 0.1.0; GitHub's latest-release endpoint returned 404.                                                                       |
 | Elpapi's v3 implementation             | [886f7a6](https://github.com/elpapi42/pi-observational-memory/tree/886f7a6628d10ea420eb6ceecaee36691489b2fb), 2026-10-02      | Latest published/GitHub release is 3.1.4 from 2026-09-20. HEAD has substantial unreleased changes despite the same manifest version. |
 
 Both prepare derived memory before compaction and render it when history is replaced. Neither
 inspected implementation routinely appends refreshed protected current-work snapshots between
-ordinary turns. The older survey's reference to a routine prompt should be read as checkpoint
-content, not continuous snapshot refresh.
+ordinary turns. Their model-visible memory is checkpoint content.
 
 ## Amos: observations, mutable topics, and a journey
 
@@ -130,19 +129,17 @@ the session model with a warning.
 [runtime](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/runtime.ts),
 [configuration](https://github.com/elpapi42/pi-observational-memory/blob/886f7a6628d10ea420eb6ceecaee36691489b2fb/src/config.ts).
 
-The old survey's finding about partial output surviving a later worker failure was not fully
-re-audited across current V3 error paths. It remains a dated observation, not a refreshed assertion
-about every current failure path.
+This source review does not establish failure atomicity across every V3 worker error path.
 
-## Implications for the smaller core
+## Implications for the core MVP
 
 Both implementations support preparing memory outside the acting agent's maintenance workflow.
 Neither establishes that topics, a journey, reflections, or a dropper are necessary for a useful
 observer-plus-snapshot-plus-recall core.
 
-The simplifications must preserve meaningful safeguards: accepted source coverage, source discovery,
-selection identity, finite work, and explicit handling of previous checkpoints and native
-categories. Removing a role is different from removing the behavior that detects lost input.
+The core needs meaningful safeguards: accepted source coverage, source discovery, selection
+identity, finite work, and explicit handling of previous checkpoints and native categories. A small
+number of model roles does not remove the need to detect lost input.
 
 The [comparison with Mastra](observational-memory-comparison.md) examines preparation versus
 activation, structured current-work extraction, and different meanings of reflection. The

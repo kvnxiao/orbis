@@ -1,8 +1,9 @@
 # Memory systems and knowledge maintenance
 
-Research date: 2026-10-03. This comparison refreshes the broader systems surveyed for tiered-memory.
-It records source-inspected behavior and documented capabilities separately from proposed Orbis
-implications. No system was executed or benchmarked in this investigation.
+Research date: 2026-10-03. This comparison examines memory systems relevant to session continuation
+and complementary knowledge maintenance. It records source-inspected behavior and documented
+capabilities separately from proposed Orbis implications. No system was executed or benchmarked in
+this investigation.
 
 ## Source boundaries
 
@@ -38,8 +39,8 @@ separation of unrelated entities. It may exclude ephemeral details unless the mi
 That is a meaningful knowledge policy, but a temporary blocker can be essential to session
 continuation. The core and a knowledge companion should therefore have different admission rules.
 
-The newly verified raw-retention options widen the comparison. They do not establish that Orbis
-needs Hindsight's service, inference, or retrieval infrastructure.
+Raw retention is an alternative to fact extraction. These options do not establish that Orbis needs
+Hindsight's service, inference, or retrieval infrastructure.
 
 ## Honcho: broader conclusions have a separate lifecycle
 
@@ -86,7 +87,7 @@ pushed, and dreaming can be triggered by step or compaction events.
 This separates prompt placement, storage ownership, and background maintenance. It is a different
 API generation from the memory-block/archive descriptions associated with early MemGPT. Its
 agent-editable repository and synchronization workflow are a valid broader product, not an
-established requirement for the smaller core. Git history alone does not settle conflicting edits,
+established requirement for the core MVP. Git history alone does not settle conflicting edits,
 source validity, or which repository facts remain applicable.
 
 ## Claude Code: authored instructions and learned notes

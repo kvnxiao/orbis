@@ -117,7 +117,7 @@ not receive them. If only a turn prefix needs summarization, no new call receive
 instructions. Thus native fallback follows the host's behavior but does not guarantee that manual
 instructions govern every native subcall.
 
-This is a concrete decision for the new package: native delegation is simple, while improving
+This is a concrete decision for the package: native delegation is simple, while improving
 instruction handling would require an explicit package-owned inference contract. It must not be
 silently inferred from a promise to honor instructions.
 [Call construction](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts).
@@ -127,7 +127,7 @@ silently inferred from a promise to honor instructions.
 An extension can use the selected model, thinking level, model discovery, registry inference,
 request-time authentication, effective settings, and exported compaction/serialization helpers.
 `getApiKeyAndHeaders()` resolves credentials and request metadata; registry streaming can perform
-that work internally. Registry inference and credential resolution already existed in 0.87.
+that work internally.
 
 Starting with `ctx.model` does not reproduce the native request exactly:
 
@@ -143,9 +143,9 @@ Sources:
 [model runtime](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/model-runtime.ts),
 [SDK](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/sdk.ts).
 
-Native authentication now happens after the compaction hook declines. A prepared custom checkpoint
-can succeed without resolving native-summary credentials, provided a selected model and valid
-preparation exist. This corrects the older survey's pre-hook-authentication assumption.
+Native authentication happens after the compaction hook declines. A prepared custom checkpoint can
+succeed without resolving native-summary credentials, provided a selected model and valid
+preparation exist.
 
 ## Hook outcomes, failure, and retry
 
@@ -190,9 +190,9 @@ Native Pi can summarize an earlier statement and retain a later correction verba
 checkpoint. Chronological supersession is part of the native baseline. That situation alone does not
 justify cancelling compaction.
 
-Checkpoint-only presentation removes repeated standalone snapshot messages from ordinary history.
-The old blanket stale-note cancellation rationale therefore does not transfer unchanged. Harder
-cases depend on still-open product behavior:
+Checkpoint-only presentation avoids repeated standalone snapshot messages in ordinary history. A
+stale statement alone does not justify blanket cancellation. Stronger correction guarantees would
+need to address these cases:
 
 - A stored record is edited or deleted without a model-visible correction.
 - A source is context-edited after its claims entered a checkpoint.
@@ -202,7 +202,7 @@ cases depend on still-open product behavior:
 Native fallback cannot discover an off-transcript invalidation by itself. A package-owned summarizer
 can generate a corrected checkpoint, but failure cannot both veto native fallthrough and
 unconditionally preserve an overflow retry through the current hook outcomes. Whether that trade-off
-is needed depends on the curation contract. It is not an unconditional blocker for the smaller core.
+is needed depends on the curation contract. It is not an unconditional blocker for the core MVP.
 
 ## Persistence and selected lineage
 
@@ -221,22 +221,11 @@ limits.
 The [modularity analysis](modularity-and-knowledge.md) covers public runtime communication and
 artifact readers. Neither requires a second replacement-compaction hook.
 
-## What changed from the older survey
-
-| Earlier assumption or mechanism                             | Refreshed finding                                                                                   |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Native credentials are resolved before the hook.            | Resolution follows hook decline in the inspected current versions.                                  |
-| Nested registry inference might require a newer Pi release. | It already existed in 0.87; exact host routing is still a separate problem.                         |
-| New provider callbacks might rewrite native summary bodies. | These callbacks do not supply that route.                                                           |
-| Native file tracking sees only direct calls.                | Current extraction includes recorded nested tool calls.                                             |
-| Pi 1.0 materially changes core compaction.                  | Compared core files are byte-identical to 0.99.1.                                                   |
-| Any stale note requires the former cancellation guard.      | The premise changes with checkpoint-only presentation; curation/retraction needs separate analysis. |
-
 ## Verification limits and next fixtures
 
-Earlier scripted-stream probes observed history/prefix input separation, custom `previousSummary`
-reuse, missing inheritance of custom file details, and absence of retained-tail corrections from
-summary inputs. These narrow probes did not test model quality or the whole SDK lifecycle.
+Scripted-stream probes observed history/prefix input separation, custom `previousSummary` reuse,
+missing inheritance of custom file details, and absence of retained-tail corrections from summary
+inputs. These narrow probes did not test model quality or the whole SDK lifecycle.
 
 Before implementation claims, use model-free fixtures for hidden custom messages, branch summaries,
 nested calls, long tool results, and images. Record inputs across repeated custom/native

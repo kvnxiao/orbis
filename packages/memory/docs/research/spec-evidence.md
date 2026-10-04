@@ -1,8 +1,9 @@
 # Evidence for the draft SPEC
 
 Research date: 2026-10-03. This map connects the current draft to inspected host behavior, related
-systems, and research. It does not amend [the SPEC](../../SPEC.md), approve open decisions, or claim
-that an implementation has passed conformance checks.
+systems, and research. It does not amend [the SPEC](../../SPEC.md) or claim that an implementation
+has passed conformance checks. Selected product directions and research recommendations are
+identified separately.
 
 ## How to read a claim
 
@@ -40,31 +41,39 @@ establish Orbis quality. A field in a proposed schema does not prove correct ext
 | `REQ-modular-memory`       | Session evidence can be consumed without giving a companion ownership of compaction. [Modularity](modularity-and-knowledge.md) compares runtime and durable interfaces.                                                                            | Concrete consumer needs, dependency direction, public versioning, unavailable-core behavior, and broader-claim correction. No generic framework is established as necessary.          |
 | `REQ-resource-budgets`     | Signals, request limits, and usage reporting provide mechanisms. Other systems expose the costs of retries, background preparation, and multiple stores. [Caching](prompt-caching-and-compaction.md) and [evaluation](evidence-and-evaluation.md). | Numerical bounds, elapsed deadlines, concurrency, cancellation, accounting gaps, capacity recovery, and separately authorized live-run limits.                                        |
 
+## Selected directions for the completed contract
+
+The MVP follows Pi session retention and defers user curation of derived memory. It preserves
+evidence identity, attribution, scope, verification state, and bounded internal reads. A public
+companion API is deferred until a concrete consumer needs it. These choices constrain the remaining
+storage and integration design; they do not select a persisted schema or complete the draft SPEC.
+
 ## Proposed changes to discuss
 
 These are changes or additions recommended for the next design round. The current draft deliberately
 leaves most of them open. This list is not authorization to resolve them silently. It does not
 propose reversing the settled core direction.
 
-| Affected requirement                                 | Proposed addition or clarification                                                                                                                                              | Why it is better supported than the alternative                                                                                                       |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REQ-session-continuity`, `REQ-current-work-note`    | Allocate applicable decision rationale, blockers, exact continuation identifiers, and split-turn context explicitly.                                                            | Native prompts request these categories; an observation index alone does not establish visibility.                                                    |
-| `REQ-session-observations`, `REQ-unified-compaction` | Account for all eligible prepared source kinds and prior checkpoint material; accept coverage only for completed, validated processing. Initially use native fallback for gaps. | Worker scheduling or cursor advance can hide unprocessed evidence. Foreground catch-up adds mechanisms whose benefit remains unmeasured.              |
-| `REQ-source-recall`                                  | Provide discovery over recorded source independently of observation IDs, with bounded results and explicit unavailable-source outcomes.                                         | Extraction can omit the very detail later needed. ID-only recall cannot discover an unknown or unextracted item.                                      |
-| `REQ-unified-compaction`                             | State that native fallback preserves custom summary text as prior input but does not inherit custom file-operation details.                                                     | The two behaviors differ in inspected Pi source; treating the whole result as transparently preserved overstates the host contract.                   |
-| `REQ-unified-compaction`, `REQ-resource-budgets`     | Distinguish fallback attempt, native success/failure, and incoming retry intent. Use decline rather than cancellation for ordinary eligibility failure.                         | Cancellation can suppress retry; throwing is not a reliable veto. Failure reporting must describe actual outcomes.                                    |
-| `REQ-current-work-note`, `REQ-resource-budgets`      | Use compaction-time capacity fallback without the former ordinary-request abort; do not drop active obligations through priority truncation.                                    | Checkpoint-only presentation removes ordinary full-note injection, while finite capacity still needs an explicit failure path.                        |
-| `REQ-unified-compaction`                             | Separate visible chronological corrections from off-transcript invalidation. Do not import blanket stale-note cancellation.                                                     | A later visible correction is valid native chronology. Invisible erasure is a different product promise and may conflict with retry preservation.     |
-| `REQ-unified-compaction`                             | Delegate instructed compaction initially, while documenting native split-prefix instruction limits.                                                                             | This avoids silently ignoring instructions in a custom result; stronger semantics require an explicit package or host change.                         |
-| `REQ-modular-memory`                                 | Preserve evidence identity and bounded internal reads; select a public integration when a concrete companion needs it.                                                          | Runtime notifications are not a durable request/response service. There is no demonstrated need for two public interfaces or a generic framework now. |
-| `REQ-session-lineage`, `REQ-source-recall`           | Consider Pi session entries if editable external memory and independent retention are deferred.                                                                                 | They fit session-bound retention if that lifetime is selected and remove a separate publication store; curation and retention must be settled first.  |
-| `REQ-session-continuity`, `REQ-resource-budgets`     | Separate construction, discovery, and acting-model use in evaluation; compare category preservation and executed continuation against native Pi.                                | QA scores, compression ratios, and mock calls answer narrower questions.                                                                              |
+| Affected requirement                                 | Proposed addition or clarification                                                                                                                                                        | Why it is better supported than the alternative                                                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REQ-session-continuity`, `REQ-current-work-note`    | Allocate applicable decision rationale, blockers, exact continuation identifiers, and split-turn context explicitly.                                                                      | Native prompts request these categories; an observation index alone does not establish visibility.                                                                                 |
+| `REQ-session-observations`, `REQ-unified-compaction` | Account for all eligible prepared source kinds and prior checkpoint material. Attempt bounded observer catch-up for gaps, recheck accepted state, then use native fallback if ineligible. | Catch-up reuses the observer and has direct implementation precedent. It still needs finite foreground work and accepted-coverage checks; quality and cost effects are unmeasured. |
+| `REQ-source-recall`                                  | Provide discovery over recorded source independently of observation IDs, with bounded results and explicit unavailable-source outcomes.                                                   | Extraction can omit the very detail later needed. ID-only recall cannot discover an unknown or unextracted item.                                                                   |
+| `REQ-unified-compaction`                             | State that native fallback preserves custom summary text as prior input but does not inherit custom file-operation details.                                                               | The two behaviors differ in inspected Pi source; treating the whole result as transparently preserved overstates the host contract.                                                |
+| `REQ-unified-compaction`, `REQ-resource-budgets`     | Distinguish fallback attempt, native success/failure, and incoming retry intent. Use decline rather than cancellation for ordinary eligibility failure.                                   | Cancellation can suppress retry; throwing is not a reliable veto. Failure reporting must describe actual outcomes.                                                                 |
+| `REQ-current-work-note`, `REQ-resource-budgets`      | Assess bounded snapshot condensation before capacity fallback; keep ordinary requests independent of snapshot fitting and preserve active obligations.                                    | Condensation addresses core continuation capacity. Both repair and native fallback use lossy inference; compare preservation and total work.                                       |
+| `REQ-unified-compaction`                             | Separate visible chronological corrections from off-transcript invalidation. Do not cancel solely because a previous checkpoint has a superseded statement.                               | A later visible correction is valid native chronology. Invisible erasure is a different product promise and may conflict with retry preservation.                                  |
+| `REQ-unified-compaction`                             | Compare instruction-aware checkpoint generation with complete host delegation; define the instruction semantics before selecting recovery.                                                | Native prefix-only summarization receives no manual instructions. Avoiding another implementation path does not establish that delegation meets the intended behavior.             |
+| `REQ-modular-memory`                                 | Define the internal evidence-reading contract within the selected deferral of a public companion API.                                                                                     | Runtime notifications are not a durable request/response service. There is no demonstrated need for two public interfaces or a generic framework now.                              |
+| `REQ-session-lineage`, `REQ-source-recall`           | Consider Pi session entries within the selected session-retention scope.                                                                                                                  | They fit session-bound retention and avoid a separate publication store. Record validation, source availability, and fork behavior still need design.                              |
+| `REQ-session-continuity`, `REQ-resource-budgets`     | Separate construction, discovery, and acting-model use in evaluation; compare category preservation and executed continuation against native Pi.                                          | QA scores, compression ratios, and mock calls answer narrower questions.                                                                                                           |
 
-The storage recommendation is conditional. The manual-instruction recommendation deliberately
-preserves native semantics, including its limitation. The file-list finding may require a decision
-about a stronger host guarantee. Those dependencies should remain explicit in the brainstorm.
+The storage format remains open within the selected retention scope. Manual-instruction semantics
+and their generation path also remain open. Cumulative file-information parity is a requirement
+across custom/native transitions; the missing native metadata inheritance is an integration problem
+to solve, not permission to weaken that requirement.
 
-## Recommendations that remain unchanged
+## Supported core direction
 
 Keep `@orbis/memory` as an independently useful continuation core. Keep the combined observer
 response, checkpoint-only snapshot, retained source-linked observations, selected lineage, and the
@@ -78,26 +87,25 @@ Orbis.
 
 ## Assumptions and findings that could invalidate a recommendation
 
-| Assumption or unresolved condition                                                               | Recommendation at risk                                                    | Evidence needed                                                                                                                   |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Background preparation reaches enough compactions in time.                                       | Fallback-first handling of coverage gaps.                                 | Observe fallback frequency and foreground latency under representative histories.                                                 |
-| Native fallback is acceptable with its actual split-instruction and custom-file metadata limits. | Delegation as the initial recovery/manual-instruction policy.             | Product decision on required semantics; scripted transition fixtures; host change if stronger deterministic behavior is required. |
-| Curation does not require invisible retraction from previous checkpoints.                        | Removing blanket stale-note cancellation without another correction path. | Explicit curation/disable contract and context-edit cases.                                                                        |
-| Session lifetime is sufficient for the core's recall promise.                                    | Session-entry persistence.                                                | Decide ephemeral-session, deletion, fork, and independent-retention behavior.                                                     |
-| Bounded source search makes omitted details practically discoverable.                            | Source recall as the supplement to compressed observations.               | Retrieval fixtures followed by action-based evaluation with actual recall choices.                                                |
-| The writer can maintain the chosen obligations within the finite budget often enough.            | Complete snapshot with capacity fallback.                                 | Repeated-compaction evaluation, including smaller writers and large sets of active obligations.                                   |
-| Companions do not need a public integration in the first release.                                | Defer public runtime/reader interfaces.                                   | Define the first consumer and test its concrete evidence needs.                                                                   |
-| Inspected host behavior remains applicable.                                                      | All source-derived integration recommendations.                           | Recheck the targeted Pi revision before implementation and exercise it through scripted providers.                                |
+| Assumption or unresolved condition                                                                                | Recommendation at risk                                       | Evidence needed                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Bounded catch-up can fill typical gaps without unacceptable foreground delay.                                     | Bounded observer catch-up before native fallback.            | Measure catch-up completion, total work, foreground waiting, fallback frequency, and continuation under representative histories. |
+| The recovery integration preserves cumulative file information and implements the selected instruction semantics. | Native delegation within the recovery design.                | Define the instruction contract and file-information mechanism; use scripted transition fixtures and seek host support if needed. |
+| Conversation corrections and host context edits are handled without promising invisible erasure.                  | Correction handling without blanket cancellation.            | Define context-edit and disable behavior; keep derived-record curation outside the MVP.                                           |
+| Session lifetime is sufficient for the core's recall promise.                                                     | Session-entry persistence.                                   | Define ephemeral-session, deletion, fork, and unavailable-source results within Pi session retention.                             |
+| Bounded source search makes omitted details practically discoverable.                                             | Source recall as the supplement to compressed observations.  | Retrieval fixtures followed by action-based evaluation with actual recall choices.                                                |
+| The writer can maintain the chosen obligations within the finite budget often enough.                             | Complete snapshot with bounded repair and capacity fallback. | Repeated-compaction evaluation, including smaller writers and large sets of active obligations.                                   |
+| A future companion can use the retained evidence without additional core metadata.                                | The sufficiency of the selected evidence requirements.       | Define the first consumer, test its evidence needs, and add a public contract then.                                               |
+| Inspected host behavior remains applicable.                                                                       | All source-derived integration recommendations.              | Recheck the targeted Pi revision before implementation and exercise it through scripted providers.                                |
 
-The original inference-access assumption is only partly true: public APIs can perform nested
-inference and resolve credentials, but do not expose one operation cloning the native host's exact
-routing, headers, and stream wrapper. The original persistence assumption is true for custom summary
-text, not every returned field or later native file metadata. Neither should remain an unqualified
-premise in the completed SPEC.
+Public APIs can perform nested inference and resolve credentials, but do not expose one operation
+cloning the native host's exact routing, headers, and stream wrapper. Pi stores custom summary text
+and uses it as later summary input. This does not imply that every returned field or native file
+metadata survives unchanged. The completed SPEC must state these integration limits explicitly.
 
 ## Evidence not produced by this research
 
 No real models were called, no provider cache savings were measured, and no runtime implementation
-of this package was tested. Narrow earlier scripted probes establish specific Pi input/persistence
+of this package was tested. Narrow scripted probes establish specific Pi input/persistence
 mechanics; they do not establish semantic quality or full SDK compatibility. The documentation
 checks for this PR validate the artifacts, not the proposed memory behavior.

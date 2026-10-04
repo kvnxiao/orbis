@@ -45,7 +45,7 @@ Pi's persisted history, authored context, and compacted acting context serve dif
 Memory cannot replace checking the current artifact when the relevant files or environment may have
 changed. A remembered passing test is evidence of a prior result, not proof of the present checkout.
 
-## Responsibilities in the smaller core
+## Responsibilities in the core MVP
 
 The following allocation reflects the agreed product direction. Its mechanisms and interfaces still
 need design decisions.
@@ -123,6 +123,6 @@ the companion package count in advance.
 mechanisms to assess against observed failure modes. They are not missing requirements merely
 because another framework gives them names.
 
-Reconsider a deferred mechanism when a concrete continuation or retrieval failure survives a simpler
-remedy, or when a real companion needs a capability that the core's evidence contract cannot
-provide. Popularity and a larger feature inventory are not comparative evidence.
+Select a mechanism when comparative evidence shows it better satisfies continuation or retrieval
+requirements within the core's scope. A concrete companion can also establish a need for additional
+evidence access. Popularity and a larger feature inventory are not comparative evidence.

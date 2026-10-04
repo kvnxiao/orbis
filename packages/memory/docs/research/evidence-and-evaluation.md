@@ -1,8 +1,8 @@
 # Evidence and evaluation
 
 Research date: 2026-10-03. Memory quality depends on construction, retrieval, and the acting model's
-use of evidence. This document updates publication status and evaluation limits from the earlier
-survey, then proposes an Orbis protocol. It reports no Orbis model-quality experiment.
+use of evidence. This document assesses published results and their limits, then proposes an Orbis
+evaluation protocol. It reports no Orbis model-quality experiment.
 
 ## Read the evidence at the scope it establishes
 
@@ -66,7 +66,7 @@ action.
 | [LightMem](https://proceedings.iclr.cc/paper_files/paper/2026/hash/a05b72653ec5b473732129829ae04195-Abstract-Conference.html), ICLR 2026                                                         | Filtering, grouping, and deferred consolidation.                                  | A benefit independent of retriever, reader, or construction loss.                             |
 | [Mem0](https://arxiv.org/abs/2504.19413); [Zep/Graphiti](https://arxiv.org/abs/2501.13956)                                                                                                       | Fact extraction/revision and temporal relationships, with vendor evaluations.     | Current OSS behavior, causal benefit from a graph alone, or a comparable cross-paper ranking. |
 | [Reflexion](https://arxiv.org/abs/2303.11366), [Voyager](https://arxiv.org/abs/2305.16291), [ExpeL](https://arxiv.org/abs/2308.10144), [Agent Workflow Memory](https://arxiv.org/abs/2409.07429) | Feedback, reusable procedures, and experience-based insights across varied tasks. | That plausible generated lessons are verified knowledge or belong in core continuation.       |
-| [ACE](https://openreview.net/pdf?id=eC4ygDs02R), ICLR 2026 conference paper; [arXiv v3](https://arxiv.org/abs/2510.04618)                                                                        | Generate, reflect, and curate an evolving playbook through incremental updates.   | An isolated compaction effect. The older preprint/workshop-only description is outdated.      |
+| [ACE](https://openreview.net/pdf?id=eC4ygDs02R), ICLR 2026 conference paper; [arXiv v3](https://arxiv.org/abs/2510.04618)                                                                        | Generate, reflect, and curate an evolving playbook through incremental updates.   | An isolated compaction effect or evidence of Pi checkpoint parity.                            |
 | [SimpleMem](https://arxiv.org/abs/2601.02553), v3 January 2026 preprint                                                                                                                          | Structured compression, online synthesis, and intent-aware retrieval.             | Formal losslessness of exact identifiers, constraints, or tool outcomes.                      |
 
 Publication status describes the artifact checked, not an endorsement of its claims. Where no venue

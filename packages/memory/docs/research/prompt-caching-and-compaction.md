@@ -1,8 +1,8 @@
 # Provider compaction, prompt caching, and memory
 
-Research date: 2026-10-03. Provider documentation was refreshed alongside Pi 1.0.1 source. This
-comparison separates provider API contracts, Pi's integration, and proposed Orbis behavior. No
-provider requests or cache measurements were run.
+Research date: 2026-10-03. This analysis compares provider documentation with Pi 1.0.1 source. It
+separates provider API contracts, Pi's integration, and proposed Orbis behavior. No provider
+requests or cache measurements were run.
 
 ## Three different operations
 
@@ -137,10 +137,10 @@ These options concern presentation, not whether observations or sources are reta
 | Replace current snapshot                     | Transform the current request to show only the latest snapshot.       | Bounds visible history of memory, while changing the request prefix and requiring lifetime rules.          |
 | Immutable compaction segments                | Preserve older summary segments and append later ones until rebasing. | A separate context-growth policy, demonstrated by some packages, with cumulative pressure and scope rules. |
 
-The settled checkpoint-only choice removes the old ordinary-request snapshot-capacity abort path. It
-does not prove the best total cost. The [Pi ecosystem comparison](pi-cache-compaction-ecosystem.md)
-separates source-reconstruction, payload capture, warming, and structural pruning from this memory
-presentation choice.
+Checkpoint-only presentation does not require ordinary requests to fit a routinely injected
+snapshot. Its effect on total cost remains unmeasured. The
+[Pi ecosystem comparison](pi-cache-compaction-ecosystem.md) separates source-reconstruction, payload
+capture, warming, and structural pruning from this memory presentation choice.
 
 ## Candidate MVP stance
 
