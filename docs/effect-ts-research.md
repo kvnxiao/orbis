@@ -1,9 +1,9 @@
 # Effect v4 for Orbis reference implementations
 
 For implementation choices, follow the
-[current Effect policy](../AGENTS.md#effect-in-reference-implementations). It assesses synchronous
-operations and data modeling as well as asynchronous workflows. The recommendations below describe
-the investigated baseline.
+[current Effect policy](../.agents/shared/effect-adoption.md). It assesses synchronous operations
+and data modeling as well as asynchronous workflows. The recommendations below describe the
+investigated baseline.
 
 The research recommends Effect for the asynchronous workflows in `plan` and `tiered-memory`. Its
 main advantage is a shared execution model for dependencies, failures, task lifetimes, cleanup,
