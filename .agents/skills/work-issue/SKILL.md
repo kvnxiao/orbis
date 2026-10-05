@@ -133,12 +133,12 @@ before starting another task that touches the same files.
 
 | Situation | Next action |
 | --- | --- |
-| Direct request on the PR-only path | On a work branch, use the matching specialist skill from the `AGENTS.md` [routing table](../../../AGENTS.md#skill-routing), delegate implementation edits to `orbis-implementer`, run `verify-changes`, and deliver a PR without an issue |
+| Direct request on the PR-only path | On a work branch, use the matching specialist skill from the `AGENTS.md` [routing table](../../../AGENTS.md#skill-routing), delegate implementation edits to `orbis-implementer`, run `review-changes` with `mode=apply`, and deliver a PR without an issue |
 | New package, unresolved design, or missing SPEC approval | Use [design-package](../design-package/SKILL.md) for design and the approval checkpoint; keep dependent work blocked |
 | Issue-backed approved contract has no current executable plan | Use [plan-implementation](../plan-implementation/SKILL.md) to create or refresh issue plans from the approved SPEC and interaction contract |
 | Existing package behavior changes | Use [revise-package](../revise-package/SKILL.md) to keep the contract and implementation consistent, delegating implementation edits to `orbis-implementer` |
 | Approved, unblocked work is authorized | Delegate the next bounded implementation task, including its acceptance checks, to `orbis-implementer` under the agent model policy |
-| Code or PR needs corrections or verification | Resume its branch and PR, send accepted implementation findings to `orbis-implementer`, and run `verify-changes` on the accumulated change set |
+| Code or PR needs corrections or verification | Resume its branch and PR, send accepted implementation findings to `orbis-implementer`, and run `review-changes` with `mode=apply` on the accumulated change set |
 | Verified changes need delivery | Audit commit and PR drafts, then prepare or update the focused PR without duplicating an existing one |
 | Verified PR awaits developer review or merge | Report that checkpoint and any remaining developer action |
 | Linked delivery merged | Compare the merged delivery with the target's acceptance criteria, then select the next unblocked child within its scope |

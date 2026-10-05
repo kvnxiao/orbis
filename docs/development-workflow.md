@@ -31,8 +31,9 @@ These terms recur:
 - A package has a **stable release** once it publishes a version at 1.0.0 or later.
 - `agent-gh` runs every agent GitHub CLI command, as the
   [`AGENTS.md` commands](../AGENTS.md#commands) require.
-- `verify-changes` is a global skill, installed outside this repository, that verifies an
-  accumulated change set with review and checks scaled to the change's risk.
+- `review-changes` is a global skill, installed outside this repository, that reviews a change set
+  and scales review and checks to the change's risk. With `mode=apply`, it also applies accepted
+  fixes.
 
 ## Work paths
 
@@ -65,7 +66,7 @@ An existing issue always takes precedence over the PR-only path:
 
 Both paths share the same roles and two `AGENTS.md` rules: the
 [executor rule](../AGENTS.md#start-a-session) in start protocol step 5 and the
-[verification requirement](../AGENTS.md#verify-and-deliver). Because `verify-changes` scales its
+[verification requirement](../AGENTS.md#verify-and-deliver). Because `review-changes` scales its
 review to risk, a small change still passes through it.
 
 ## Start or resume work
@@ -265,7 +266,7 @@ unaffected approvals, and confirm the complete revised scope before resuming.
 
 ## Delegation
 
-The orchestrator keeps `work-issue` and `verify-changes` coordination, decisions, obtaining the
+The orchestrator keeps `work-issue` and `review-changes` coordination, decisions, obtaining the
 developer's contract approval, accumulated verification, commits, and PR delivery. Delegates execute
 their assignment and return results or findings to the orchestrator. They do not delegate further,
 start either coordinating workflow, or take ownership of the orchestrator's responsibilities.

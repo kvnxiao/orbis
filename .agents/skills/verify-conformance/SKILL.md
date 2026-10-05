@@ -3,7 +3,7 @@ name: verify-conformance
 description:
   Review an Orbis package's reference implementation against its SPEC.md using clone-available
   source, tests, and documentation. Use for full-package conformance reviews or the
-  affected-contract check in verify-changes. Report deviations and verification gaps without
+  affected-contract check in review-changes. Report deviations and verification gaps without
   repairing code or changing the contract.
 ---
 
@@ -22,7 +22,7 @@ implementation revisions, and requested scope:
 
 - For a full-package review, account for every mandatory requirement and its conformance scenarios,
   including required interfaces and compatibility claims.
-- Within `verify-changes`, use the coordinator's change set and review affected requirements plus
+- Within `review-changes`, use the coordinator's change set and review affected requirements plus
   their interactions with unchanged behavior. Do not infer full-package conformance from this scope.
   Return findings to the coordinator within the workflow's
   [delegate limits](../../../docs/development-workflow.md#delegation).
@@ -93,7 +93,7 @@ to weaken a requirement. Report the required behavior and the evidence for disag
 changing either artifact.
 
 For a proposed amendment, identify the affected requirement or undocumented public behavior, the
-discrepancy, and the decision needed. Hand approved revision work to the caller or `verify-changes`
+discrepancy, and the decision needed. Hand approved revision work to the caller or `review-changes`
 coordinator through [revise-package](../revise-package/SKILL.md). The coordinator determines
 authorization from the developer's request; this review neither approves nor applies amendments.
 After the coordinator resolves a finding, review the affected requirements and their interactions
@@ -102,7 +102,7 @@ against the updated artifacts.
 ## Obtain reproducible evidence
 
 Use the repository's documented local checks and declared toolchain. Run safe, relevant checks when
-acting as the primary reviewer. When delegated by `verify-changes`, return the commands and expected
+acting as the primary reviewer. When delegated by `review-changes`, return the commands and expected
 assertions to the coordinator, which owns test execution; distinguish inspected tests from executed
 results. Reuse a result only when its reviewed inputs and environment match, and identify its
 source. Historical success claims do not replace reproducible checks.

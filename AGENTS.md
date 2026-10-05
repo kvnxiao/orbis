@@ -200,16 +200,19 @@ compatibility.
 
 ## Verify and deliver
 
-Run `verify-changes`, a global skill, once on the accumulated change set before a commit or PR, and
-include `verify-conformance` for affected contracts and `write-readme` for affected READMEs.
-Reviewers report without editing; the orchestrator resolves findings within authorized scope and
-reruns affected checks. Within `verify-changes`, `orbis-implementer` applies accepted implementation
-fixes under step 5 of the start protocol; this overrides that skill's coordinator-only tree-mutation
-scope and its fast-path limit on subagents. Review changes to agent instructions and configuration
-under the workflow's [review rules](docs/development-workflow.md#review-and-delivery).
+Run the global `review-changes` skill with `mode=apply` once on the accumulated change set before a
+commit or PR, and include `verify-conformance` for affected contracts and `write-readme` for
+affected READMEs. Reviewers report without editing; the orchestrator resolves findings within
+authorized scope and reruns affected checks. Within `review-changes`, `orbis-implementer` applies
+accepted implementation fixes under step 5 of the start protocol. A documentation delegate may run
+`update-docs` and `audit-prose` with `mode=apply` within its scoped write permission. These
+exceptions override that skill's rule that only the coordinator edits files in apply mode, including
+on its in-session fast path. Review changes to agent instructions and configuration under the
+workflow's [review rules](docs/development-workflow.md#review-and-delivery).
 
-If the global `verify-changes` or `audit-prose` skill is required but unavailable, review the diff,
-update affected documentation, audit prose, run repository checks, and report what was skipped.
+If the global `review-changes`, `update-docs`, or `audit-prose` skill is required but unavailable,
+review the diff, update affected documentation, audit prose, run repository checks, and report what
+was skipped.
 
 The workflow's [authorization rules](docs/development-workflow.md#authorization) define what
 authorized work may create, commit, push, and open. Do not merge, push to the default branch,

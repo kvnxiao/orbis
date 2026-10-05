@@ -23,4 +23,4 @@ focused tests, run relevant checks, and fix failures within scope.
 
 Return unresolved behavior, architecture, authorization, or scope decisions to the parent before
 dependent edits. Report changed files, checks, and remaining risks. Leave `work-issue` and
-`verify-changes` coordination to the parent. Do not delegate further, commit, push, or create a PR.
+`review-changes` coordination to the parent. Do not delegate further, commit, push, or create a PR.
