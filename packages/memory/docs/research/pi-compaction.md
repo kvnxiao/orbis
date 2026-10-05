@@ -79,9 +79,12 @@ by the prepared cut, rather than observer append time. The effective view at pre
 a later context edit to an earlier source. `messagesToSummarize`, `turnPrefixMessages`, and an
 applicable `previousSummary` or derived baseline define its prepared text domain. A derived
 checkpoint need not trigger replay of its originals, but its accepted processing cannot claim
-original coverage. An observer batch that includes later source requires a compatible earlier basis
-and bounded catch-up through the cut. The available Pi hook does not make a later aggregate state
-valid for an earlier cut.
+original coverage. An observer batch that includes later source requires the latest accepted state
+whose source horizon ends before the cut, plus bounded catch-up through the cut; that catch-up
+serves only the checkpoint. The available Pi hook does not make a later aggregate state valid for an
+earlier cut. Because native serialization keeps only the first 2,000 characters of each tool result,
+the contract counts a documented start-and-end excerpt of a large tool result as reduced processing
+rather than requiring every byte.
 
 ## Custom results and later native summaries
 

@@ -48,7 +48,8 @@ scripted probes, and live-model outcomes are distinct evidence.
 
 The host corrections in this review were verified against installed Pi 0.99.1. The earlier research
 recorded an archive comparison with published 1.0.1; that comparison was not repeated in this review
-and is not runtime compatibility evidence.
+and is not runtime compatibility evidence. Recheck host facts against the targeted Pi release before
+implementation.
 
 Important comparison pins are:
 

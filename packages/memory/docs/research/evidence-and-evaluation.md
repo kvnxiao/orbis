@@ -129,7 +129,9 @@ Model-free fixtures should distinguish:
 - Source time from later processing time, including unresolved relative dates.
 - State at Pi's prepared cut from a spanning observer batch, including a later correction or
   completion that must not appear earlier.
-- An oversized or interrupted input portion from accepted coverage.
+- An oversized or interrupted input portion from accepted coverage, and a reduced tool result from a
+  fully processed one.
+- A context edit after acceptance that makes a source uncovered without rolling back later state.
 - A native checkpoint accepted as derived evidence from original-source coverage.
 - Effective browse, search, and read after a source edit; access to the edited-out original only
   with a current personal opt-in and explicit request.

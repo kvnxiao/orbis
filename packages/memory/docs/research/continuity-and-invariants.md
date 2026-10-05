@@ -75,19 +75,30 @@ messages would duplicate content and obscure which representation preserved the 
 The snapshot represents state as of Pi's prepared cut under the effective source view at
 preparation. A later context edit may still affect a source before the cut. An observer append
 timestamp only records when processing finished. It does not make later evidence valid at an earlier
-cut. When an observation batch spans the cut, reconstruct a compatible earlier basis and use bounded
-catch-up through the cut. If that cannot produce eligible state, the candidate needs fallback.
-Inferring earlier state by removing facts that appear recent can project later corrections or
-completions backward.
+cut. When an observation batch spans the cut, start from the latest accepted state whose source
+horizon ends before the cut and use bounded catch-up through the cut. That catch-up serves only the
+checkpoint and is not committed, so the main accepted state keeps one chain. If it cannot produce
+eligible state, the candidate needs fallback. Inferring earlier state by removing facts that appear
+recent can project later corrections or completions backward.
 
-The observer receives the full active obligations, existing maintained items it may change, and
-bounded evidence. It proposes machine-readable add, replace, and remove operations with complete
-replacement content. Validation and application are automatic, without per-update user approval. An
-omitted item persists; the observer need not restate every unchanged decision, completed result, or
-identifier. Those non-obligation facts also need explicit removal when no longer needed. An
-obligation needs linked evidence to retire; its removal does not require a narrative in the final
-checkpoint. These operations keep the accepted state distinct from a new free-form state replacement
-or an extra model interpretation pass.
+A context edit to an already processed source is new evidence rather than an invalidation. The
+source becomes uncovered and the observer processes its effective version against the current
+snapshot. Rolling back every later update would make one early edit cost near-complete
+re-observation. Pi's overflow recovery also omits its failed final attempt through context edits, so
+edits to processed sources are routine.
+
+The observer receives the complete snapshot, with every obligation and maintained item, and bounded
+evidence. Supplying everything lets each job review and prune any item without a selection policy;
+the cost is earlier suspension when the snapshot outgrows the observer's input budget. Tool results
+above a documented size may be processed as start-and-end excerpts and recorded as reduced, because
+native compaction reads only the first 2,000 characters of each tool result and full processing
+would make eligibility costlier than the native baseline. The observer proposes machine-readable
+add, replace, and remove operations with complete replacement content. Validation and application
+are automatic, without per-update user approval. An omitted item persists; the observer need not
+restate every unchanged decision, completed result, or identifier. Those non-obligation facts also
+need explicit removal when no longer needed. An obligation needs linked evidence to retire; its
+removal does not require a narrative in the final checkpoint. These operations keep the accepted
+state distinct from a new free-form state replacement or an extra model interpretation pass.
 
 An observation-only checkpoint is a viable experimental comparison, but neither inspected
 observational-memory package proves that selection by recency or importance protects all active
@@ -175,9 +186,12 @@ successful filesystem effects. The inventory remains fixed at a checkpoint bound
 
 The [continuation snapshot contract](../../SPEC.md#continuation-snapshot--req-continuation-snapshot)
 permits bounded condensation of checkpoint presentation while keeping accepted obligations
-authoritative. This is lossy inference: structural validation cannot prove that every obligation
-survived. Repeated repair, corrections, and overflow need evaluation. Neither condensation nor
-native fallback guarantees that arbitrarily large active state fits a fixed context budget.
+authoritative. Obligations render verbatim, and condensation shortens only maintained items through
+a structured output keyed by item identity. Code can then check that every applicable item and
+protected string survived. Condensing maintained context is still lossy inference: structural checks
+cannot prove that a shortened item kept its meaning. Repeated repair, corrections, and overflow need
+evaluation. Neither condensation nor native fallback guarantees that arbitrarily large active state
+fits a fixed context budget.
 
 ## 5. Choose when the snapshot appears
 
