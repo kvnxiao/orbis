@@ -217,6 +217,13 @@ publish packages, or create releases without separate explicit authorization; de
 merge PRs. For issue-backed work, publish checkpoints under the workflow's
 [checkpoint policy](docs/development-workflow.md#publish-checkpoint-artifacts).
 
+Every repository except `kvnxiao/orbis` is an external repository; upstream Pi (`earendil-works/pi`)
+is one. Never open, edit, close, label, review, or comment on an issue or PR in an external
+repository. Never @-mention an external repository's maintainers or contributors in issues, PRs,
+comments, or commit messages. When an external bug or gap affects the work, report it and its
+evidence to the developer instead. Reading external repositories, such as viewing their issues or
+cloning their source, is allowed.
+
 ## Writing
 
 - Draft and publish GitHub issue and PR bodies and comments under the workflow's
