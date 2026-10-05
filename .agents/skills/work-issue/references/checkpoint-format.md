@@ -46,8 +46,10 @@ Follow the table with these sections:
 - **Result:** work performed since the previous checkpoint, findings, consequential choices, and
   their supporting rationale. A review with no findings states its scope and verdict here.
 - **Evidence:** relevant checks and conditions, distinguishing passed, failed, skipped, and
-  unverified results. Include useful commands and shared links; make the result understandable
-  without ignored local files.
+  unverified results. State outcomes, such as "`just check` passed", rather than counts or sizes of
+  repository artifacts, under the
+  [GitHub Markdown rules](../../../../docs/development-workflow.md#write-github-markdown). Include
+  useful commands and shared links; make the result understandable without ignored local files.
 - **Next action:** remaining obligations, blockers, and the responsible role's next action, or None.
 
 For a brainstorm, use the concise [decision record format](brainstorm-records.md). Link prior

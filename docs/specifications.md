@@ -37,7 +37,8 @@ cancellation, and recovery belong in the specification when they affect the pack
 Internal module names, file layouts, algorithms, dependency choices, and task decomposition belong
 in implementation plans unless an external compatibility contract requires them. Exclude provenance,
 review history, and verification journals; the one permitted record of abandoned ideas is the
-[Explored alternatives](#explored-alternatives) section.
+[Explored alternatives](#explored-alternatives) section. An optional
+[Supporting evidence](#supporting-evidence) section can link requirements to package research.
 
 Declare which text defines conformance. The `REQ-<slug>` requirements and associated contract tables
 define system behavior; the linked interaction document defines detailed UI behavior under the same
@@ -95,9 +96,9 @@ retirement ledgers, redirect tables, or renamed-identifier notes to the SPEC.
 | Slug contradicts the behavior it names    | Rename it. Rename for a wrong name, never for tidiness or consistency with a neighboring slug. |
 
 A retired or renamed slug leaves dangling references in tracked Markdown. Before finishing the
-change set, sweep the package with `rg 'REQ-<old-slug>'` and resolve every hit. Do not reuse a
-retired slug for different behavior. Amend the affected requirements and their conformance scenarios
-before implementing changed behavior.
+change set, sweep the package with `rg -i 'req-<old-slug>'`, which also matches heading anchors, and
+resolve every hit. Do not reuse a retired slug for different behavior. Amend the affected
+requirements and their conformance scenarios before implementing changed behavior.
 
 ### Explored alternatives
 
@@ -110,6 +111,23 @@ changed. The current approved behavior and its approval requirements still apply
 no requirements and records no other history; the
 [development workflow](development-workflow.md#decisions-and-local-evidence) defines where the full
 decision records live.
+
+### Supporting evidence
+
+A SPEC may end with one informative section with this heading. The section is optional; not every
+SPEC needs it. Add it when package research under `docs/research/` supports the contract and readers
+need to trace a requirement to that research. Give each supported requirement one row with these
+columns:
+
+- A link to the requirement.
+- Links to its supporting research, labeled by evidence kind when the research defines kinds.
+- The outcome that the linked research does not establish.
+
+Keep findings, evidence-kind definitions, and comparisons in the research documents and link to them
+rather than restating them. The section does not add requirements. When a requirement is added,
+renamed, or retired, add, relink, or delete its row in the same change. When later research
+establishes an open outcome, link that research and remove the open item; keep the results in the
+research document.
 
 ## Terminal interaction document
 

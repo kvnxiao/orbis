@@ -182,7 +182,8 @@ contract reconciliation, and publication of the consolidated decisions. Verify t
 prepared PR body link to a concise current summary. After publication, verify the stored PR body
 includes that link. Report missing history or publication gaps explicitly.
 Use descriptive decisions and outcomes in all issue/PR bodies and checkpoint comments; do not
-reference conversation question numbers or option letters.
+reference conversation question numbers or option letters, or cite counts or sizes of repository
+artifacts.
 
 Prepare source delivery on a work branch against the repository's default branch. Complete
 repository verification, write commit and PR copy to draft files, audit them, and publish with
