@@ -49,3 +49,10 @@ not from the implementation.
 Optional. List each idea explored or trialed and abandoned, one entry per idea, with the reason it
 was dropped and an optional link to the owning issue comment that records the decision. Remove this
 section while the package has no abandoned ideas.
+
+## Supporting evidence
+
+Optional. When research in `docs/research/` supports the contract, link each supported `REQ-<slug>`
+to its research and name the outcome that research does not establish, as the guide's
+[supporting evidence](../../docs/specifications.md#supporting-evidence) section describes. The
+section does not add requirements. Remove this section when the package has no research to cite.

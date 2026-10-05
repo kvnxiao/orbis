@@ -140,9 +140,11 @@ Write `packages/<name>/SPEC.md` as the guide's
 headings appropriate to the package, requirements identified by `REQ-<behavior-slug>`, and every
 requirement linked to a conformance check. Record each option the brainstorm rejected in the SPEC's
 [Explored alternatives](../../../docs/specifications.md#explored-alternatives) section with the
-reason. Write original prose under the repository license and cite external contracts that
-implementers need. Describe implementation availability separately from intended behavior. Do not
-create runtime stubs or package-local plan directories merely to store a specification.
+reason. When package research supports the contract, the SPEC may end with an optional
+[Supporting evidence](../../../docs/specifications.md#supporting-evidence) section. Write original
+prose under the repository license and cite external contracts that implementers need. Describe
+implementation availability separately from intended behavior. Do not create runtime stubs or
+package-local plan directories merely to store a specification.
 
 Link the SPEC and approved scope from the owning issue, and record decisions where the workflow's
 [decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place them.

@@ -444,6 +444,15 @@ including checkpoints on both work paths. Do not refer to questions by their con
 to choices by option letters. Translate a local answer into its meaning, such as “use Pi session
 entries as authoritative storage,” and link the decision record when more context is needed.
 
+In issue and PR bodies, comments, and Project items, do not cite counts or sizes of repository
+artifacts, even when reducing them is the goal. These include requirement, test, link, file, line,
+and word counts and percentage changes in document length. State the outcome instead: write "every
+requirement has a conformance scenario", not "eight requirements have scenarios". A tally goes stale
+at the next push even while the outcome still holds, and keeping it current costs tool calls.
+Identifiers, versions, and commit-pinned links are not counts. Runtime measurements, such as
+benchmark, import-time, latency, or heap results, are not artifact counts; report each with the
+revision it measured.
+
 For issue bodies, issue comments, PR bodies, and PR comments, write each prose paragraph or list
 item on one physical line and let the browser wrap it. Preserve structural newlines for headings,
 lists, tables, and code blocks. Do not insert column-width breaks, trailing double spaces, or HTML

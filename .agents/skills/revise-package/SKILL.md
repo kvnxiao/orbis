@@ -96,7 +96,9 @@ a definition changes, inspect its earlier uses and affected interaction sections
 depend on a later introduction. When an approach or requirement is abandoned, add it to the SPEC's
 [Explored alternatives](../../../docs/specifications.md#explored-alternatives) section with the
 reason, and record the decision where the workflow's
-[decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
+[decision rules](../../../docs/development-workflow.md#decisions-and-local-evidence) place it. When
+the SPEC has a [Supporting evidence](../../../docs/specifications.md#supporting-evidence) section,
+add, relink, or delete the rows of added, renamed, or retired requirements.
 
 For interactive changes, resolve affected focus, navigation, submission, back, cancel, and recovery
 behavior, and update `docs/tui-interactions.md`, its requirement references, and affected diagrams

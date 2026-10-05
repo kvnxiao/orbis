@@ -234,7 +234,8 @@ cloning their source, is allowed.
 ## Writing
 
 - Draft and publish GitHub issue and PR bodies and comments under the workflow's
-  [GitHub Markdown rules](docs/development-workflow.md#write-github-markdown).
+  [GitHub Markdown rules](docs/development-workflow.md#write-github-markdown); state verified
+  outcomes instead of counts or sizes of repository artifacts.
 - In documentation, skills, and design discussions, introduce terms and concepts before using or
   comparing them. Before delivery, read changed documents top to bottom without following forward
   links; apply the [reading-order checks](docs/specifications.md#avoid-forward-references) to SPECs

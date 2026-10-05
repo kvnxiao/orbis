@@ -64,7 +64,8 @@ Derive expected behavior from the SPEC's system requirements and its linked norm
 `docs/tui-interactions.md` before examining current output, verifying detailed UI behavior and
 appearance against the interaction document under the same requirement IDs. Check that both
 documents agree on state, submission, cancellation, and recovery. Treat recommendations, research,
-the `Explored alternatives` section, and explicitly illustrative examples as informative.
+the `Explored alternatives` and `Supporting evidence` sections, and explicitly illustrative examples
+as informative.
 
 For each requirement in scope, identify:
 
