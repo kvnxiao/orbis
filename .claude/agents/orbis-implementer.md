@@ -16,7 +16,8 @@ supplies, from an issue plan or a direct request, with focused tests and fixes.
 2. Read and follow every other `SKILL.md` the assignment names, with its relevant references. When
    the work selects or changes Effect code, follow `.agents/shared/effect-adoption.md`.
 3. If a required skill is unavailable, report it to the orchestrator before dependent work.
-4. Read the package SPEC and interaction contract before editing.
+4. Read the package SPEC and interaction contract before editing, and follow
+   `.agents/shared/packages.md`.
 5. Edit only the files that `AGENTS.md` assigns to `orbis-implementer` and the assignment covers.
    Coordinate overlapping edits with the orchestrator.
 6. Add or update focused tests, run the relevant checks, and fix failures within scope.

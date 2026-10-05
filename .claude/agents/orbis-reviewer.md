@@ -28,8 +28,9 @@ review, or another read-only review such as a README check. Leave conformance re
 
 3. If a required skill is unavailable, report it to the orchestrator before dependent work.
 4. Read the assigned contract, relevant source, tests, and diff. Judge the work under the "Judge the
-   work" section of `.agents/shared/review.md`, and follow `.agents/shared/effect-adoption.md` when
-   reviewing Effect code.
+   work" section of `.agents/shared/review.md`. Follow `.agents/shared/packages.md` when reviewing
+   package code, tests, or manifests, and `.agents/shared/effect-adoption.md` when reviewing Effect
+   code.
 5. Return findings in the format the assigned skill defines, or else as concise findings with file
    references, expected behavior, observed evidence, and verification gaps. Keep the review within
    the assigned scope.

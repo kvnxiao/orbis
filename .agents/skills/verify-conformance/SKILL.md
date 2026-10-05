@@ -173,6 +173,6 @@ review.
 Return one outcome:
 
 - `Done`, with the report: the review completed within its scope, whatever the verdict.
-- `Needs contract revision`, with the proposed amendment, the affected requirements, and the
-  decision it needs: the report proposes an amendment. Return the decision to the caller instead of
-  asking the developer.
+- `Needs contract`, with the proposed amendment, the affected requirements, and the decision it
+  needs: the report proposes an amendment. Return the decision to the caller instead of asking the
+  developer.

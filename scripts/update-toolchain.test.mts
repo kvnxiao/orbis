@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import { test } from "vitest";
 
@@ -9,6 +11,7 @@ import {
   packageProblems,
   parseArgs,
   releaseTargets,
+  scaffoldVerificationPackage,
   selectPackageRelease,
   selectRelease,
   stableVersions,
@@ -279,4 +282,30 @@ test("requires the catalog typebox pin to match Pi's typebox dependency", () => 
   assert.deepEqual(typeboxPinProblems("1.3.27", {}), [
     "@earendil-works/pi-coding-agent does not declare a typebox dependency",
   ]);
+});
+
+test("scaffolds the verification package from a specification in the copied workspace", async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const workspace = await mkdtemp(join(tmpdir(), "orbis-toolchain-scaffold-"));
+  t.onTestFinished(async () => {
+    await rm(workspace, { recursive: true, force: true });
+  });
+  await cp(join(root, "scripts"), join(workspace, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(workspace, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(workspace, "LICENSE"));
+
+  await scaffoldVerificationPackage(workspace, "toolchain-verification");
+
+  const destination = join(workspace, "packages", "toolchain-verification");
+  assert.equal(
+    await readFile(join(destination, "SPEC.md"), "utf8"),
+    "# @orbis/toolchain-verification specification\n",
+  );
+  const manifest: unknown = JSON.parse(await readFile(join(destination, "package.json"), "utf8"));
+  assert.ok(typeof manifest === "object" && manifest !== null && "name" in manifest);
+  assert.equal(manifest.name, "@orbis/toolchain-verification");
+  assert.match(
+    await readFile(join(destination, "src", "index.ts"), "utf8"),
+    /registerCommand\("orbis-toolchain-verification"/,
+  );
 });

@@ -58,7 +58,8 @@ These rules replace the matching `review-changes` rules in this repository:
   without a runtime implementation. Check that:
   - Each approved in-scope behavior has a requirement and conformance scenario.
   - Resolved questions are gone from open lists, and remaining questions concern explicit deferrals.
-  - Current summaries and research agree with the contract without adding requirements of their own.
+  - Research does not add requirements, and a SPEC whose package has research links its research
+    index from the Supporting evidence section.
 
   Report contract inconsistencies separately from runtime verification gaps. Passing repository
   checks do not establish agreement with the approved design.

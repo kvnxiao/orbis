@@ -658,16 +658,14 @@ compatibility checks and verification limits.
 
 ## References
 
-- [Composer mode research](docs/research/composer-mode.md): key routing, natural-language entry, and
-  harness comparison limits.
-
 - [TUI interactions](docs/tui-interactions.md): required presentation, key mappings, user flows, and
   interaction conformance scenarios under the package requirement IDs.
-- [TUI design research](docs/research/tui-interaction-design.md): modal, keyboard, and
-  block-annotation feasibility and verification limits.
-- [Planning research](docs/research/README.md): package comparisons and planning behavior;
-  informative rather than an additional contract.
-- [Pi integration research](docs/research/pi-integration.md): terminal components, session recovery,
-  handoff, and the optional presentation boundary.
 - [Pi extension API](https://pi.dev/docs/latest/extensions): tools, custom UI, message delivery,
   lifecycle callbacks, session entries, and shared events.
+
+## Supporting evidence
+
+This section is informative and does not add requirements. The
+[research index](docs/research/README.md) lists the research behind this contract: package
+comparisons, Pi integration, terminal interaction design, composer mode, recovery, and
+implementation handoff.

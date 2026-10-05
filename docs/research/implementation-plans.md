@@ -1,8 +1,12 @@
 # Implementation plan formats
 
-Research date: 2026-09-09. The inspected formats range from conversational Markdown to persisted
-documents and structured task ledgers. They do not establish one standard `PLAN.md` schema or
-evidence that a particular template is best.
+Research date: 2026-09-09. The
+[issue plan format](../../.agents/skills/plan-implementation/references/plan-format.md) states the
+current rules; the
+[previous version](https://github.com/kvnxiao/orbis/blob/405932fbefac5e3955b4fcb03166022fcdeecc7a/docs/implementation-plan-research.md)
+of this document also recommended a format for Orbis. The inspected formats range from
+conversational Markdown to persisted documents and structured task ledgers. They do not establish
+one standard `PLAN.md` schema or evidence that a particular template is best.
 
 ## Codex
 
@@ -78,35 +82,3 @@ Sources:
   [prompt](https://github.com/jalbarrang/pi-plan-mode/blob/065d82000a990222082b82711f40012f2b07699b/extensions/plan-mode/prompts.ts)
   and
   [ledger integration](https://github.com/jalbarrang/pi-plan-mode/blob/065d82000a990222082b82711f40012f2b07699b/extensions/plan-mode/ledger.ts).
-
-## Recommended Orbis format
-
-Use ordinary Markdown with task-level detail and a small amount of baseline metadata. Each plan
-identifies its specification revision, approved scope, repository baseline, readiness, and execution
-state. Specification approval does not imply authorization to execute the plan.
-
-Each task states its outcome, requirement contribution, prerequisite outputs, files or symbols to
-change, intended edits, existing behavior to reuse, and verification. Verification names the working
-directory, command or interaction, input, and expected result. Recorded evidence remains separate
-from expected results. Unknown host behavior becomes a bounded investigation with dependent work
-explicitly blocked.
-
-Use a coverage table to assign the check that establishes each requirement's full coverage. During
-implementation, record partial completion and the next unblocked task. Recheck affected source and
-specification assumptions on resumption.
-
-Split large work by independently executable outcomes and context needs, not by an arbitrary line or
-task limit. An index records shared decisions, dependencies, and combined coverage; each child
-contains its task details and evidence. Assign verification of interactions across plans to concrete
-tasks. A separate JSON ledger or YAML schema is unnecessary until a consumer needs machine-readable
-state.
-
-The [development workflow](development-workflow.md) applies this content to GitHub issues. Issue
-bodies contain the current shared plan; native relationships express hierarchy and dependencies. The
-[issue plan format](../.agents/skills/plan-implementation/references/plan-format.md) defines their
-content.
-
-Local files under `packages/<name>/implementation/` remain optional scratch work and detailed
-evidence, ignored by Git. The scaffold preserves that directory when adding runtime files to a
-specification-only package. Repository development plans remain separate from `@orbis/plan`'s
-approved artifacts, whose runtime contract requires saving the exact reviewed Markdown.

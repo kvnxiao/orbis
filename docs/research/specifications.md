@@ -4,9 +4,12 @@ Explicit behavioral contracts and checks have supporting evidence. A universally
 structure for specification-driven coding agents does not emerge from the sources reviewed here.
 Orbis uses a small contract structure and adapts its sections to each package.
 
-This review covers sources available on 2026-09-08 and records publication status and paper
-versions. Findings concern the authors' evaluated settings; the Orbis recommendations are design
-judgments, not measured Orbis results.
+Research date: 2026-09-08. The [specification guide](../specifications.md) states the current rules;
+the
+[previous version](https://github.com/kvnxiao/orbis/blob/405932fbefac5e3955b4fcb03166022fcdeecc7a/docs/specification-research.md)
+of this review also described the former specification starter. This review covers sources available
+on that date and records publication status and paper versions. Findings concern the authors'
+evaluated settings; the Orbis recommendations are design judgments, not measured Orbis results.
 
 ## Specification approaches
 
@@ -114,22 +117,7 @@ of an August preprint. It supplies a large public corpus of SDD artifacts, histo
 between specifications and code. It supports study of actual adoption and workflow patterns, but
 does not establish that a particular template reduces defects or improves agent productivity.
 
-## Consequences for the Orbis template
-
-The [specification guide](specifications.md) defines the authoring rules. The template requests the
-content needed to implement and evaluate the package:
-
-- **Purpose and scope:** the user problem, Pi boundary, and intended implementer.
-- **Behavioral contract:** stable `REQ-<slug>` requirements with triggers, results, and the
-  interface, state, ordering, and failure rules that apply.
-- **Explicit variation:** implementation-defined choices, informative examples, and unresolved
-  decisions that cannot be treated as approved behavior.
-- **Conformance:** the complete required behavior and checks that expose whether each requirement is
-  satisfied.
-
-Headings remain adaptable. Requirement identifiers do not correspond one-to-one with implementation
-tasks. A small command specification may omit architecture, persistence, or workflow sections. When
-those topics affect a planning UI's observable behavior, its specification defines those contracts.
+## Gaps
 
 The reviewed evidence does not establish an optimal question-round size, a best Markdown table of
 contents, or the effectiveness of Orbis on Pi. Evaluating Orbis would require comparable tasks and

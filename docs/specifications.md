@@ -12,15 +12,26 @@ reference implementations are distributed under the repository's MIT license.
 ## Specify a package
 
 Write the specification before implementing a new package, and keep it current with approved
-behavior afterwards. A package containing research and a specification without runtime files is not
-an installable extension. Use the specification starter, `templates/extension/SPEC.md`, as writing
-guidance, and replace its instructional text with the package's contract. Before drafting, plan the
-reading order as [Avoid forward references](#avoid-forward-references) describes.
+behavior afterwards. `just new <name>` adds runtime files only to a package whose `SPEC.md` exists;
+a package containing research and a specification without runtime files is not an installable
+extension. Before drafting, plan the reading order as
+[Avoid forward references](#avoid-forward-references) describes.
 
 Choose headings for the package's audience and responsibilities. A command may need a short
 description and conformance scenarios. An interactive workflow may also need state transitions,
 persistence rules, and interface contracts. Do not add empty sections to satisfy a universal table
-of contents.
+of contents. This outline is a starting point:
+
+| Section               | Contents                                                                                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Title and status      | `# @orbis/<name> specification`, then a `Status:` line stating approval and implementation                                                                                 |
+| Purpose               | The user problem, audience, Pi integration, scope, and exclusions                                                                                                          |
+| Concepts and workflow | Package-specific terms, actors, states, artifacts, and interfaces, introduced before requirements use them; a small package puts them in its purpose                       |
+| Required behavior     | [Requirements](#requirement-identifiers) with triggers, results, failures, and permitted choices, and a link to any [interaction document](#terminal-interaction-document) |
+| Conformance           | A check for each requirement, as [Define conformance](#define-conformance) describes                                                                                       |
+| Explored alternatives | [Optional](#explored-alternatives): ideas the design rejected or abandoned                                                                                                 |
+| Supporting evidence   | [Required when the package has research](#supporting-evidence): a link to `docs/research/README.md`, with optional rows from requirements to research                      |
+| References            | Optional: external contracts, such as Pi API documentation                                                                                                                 |
 
 Every specification states:
 
@@ -40,8 +51,8 @@ Place each kind of content by its role:
   in implementation plans unless an external compatibility contract requires them.
 - Provenance, review history, and verification journals do not belong in the specification. Its one
   permitted record of abandoned ideas is the optional
-  [Explored alternatives](#explored-alternatives) section, and an optional
-  [Supporting evidence](#supporting-evidence) section can link requirements to package research.
+  [Explored alternatives](#explored-alternatives) section, and the
+  [Supporting evidence](#supporting-evidence) section links requirements to package research.
 
 Declare which text defines conformance. The `REQ-<behavior-slug>` requirements, including any tables
 they reference, define system behavior; the linked interaction document defines detailed UI behavior
@@ -120,20 +131,21 @@ decision records live outside the SPEC.
 
 ### Supporting evidence
 
-A SPEC may end with one informative section with this heading. The section is optional; not every
-SPEC needs it. Add it when package research under `docs/research/` supports the contract and readers
-need to trace a requirement to that research. Give each supported requirement one row with these
-columns:
+A SPEC whose package has research under `docs/research/` ends with one informative section with this
+heading. The section first links the research index, `docs/research/README.md`. Add a row for a
+requirement when readers need to trace it to research, with these columns:
 
 - A link to the requirement.
-- Links to its supporting research, labeled by evidence kind when the research defines kinds.
+- Links to its supporting research. Prefix a link with `**Observed in <version or conditions>:**`
+  when the linked finding was inspected, probed, or measured at that version and can be rechecked;
+  leave a link to reasoning or to others' claims unmarked.
 - The outcome that the linked research does not establish.
 
-Keep findings, evidence-kind definitions, and comparisons in the research documents and link to them
-rather than restating them. The section does not add requirements. When a requirement is added,
-renamed, or retired, add, relink, or delete its row in the same change. When later research
-establishes an open outcome, link that research and remove the open item; keep the results in the
-research document.
+Keep findings and comparisons in the research documents and link to them rather than restating them.
+The section does not add requirements. When a requirement is added, renamed, or retired, add,
+relink, or delete its row in the same change. When later research establishes an open outcome, link
+that research and remove the open item; keep the results in the research document. List external
+contracts, such as Pi API documentation, in an optional References section instead.
 
 ## Terminal interaction document
 
@@ -219,7 +231,7 @@ understand them.
 
 ## References
 
-The research review in `docs/specification-research.md` compares Symphony, W3C guidance, Spec Kit,
+The research review in `docs/research/specifications.md` compares Symphony, W3C guidance, Spec Kit,
 OpenSpec, and executable specifications, alongside empirical studies of coding agents. Read it when
-evaluating the specification workflow or template. It distinguishes published results, preprints,
+evaluating the specification workflow or this guide. It distinguishes published results, preprints,
 and Orbis design recommendations.

@@ -16,7 +16,8 @@ return conformance findings.
    their references whose "Read when" condition matches the change.
 2. Read and follow `.agents/skills/verify-conformance/SKILL.md`.
 3. If a required skill is unavailable, report it to the orchestrator before dependent work.
-4. Read the assigned SPEC, linked interaction document, relevant source, tests, and diff.
+4. Read the assigned SPEC, linked interaction document, relevant source, tests, and diff, and follow
+   `.agents/shared/packages.md` for package conventions and tests.
 5. Return the requirement coverage table the skill defines, with file references, expected behavior,
    observed evidence, and verification gaps. Keep the review within the assigned scope.
 

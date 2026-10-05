@@ -13,11 +13,6 @@ repository, and publishes it in issue bodies in the [plan format](references/pla
 result is a plan whose tasks an implementer can execute from the repository and the issue without
 the chat. A planning request authorizes shared planning records, not execution of their tasks.
 
-If `work-issue` did not start this work, first follow
-[starting-work.md](../../shared/starting-work.md), with the Stage values in
-[work-paths.md](../../shared/work-paths.md) and the labels in
-[github-markdown.md](../../shared/github-markdown.md).
-
 ## 1. Establish the approved baseline
 
 1. Read [specifications.md](../../../docs/specifications.md) and the package's SPEC with its linked
@@ -25,22 +20,24 @@ If `work-issue` did not start this work, first follow
 2. Identify the package, requested scope, SPEC revision, and approval evidence from the current
    conversation or repository. Count explicit developer direction as approval even when the SPEC's
    status has not been updated. A SPEC's existence does not establish approval.
-3. For a brainstormed change, verify that the developer approved the complete requested design under
-   [brainstorm-records.md](../../shared/brainstorm-records.md) before editing or publishing plans.
+3. For a brainstormed change, verify that the developer approved the complete requested design
+   before editing or publishing plans.
 4. Act on the baseline:
 
-   | Baseline                                                               | Action                                                                                                    |
-   | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-   | The SPEC is missing or unapproved, or material design questions remain | Research the current implementation, identify the missing contract or approval, and return `Needs design` |
-   | The contract is approved                                               | Continue                                                                                                  |
+   | Baseline                                                               | Action                                                                                                      |
+   | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+   | The SPEC is missing or unapproved, or material design questions remain | Research the current implementation, identify the missing contract or approval, and return `Needs contract` |
+   | The contract is approved                                               | Continue                                                                                                    |
 
 ## 2. Inspect the repository
 
-Inspect the package source, tests, dependencies, scaffold, and relevant Pi APIs. A package directory
-with only a SPEC is a valid starting point.
+Inspect the package source, tests, dependencies, scaffold, and relevant Pi APIs, and read
+[packages.md](../../shared/packages.md). A package directory with only a SPEC is a valid starting
+point.
 
-- When package research exists, read the findings relevant to the planned behavior, and verify the
-  assumptions that affect feasibility. Research recommendations do not add requirements.
+- When package research exists, read the findings relevant to the planned behavior. Recheck an
+  `Observed in` finding against the installed version when the plan depends on it. Research does not
+  add requirements.
 - When the SPEC has an Explored alternatives section, read it and apply its
   [reconsideration rule](../../../docs/specifications.md#explored-alternatives).
 - Distinguish implemented and verified behavior from absent, partial, or unverified requirements. Do
@@ -63,16 +60,17 @@ Map the requested scope to SPEC requirements and conformance scenarios.
 
 Select files, internal types, algorithms, library approaches, and task boundaries within the
 contract. Assess Effect v4 for a library approach under
-[effect-adoption.md](../../shared/effect-adoption.md). Translate failure, cancellation, recovery,
-and ordering guarantees into concrete edits and checks; do not require the SPEC to prescribe the
-mechanism.
+[effect-adoption.md](../../shared/effect-adoption.md); the
+[Effect research](../../../docs/research/effect-ts-v4.md) records v4 patterns, host constraints, and
+measured costs. Translate failure, cancellation, recovery, and ordering guarantees into concrete
+edits and checks; do not require the SPEC to prescribe the mechanism.
 
 Before planning work that depends on a behavioral decision:
 
 - When a missing behavioral decision would change acceptance, settle it with the developer through
   the global `brainstorm` skill.
 - When an implementation decision would change observable behavior, treat it as a contract change,
-  obtain the developer's direction through `brainstorm`, and return `Needs contract revision`.
+  obtain the developer's direction through `brainstorm`, and return `Needs contract`.
 - Do not add requirements, weaken acceptance criteria, or treat a proposed change as approved.
 
 ## 5. Divide the work
@@ -97,7 +95,7 @@ slices: each slice has an observable outcome and implements the layers that its 
 
 When a plan format [Design section](references/plan-format.md#design-section) trigger applies, write
 that section and follow its approval and recording steps. Place each decision record under
-[decisions.md](../../shared/decisions.md).
+[records.md](../../shared/records.md).
 
 For each task, provide:
 
@@ -154,18 +152,17 @@ before tasks use or compare them.
    [resume and publication](references/plan-format.md#resume-and-publication) rules. When evidence
    invalidates an assumption, revise the affected issue plans, dependencies, and coverage, and
    preserve unaffected work. Reconcile an older local plan under the local evidence rules in
-   [decisions.md](../../shared/decisions.md).
+   [records.md](../../shared/records.md).
 2. Search existing issues before creating one, and reuse the issue that matches the requested scope.
-   Create native sub-issues only for independently executable outcomes, under the work hierarchy in
-   [work-paths.md](../../shared/work-paths.md). Do not mirror every requirement or checklist step as
-   an issue.
+   Create native sub-issues only for independently executable outcomes, under the hierarchy in
+   [issues.md](../../shared/issues.md). Do not mirror every requirement or checklist step as an
+   issue.
 3. Write each issue's plan in the plan format's
    [initiatives and epics](references/plan-format.md#initiatives-and-epics) or
-   [work issue](references/plan-format.md#work-issue) section. Under
-   [work-paths.md](../../shared/work-paths.md), start each issue body with the Current handoff table
-   and follow its issue-body editing rules.
-4. Apply labels and write the issue prose under
-   [github-markdown.md](../../shared/github-markdown.md).
+   [work issue](references/plan-format.md#work-issue) section. Start each issue body with the
+   Current handoff table, and apply the labels and issue-body editing rules in
+   [issues.md](../../shared/issues.md).
+4. Write the issue prose under [records.md](../../shared/records.md).
 5. If GitHub is unavailable, save a local draft and report that publication remains pending.
    Otherwise, verify the remote issue contents, hierarchy, dependencies, and Project membership.
 
@@ -176,9 +173,8 @@ Return one outcome to the caller:
 - `Done`: the plan is published, or saved as a local draft whose publication remains pending. Report
   the issue links, approved scope, readiness, and blockers, including a Design section that awaits
   developer approval. When implementation is authorized, name the next unblocked task.
-- `Needs design`: the SPEC is missing or unapproved, or material design questions remain. Report the
-  missing contract or approval that step 1 identified.
-- `Needs contract revision`: a planning decision or new evidence requires a change to observable
-  behavior. Report the proposed change, any developer direction, and the tasks it blocks.
+- `Needs contract`: the SPEC is missing or unapproved, material design questions remain, or a
+  planning decision or new evidence requires a change to observable behavior. Report the missing
+  contract or approval, or the proposed change, any developer direction, and the tasks it blocks.
 - `Blocked`: a behavioral decision that changes acceptance remains unanswered. Report the decision
   needed and the independent planning already completed.

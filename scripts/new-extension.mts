@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { cp, lstat, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -15,82 +15,83 @@ if (
   process.exit(1);
 }
 
-const root = resolve(import.meta.dirname, "..");
-const packages = join(root, "packages");
-const destination = join(packages, name);
-let preserveSpecification = false;
+function reject(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
 
+const root = resolve(import.meta.dirname, "..");
+const destination = join(root, "packages", name);
+const missingSpecification = `Missing packages/${name}/SPEC.md: write the package specification before scaffolding.`;
+const invalidLayout = `packages/${name} must be a directory, not a link, and may contain only SPEC.md, docs/research/, docs/tui-interactions.md, and implementation/.`;
+
+let existing;
 try {
-  await mkdir(packages, { recursive: true });
-  await mkdir(destination);
+  existing = await lstat(destination);
 } catch (error) {
-  if (error instanceof Error && "code" in error && error.code === "EEXIST") {
-    const existing = await lstat(destination);
-    const entries = existing.isDirectory()
-      ? await readdir(destination, { withFileTypes: true })
-      : [];
-    const specification = entries.find((entry) => entry.name === "SPEC.md");
-    let validDocs = true;
-    if (entries.some((entry) => entry.name === "docs" && entry.isDirectory())) {
-      const docs = await readdir(join(destination, "docs"), { withFileTypes: true });
-      validDocs =
-        docs.length > 0 &&
-        docs.every(
-          (entry) =>
-            (entry.name === "research" && entry.isDirectory()) ||
-            (entry.name === "tui-interactions.md" && entry.isFile()),
-        );
-    }
-    preserveSpecification =
-      specification?.isFile() === true &&
-      validDocs &&
-      entries.every(
-        (entry) =>
-          entry.name === "SPEC.md" ||
-          ((entry.name === "docs" || entry.name === "implementation") && entry.isDirectory()),
-      );
-    if (!preserveSpecification) {
-      console.error(`Package directory already exists: packages/${name}`);
-      process.exit(1);
-    }
-  } else {
-    throw error;
+  if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+    reject(missingSpecification);
   }
+  throw error;
+}
+if (!existing.isDirectory()) {
+  reject(invalidLayout);
+}
+
+const entries = await readdir(destination, { withFileTypes: true });
+const specification = entries.find((entry) => entry.name === "SPEC.md");
+if (specification === undefined) {
+  reject(missingSpecification);
+}
+let validDocs = true;
+if (entries.some((entry) => entry.name === "docs" && entry.isDirectory())) {
+  const docs = await readdir(join(destination, "docs"), { withFileTypes: true });
+  validDocs =
+    docs.length > 0 &&
+    docs.every(
+      (entry) =>
+        (entry.name === "research" && entry.isDirectory()) ||
+        (entry.name === "tui-interactions.md" && entry.isFile()),
+    );
+}
+if (
+  !specification.isFile() ||
+  !validDocs ||
+  !entries.every(
+    (entry) =>
+      entry.name === "SPEC.md" ||
+      ((entry.name === "docs" || entry.name === "implementation") && entry.isDirectory()),
+  )
+) {
+  reject(invalidLayout);
 }
 
 const template = join(root, "templates", "extension");
 await Promise.all(
-  (await readdir(template))
-    .filter((entry) => !preserveSpecification || entry !== "SPEC.md")
-    .map(async (entry) => {
-      await cp(join(template, entry), join(destination, entry), {
-        recursive: true,
-        force: false,
-        errorOnExist: true,
-      });
-    }),
+  (await readdir(template)).map(async (entry) => {
+    await cp(join(template, entry), join(destination, entry), {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+    });
+  }),
 );
 await cp(join(root, "LICENSE"), join(destination, "LICENSE"));
 
 await Promise.all(
-  [
-    "package.json",
-    "README.md",
-    ...(!preserveSpecification ? ["SPEC.md"] : []),
-    "src/index.ts",
-    "vitest.config.mts",
-    "tests/index.test.mts",
-  ].map(async (file) => {
-    const path = join(destination, file);
-    const content = await readFile(path, "utf8");
-    await writeFile(
-      path,
-      content
-        .replaceAll("@orbis/example", `@orbis/${name}`)
-        .replaceAll("orbis-example", `orbis-${name}`)
-        .replaceAll("packages/example", `packages/${name}`),
-    );
-  }),
+  ["package.json", "README.md", "src/index.ts", "vitest.config.mts", "tests/index.test.mts"].map(
+    async (file) => {
+      const path = join(destination, file);
+      const content = await readFile(path, "utf8");
+      await writeFile(
+        path,
+        content
+          .replaceAll("@orbis/example", `@orbis/${name}`)
+          .replaceAll("orbis-example", `orbis-${name}`)
+          .replaceAll("packages/example", `packages/${name}`),
+      );
+    },
+  ),
 );
 
 console.log(`Created @orbis/${name} in packages/${name}`);

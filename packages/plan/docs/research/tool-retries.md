@@ -1,6 +1,6 @@
 # Planning tool retries
 
-Pi baseline: 0.85.1.
+Research date: 2026-09-12. Pi baseline: 0.85.1.
 
 Custom extension entries persist on the active session branch. Pi can append an entry in memory
 before its disk write completes, and it defers initial persistence until the first assistant

@@ -62,9 +62,10 @@ in place of the skill's chat format, and plan review supplies the final confirma
 validates identities and submission but cannot establish research quality or decision-tree
 completeness from a tool call alone.
 
-The repository's [brainstorm skill](../../../../.agents/skills/design-package/SKILL.md) adapts that
-process to package design. The plan spec defines the intended runtime experience separately from
-this development-time skill.
+The repository's
+[specify-package skill](https://github.com/kvnxiao/orbis/blob/main/.agents/skills/specify-package/SKILL.md)
+adapts that process to package design. The plan spec defines the intended runtime experience
+separately from this development-time skill.
 
 **Design implication:** A frontier can contain related questions that users need to revisit.
 Whole-round navigation and explicit submission preserve that freedom. Per-question clarification
@@ -75,8 +76,8 @@ establish the research and clarification process.
 [HumanEvalComm](https://arxiv.org/abs/2406.00215) studies clarification for ambiguous, inconsistent,
 and incomplete small coding tasks. It supplies relevant evidence about questioning, but does not
 validate frontier batching or browser-versus-terminal interaction. The repository's
-[scholarly review](../../../../docs/specification-research.md) records its findings and limitations
-alongside related studies.
+[scholarly review](https://github.com/kvnxiao/orbis/blob/main/docs/research/specifications.md)
+records its findings and limitations alongside related studies.
 
 ## Comparison with the specified Orbis behavior
 
