@@ -348,7 +348,7 @@ async function inventory() {
     dependencies,
     reviewFiles: files
       .filter((path) =>
-        /(?:AGENTS\.md|README\.md|tsconfig.*\.json|vitest\.config\.mts|\.oxlintrc\.json|\.node-version|\.nvmrc|\.tool-versions|Dockerfile|\.github\/.*)$/.test(
+        /(?:AGENTS\.md|\.agents\/shared\/packages\.md|README\.md|tsconfig.*\.json|vitest\.config\.mts|\.oxlintrc\.json|\.node-version|\.nvmrc|\.tool-versions|Dockerfile|\.github\/.*)$/.test(
           path,
         ),
       )

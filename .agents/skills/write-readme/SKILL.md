@@ -11,11 +11,7 @@ This skill writes or reviews a repository or package README so that a reader can
 extension, install it, and complete a first use. The result is a README that meets the README
 guidelines, or review findings against them.
 
-If `work-issue` did not start this work, first follow
-[starting-work.md](../../shared/starting-work.md), with the Stage values in
-[work-paths.md](../../shared/work-paths.md) and the labels in
-[github-markdown.md](../../shared/github-markdown.md). A README review skips that step and needs
-only the README paths or the change set to check.
+A README review needs only the README paths or the change set to check.
 
 1. Read the [README guidelines](../../../docs/readme-guidelines.md) before drafting. They define the
    reading order, the documentation destinations, and the review checks.

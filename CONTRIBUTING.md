@@ -2,8 +2,9 @@
 
 Orbis extensions publish TypeScript source and use Pi's public extension API. Pi loads their `.ts`
 entry points through Jiti; publication does not require a build step. [`AGENTS.md`](AGENTS.md)
-contains the instructions coding agents follow and the package conventions every contributor
-follows; this guide covers the workspace, the package lifecycle, and the checks.
+contains the instructions coding agents follow, and
+[`.agents/shared/packages.md`](.agents/shared/packages.md) has the package conventions every
+contributor follows; this guide covers the workspace, the package lifecycle, and the checks.
 
 ## Requirements
 
@@ -27,12 +28,12 @@ follows; this guide covers the workspace, the package lifecycle, and the checks.
 ```text
 packages/                      Package specifications and available implementations
 templates/extension/           Source-only package template
-docs/development-workflow.md   How the agent workflow runs, with a map of its instructions
+docs/development-workflow.md   How to ask agents for work, and where instructions live
 docs/specifications.md         Package specification guidance
 docs/readme-guidelines.md      README guidance
 docs/research/                 Research behind repository standards
 .agents/skills/                Repository-local agent skills
-.agents/shared/                Agent-only rules shared by several skills and agents
+.agents/shared/                Rules shared by several skills and agents, including package conventions
 .codex/                        Codex session defaults and custom agents
 .claude/                       Claude Code session settings and custom agents
 scripts/                       Scaffolding and toolchain scripts
@@ -86,9 +87,8 @@ delivered.
 
 ## Work with agents
 
-The [development workflow](docs/development-workflow.md) explains how to ask the agents for work,
-what each stage produces, and where you approve it. It also maps every skill, agent, and shared
-instruction file.
+The [development workflow](docs/development-workflow.md) explains how to ask the agents for work and
+where you approve it. It also shows how the instruction files are organized.
 
 ## GitHub setup
 
@@ -138,10 +138,11 @@ and
    creating anything. The scaffold copies the repository license.
 3. Implement `packages/<name>/src/index.ts` as a default factory that receives `ExtensionAPI` and
    registers commands, tools, and handlers. Keep runtime imports resolvable from the published
-   package under the import rules in the [package conventions](AGENTS.md#package-conventions).
+   package under the import rules in the
+   [package conventions](.agents/shared/packages.md#package-conventions).
 4. Declare dependencies and validate boundary data as the
-   [package conventions](AGENTS.md#package-conventions) require. Validation goes through the
-   scaffold's `src/records.ts`.
+   [package conventions](.agents/shared/packages.md#package-conventions) require. Validation goes
+   through the scaffold's `src/records.ts`.
 5. Add tests in `packages/<name>/tests/**/*.test.mts`. The scaffold includes a Pi loading test and a
    `vitest.config.mts` project named `@orbis/<name>`; the root Vitest configuration discovers it
    automatically.
@@ -167,8 +168,9 @@ The Exit test loads the package through Pi and checks that `/exit` requests shut
 test checks that `/orbis-<name>` registers. For Plan's fixtures, benchmarks, and terminal checks,
 see [package development](packages/plan/docs/development.md). Use `pnpm test:watch` for workspace
 watch mode; each package also provides `test:watch`. The scaffold and template tests load TypeScript
-source through Pi and check command registration; the [test policy](AGENTS.md#tests) requires
-runtime tests for new or changed extension behavior.
+source through Pi and check command registration; the
+[test policy](.agents/shared/packages.md#tests) requires runtime tests for new or changed extension
+behavior.
 
 ## TypeScript compatibility
 
@@ -219,12 +221,13 @@ constant declarations where possible.
   rejections and newly thrown or rejected `any` or `unknown` values are rejected.
 
 Lint also enforces the file and function size limits and the `records.ts` parsing rule in the
-[package conventions](AGENTS.md#package-conventions). In `packages/tiered-memory/src/`, lint also
-rejects `AbortSignal.any` and `.throwIfAborted`: a composite signal reports different reasons on
-Node 22 and on Node 24 and later, so decide cancellation from the fiber's exit and the first
-recorded cancellation reason. Extensions must use Pi's UI or messaging APIs instead of writing to
-the console. CLI scripts may print results and errors. Lint checks reject unused suppression
-directives. Keep exceptions limited to the code that needs them.
+[package conventions](.agents/shared/packages.md#package-conventions). In
+`packages/tiered-memory/src/`, lint also rejects `AbortSignal.any` and `.throwIfAborted`: a
+composite signal reports different reasons on Node 22 and on Node 24 and later, so decide
+cancellation from the fiber's exit and the first recorded cancellation reason. Extensions must use
+Pi's UI or messaging APIs instead of writing to the console. CLI scripts may print results and
+errors. Lint checks reject unused suppression directives. Keep exceptions limited to the code that
+needs them.
 
 ## Checks
 

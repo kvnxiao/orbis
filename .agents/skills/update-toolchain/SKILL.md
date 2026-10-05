@@ -15,11 +15,6 @@ packages source-only. `scripts/update-toolchain.mts` handles inventory, release 
 mechanical verification. Agent judgment covers compatibility, package migrations, new correctness
 checks, and code fixes.
 
-If `work-issue` did not start this work, first follow
-[starting-work.md](../../shared/starting-work.md), with the Stage values in
-[work-paths.md](../../shared/work-paths.md) and the labels in
-[github-markdown.md](../../shared/github-markdown.md).
-
 ## 1. Capture the baseline
 
 Run the script from the repository root:
@@ -125,7 +120,7 @@ Before creating an artifact, match each finding to its owner:
   contract.
 - Record work outside the update's scope as a comment on the existing issue that owns its outcome,
   not in a second issue for the same work. Create an issue only for a distinct deliverable that
-  needs its own execution or decision, under the new-issue rules in `starting-work.md`. A new API, a
+  needs its own execution or decision, under [issues.md](../../shared/issues.md). A new API, a
   restated requirement, or a paragraph-sized SPEC clarification is not a separate deliverable.
 - Track work for unavailable packages under their existing delivery issues. Do not imply that a SPEC
   change implements the package.
@@ -185,14 +180,9 @@ package tests and packed-loading checks separately. Test the standalone Pi binar
 support for it. When a required runtime or check is unavailable, report the missing coverage, and do
 not describe the update as fully verified.
 
-Then account for every finding and choose the outcome, as the Return section defines:
-
-1. If the outcome is not `Done`, return it before any delivery.
-2. If `work-issue` started this work, return `Done` with the finding placements; `work-issue` runs
-   the review and delivers.
-3. Otherwise, verify the accumulated change set under [review.md](../../shared/review.md), reviewing
-   the finding placements alongside code correctness, and deliver the requested PR under
-   [github-markdown.md](../../shared/github-markdown.md).
+Then account for every finding, and return the outcome that the Return section defines with the
+finding placements. `work-issue` runs the review, which checks the placements alongside code
+correctness, and delivers the requested PR.
 
 ## Return
 
@@ -209,7 +199,7 @@ Return one outcome:
 
 - `Done`, with the report: the selected versions are applied and verified, and no finding needs a
   contract revision.
-- `Needs contract revision`, with the report and the affected requirements: a finding changes
-  observable behavior that a package SPEC or interaction document defines.
+- `Needs contract`, with the report and the affected requirements: a finding changes observable
+  behavior that a package SPEC or interaction document defines.
 - `Blocked`, with the failure and the decision it needs: a script command failed and the failure
   cannot be resolved.

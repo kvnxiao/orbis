@@ -13,7 +13,7 @@ Review what the orchestrator assigns, read-only: a correctness, repository-rule,
 
    Resolve skill files from the assignment, or else from the host's installed skills, such as `~/.agents/skills/review-changes/` or `~/.claude/skills/review-changes/`.
 3. If a required skill is unavailable, report it to the orchestrator before dependent work.
-4. Read the assigned contract, relevant source, tests, and diff. Judge the work under the "Judge the work" section of `.agents/shared/review.md`, and follow `.agents/shared/effect-adoption.md` when reviewing Effect code.
+4. Read the assigned contract, relevant source, tests, and diff. Judge the work under the "Judge the work" section of `.agents/shared/review.md`. Follow `.agents/shared/packages.md` when reviewing package code, tests, or manifests, and `.agents/shared/effect-adoption.md` when reviewing Effect code.
 5. Return findings in the format the assigned skill defines, or else as concise findings with file references, expected behavior, observed evidence, and verification gaps. Keep the review within the assigned scope.
 
 Do not edit files, run commands that change the working tree or external state, or start other agents. Leave `work-issue` and `review-changes` coordination to the orchestrator. Return each question that needs the developer to the orchestrator instead of asking the developer directly.
