@@ -191,8 +191,8 @@ or session ID alone does not establish shared-prefix reuse.
 
 ### Stable checkpoint presentation
 
-Pi renders a persisted summary as a user message under a fixed wrapper before retained history.
-Entry IDs and token estimates are not interpolated into that text.
+**Observed in Pi 1.0.1:** Pi renders a persisted summary as a user message under a fixed wrapper
+before retained history. Entry IDs and token estimates are not interpolated into that text.
 [Message conversion](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/messages.ts).
 
 The [request stability contract](../../SPEC.md#request-stability--req-request-stability) selects

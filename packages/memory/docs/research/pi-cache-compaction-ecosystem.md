@@ -1,7 +1,8 @@
 # Pi memory, cache, and pruning packages
 
-Research date: 2026-10-04. This survey compares current source and publication boundaries. It does
-not report installation, runtime compatibility, cache measurements, or model-quality tests.
+Research date: 2026-10-04. **Observed in the revisions under Version inventory:** This survey
+compares current source and publication boundaries. It does not report installation, runtime
+compatibility, cache measurements, or model-quality tests.
 
 ## Version inventory
 

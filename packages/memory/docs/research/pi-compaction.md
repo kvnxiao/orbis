@@ -1,8 +1,9 @@
 # Pi compaction and public integration contracts
 
-Research date: 2026-10-04. **Host fact:** The installed reference is Pi 0.99.1. The published
-release checked is [Pi 1.0.1](https://github.com/earendil-works/pi/releases/tag/v1.0.1), released on
-2026-10-03 at 16:14 UTC from
+Research date: 2026-10-04. **Observed in installed Pi 0.99.1 and the Pi 1.0.1 source:** The
+installed reference is Pi 0.99.1. The published release checked is
+[Pi 1.0.1](https://github.com/earendil-works/pi/releases/tag/v1.0.1), released on 2026-10-03 at
+16:14 UTC from
 [a7229dd](https://github.com/earendil-works/pi/commit/a7229ddc21810d6245105978033b7df645ecc2f7).
 GitHub release metadata and npm metadata agreed. These are inspected source baselines, not tested
 runtime compatibility claims for the proposed package.
@@ -74,9 +75,9 @@ assistant, and tool records would not establish parity with all native summary i
 summary deliberately selected by Pi is legitimate selected-lineage evidence even if it describes
 work originally performed elsewhere.
 
-**Product decision:** The Orbis contract fixes which source events a custom checkpoint may present
-by the prepared cut, rather than observer append time. The effective view at preparation can include
-a later context edit to an earlier source. `messagesToSummarize`, `turnPrefixMessages`, and an
+The [Orbis contract](../../SPEC.md) fixes which source events a custom checkpoint may present by the
+prepared cut, rather than observer append time. The effective view at preparation can include a
+later context edit to an earlier source. `messagesToSummarize`, `turnPrefixMessages`, and an
 applicable `previousSummary` or derived baseline define its prepared text domain. A derived
 checkpoint need not trigger replay of its originals, but its accepted processing cannot claim
 original coverage. An observer batch that includes later source requires the latest accepted state

@@ -1,8 +1,8 @@
 # Modularity and future knowledge packages
 
-Research date: 2026-10-04. **Design inference:** This document compares integration options for
-future knowledge companions based on inspected host and companion mechanisms. The
-[core contract](../../SPEC.md) defines current behavior.
+Research date: 2026-10-04. This document compares integration options for future knowledge
+companions based on inspected host and companion mechanisms. The [core contract](../../SPEC.md)
+defines current behavior.
 
 ## Separate the product responsibilities
 

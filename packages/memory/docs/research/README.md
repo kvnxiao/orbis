@@ -5,16 +5,6 @@ Research date: 2026-10-04. This research explains the evidence and trade-offs be
 [supporting evidence](../../SPEC.md#supporting-evidence) section links each requirement to this
 research and to outcomes that still need measurement.
 
-## How to read a claim
-
-- **Host fact:** behavior inspected in a named Pi version or exercised by a bounded probe.
-- **Product decision:** an approved objective or scope choice, whose rationale research can explain.
-- **Design inference:** an expected benefit or failure inferred from mechanisms or related systems.
-- **Evaluation result:** an observed outcome under stated tasks, models, versions, and budgets.
-
-A section or table identifies its evidence kind once. Preserve qualifications that change the
-claim's scope; a source inspection does not become a measured continuation result.
-
 ## Core reading path
 
 Read a topic when its evidence affects implementation or evaluation. The core hypothesis remains

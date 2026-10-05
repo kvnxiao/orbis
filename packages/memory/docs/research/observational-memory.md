@@ -1,8 +1,9 @@
 # The two Pi observational-memory implementations
 
-Research date: 2026-10-04. Two unrelated repositories use the name `pi-observational-memory`. Their
-architectures and failure policies must not be attributed to each other. This document records
-inspected source behavior; neither package was installed or run for this research.
+Research date: 2026-10-04. **Observed in the revisions under Versions and scope:** Two unrelated
+repositories use the name `pi-observational-memory`. Their architectures and failure policies must
+not be attributed to each other. This document records inspected source behavior; neither package
+was installed or run for this research.
 
 ## Versions and scope
 

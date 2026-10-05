@@ -1,9 +1,8 @@
 # Evidence and evaluation
 
 Research date: 2026-10-04. Memory quality depends on construction, retrieval, and the acting model's
-use of evidence. Published **Evaluation result** claims describe their stated systems and settings.
-The later protocol falls under **Design inference** for a possible Orbis study. This research did
-not run an Orbis model-quality experiment.
+use of evidence. Published results describe their stated systems and settings. The later protocol is
+a proposal for a possible Orbis study. This research did not run an Orbis model-quality experiment.
 
 ## Read the evidence at the scope it establishes
 
