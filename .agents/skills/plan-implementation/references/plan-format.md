@@ -1,168 +1,79 @@
 # Issue implementation plans
 
-Keep current executable plans in GitHub issue bodies. The SPEC and interaction contract define
-behavior; issues select concrete edits and checks. The development workflow's
-[work paths](../../../../docs/development-workflow.md#work-paths) define which work gets an issue,
-and its [work hierarchy](../../../../docs/development-workflow.md#work-hierarchy) defines issue
-scope and where each record lives.
+An issue plan is the current executable plan for issue-backed work. It lives in the GitHub issue
+body, below the Current handoff table. The SPEC and its interaction contract define behavior; the
+plan selects concrete edits and checks. The work paths determine which work has an issue, and the
+work hierarchy of initiatives, epics, and tasks sets each issue's scope.
 
-Start each issue with the Current handoff block below. For a small change, cover the remaining plan
-information in a few paragraphs. Do not add empty plan sections or copy the section-guidance tables
-into issues.
-
-## Current handoff
-
-Use this Markdown table at the top of the body. Keep the heading, boundary markers, field labels,
-and row order fixed; replace the example values with current facts. Use one physical line per row.
-
-```markdown
-<!-- orbis:handoff:start -->
-## Current handoff
-
-| Field | Current value |
-| --- | --- |
-| Stage | Design |
-| Authorization | Pending developer direction |
-| Work | Not started |
-| Verification | Not run |
-| Blocker | None |
-| Next action | Resolve the scope and execution authorization. |
-| Checkpoint | None |
-<!-- orbis:handoff:end -->
-```
-
-Keep these values concise:
-
-| Field | Contents |
-| --- | --- |
-| Stage | One exact value from the [Stage values](#stage-values), derived from current evidence |
-| Authorization | Current approval and execution scope, including restrictions and an approval reference when available |
-| Work | Active child, branch or PR, and relevant source revision; state when work is uncommitted or has not started |
-| Verification | Concise actual result or remaining verification; keep commands and detailed findings in checkpoint comments |
-| Blocker | Current obstacle and the decision or prerequisite that resolves it, or None |
-| Next action | One bounded action and its responsible role when ownership matters |
-| Checkpoint | A direct link to the artifact needed for the current handoff, or None; do not accumulate links or replace the link for every new comment |
-
-Put the outcome, approved baseline, approach, and acceptance criteria below the block. Do not repeat
-the current handoff there. The approved baseline stays in the plan; the Work row records the current
-revision. For rows other than Stage, use explicit values such as Pending, Not run, None, or Not
-applicable instead of empty cells.
-
-### Stage values
-
-The Stage row records the issue's current required activity or a terminal outcome. Use exactly one
-of these case-sensitive values, with no aliases, annotations, or combined values:
-
-| Stage | Use when |
-| --- | --- |
-| Investigation | A bounded factual question or experiment still needs supported findings before the next decision or to deliver an investigation issue's outcome. |
-| Design | Behavior, scope, or a contract needs definition or revision, or a design decision or approval blocks later work within the issue's scope. |
-| Planning | Approved behavior or scope needs executable tasks, dependencies, or acceptance checks. |
-| Implementation | An approved plan still needs code, tests, documentation, or other scoped deliverables. Use this stage even when execution has not started or is blocked; record progress in Work and permission in Authorization. |
-| Verification | The accumulated deliverable needs checks or agent reviews, findings are being resolved, or verified delivery is being prepared for publication. |
-| Review | The issue's complete scoped deliverable is published and ready for developer review, approval, or merge, with no outstanding agent-owned delivery work. A draft PR alone does not qualify. |
-| Complete | Evidence establishes the workflow's definition of done for this issue's role. PR-delivered work must be merged; passing checks or finishing a child issue is insufficient. |
-| Abandoned | The issue is closed as not planned. Do not count it as delivered or as satisfying parent acceptance. |
-
-Use the stage of the issue's current required activity even when that activity has not started;
-record readiness in Work, permission in Authorization, and impediments in Blocker. An investigation
-or planning subtask within an ongoing activity does not by itself change Stage. These stages are not
-a mandatory linear sequence. Skip activities already satisfied and return to the appropriate stage
-when the issue's required activity changes. Agent review and fixes within an accumulated
-verification pass remain Verification; preparing a commit, publishing a PR, and writing its handoff
-also remain Verification until the complete delivery is ready for developer review.
-
-For a design-only issue, use Review once its complete deliverable is published and only developer
-approval remains. When design approval blocks later work within the same issue, retain Design.
-
-Keep the current stage while work is blocked or paused, and put the cause and resumption condition
-in Blocker and Next action. Do not use Blocked, Paused, Ready, In progress, In review, Done, or
-Handoff as Stage values. Project status is a separate coarse execution field. For an initiative or
-epic, derive Stage from its remaining work and integrated acceptance; a child reaching Review or
-Complete does not move the whole parent to that stage. A negative investigation result can be
-Complete when its supported findings answer the issue's question, the effect on dependent work is
-recorded, and the investigation's acceptance criteria are met.
-
-### Edit the issue body
-
-Before every body edit, reread the remote body, preserve contributor text, and skip unchanged
-writes. After an uncertain write, check remote state before retrying or creating another issue.
-
-Edit plan sections only when the plan changes, and confine routine state updates to the handoff
-block. Record findings and progress in checkpoint comments even when the body needs no change.
-Batch pending body changes before a stage transition, pause, or delivery; update sooner when another
-worker needs the changed plan. Do not rewrite the body after every delegate returns or merely to
-refresh a timestamp.
-
-For a routine state update, locate exactly one ordered marker pair around the top handoff block in
-the reread body. Change only the affected value cells, preserving labels, row order, and all bytes
-outside the block. Skip publication when no value changes. GitHub still receives a whole-body
-update; inspect the draft diff before publishing and reconcile concurrent changes rather than
-overwriting them.
-
-When an existing issue needs a plan or handoff update, migrate its current handoff into this block
-and remove only the superseded handoff section. Preserve the remaining plan and contributor text; do
-not bulk-migrate idle or closed issues. If markers are missing, duplicated, or malformed, reconcile
-the structure explicitly before applying a routine block replacement. Treat changes to scope,
-approach, dependencies, acceptance criteria, or task checklists as separate plan edits.
+For a small change, cover the plan in a few paragraphs. Do not add empty plan sections or copy the
+section tables below into issues.
 
 ## Initiatives and epics
 
-An initiative or epic tracks coordinated delivery across one or more PRs. Keep small work in one
-issue. Create native sub-issues only for independently executable outcomes. Apply the workflow's
-[scope and label rules](../../../../docs/development-workflow.md#issue-labels) independently
-of parent depth.
+An initiative or epic tracks coordinated delivery across one or more PRs. Its plan has these
+sections:
 
-| Section | Required information |
-| --- | --- |
-| Outcome and scope | Observable delivery, affected packages or mechanisms, boundaries, and approved requirements when applicable |
-| Baseline | Applicable SPEC and interaction-contract links and reviewed revisions; repository baseline; developer approval reference or pending decisions |
-| Shared approach | Verified current behavior, proposed additions, selected approach, and shared constraints |
-| Coverage and integrated acceptance | Applicable requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks |
+| Section                            | Required information                                                                                                                          |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Outcome and scope                  | Observable delivery, affected packages or mechanisms, boundaries, and approved requirements when applicable                                   |
+| Baseline                           | Applicable SPEC and interaction-contract links and reviewed revisions; repository baseline; developer approval reference or pending decisions |
+| Shared approach                    | Verified current behavior, proposed additions, selected approach, and shared constraints                                                      |
+| Coverage and integrated acceptance | Applicable requirement IDs, contributing issues and partial contributions, cross-child checks, and full scoped coverage checks                |
 
-Use native child relationships rather than a duplicate child-status checklist. Record blocking links
-and the prerequisite's observable output. Issue numbers do not imply execution order. SPEC approval
-does not itself authorize execution or establish readiness.
+- Use native child relationships instead of a duplicate child-status checklist.
+- Record blocking links and the prerequisite's observable output.
 
 ## Work issue
 
-A work issue is a `level:task` issue. Make each one executable from the repository and linked
-issues without the original chat. When it has a parent, refer to that issue for shared context
-rather than copying its contract or coverage table.
+A work issue is a `level:task` issue. When it has a parent, refer to the parent for shared context
+instead of copying its contract or coverage table. Its plan has these sections:
 
-| Section | Required information |
-| --- | --- |
-| Outcome | Observable result, requirement contribution, and obligations left to other work |
-| Prerequisites | Blocking issue links, required outputs, and unresolved decisions |
-| Design | Required when the plan introduces a persisted format, a new module boundary, or more than one new module: modules with one-line ownership and the permitted import direction; each persisted record with its schema, atomic unit, and owner; each multi-step lifecycle as a state table; for each mechanism, the requirement that forces it and the simpler mechanism that fails that requirement |
-| Implementation | Files or symbols, intended edits, existing behavior to reuse, constraints, and small-step checklists |
-| Acceptance | Working directory, command or interaction, inputs, expected results, and applicable failure or recovery cases |
+| Section        | Required information                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Outcome        | Observable result, requirement contribution, and obligations left to other work                                                                             |
+| Prerequisites  | Blocking issue links, required outputs, and unresolved decisions                                                                                            |
+| Design         | Only when a [Design section](#design-section) trigger applies                                                                                               |
+| Implementation | Files or symbols, intended edits, existing behavior to reuse, constraints, and small-step checklists                                                        |
+| Acceptance     | Working directory, command or interaction, inputs, expected results, applicable failure or recovery cases, and plausible regressions the checks must reject |
 
-A plan without the Design triggers states its approach in the Implementation section and needs no
+- Separate local automated checks from explicitly authorized real-model checks.
+- Verification and PR delivery normally belong in acceptance criteria, not in separate issues.
+- For an investigation, state the question, the bounded experiment, and the result needed to unblock
+  dependent work. A negative finding that completes the investigation does not make the dependent
+  design viable.
+
+### Design section
+
+Add a Design section when the plan introduces any of these:
+
+- A persisted format.
+- A new module boundary.
+- More than one new module.
+
+The section records:
+
+- Each module, with its one-line ownership and the permitted import direction.
+- Each persisted record, with its schema, atomic unit, and owner.
+- Each multi-step lifecycle, as a state table.
+- For each mechanism, the requirement that forces it and the simpler mechanism that fails that
+  requirement.
+
+A plan without these triggers states its approach in the Implementation section and does not need
 separate approval. When the Design section is present:
 
-- Drop a mechanism with no forcing requirement during planning.
-- The developer approves the section before implementation authorization.
-- Record each persisted format as a decision where the workflow's
-  [decision rules](../../../../docs/development-workflow.md#decisions-and-local-evidence) place it.
-- Make the first implementation assignment a skeleton: types, schemas, module boundaries, exported
-  signatures, and test names with no bodies. The orchestrator runs the simplification review on
-  that skeleton before bodies are written.
-
-Initially state that implementation has not started. Update the handoff from observed results and
-relevant contract and source revisions as work progresses. Keep expected checks separate from actual
-results. Identify plausible regressions that the checks must reject. Separate local automated checks
-from explicitly authorized real-model checks. Verification and PR delivery normally belong in
-acceptance criteria rather than separate issues. A completed slice establishes only its assigned
-contribution.
-
-For an investigation, state the question, bounded experiment, and result needed to unblock dependent
-work. A negative finding can complete the investigation without making the dependent design viable.
+1. During planning, drop each mechanism that has no forcing requirement.
+2. Obtain the developer's approval of the section before implementation begins. Approval does not
+   authorize implementation.
+3. Record each persisted format as a decision record.
+4. Make the first implementation assignment a skeleton: types, schemas, module boundaries, exported
+   signatures, and test names, with no bodies.
+5. Before bodies are written, the orchestrator runs a `review-changes` simplification review on the
+   skeleton.
 
 ## Resume and publication
 
-Compare the recorded baseline with current SPEC and source changes before resuming. Revise affected
-tasks and coverage; unrelated commits do not invalidate the whole plan. Preserve completed work and
-contributor edits. Local drafts during a GitHub outage remain unpublished until the issue update
-succeeds; reconcile old local plans against current scope before publication. This format governs
-repository development, not the exact reviewed Markdown saved by `@orbis/plan`.
+- When the recorded baseline differs from the current SPEC or source, revise the affected tasks and
+  coverage, and preserve completed work. Unrelated commits do not invalidate the whole plan.
+- A local draft saved during a GitHub outage stays unpublished until the issue update succeeds.
+- This format governs repository development, not the exact reviewed Markdown that `@orbis/plan`
+  saves.
