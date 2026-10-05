@@ -61,7 +61,7 @@ Map the requested scope to SPEC requirements and conformance scenarios.
 Select files, internal types, algorithms, library approaches, and task boundaries within the
 contract. Assess Effect v4 for a library approach under
 [effect-adoption.md](../../shared/effect-adoption.md); the
-[Effect research](../../../docs/research/effect.md) records v4 patterns, host constraints, and
+[Effect research](../../../docs/research/effect-ts-v4.md) records v4 patterns, host constraints, and
 measured costs. Translate failure, cancellation, recovery, and ordering guarantees into concrete
 edits and checks; do not require the SPEC to prescribe the mechanism.
 
