@@ -27,10 +27,11 @@ follows; this guide covers the workspace, the package lifecycle, and the checks.
 ```text
 packages/                      Package specifications and available implementations
 templates/extension/           Source-only package template and specification starter
-docs/development-workflow.md   Shared work, authorization, checkpoints, and delivery
+docs/development-workflow.md   How the agent workflow runs, with a map of its instructions
 docs/specifications.md         Package specification guidance
 docs/readme-guidelines.md      README guidance
-.agents/skills/                Repository-local design and development skills
+.agents/skills/                Repository-local agent skills
+.agents/shared/                Agent-only rules shared by several skills and agents
 .codex/                        Codex session defaults and custom agents
 .claude/                       Claude Code session settings and custom agents
 scripts/                       Scaffolding and toolchain scripts
@@ -79,30 +80,49 @@ the SPEC. For packages with configurable behavior, follow the generated
 [Pi settings and commands rules](.agents/skills/pi-coding-agent-rules/references/pi-settings-and-commands.md)
 for the native menu boundary, reusable settings components, and command design.
 
-The [development workflow](docs/development-workflow.md) defines how shared work is tracked and
+The [development workflow](docs/development-workflow.md) explains how shared work is tracked and
 delivered.
 
 ## Work with agents
 
-The [skill routing table](AGENTS.md#skill-routing) in `AGENTS.md` maps each kind of request to its
-repository skill under `.agents/skills/`. The
-[agent model policy](docs/development-workflow.md#agent-models) maps each role to a model per host.
+The [development workflow](docs/development-workflow.md) explains how to ask the agents for work,
+what each stage produces, and where you approve it. It also maps every skill, agent, and shared
+instruction file.
 
-In a new Codex or Claude Code session in the updated, trusted repository, send:
+## GitHub setup
 
-```text
-Resume #<number>
-```
+The repository's Claude Code and Codex `PreToolUse` hooks block direct `gh` commands and point the
+agent to [`agent-gh`](https://github.com/kvnxiao/agent-gh). `agent-gh` runs commands with your `gh`
+login unless its profile routes them to a bot. Before your first agent session:
 
-The same entry point resumes a PR or takes a direct request, as the
-[start protocol](AGENTS.md#start-a-session) describes. To limit the work, say
-`Resume #<number>, planning only`; to inspect without execution, ask
-`What is the status of #<number>?`.
+1. Authenticate `gh` with `gh auth login`, then add project access with
+   `gh auth refresh --hostname github.com --scopes project`.
+2. Install `agent-gh` and a GitHub App with Issues and Pull requests write access on the repository.
+   Define a profile for the App with the
+   [comments configuration](https://github.com/kvnxiao/agent-gh#comments-configuration) as its
+   `run_as_bot` rules, so checkpoint comments show your bot as their author while issue, PR, and
+   Project changes stay with your login.
+3. Run `agent-gh self setup <profile>` in your clone to select the profile.
+4. Run `agent-gh self status` and confirm that it prints the profile and its `run_as_bot` rules.
+5. Trust the repository in Codex so it loads the project configuration. Configuration changes apply
+   to new sessions.
 
-To select a skill explicitly, invoke `$<skill>` in Codex, `/skill:<skill>` in Pi, or `/<skill>` in
-Claude Code, such as `$work-issue` or `/design-package`. After project trust is established, Pi
-discovers the repository's `.agents/skills`. When a host does not discover these skills, ask it to
-read the linked `SKILL.md` directly.
+The repository owner keeps these GitHub settings:
+
+- The existing Project columns. Native auto-add for `repo:kvnxiao/orbis is:issue` is optional,
+  because agents add their issues explicitly and verify membership.
+- In the Project menu, **Workflows** → **Item closed** enabled with Status **Done**.
+- In repository **Settings → General → Issues**, **Auto-close issues with merged linked pull
+  requests** enabled.
+- The repository wiki, enabled with its first page created on GitHub and editing restricted to
+  collaborators. Agents clone it over SSH from `git@github.com:kvnxiao/orbis.wiki.git`.
+
+Verify these settings in GitHub rather than assuming their defaults. GitHub documents
+[sub-issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues),
+[PR closing links](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue),
+[Project workflows](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-built-in-automations),
+and
+[wiki editing](https://docs.github.com/en/communities/documenting-your-project-with-wikis/adding-or-editing-wiki-pages).
 
 ## Add an extension
 
@@ -274,9 +294,9 @@ remain agent tasks.
 Effect follows the approved v4 track. Release discovery prefers the newest stable `4.x` release that
 satisfies the same 24-hour age policy as other non-exempt dependencies. Until a stable v4 release is
 eligible, it selects the highest eligible numeric `4.0.0-rc.N` release. Other major versions and
-preview tracks are excluded. Migration from an RC to stable v4 is approved, subject to compatibility
-checks. Review the selected release's notes and installed guidance, then verify the memory package's
-lifecycle and storage checks.
+preview tracks are excluded. Migration from an RC to stable v4 is authorized, subject to
+compatibility checks. Review the selected release's notes and installed guidance, then verify the
+memory package's lifecycle and storage checks.
 
 ## References
 

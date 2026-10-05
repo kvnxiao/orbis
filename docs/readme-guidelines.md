@@ -10,9 +10,8 @@ Use this reading order and adapt headings to the package:
 
 1. **Purpose:** Name the user capability and when it is useful. Avoid implementation inventories.
 2. **Install:** State required setup and show `pi install npm:@orbis/<name>`. State the Node.js
-   minimum. Describe any Pi version the README names as tested, following the
-   [package conventions](../AGENTS.md#package-conventions). Include activation instructions. Keep
-   source builds and workspace setup in contributor documentation.
+   minimum, and describe any Pi version the README names as tested, not required. Include activation
+   instructions. Keep source builds and workspace setup in contributor documentation.
 3. **Try it:** Show a command or natural-language request and its visible result. Complete the
    default workflow before introducing alternatives. Use tool-call JSON only for an API audience.
 4. **How it works, when needed:** Explain activation, user decisions, saved output, and everyday
@@ -25,23 +24,25 @@ runtime requirements, additional model calls, automatic edits, and file writes c
 installation decision. Describe only constraints that apply to the package. Do not bury them in
 contributor documentation to shorten the README.
 
-The [extension template](../templates/extension/README.md) demonstrates the structure with its
-actual example command. Replace the example behavior as implementation changes. Do not copy author
-instructions into package READMEs or pad a small extension with empty sections.
+The README that `just new <name>` scaffolds from the extension template demonstrates this structure
+with the template's actual example command. Replace the example behavior as the implementation
+changes. Do not copy author instructions into package READMEs or pad a small extension's README with
+empty sections.
 
 A screenshot or short recording is optional when it explains an interaction faster than prose. Keep
 a text-based quick start usable without the media. Use plain Markdown. For repository-only documents
 and assets, use absolute GitHub URLs; relative links must resolve from the package and its published
 contents.
 
-Judge concision by the reader's path to first use, not a word count or required section count. Avoid
+Judge concision by the reader's path to first use, not a word count or required section count. Keep
 provider catalogs, exhaustive option tables, contributor instructions, verification journals, and
-implementation progress in the README. Keep npm install commands in the authored README without
+implementation progress out of the README. Keep npm install commands in the authored README without
 temporary publication or repository-visibility notices.
 
 ## Repository README
 
-Introduce Orbis and its name, then help users choose independently installable extensions. Use a
+Introduce Orbis, and in that project introduction explain its name: Latin _orbis_, a circle or orb,
+and the circle constant pi. Then help users choose independently installable extensions with a
 linked package-and-purpose table and a representative installation and first-use example. Package
 READMEs own detailed setup and usage. Link `CONTRIBUTING.md` for workspace setup, package design,
 architecture, testing, and publication.
@@ -57,18 +58,22 @@ architecture, testing, and publication.
 | Complete behavioral requirements                      | Package `SPEC.md` and linked interaction contract |
 | Local run results and verification gaps               | Git-ignored implementation directory              |
 
-Create supporting documents only when they contain useful material. Keep one authoritative account
-of each detailed topic and update incoming links when moving it. The README summarizes current
+Create supporting documents only when they have useful material. Keep one authoritative account of
+each detailed topic and update incoming links when moving it. The README summarizes current
 behavior; it does not replace the specification.
 
 ## Review
 
-Check that a reader can identify the purpose, satisfy prerequisites, install, and complete the first
-example without reading a specification or contributor guide. Read the install-to-first-use path
-without following forward links, and explain a missing prerequisite before the step that needs it.
-Compare commands and claims with the implementation and contract. Check package names, link targets
-and anchors, template substitutions, published file inclusion, and the npm description and
-`pi-package` keyword the catalog uses. When a published preview is available, verify links, images,
-and code blocks on npm and pi.dev; release preparation verifies that the published package and
-linked resources exist. Report unavailable rendering or installation checks without inserting
-session results into public docs.
+Review each README with these checks:
+
+- Confirm that a reader can identify the purpose, satisfy prerequisites, install, and complete the
+  first example without reading a specification or contributor guide.
+- Read the install-to-first-use path without following forward links, and explain a missing
+  prerequisite before the step that needs it.
+- Compare commands and claims with the implementation and contract.
+- Check package names, link targets and anchors, template substitutions, published file inclusion,
+  and the npm description and `pi-package` keyword the catalog uses.
+- When a published preview is available, verify links, images, and code blocks on npm and pi.dev.
+  Release preparation verifies that the published package and linked resources exist.
+- Report unavailable rendering or installation checks without inserting session results into public
+  docs.

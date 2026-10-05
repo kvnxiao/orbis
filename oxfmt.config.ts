@@ -18,7 +18,7 @@ export default defineConfig({
     "**/LICENSE",
     "node_modules/**",
     ".artifacts/**",
-    ".agents/**",
+    ".agents/skills/*-rules/**",
     ".claude/rules/*-rules.md",
   ],
   proseWrap: "always",

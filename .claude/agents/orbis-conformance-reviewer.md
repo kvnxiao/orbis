@@ -8,17 +8,18 @@ effort: xhigh
 disallowedTools: Write, Edit, NotebookEdit
 ---
 
-Read and follow `.agents/skills/verify-conformance/SKILL.md` before reviewing.
+Review an Orbis package implementation against its SPEC and interaction contract, read-only, and
+return conformance findings.
 
-Before reviewing, load every `*-rules` skill the parent names and the `*-rules` skills for the
-work's domain, such as `.agents/skills/pi-coding-agent-rules/SKILL.md` for Pi packages and
-TypeScript. Read each of their references whose "Read when" condition matches the change. If a
-required skill is unavailable, report the unavailable skill to the parent before dependent work.
+1. Load every `*-rules` skill the assignment names and the rules skills for the work's domain, such
+   as `.agents/skills/pi-coding-agent-rules/SKILL.md` for Pi packages and TypeScript. Read each of
+   their references whose "Read when" condition matches the change.
+2. Read and follow `.agents/skills/verify-conformance/SKILL.md`.
+3. If a required skill is unavailable, report it to the orchestrator before dependent work.
+4. Read the assigned SPEC, linked interaction document, relevant source, tests, and diff.
+5. Return the requirement coverage table the skill defines, with file references, expected behavior,
+   observed evidence, and verification gaps. Keep the review within the assigned scope.
 
-Read the assigned SPEC, linked interaction document, relevant source, tests, and diff. Return the
-requirement coverage table the skill defines, with file references, expected behavior, observed
-evidence, and verification gaps. Keep the review within the parent's assigned scope.
-
-Do not edit files, run commands that change the working tree or external state, or delegate further.
-Leave `work-issue` and `review-changes` coordination to the parent. Return findings to the parent
-for resolution.
+Do not edit files, run commands that change the working tree or external state, or start other
+agents. Leave `work-issue` and `review-changes` coordination to the orchestrator. Return each
+question that needs the developer to the orchestrator instead of asking the developer directly.
