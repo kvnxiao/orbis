@@ -100,10 +100,11 @@ Run `just --list` to list recipes. Prefer `just install`, `just new <name>`, `ju
 `just check`, and `just test` over the root `pnpm` scripts; use `pnpm` directly for package-filtered
 commands such as `pnpm --filter @orbis/<name> test`, dependency-manifest changes, and publication.
 Run every GitHub CLI command through [`agent-gh`](https://github.com/kvnxiao/agent-gh), which
-accepts the same arguments as `gh`; do not invoke `gh` directly. Push wiki changes with plain `git`
-over SSH to `git@github.com:kvnxiao/orbis.wiki.git`, not through `agent-gh` or `gh`'s Git credential
-helper. If SSH authentication fails, keep the wiki edit local and report the gap; do not create
-keys, start a login, or change global Git or SSH configuration.
+accepts the same arguments as `gh`; do not invoke `gh` directly. Push wiki changes directly to the
+wiki's `master` branch with plain `git` over SSH to `git@github.com:kvnxiao/orbis.wiki.git`, not
+through `agent-gh` or `gh`'s Git credential helper. If SSH authentication fails, keep the wiki edit
+local and report the gap; do not create keys, start a login, or change global Git or SSH
+configuration.
 
 Before completing a change, run `just fix` and `just check`. After code edits, use `just fix` before
 manual formatting or fixable lint repairs and inspect its diff. If lint errors stop formatting,
@@ -218,9 +219,9 @@ review the diff, update affected documentation, audit prose, run repository chec
 was skipped.
 
 The workflow's [authorization rules](docs/development-workflow.md#authorization) define what
-authorized work may create, commit, push, and open. Do not merge, push to the default branch,
-publish packages, or create releases without separate explicit authorization; developers review and
-merge PRs. For issue-backed work, publish checkpoints under the workflow's
+authorized work may create, commit, push, and open. Do not merge, push to the code repository's
+default branch, publish packages, or create releases without separate explicit authorization;
+developers review and merge PRs. For issue-backed work, publish checkpoints under the workflow's
 [checkpoint policy](docs/development-workflow.md#publish-checkpoint-artifacts).
 
 Every repository except `kvnxiao/orbis` is an external repository; upstream Pi (`earendil-works/pi`)
