@@ -10,8 +10,11 @@ installable implementation is not available.
 ## What it adds
 
 The extension design prepares a continuation snapshot and source-linked observations as a session
-progresses. At compaction, an eligible checkpoint presents what the model needs to continue.
-Historical observations and original evidence remain available through recall.
+progresses. At compaction, a checkpoint presents continuation state through Pi's prepared cut,
+followed by the retained recent conversation. Memory updates are automatic. Recall uses effective
+source text by default; access to edited-out originals requires an explicit request and a personal
+configuration opt-in. Disabling memory stops preparation and supplements while bounded recall
+remains available.
 
 | Capability               | Role                                                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |

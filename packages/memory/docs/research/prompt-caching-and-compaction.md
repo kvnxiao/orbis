@@ -195,12 +195,12 @@ Pi renders a persisted summary as a user message under a fixed wrapper before re
 Entry IDs and token estimates are not interpolated into that text.
 [Message conversion](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/messages.ts).
 
-The [resource budget contract](../../SPEC.md#resource-budgets--req-resource-budgets) selects stable
-request construction. Its checkpoint inventory is fixed at the checkpoint boundary; later activity
-stays in recent history. Deterministic rendering can avoid package-induced prefix churn under
-unchanged selection and configuration. It cannot guarantee provider hits, and an actual correction
-or lineage change may alter the prefix. Request fixtures establish construction stability; only
-provider measurements can establish cache reuse.
+The [request stability contract](../../SPEC.md#request-stability--req-request-stability) selects
+stable request construction. The [file inventory](../../SPEC.md#file-inventory--req-file-inventory)
+is fixed at the checkpoint boundary; later activity stays in recent history. Deterministic rendering
+can avoid package-induced prefix churn under unchanged selection and configuration. It cannot
+guarantee provider hits, and an actual correction or lineage change may alter the prefix. Request
+fixtures establish construction stability; only provider measurements can establish cache reuse.
 
 Pi also supports structured system/tool updates as transcript changes in compatible paths. A forced
 system-prompt string replaces the leading prompt for that run. Native warming is an independent
@@ -250,11 +250,12 @@ those limits. Source retention, active presentation, and cache reuse remain sepa
 
 ## Selected MVP policy and post-MVP experiments
 
-The [contract](../../SPEC.md#implementation-defined-choices) selects stable construction and defers
-provider-specific acting-prefix reuse, request replay or warming, and immutable checkpoint segments.
-These alternatives warrant measurement only if full-task cost or foreground latency identifies a
-problem. Replay must preserve payload, credentials, headers, routing, cancellation, and budget
-accounting. Immutable segments need correction, lineage, growth, and rebase rules. The
+The [request stability contract](../../SPEC.md#request-stability--req-request-stability) selects
+stable construction. The [implementation choices](../../SPEC.md#implementation-defined-choices)
+defer provider-specific acting-prefix reuse, request replay or warming, and immutable checkpoint
+segments. These alternatives warrant measurement only if full-task cost or foreground latency
+identifies a problem. Replay must preserve payload, credentials, headers, routing, cancellation, and
+budget accounting. Immutable segments need correction, lineage, growth, and rebase rules. The
 [ecosystem comparison](pi-cache-compaction-ecosystem.md) records source precedents, not measured
 benefits for Orbis.
 

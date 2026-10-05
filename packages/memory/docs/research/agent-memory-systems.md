@@ -211,6 +211,6 @@ broader knowledge without selecting a shared backend.
 | Automatic skill or instruction generation                 | Knowledge admission does not authorize changing operating policy.         | A separate user-facing capability defines approval and verification.                                       |
 | Shared storage service or generalized backend abstraction | Current continuation does not establish a multi-consumer deployment need. | Actual consumers require shared behavior or a supported deployment cannot use the simple store.            |
 
-The [modular-memory requirement](../../SPEC.md#modular-memory--req-modular-memory) defers public
-companion and external retrieval APIs. The comparisons above identify when a concrete consumer or
-measured failure might justify them.
+The [core scope](../../SPEC.md#status-and-purpose) defers public companion and external retrieval
+APIs. The comparisons above identify when a concrete consumer or measured failure might justify
+them.

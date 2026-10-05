@@ -74,6 +74,15 @@ assistant, and tool records would not establish parity with all native summary i
 summary deliberately selected by Pi is legitimate selected-lineage evidence even if it describes
 work originally performed elsewhere.
 
+**Product decision:** The Orbis contract fixes which source events a custom checkpoint may present
+by the prepared cut, rather than observer append time. The effective view at preparation can include
+a later context edit to an earlier source. `messagesToSummarize`, `turnPrefixMessages`, and an
+applicable `previousSummary` or derived baseline define its prepared text domain. A derived
+checkpoint need not trigger replay of its originals, but its accepted processing cannot claim
+original coverage. An observer batch that includes later source requires a compatible earlier basis
+and bounded catch-up through the cut. The available Pi hook does not make a later aggregate state
+valid for an earlier cut.
+
 ## Custom results and later native summaries
 
 The host saves the custom summary text unchanged and marks the checkpoint `fromHook: true`. It uses
@@ -96,6 +105,12 @@ Native preparation inherits prior `details.readFiles` and `details.modifiedFiles
 checkpoints that are not marked `fromHook`. Returning native-shaped metadata does not opt a custom
 checkpoint into that inheritance.
 
+A local in-memory probe with installed Pi 0.99.1 confirmed this preparation rule. With prior
+`readFiles: [a.ts]`, `modifiedFiles: [b.ts]`, and a later read of `c.ts`, native preparation
+produced read files `a.ts` and `c.ts` plus modified file `b.ts`. Marking the otherwise equivalent
+prior checkpoint `fromHook: true` produced only read file `c.ts`. The probe called preparation and
+file-list computation without a model or SDK hook dispatch; it does not verify request rendering.
+
 The extractor recognizes `read`, `write`, and `edit` with string paths, including recorded nested
 tool calls. It sorts paths and excludes modified paths from the read-only list. These are invoked
 operations, not verified filesystem effects. Arbitrary shell effects and omitted nested-call
@@ -103,10 +118,11 @@ metadata are outside that deterministic account.
 
 A later native summary might retain old filenames from custom summary text, but that is generative
 retention rather than inherited file metadata. The
-[file-preservation contract](../../SPEC.md#unified-compaction--req-unified-compaction) supplements
-the model-facing checkpoint through the context hook while enabled. The context hook transforms
-cloned request messages; it does not repair the stored entry, TUI view, or later native
-`previousSummary` input.
+[file-inventory contract](../../SPEC.md#file-inventory--req-file-inventory) supplements the
+model-facing checkpoint through the context hook while enabled. The context hook transforms cloned
+request messages; it does not repair the stored entry, TUI view, or later native `previousSummary`
+input. An upstream inheritance improvement could remove this supplement after the supported host
+behavior is tested. It is not a dependency for the proposed package.
 [Inheritance rule](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts),
 [file tracking](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/utils.ts).
 
@@ -275,6 +291,14 @@ operation. Navigating before an edit removes that edit from selected ancestry; i
 claims already embedded in an applicable checkpoint.
 [Session projection and edits](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts).
 
+The default recall view should follow effective text for browse, search, and read. A separate
+personal opt-in can permit explicitly requested access to an edited-out original across sessions
+until revoked. Project configuration or tool arguments cannot grant it. The decision must be checked
+when the read occurs, with original and replacement attribution kept distinct. Access to the raw
+entry can reveal text that an edit concealed, including secrets. This opt-in does not erase records
+already derived from the original and does not add a filesystem sandbox. These are design limits,
+not capabilities supplied by the host API.
+
 Request-local filtering also does not alter persisted evidence or an already prepared compaction.
 Context-handler errors are reported and swallowed rather than serving as a dispatch veto. Queued
 custom messages and custom state appends have different delivery semantics; return from
@@ -316,11 +340,11 @@ persistence waits for a user or assistant message; a state-only session can rema
 in-memory session never writes a file. This path does not provide `fsync`, transactional rollback,
 or a durable receipt.
 
-One validated record can associate snapshot changes, observations, and coverage as one logical
-replay unit. That does not establish crash-safe storage atomicity. The host retains the supplied
-custom data by reference, so later mutation would also change the in-memory record. Forks use a new
-session ID while copying entry IDs; eligibility therefore needs session identity, selected ancestry,
-and effective source versions.
+One validated record can associate structured snapshot operations, observations, and coverage as one
+logical replay unit. That does not establish crash-safe storage atomicity. The host retains the
+supplied custom data by reference, so later mutation would also change the in-memory record. Forks
+use a new session ID while copying entry IDs; eligibility therefore needs session identity, selected
+ancestry, and effective source versions.
 [Append and fork behavior in 0.99.1](https://github.com/earendil-works/pi/blob/v0.99.1/packages/coding-agent/src/core/session-manager.ts),
 [extension append adapter](https://github.com/earendil-works/pi/blob/v0.99.1/packages/coding-agent/src/core/agent-session.ts).
 Tree navigation can change ancestry without replacing the whole extension runtime; pending worker

@@ -183,7 +183,7 @@ compatibility limits. Pi does not merge independent replacement checkpoints; the
 [unified compaction requirement](../../SPEC.md#unified-compaction--req-unified-compaction) assumes
 one owner while checking actual stored ownership.
 
-The [resource budget requirement](../../SPEC.md#resource-budgets--req-resource-budgets) selects
+The [request stability requirement](../../SPEC.md#request-stability--req-request-stability) selects
 stable request construction. Provider replay, warming, and immutable segments remain later
 experiments; these source examples do not measure their benefit for Orbis. Persist-time pruning can
 also remove evidence that source recall would need.

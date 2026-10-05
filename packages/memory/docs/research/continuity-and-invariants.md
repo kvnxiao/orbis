@@ -40,25 +40,25 @@ reported outcomes from these articles.
 ## Category-level parity
 
 The table allocates information by its role in continuation. "Snapshot" means the complete
-current-work note presented in a checkpoint. An observation is an interpreted account with source
+continuation state presented in a checkpoint. An observation is an interpreted account with source
 references. Recall provides supporting detail after the checkpoint; it cannot replace an active
 obligation the model has no reason to search for.
 
-| Native information or mechanism | Proposed visible checkpoint content                                                                                | Supporting observations or recall                                                               | Gap or verification obligation                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Goal and scope                  | Snapshot states the operative objective and exclusions.                                                            | Earlier objectives remain attributable history.                                                 | Distinguish a changed objective from an additional pending task.                                                          |
-| Constraints and preferences     | Snapshot preserves applicable instructions and corrections.                                                        | Source lookup provides exact wording and scope.                                                 | Old active constraints cannot expire by age, frequency, or recency selection alone.                                       |
-| Done work                       | Snapshot records confirmed completion and verification status relevant to continuation.                            | Observations retain outcomes and supporting command/tool evidence.                              | A planned action or successful tool invocation is not proof of the whole task's completion.                               |
-| In-progress work                | Snapshot states partial work and the next continuation point.                                                      | Observations retain exact partial artifacts and attempted approaches.                           | Preserve unfinished work across topic changes and repeated checkpoints.                                                   |
-| Blocked and paused work         | Snapshot names the blocker, waiting condition, and still-open obligation.                                          | Source evidence explains failure and previous attempts.                                         | A pause is neither completion nor cancellation.                                                                           |
-| Key decisions and rationale     | Include decisions that govern next actions with enough rationale to avoid repeating rejected work.                 | Historical alternatives and supporting evidence remain recallable.                              | Check whether the acting model retains the reason for a decision.                                                         |
-| Next steps                      | Snapshot identifies the next action or waiting condition.                                                          | Recall supplies detailed procedures when needed.                                                | A suggestion must remain distinct from user authorization and confirmed execution.                                        |
-| Critical context                | Snapshot states necessary environment and task facts.                                                              | Source lookup retrieves longer evidence.                                                        | An observation index alone cannot establish that critical facts are visible.                                              |
-| Exact paths, names, and errors  | Preserve exact values when they constrain the next action.                                                         | Search and source reads recover other recorded details without relying only on observation IDs. | Extraction may omit a detail; original source must remain discoverable independently.                                     |
-| Incremental previous summary    | Reconcile still-applicable prior checkpoint content with newer evidence and corrections.                           | Previous records retain provenance.                                                             | Native fallback reads custom summary text but cannot reconstruct previously omitted facts from the archive automatically. |
-| Mid-turn context                | Present the original request, progress so far, and continuation context for the portion before the fixed cut.      | Source references identify the relevant turn and partial tool exchanges.                        | The observer or renderer must cover the prepared turn prefix; a generic observation list is not enough.                   |
-| Read and modified files         | Render available file-operation facts deterministically from preparation plus explicitly retained prior inventory. | Source lookup explains what an invocation actually did.                                         | Pi excludes custom-checkpoint details from native metadata inheritance. Tool invocation is not proof of success.          |
-| Summarized source coverage      | Eligibility accounts for every prepared source kind, previous checkpoint, and turn prefix.                         | Coverage records identify accepted processing and gaps.                                         | Contiguous processing is a mechanical property; semantic preservation needs separate evaluation.                          |
+| Native information or mechanism | Proposed visible checkpoint content                                                                                                      | Supporting observations or recall                                                                   | Gap or verification obligation                                                                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Goal and scope                  | Snapshot states the operative objective and exclusions.                                                                                  | Earlier objectives remain attributable history.                                                     | Distinguish a changed objective from an additional pending task.                                                                                    |
+| Constraints and preferences     | Snapshot preserves applicable instructions and corrections.                                                                              | Source lookup provides exact wording and scope.                                                     | Old active constraints cannot expire by age, frequency, or recency selection alone.                                                                 |
+| Done work                       | Snapshot records confirmed completion and verification status relevant to continuation.                                                  | Observations retain outcomes and supporting command/tool evidence.                                  | A planned action or successful tool invocation is not proof of the whole task's completion.                                                         |
+| In-progress work                | Snapshot states partial work and the next continuation point.                                                                            | Observations retain exact partial artifacts and attempted approaches.                               | Preserve unfinished work across topic changes and repeated checkpoints.                                                                             |
+| Blocked and paused work         | Snapshot names the blocker, waiting condition, and still-open obligation.                                                                | Source evidence explains failure and previous attempts.                                             | A pause is neither completion nor cancellation.                                                                                                     |
+| Key decisions and rationale     | Include decisions that govern next actions with enough rationale to avoid repeating rejected work.                                       | Historical alternatives and supporting evidence remain recallable.                                  | Check whether the acting model retains the reason for a decision.                                                                                   |
+| Next steps                      | Snapshot identifies the next action or waiting condition.                                                                                | Recall supplies detailed procedures when needed.                                                    | A suggestion must remain distinct from user authorization and confirmed execution.                                                                  |
+| Critical context                | Snapshot states necessary environment and task facts.                                                                                    | Source lookup retrieves longer evidence.                                                            | An observation index alone cannot establish that critical facts are visible.                                                                        |
+| Exact paths, names, and errors  | Preserve exact values when they constrain the next action.                                                                               | Search and source reads recover permitted recorded details without relying only on observation IDs. | Extraction may omit a detail; effective source must remain discoverable independently. Historical originals need the personal opt-in after an edit. |
+| Incremental previous summary    | Reconcile still-applicable prior checkpoint content with newer evidence and corrections.                                                 | Previous records retain provenance.                                                                 | Native fallback reads custom summary text but cannot reconstruct previously omitted facts from the archive automatically.                           |
+| Mid-turn context                | Present the original request, progress so far, and continuation context for the portion before the fixed cut.                            | Source references identify the relevant turn and partial tool exchanges.                            | Every split prefix needs this content, even without special compaction instructions.                                                                |
+| Read and modified files         | Render available file-operation facts deterministically from preparation plus explicitly retained prior inventory.                       | Source lookup explains what an invocation actually did.                                             | Pi excludes custom-checkpoint details from native metadata inheritance. Tool invocation is not proof of success.                                    |
+| Summarized source coverage      | Eligibility accounts for prepared `messagesToSummarize`, `turnPrefixMessages`, and any applicable `previousSummary` or derived baseline. | Coverage records identify accepted processing and gaps.                                             | Processing derived text does not imply replay or coverage of its originals. Mechanical coverage does not prove semantic preservation.               |
 
 The native baseline itself has limits: source serialization truncates tool text, omits images, and
 can make separate history and turn-prefix calls. The qualitative comparison should use what native
@@ -67,10 +67,27 @@ should not describe native compaction as a lossless read of every byte.
 
 ## 1. Allocate native information without duplicating a summary
 
-The [continuation snapshot](../../SPEC.md#continuation-snapshot--req-current-work-note) is
+The [continuation snapshot](../../SPEC.md#continuation-snapshot--req-continuation-snapshot) is
 self-contained for current semantic state; observations support historical recall. This distinction
 makes missing active obligations visible in evaluation. A separate native summary of the same
 messages would duplicate content and obscure which representation preserved the obligation.
+
+The snapshot represents state as of Pi's prepared cut under the effective source view at
+preparation. A later context edit may still affect a source before the cut. An observer append
+timestamp only records when processing finished. It does not make later evidence valid at an earlier
+cut. When an observation batch spans the cut, reconstruct a compatible earlier basis and use bounded
+catch-up through the cut. If that cannot produce eligible state, the candidate needs fallback.
+Inferring earlier state by removing facts that appear recent can project later corrections or
+completions backward.
+
+The observer receives the full active obligations, existing maintained items it may change, and
+bounded evidence. It proposes machine-readable add, replace, and remove operations with complete
+replacement content. Validation and application are automatic, without per-update user approval. An
+omitted item persists; the observer need not restate every unchanged decision, completed result, or
+identifier. Those non-obligation facts also need explicit removal when no longer needed. An
+obligation needs linked evidence to retire; its removal does not require a narrative in the final
+checkpoint. These operations keep the accepted state distinct from a new free-form state replacement
+or an extra model interpretation pass.
 
 An observation-only checkpoint is a viable experimental comparison, but neither inspected
 observational-memory package proves that selection by recency or importance protects all active
@@ -78,7 +95,7 @@ obligations. A snapshot-only checkpoint also has merit as a diagnostic arm; drop
 observations would change a settled direction without evidence that their discovery role is
 unnecessary.
 
-The obligation rule protects accepted state from omission in a later response. It cannot detect an
+The retention rule protects accepted state from omission in a later response. It cannot detect an
 initial extraction miss or prove that a proposed supersession is correct. Preserve exact source
 wording when paraphrase would weaken a condition, prohibition, scope, or acceptance criterion.
 
@@ -86,9 +103,9 @@ wording when paraphrase would weaken a condition, prohibition, scope, or accepta
 
 The [unified compaction contract](../../SPEC.md#unified-compaction--req-unified-compaction) uses
 bounded catch-up through the existing observer, followed by whole-checkpoint native fallback when
-the candidate remains ineligible. A deadline must include waiting for existing work; a chunk-count
-bound alone is not an elapsed deadline. Late or competing work must not commit after the selected
-lineage changes.
+the candidate remains ineligible. The candidate needs accepted state whose source horizon matches
+the prepared cut. A deadline must include waiting for existing work; a chunk-count bound alone is
+not an elapsed deadline. Late or competing work must not commit after the selected lineage changes.
 
 ### Basis in inspected implementations
 
@@ -149,23 +166,23 @@ credentials are resolved after decline.
 
 Native fallback reads prior custom summary prose but does not inherit its file metadata. The
 [file-operation analysis](pi-compaction.md#file-operation-history-is-an-exception) explains why the
-[contract](../../SPEC.md#unified-compaction--req-unified-compaction) supplements the model-facing
-cumulative inventory through the context hook. Recognized tool invocations do not prove successful
-filesystem effects. The inventory remains fixed at a checkpoint boundary under the
+[file-inventory contract](../../SPEC.md#file-inventory--req-file-inventory) supplements the
+model-facing cumulative inventory through the context hook. Recognized tool invocations do not prove
+successful filesystem effects. The inventory remains fixed at a checkpoint boundary under the
 [request construction policy](prompt-caching-and-compaction.md#stable-checkpoint-presentation).
 
 ## 4. Handle an oversized snapshot
 
-The [resource budget contract](../../SPEC.md#resource-budgets--req-resource-budgets) permits bounded
-condensation of checkpoint presentation while keeping accepted obligations authoritative. This is
-lossy inference: structural validation cannot prove that every obligation survived. Repeated repair,
-corrections, and overflow need evaluation. Neither condensation nor native fallback guarantees that
-arbitrarily large active state fits a fixed context budget.
+The [continuation snapshot contract](../../SPEC.md#continuation-snapshot--req-continuation-snapshot)
+permits bounded condensation of checkpoint presentation while keeping accepted obligations
+authoritative. This is lossy inference: structural validation cannot prove that every obligation
+survived. Repeated repair, corrections, and overflow need evaluation. Neither condensation nor
+native fallback guarantees that arbitrarily large active state fits a fixed context budget.
 
 ## 5. Choose when the snapshot appears
 
-The [continuation snapshot](../../SPEC.md#continuation-snapshot--req-current-work-note) appears in
-checkpoints. Ordinary turns supply recent changes between checkpoints. Routine snapshot insertion
+The [continuation snapshot](../../SPEC.md#continuation-snapshot--req-continuation-snapshot) appears
+in checkpoints. Ordinary turns supply recent changes between checkpoints. Routine snapshot insertion
 would add duplication, capacity, and freshness behavior. Any cache or token benefit from the chosen
 placement remains unmeasured.
 
@@ -175,8 +192,9 @@ Pi passes supplied instructions to a history-summary call, but not to a separate
 If only the prefix needs summarization, native inference does not receive the supplied compaction
 instructions. This host limit motivates the contract's bounded instruction-aware presentation path.
 The hook's instruction string is not a persisted user message; an SDK or extension can initiate a
-manual compaction. Instructions about presentation do not themselves authorize retiring an
-obligation.
+manual compaction. The package still presents request, progress, and continuation context for a
+split prefix when no special instructions are supplied. Instructions about presentation do not
+themselves authorize retiring an obligation.
 
 ## 7. Handle corrections without blanket cancellation
 

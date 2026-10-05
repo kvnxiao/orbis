@@ -95,18 +95,21 @@ that study, not additional MVP requirements.
 3. **Use:** observe the acting model's next action with the selected context. Correct evidence
    followed by an incorrect edit is different from missing evidence.
 
-A valid empty observer result differs from a failed worker. Larger retrieval output and a different
-observer model are variables to measure, not assumed repairs. Recall cannot compensate for a hidden
-active obligation that the agent has no reason to search for.
+A valid empty observer result differs from a failed worker. Tests should distinguish a valid
+add/replace/remove operation from a malformed or partial response, and omission from explicit
+removal. Larger retrieval output and a different observer model are variables to measure, not
+assumed repairs. Recall cannot compensate for a hidden active obligation that the agent has no
+reason to search for.
 
 ### Baseline and diagnostic arms
 
 For a live comparison, use native Pi with the extension unloaded and the core enabled from session
 start. Match initial repository, history, acting model, tools, and native settings; count auxiliary
 work in the core arm. Optional diagnostic arms can provide source recall alone, a correct supplied
-continuation state, or full recorded context when it fits. Label supplied state as an oracle, not
-deployable performance. Run manual compaction at matched milestones separately from automatic
-compaction, where compaction frequency itself is an outcome.
+continuation state, native Pi plus an obligation diagnostic, or full recorded context when it fits.
+Label supplied state as an oracle, not deployable performance. These arms diagnose loss; native Pi
+plus obligations is not a required shipping stage. Run manual compaction at matched milestones
+separately from automatic compaction, where compaction frequency itself is an outcome.
 
 ### Histories that distinguish compliant behavior
 
@@ -124,8 +127,14 @@ Model-free fixtures should distinguish:
 - An omitted identifier discoverable in original evidence without a generated ID.
 - Identical error text from separate source events and a repeated accepted operation.
 - Source time from later processing time, including unresolved relative dates.
+- State at Pi's prepared cut from a spanning observer batch, including a later correction or
+  completion that must not appear earlier.
 - An oversized or interrupted input portion from accepted coverage.
 - A native checkpoint accepted as derived evidence from original-source coverage.
+- Effective browse, search, and read after a source edit; access to the edited-out original only
+  with a current personal opt-in and explicit request.
+- Disabled operation that stops observation, custom checkpoints, and file supplements while recall
+  remains available under the same source policy.
 
 Keep answer keys outside acting-agent files and tools. A derived checkpoint cannot count repeated
 summary prose as independent corroboration.
@@ -157,7 +166,8 @@ entry. Report task cost and action quality alongside provider read/write counter
 
 ## Mechanical checks and live evaluation
 
-Scripted providers can verify source selection, persistence, cancellation, limits, retry routing,
-and malformed output without model charges. They cannot establish that a real model extracts every
-relevant obligation or that a provider serves cache hits. Live evaluation needs separate
-authorization, finite budgets, and supervision. This research did not perform live Orbis runs.
+Scripted providers can verify source selection, prepared-cut alignment, structured operations,
+persistence, cancellation, limits, retry routing, recall permissions, and malformed output without
+model charges. They cannot establish that a real model extracts every relevant obligation or that a
+provider serves cache hits. Live evaluation needs separate authorization, finite budgets, and
+supervision. This research did not perform live Orbis runs.

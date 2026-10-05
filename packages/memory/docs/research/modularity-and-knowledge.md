@@ -8,7 +8,8 @@ future knowledge companions based on inspected host and companion mechanisms. Th
 
 Continuation concerns the acting model's next action in the selected conversation. Knowledge
 maintenance decides which claims apply beyond that conversation, why they are credible, and when
-they stop applying. The [memory contract](../../SPEC.md#modular-memory--req-modular-memory) keeps
+they stop applying. The
+[session-observations contract](../../SPEC.md#session-observations--req-session-observations) keeps
 the latter outside the core. The [memory-layer analysis](memory-layers.md) and
 [system comparison](agent-memory-systems.md) show why scope, promotion, and correction need separate
 policies.
@@ -58,9 +59,8 @@ a general tool-execution service for lifecycle handlers. Nested execution throug
 [extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts),
 [loader](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/loader.ts).
 
-The [modular-memory requirement](../../SPEC.md#modular-memory--req-modular-memory) defers a public
-interface until a concrete consumer supplies its evidence needs. The options above remain useful
-when that need is defined.
+The [core scope](../../SPEC.md#status-and-purpose) defers a public interface until a concrete
+consumer supplies its evidence needs. The options above remain useful when that need is defined.
 
 ## Persistence for the core MVP
 
