@@ -270,6 +270,13 @@ function command(executable: string, args: string[], cwd = root, env = process.e
   return result.stdout.trim();
 }
 
+export async function scaffoldVerificationPackage(workspace: string, name: string): Promise<void> {
+  const destination = join(workspace, "packages", name);
+  await mkdir(destination, { recursive: true });
+  await writeFile(join(destination, "SPEC.md"), `# @orbis/${name} specification\n`);
+  command(process.execPath, ["scripts/new-extension.mts", name], workspace);
+}
+
 function jsonCommand(args: string[], cwd = root): JsonObject {
   return object(JSON.parse(command(pnpm, args, cwd)) as unknown);
 }
@@ -500,7 +507,7 @@ async function verify(state: Awaited<ReturnType<typeof inventory>>, minimumNode:
       ) && !(await lstat(source)).isSymbolicLink(),
   });
   const name = "toolchain-verification";
-  command(process.execPath, ["scripts/new-extension.mts", name], workspace);
+  await scaffoldVerificationPackage(workspace, name);
   command(pnpm, ["install", "--no-frozen-lockfile"], workspace);
   command(pnpm, ["format"], workspace);
   command(pnpm, ["check"], workspace);

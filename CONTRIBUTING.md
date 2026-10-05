@@ -26,10 +26,11 @@ follows; this guide covers the workspace, the package lifecycle, and the checks.
 
 ```text
 packages/                      Package specifications and available implementations
-templates/extension/           Source-only package template and specification starter
+templates/extension/           Source-only package template
 docs/development-workflow.md   How the agent workflow runs, with a map of its instructions
 docs/specifications.md         Package specification guidance
 docs/readme-guidelines.md      README guidance
+docs/research/                 Research behind repository standards
 .agents/skills/                Repository-local agent skills
 .agents/shared/                Agent-only rules shared by several skills and agents
 .codex/                        Codex session defaults and custom agents
@@ -129,13 +130,12 @@ and
 1. Write and review `packages/<name>/SPEC.md`, then derive implementation tasks from its
    requirements. Use a lowercase name such as `review` or `session-notes`; names must fit npm's
    length limit and avoid Windows device names.
-2. When implementation starts, run `just new <name>` and then `just install`. The recipe creates
-   `packages/<name>` with npm name `@orbis/<name>` and registers an example `/orbis-<name>` command.
-   It accepts a new directory or an existing real directory containing `SPEC.md` and optional
-   `docs/research/`, `docs/tui-interactions.md`, and `implementation/`; it preserves those
-   artifacts, adds the runtime files, and rejects other existing contents and linked directories.
-   For a new directory it includes the specification starter; complete that contract before
-   replacing the example command. The scaffold copies the repository license.
+2. When implementation starts, run `just new <name>` and then `just install`. The recipe adds the
+   runtime files to `packages/<name>` with npm name `@orbis/<name>` and registers an example
+   `/orbis-<name>` command. It requires an existing real directory containing `SPEC.md`, with
+   optional `docs/research/`, `docs/tui-interactions.md`, and `implementation/`; it preserves those
+   artifacts and rejects a missing SPEC, other existing contents, and linked directories without
+   creating anything. The scaffold copies the repository license.
 3. Implement `packages/<name>/src/index.ts` as a default factory that receives `ExtensionAPI` and
    registers commands, tools, and handlers. Keep runtime imports resolvable from the published
    package under the import rules in the [package conventions](AGENTS.md#package-conventions).

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -8,6 +18,11 @@ import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-codin
 import { test } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
+const invalidLayout = /must be a directory, not a link, and may contain only SPEC\.md/;
+
+function missingSpecification(name: string): RegExp {
+  return new RegExp(`Missing packages/${name}/SPEC\\.md: write .* before scaffolding`);
+}
 
 test("scaffolds scoped TypeScript packages and preserves an existing package", async (t) => {
   const fixture = await mkdtemp(join(tmpdir(), "orbis-scaffold-"));
@@ -23,12 +38,19 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
   await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
 
   const script = join(fixture, "scripts", "new-extension.mts");
+  const destination = join(fixture, "packages", "review");
+  await mkdir(destination, { recursive: true });
+  const specification = Buffer.from("# Review specification\r\nPreserve @orbis/example.\r\n");
+  await writeFile(join(destination, "SPEC.md"), specification);
   const result = spawnSync(process.execPath, [script, "review"], {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout,
+    "Created @orbis/review in packages/review\nRun pnpm install, then pi install ./packages/review\n",
+  );
 
-  const destination = join(fixture, "packages", "review");
   const manifest: unknown = JSON.parse(await readFile(join(destination, "package.json"), "utf8"));
   assert.ok(
     typeof manifest === "object" && manifest !== null && "name" in manifest && "pi" in manifest,
@@ -48,7 +70,7 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
   assert.match(source, /from "typebox"/);
   assert.match(source, /registerCommand\("orbis-review"/);
   assert.match(source, /@orbis\/review is loaded/);
-  assert.match(await readFile(join(destination, "SPEC.md"), "utf8"), /@orbis\/review/);
+  assert.deepEqual(await readFile(join(destination, "SPEC.md")), specification);
   assert.equal(
     await readFile(join(destination, "LICENSE"), "utf8"),
     await readFile(join(root, "LICENSE"), "utf8"),
@@ -75,7 +97,7 @@ test("scaffolds scoped TypeScript packages and preserves an existing package", a
     encoding: "utf8",
   });
   assert.equal(duplicate.status, 1);
-  assert.match(duplicate.stderr, /already exists/);
+  assert.match(duplicate.stderr, invalidLayout);
   assert.equal(await readFile(join(destination, "src", "index.ts"), "utf8"), source);
 
   for (const args of [
@@ -134,7 +156,7 @@ test("preserves a package specification and rejects other existing directory con
       const before = await readdir(existing);
       const rejected = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
       assert.equal(rejected.status, 1);
-      assert.match(rejected.stderr, /already exists/);
+      assert.match(rejected.stderr, name === "empty" ? missingSpecification(name) : invalidLayout);
       assert.deepEqual(await readdir(existing), before);
     }),
   );
@@ -145,6 +167,7 @@ test("preserves a package specification and rejects other existing directory con
   await symlink(linkedTarget, join(fixture, "packages", "linked"), "junction");
   const linked = spawnSync(process.execPath, [script, "linked"], { encoding: "utf8" });
   assert.equal(linked.status, 1);
+  assert.match(linked.stderr, invalidLayout);
   assert.deepEqual(await readdir(linkedTarget), ["SPEC.md"]);
 });
 
@@ -209,7 +232,10 @@ test("preserves package research and rejects conflicting or linked research dire
       const before = await readdir(existing);
       const rejected = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
       assert.equal(rejected.status, 1, name);
-      assert.match(rejected.stderr, /already exists/);
+      assert.match(
+        rejected.stderr,
+        name === "research-only" ? missingSpecification(name) : invalidLayout,
+      );
       assert.deepEqual(await readdir(existing), before);
     }),
   );
@@ -282,7 +308,10 @@ test("preserves implementation plans with or without research and rejects invali
       const before = await readdir(destination);
       const rejected = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
       assert.equal(rejected.status, 1, name);
-      assert.match(rejected.stderr, /already exists/);
+      assert.match(
+        rejected.stderr,
+        name === "plans-only" ? missingSpecification(name) : invalidLayout,
+      );
       assert.deepEqual(await readdir(destination), before);
     }),
   );
@@ -344,10 +373,51 @@ test("preserves TUI interaction documents and rejects directories or links in th
       }
       const result = spawnSync(process.execPath, [script, name], { encoding: "utf8" });
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /already exists/);
+      assert.match(result.stderr, invalidLayout);
       assert.deepEqual((await readdir(destination)).toSorted(), ["SPEC.md", "docs"]);
       assert.deepEqual(await readFile(join(destination, "SPEC.md")), content);
     }),
   );
   assert.deepEqual(await readFile(join(target, "untouched.md")), content);
+});
+
+test("refuses to scaffold a package without a specification and leaves the filesystem unchanged", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-missing-spec-scaffold-"));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+  const script = join(fixture, "scripts", "new-extension.mts");
+  const packages = join(fixture, "packages");
+
+  const withoutPackages = spawnSync(process.execPath, [script, "absent"], { encoding: "utf8" });
+  assert.equal(withoutPackages.status, 1);
+  assert.match(withoutPackages.stderr, missingSpecification("absent"));
+  assert.equal(withoutPackages.stdout, "");
+  await assert.rejects(lstat(packages), { code: "ENOENT" });
+
+  await mkdir(packages);
+  const withPackages = spawnSync(process.execPath, [script, "absent"], { encoding: "utf8" });
+  assert.equal(withPackages.status, 1);
+  assert.match(withPackages.stderr, missingSpecification("absent"));
+  assert.deepEqual(await readdir(packages), []);
+
+  const destination = join(packages, "research-only");
+  const synthesis = Buffer.from("# Research\r\nPreserve @orbis/example.\r\n");
+  await mkdir(join(destination, "docs", "research"), { recursive: true });
+  await writeFile(join(destination, "docs", "research", "pi.md"), synthesis);
+  const researchOnly = spawnSync(process.execPath, [script, "research-only"], {
+    encoding: "utf8",
+  });
+  assert.equal(researchOnly.status, 1);
+  assert.match(researchOnly.stderr, missingSpecification("research-only"));
+  assert.deepEqual((await readdir(destination, { recursive: true })).toSorted(), [
+    "docs",
+    join("docs", "research"),
+    join("docs", "research", "pi.md"),
+  ]);
+  assert.deepEqual(await readFile(join(destination, "docs", "research", "pi.md")), synthesis);
+  assert.deepEqual(await readdir(packages), ["research-only"]);
 });

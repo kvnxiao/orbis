@@ -49,14 +49,16 @@ architecture, testing, and publication.
 
 ## Documentation destinations
 
-| Content                                               | Destination                                       |
-| ----------------------------------------------------- | ------------------------------------------------- |
-| Workspace setup, toolchain, common tests, publication | Root `CONTRIBUTING.md`                            |
-| Advanced user workflows, settings, troubleshooting    | Package `docs/usage.md`, when needed              |
-| Extension integration APIs                            | Package `docs/integrations.md`, when needed       |
-| Package-specific development and reusable checks      | Package `docs/development.md`, when needed        |
-| Complete behavioral requirements                      | Package `SPEC.md` and linked interaction contract |
-| Local run results and verification gaps               | Git-ignored implementation directory              |
+| Content                                               | Destination                                        |
+| ----------------------------------------------------- | -------------------------------------------------- |
+| Workspace setup, toolchain, common tests, publication | Root `CONTRIBUTING.md`                             |
+| Advanced user workflows, settings, troubleshooting    | Package `docs/usage.md`, when needed               |
+| Extension integration APIs                            | Package `docs/integrations.md`, when needed        |
+| Package-specific development and reusable checks      | Package `docs/development.md`, when needed         |
+| Complete behavioral requirements                      | Package `SPEC.md` and linked interaction contract  |
+| Research behind a package contract                    | Package `docs/research/`, with a `README.md` index |
+| Research behind a repository standard                 | `docs/research/`, with a `README.md` index         |
+| Local run results and verification gaps               | Git-ignored implementation directory               |
 
 Create supporting documents only when they have useful material. Keep one authoritative account of
 each detailed topic and update incoming links when moving it. The README summarizes current

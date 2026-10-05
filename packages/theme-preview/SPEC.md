@@ -19,9 +19,8 @@ colors, not the readability of the settings or diagnostic UI.
 
 The `REQ-` requirements and their associated tables define system conformance. The linked
 [terminal interaction contract](docs/tui-interactions.md) defines layout, controls, focus, and user
-flows under the same requirement IDs. Both documents are normative. The
-[Pi rendering research](docs/research/pi-theme-rendering.md) and
-[measurement research](docs/research/color-measurements.md) are informative.
+flows under the same requirement IDs. Both documents are normative. The package's research is
+informative; the [supporting evidence](#supporting-evidence) section links it.
 
 ## Host and command
 
@@ -347,3 +346,9 @@ strict `#RRGGBB` author input. A host fallback for missing terminal defaults mus
 gallery ready. A partial terminal response without background must not enable measurements; a
 response with foreground or palette data must not overwrite author inputs. These checks contribute
 REQ-color-resolution and REQ-background-source.
+
+## Supporting evidence
+
+This section is informative and does not add requirements. The
+[research index](docs/research/README.md) lists the research behind this contract: Pi theme
+rendering and advisory color measurements.

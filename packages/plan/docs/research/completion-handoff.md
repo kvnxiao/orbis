@@ -1,8 +1,8 @@
 # Planning completion and implementation handoff
 
-Pi 0.85.1 exposes successful tool termination and command-owned session replacement through public
-APIs. Source inspection establishes these mechanics; offline runtime tests must verify their
-ordering and failure boundaries.
+Research date: 2026-09-12. Pi 0.85.1 exposes successful tool termination and command-owned session
+replacement through public APIs. Source inspection establishes these mechanics; offline runtime
+tests must verify their ordering and failure boundaries.
 
 Only when every finalized result in a tool batch requests `AgentToolResult.terminate: true` does
 automatic continuation stop. Sequential execution preserves the batch. Steering and follow-up
