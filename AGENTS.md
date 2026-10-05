@@ -64,8 +64,8 @@ or an external change, and reread remote state before writing to it. Delegates a
 reviewers still read the artifacts they are assigned.
 
 At the start of substantive work, read the
-[wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) once, open the records for
-the affected package or mechanism, and compare their constraints with current source and runtime
+[wiki decision index](https://github.com/kvnxiao/orbis/wiki) once, open the records whose "Read
+when" condition matches the work, and compare their constraints with current source and runtime
 versions before relying on them. If GitHub is unavailable, report the gap and continue independent
 local work.
 
@@ -100,7 +100,10 @@ Run `just --list` to list recipes. Prefer `just install`, `just new <name>`, `ju
 `just check`, and `just test` over the root `pnpm` scripts; use `pnpm` directly for package-filtered
 commands such as `pnpm --filter @orbis/<name> test`, dependency-manifest changes, and publication.
 Run every GitHub CLI command through [`agent-gh`](https://github.com/kvnxiao/agent-gh), which
-accepts the same arguments as `gh`; do not invoke `gh` directly.
+accepts the same arguments as `gh`; do not invoke `gh` directly. Push wiki changes with plain `git`
+over SSH to `git@github.com:kvnxiao/orbis.wiki.git`, not through `agent-gh` or `gh`'s Git credential
+helper. If SSH authentication fails, keep the wiki edit local and report the gap; do not create
+keys, start a login, or change global Git or SSH configuration.
 
 Before completing a change, run `just fix` and `just check`. After code edits, use `just fix` before
 manual formatting or fixable lint repairs and inspect its diff. If lint errors stop formatting,
