@@ -1,10 +1,19 @@
 # Memory design research
 
 Research date: 2026-10-04. This research explains the evidence and trade-offs behind
-`@orbis/memory`. The [SPEC](../../SPEC.md) defines behavior; the [evidence map](spec-evidence.md)
-links each requirement to supporting work and unmeasured outcomes. Its
-[four evidence kinds](spec-evidence.md#how-to-read-a-claim) distinguish host facts, product
-decisions, design inferences, and evaluation results.
+`@orbis/memory`. The [SPEC](../../SPEC.md) defines behavior; its
+[supporting evidence](../../SPEC.md#supporting-evidence) section links each requirement to this
+research and to outcomes that still need measurement.
+
+## How to read a claim
+
+- **Host fact:** behavior inspected in a named Pi version or exercised by a bounded probe.
+- **Product decision:** an approved objective or scope choice, whose rationale research can explain.
+- **Design inference:** an expected benefit or failure inferred from mechanisms or related systems.
+- **Evaluation result:** an observed outcome under stated tasks, models, versions, and budgets.
+
+A section or table identifies its evidence kind once. Preserve qualifications that change the
+claim's scope; a source inspection does not become a measured continuation result.
 
 ## Core reading path
 

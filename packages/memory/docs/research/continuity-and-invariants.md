@@ -5,7 +5,7 @@ acting model can perform the right next action under the current instructions. A
 a successful observer call, and an available archive are each insufficient evidence of that outcome.
 
 The policy comparisons below fall under **Design inference** in the
-[evidence map](spec-evidence.md#how-to-read-a-claim). They record trade-offs behind the
+[research index](README.md#how-to-read-a-claim). They record trade-offs behind the
 [continuation contract](../../SPEC.md). The [Pi audit](pi-compaction.md) establishes host mechanics;
 [evidence and evaluation](evidence-and-evaluation.md) distinguishes measured results from proposed
 checks.
