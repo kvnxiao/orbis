@@ -3,9 +3,9 @@
 Orbis tracks shared work in [GitHub Issues](https://github.com/kvnxiao/orbis/issues) and the
 [Orbis Project](https://github.com/users/kvnxiao/projects/1). Package SPECs define approved
 behavior, issues contain implementation plans, and the
-[wiki decision index](https://github.com/kvnxiao/orbis/wiki/Decisions) links repository-wide
-constraints and the rationale behind them. [`AGENTS.md`](../AGENTS.md) states the rules every task
-follows, including the start protocol; this document defines the procedures those rules invoke.
+[wiki decision index](https://github.com/kvnxiao/orbis/wiki) links repository-wide constraints and
+the rationale behind them. [`AGENTS.md`](../AGENTS.md) states the rules every task follows,
+including the start protocol; this document defines the procedures those rules invoke.
 
 ## Roles and terms
 
@@ -31,8 +31,9 @@ These terms recur:
 - A package has a **stable release** once it publishes a version at 1.0.0 or later.
 - `agent-gh` runs every agent GitHub CLI command, as the
   [`AGENTS.md` commands](../AGENTS.md#commands) require.
-- `verify-changes` is a global skill, installed outside this repository, that verifies an
-  accumulated change set with review and checks scaled to the change's risk.
+- `review-changes` is a global skill, installed outside this repository, that reviews a change set
+  and scales review and checks to the change's risk. With `mode=apply`, it also applies accepted
+  fixes.
 
 ## Work paths
 
@@ -65,7 +66,7 @@ An existing issue always takes precedence over the PR-only path:
 
 Both paths share the same roles and two `AGENTS.md` rules: the
 [executor rule](../AGENTS.md#start-a-session) in start protocol step 5 and the
-[verification requirement](../AGENTS.md#verify-and-deliver). Because `verify-changes` scales its
+[verification requirement](../AGENTS.md#verify-and-deliver). Because `review-changes` scales its
 review to risk, a small change still passes through it.
 
 ## Start or resume work
@@ -265,7 +266,7 @@ unaffected approvals, and confirm the complete revised scope before resuming.
 
 ## Delegation
 
-The orchestrator keeps `work-issue` and `verify-changes` coordination, decisions, obtaining the
+The orchestrator keeps `work-issue` and `review-changes` coordination, decisions, obtaining the
 developer's contract approval, accumulated verification, commits, and PR delivery. Delegates execute
 their assignment and return results or findings to the orchestrator. They do not delegate further,
 start either coordinating workflow, or take ownership of the orchestrator's responsibilities.
@@ -515,14 +516,24 @@ wiki. Comments and wiki records are append-only by convention: supersede a recor
 that links the earlier record and states what changes, and move the superseded approach into the
 record's explored alternatives.
 
-Use descriptive wiki page names. The Decisions index contains scope, a one-sentence choice or
-constraint, status, and a page link. Preserve superseded records with replacement links. A
+Use descriptive wiki page names. The wiki home page is the decision index. Each index row has:
+
+- A link to the record.
+- A "Read when" condition that names the work that needs the full record, so readers can skip
+  records that do not apply.
+- The one-sentence decision or constraint.
+- The record's status.
+
+Give every new row a "Read when" condition. Preserve superseded records with replacement links. A
 historical choice does not override the current approved contract or authorize a new requirement.
 The [session start](../AGENTS.md#start-a-session) in `AGENTS.md` defines when to read the index.
 
-The wiki has its own Git repository. Refresh it before editing, inspect the diff, audit the prose,
-and push only the intended pages and index changes. On a concurrent update, reconcile the changes;
-do not force-push. Wiki publication of approved decision summaries is authorized within the task.
+The wiki has its own Git repository, which agents access with plain `git` over SSH as the
+[`AGENTS.md` commands](../AGENTS.md#commands) require. If an existing clone's `origin` uses HTTPS,
+set it to the SSH URL before pushing. Refresh the clone before editing, inspect the diff, audit the
+prose, and push only the intended pages and index changes. On a concurrent update, reconcile the
+changes; do not force-push. Wiki publication of approved decision summaries is authorized within the
+task.
 
 After a retrospective, put reusable conclusions in the record location its scope requires, linking
 the checkpoint evidence and stating the history examined and its gaps. Keep the checkpoint artifacts
@@ -565,10 +576,8 @@ enable **Auto-close issues with merged linked pull requests**. Verify these sett
 rather than assuming their defaults. Use issues as the board's work records and linked PRs for
 review.
 
-Enable the repository wiki and create its first page on GitHub before cloning
-`https://github.com/kvnxiao/orbis.wiki.git`. Keep editing restricted to collaborators. When Git uses
-an interactive credential helper, use `gh`'s Git credential helper for that invocation rather than
-starting another login or changing global credentials.
+Enable the repository wiki and create its first page on GitHub, then clone
+`git@github.com:kvnxiao/orbis.wiki.git` over SSH. Keep editing restricted to collaborators.
 
 GitHub documents
 [sub-issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues),

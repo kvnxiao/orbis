@@ -126,7 +126,7 @@ tasks to `orbis-implementer` under the [executor rule](../../../AGENTS.md#start-
 
 ## Verify the accumulated revision
 
-When this skill resolves a finding within an active `verify-changes` run, return to that coordinator
+When this skill resolves a finding within an active `review-changes` run, return to that coordinator
 without starting a nested verification workflow. Otherwise, verify the accumulated change set under
 the [repository verification rule](../../../AGENTS.md#verify-and-deliver).
 

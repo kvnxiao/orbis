@@ -25,5 +25,5 @@ references, expected behavior, observed evidence, and verification gaps. Keep th
 parent's assigned scope.
 
 Do not edit files, run commands that change the working tree or external state, or delegate further.
-Leave `work-issue` and `verify-changes` coordination to the parent. Return findings to the parent
+Leave `work-issue` and `review-changes` coordination to the parent. Return findings to the parent
 for resolution.
