@@ -1,218 +1,135 @@
+---
+date: 2026-10-11
+questions:
+  - What do current memory systems establish for an independent continuation core versus optional knowledge-maintenance companions?
+observed-in: [Pi 1.1.0, current upstream source and documentation retrieved 2026-10-11]
+recheck-when: Pi changes compaction or source access, an upstream changes the compared guarantees, or a concrete companion is proposed.
+---
+
 # Memory systems and knowledge maintenance
 
-Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
-[Pi 1.1.0](pi-compaction.md).
+Keep selected-lineage continuation independent of broader knowledge maintenance. Selected lineage means the entries on the active session branch, excluding abandoned branches. Current products offer useful retrieval, synthesis, correction, and cross-session storage mechanisms, but their documented capabilities do not establish checkpoint parity or improved continuation for Orbis. The core needs reliable access to attributed session evidence and the state required for the next correct action. Profiles, knowledge pages, background reasoning, and shared services remain optional companion work with their own admission, scope, correction, and authorization rules.
 
-This comparison examines memory systems relevant to session continuation and complementary knowledge
-maintenance. It records source-inspected behavior and documented capabilities separately from
-proposed Orbis implications. No system was executed or benchmarked in this investigation.
+This research informs whether the continuation core needs infrastructure or maintenance policies borrowed from broader memory products. It compares current documentation and source without installing packages, executing memory systems, calling models, or reproducing benchmark results. Pi applicability remains based on [Pi 1.1.0](pi-compaction.md); upstream adapter support is not runtime compatibility verification against that version.
 
-## Source boundaries
+## Current sources and published releases
 
-| System                                 | Source baseline                                                                                         | Qualification                                                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Hindsight                              | [f7dd3f4](https://github.com/vectorize-io/hindsight/tree/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066)      | Current main source; not a verified published package.                           |
-| Honcho                                 | [8e4df99](https://github.com/plastic-labs/honcho/tree/8e4df990d974c146a100e96ab4b3957a6591ceab)         | Current main and v3 documentation.                                               |
-| Mem0                                   | [abb81c8](https://github.com/mem0ai/mem0/tree/abb81c88e1f738a8117d8293530fbc31a5ef8fd9)                 | Current open-source implementation; hosted features are separate.                |
-| pi-hermes-memory                       | [d5e2d13](https://github.com/chandra447/pi-hermes-memory/tree/d5e2d1384b2f78d7a304f24383ad3aae1da5749e) | Manifest says 0.9.10; several source changes are marked Unreleased.              |
-| claude-mem                             | [a1951f2](https://github.com/thedotmack/claude-mem/tree/a1951f2ad247330b2b5d58a1e0c7efeef4a03be5)       | README inspection; not a complete audit of lifecycle hooks.                      |
-| Letta, Claude Code, framework services | Official documentation observed on the research date                                                    | Mutable documentation describes capabilities, not a pinned installed deployment. |
+**Observed on 2026-10-11:** All source and documentation links below use canonical current locations. The abbreviated revisions record the default-branch state observed on retrieval; they do not pin the design to those revisions. A GitHub release, npm package, development branch, and hosted documentation describe different distribution surfaces.
 
-A current source revision is not necessarily a released implementation. An extraction prompt
-establishes requested model behavior, not semantic correctness. Vendor benchmark claims are
-considered in [evidence and evaluation](evidence-and-evaluation.md), not used as a ranking here.
+| System           | Current source observed                                                     | Latest published release observed                                                                                                                                   | Qualification                                                                                                                                        |
+| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hindsight        | [main](https://github.com/vectorize-io/hindsight/tree/main), `a9eeed7`      | [v0.10.3](https://github.com/vectorize-io/hindsight/releases/tag/v0.10.3), October 8                                                                                | Current source includes changes after the release. Coding-agent adapter has a separate npm version.                                                  |
+| Honcho           | [main](https://github.com/plastic-labs/honcho/tree/main), `3922af8`         | [v3.2.2](https://github.com/plastic-labs/honcho/releases/tag/v3.2.2), October 1                                                                                     | Current v3 documentation is not a guarantee that every capability is in this server release.                                                         |
+| Mem0             | [main](https://github.com/mem0ai/mem0/tree/main), `b7ad69a`                 | Python [v2.2.1](https://github.com/mem0ai/mem0/releases/tag/v2.2.1) and TypeScript [ts-v3.3.1](https://github.com/mem0ai/mem0/releases/tag/ts-v3.3.1), September 25 | The migration guide's algorithm generation and package version numbers differ. Platform features are separate from OSS.                              |
+| pi-hermes-memory | [main](https://github.com/chandra447/pi-hermes-memory/tree/main), `24fcd8a` | [v0.9.10](https://github.com/chandra447/pi-hermes-memory/releases/tag/v0.9.10), October 2; npm 0.9.10                                                               | Source has later work. Some changelog entries still labelled Unreleased are also in the published release notes.                                     |
+| claude-mem       | [main](https://github.com/thedotmack/claude-mem/tree/main), `fa8ab09`       | [v13.35.0](https://github.com/thedotmack/claude-mem/releases/tag/v13.35.0), October 9; npm 13.35.0                                                                  | Release notes and current search implementation describe a newer interface than the README's three-tool examples.                                    |
+| Letta Code       | [main](https://github.com/letta-ai/letta-code/tree/main), `271f119`         | [v0.34.10](https://github.com/letta-ai/letta-code/releases/tag/v0.34.10), October 9; npm 0.34.10                                                                    | Current MemFS and Agent SDK pages describe different prompt-placement layouts. The separate legacy Letta server release does not version these docs. |
+| Claude Code      | [public repository](https://github.com/anthropics/claude-code), `3deb873`   | [v2.1.296](https://github.com/anthropics/claude-code/releases/tag/v2.1.296), October 9                                                                              | Product documentation is the memory evidence; this repository is not a complete client source audit.                                                 |
 
-## Hindsight: retention and retrieval are different guarantees
+An extraction prompt establishes requested model behavior, not semantic correctness. A published capability does not establish effectiveness on Orbis tasks. Vendor benchmark claims belong in [evidence and evaluation](evidence-and-evaluation.md), not a product ranking here.
 
-Current [retention documentation](https://hindsight.vectorize.io/developer/retain) describes
-concise, verbose, custom, verbatim, and chunk-based modes. Verbatim mode preserves original chunks
-alongside extracted metadata; chunk mode skips extraction. A stored document that produces zero
-extracted memories can remain unavailable through memory recall and reflection. The documentation
-also covers image-derived records and attachment propagation, subject to model capabilities.
+## Hindsight separates retained source, extracted facts, and maintained knowledge
 
-For Orbis, this distinguishes three outcomes: the source was retained, the worker processed it, and
-the acting model can discover it. None implies the other two. An empty observation response must not
-make exact source retrieval depend on a fact the observer failed to extract.
+**Observed in current Hindsight documentation:** [Retention](https://hindsight.vectorize.io/developer/retain) supports concise, verbose, custom, verbatim, and chunk modes. Verbatim preserves chunk text with extracted metadata; chunk mode skips model extraction. A document with zero extracted memories remains stored but cannot be found through memory recall or reflection. Completion can report zero memory units, and document reprocessing can attempt extraction again. Image attachments can contribute evidence, subject to vision-model support; dense visual content is not promised exhaustive extraction.
 
-The pinned
-[consolidation prompt](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-api-slim/hindsight_api/engine/consolidation/prompts.py)
-asks for supporting fact IDs, occurrence and mention dates, corrections to matching facets, and
-separation of unrelated entities. It may exclude ephemeral details unless the mission needs them.
-That is a meaningful knowledge policy, but a temporary blocker can be essential to session
-continuation. The core and a knowledge companion should therefore have different admission rules.
+For Orbis, source retention, successful processing, and discoverable evidence are separate guarantees. A valid empty observation must not make exact source access depend on something the observer failed to extract.
 
-Raw retention is an alternative to fact extraction. These options do not establish that Orbis needs
-Hindsight's service, inference, or retrieval infrastructure.
+**Observed in current Hindsight source:** The [consolidation prompt](https://github.com/vectorize-io/hindsight/blob/main/hindsight-api-slim/hindsight_api/engine/consolidation/prompts.py) requests supporting fact IDs and separates occurrence dates from the date the source stated a fact. It matches a specific facet, meaning an entity attribute, relationship, event, decision, or claim, rather than a broad topic. The configurable consolidation objective, `observations_mission`, can retain otherwise ephemeral information; it is distinct from `retain_mission`, which guides initial extraction. A temporary blocker can be essential to continuation even when a durable-knowledge policy would omit it.
 
-## Honcho: broader conclusions have a separate lifecycle
+**Observed in current Hindsight documentation:** [Knowledge pages](https://hindsight.vectorize.io/developer/knowledge-pages) synthesize consolidated observations into maintained documents. Default pages refresh after relevant consolidation, do not read other pages, and can be exported or projected into Markdown files. The [coding-agent integration](https://hindsight.vectorize.io/sdks/integrations/coding-agents) applies its own defaults, including scheduled page refresh, and supports injection from reflection, pages, or recall. Page and recall injection do not add a query-time model call. Thus automatic maintenance and query-time reasoning are independent choices.
 
-Honcho's [architecture](https://honcho.dev/docs/v3/documentation/core-concepts/architecture) stores
-messages while background processes derive representations across workspace, peer, and session
-scopes. Persistent peer representations address a broader identity problem than one selected coding
-conversation.
+These mechanisms are useful companion examples: source-backed maintained documents, bounded injection, and preventing synthesis from recursively citing other synthesized pages. They do not establish a need for Hindsight's service in the continuation core.
 
-The pinned
-[deletion contract](https://github.com/plastic-labs/honcho/blob/8e4df990d974c146a100e96ab4b3957a6591ceab/docs/v3/documentation/features/advanced/deleting-data.mdx)
-first makes a session inactive, then asynchronously removes its messages and session-scoped
-conclusions. Workspace-scoped derived conclusions survive. The documented interface does not provide
-a deletion-cascade completion endpoint.
+## Honcho distinguishes workspace knowledge from scoped evidence
 
-This exposes a decision that a future Orbis companion cannot avoid: does removing supporting
-evidence also withdraw a reusable claim? Merely sharing source IDs does not implement retraction.
-The companion needs to explain its policy and the state of derived knowledge; the core need not
-implement a general dependency engine before that consumer exists.
+**Observed in current Honcho documentation and source:** [Architecture](https://honcho.dev/docs/v3/documentation/core-concepts/architecture) separates stored messages from background derivation across workspace, peer, and session scopes. A peer represents a persistent user, agent, or other entity. The [deletion contract](https://github.com/plastic-labs/honcho/blob/main/docs/v3/documentation/features/advanced/deleting-data.mdx) immediately makes a deleted session inactive, then asynchronously removes its messages and session-scoped conclusions. Workspace-derived conclusions survive session deletion. The interface does not expose completion of that deletion cascade.
 
-## Mem0: current OSS differs from the historical paper
+**Observed in current Honcho scope documentation:** [Named scopes](https://honcho.dev/docs/v3/documentation/features/advanced/scopes) maintain a derived view from member sessions. Adding historical sessions schedules copying of explicit conclusions, with pending, completed, or failed backfill status. Removing a member retracts its contributions, including conclusions derived from them. An ad hoc session allowlist instead returns explicit conclusions without cross-session inferences. Scopes constrain requests that name them; they do not replace API authorization, and unscoped requests can still read the broader representation.
 
-The [v3 migration guide](https://docs.mem0.ai/migration/oss-v2-to-v3) describes ADD-only extraction,
-coexisting facts, explicit update/delete operations, and removal of OSS graph memory. Temporal
-features of the hosted platform must not be attributed to the open-source package.
+A companion must define which derived view a removal affects. Deleting source evidence, removing scope membership, and deleting a workspace are different operations.
 
-In the pinned
-[implementation](https://github.com/mem0ai/mem0/blob/abb81c88e1f738a8117d8293530fbc31a5ef8fd9/mem0/memory/main.py),
-non-inference mode stores non-system messages directly. Inferred extraction uses conversation and
-retrieved memory. Provider failure raises an error, while malformed extraction JSON can result in an
-empty extraction result.
+**Observed in current Honcho documentation:** [Reasoning](https://honcho.dev/docs/v3/documentation/core-concepts/reasoning) is asynchronous. [Queue status](https://honcho.dev/docs/v3/documentation/features/advanced/queue-status) reports representation, summary, and dream tasks but excludes infrastructure tasks such as deletion. The guide explicitly advises against queue-drained synchronization. Scope backfill status supplies a narrower readiness contract; it is not proof that all background work has completed.
 
-The important comparison is the output contract. Failure, valid empty output, accepted evidence, and
-superseded claims are different states. Additive storage avoids one destructive rewrite, but it does
-not decide which conflicting fact is currently applicable. The earlier Mem0 paper remains research
-evidence for its evaluated system, not documentation of current OSS behavior.
+## Mem0 separates additive OSS extraction from hosted maintenance
 
-## Retrieval and reasoning as optional companion mechanisms
+**Observed in current Mem0 documentation:** The [OSS migration guide](https://docs.mem0.ai/migration/oss-v2-to-v3) describes ADD-only extraction, explicit update/delete operations, and removal of OSS graph memory. New and old facts can coexist. Its hybrid retrieval reranks semantic candidates with lexical and optional entity signals; those additional signals do not independently expand recall candidates. Platform graph memory and temporal behavior must not be attributed to OSS.
 
-The systems expose concrete alternatives beyond basic source search:
+**Observed in current Mem0 source:** The [Python implementation](https://github.com/mem0ai/mem0/blob/main/mem0/memory/main.py) stores non-system messages directly when inference is disabled. Inferred extraction reads conversation and retrieved memory. Provider failure raises an error, while malformed extraction JSON can yield an empty result after logging. Original messages can still be saved when extraction returns nothing. The Python v2.2.1 release also distinguishes actual vector insertion from attempted insertion: rejected records are not returned as successful additions, and complete insertion failure raises an error.
 
-| System                | Documented mechanism                                                                                                                               | Design limit                                                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hindsight recall      | Semantic, keyword, entity-graph, and temporal routes; reciprocal-rank fusion and reranking; separate search-effort and returned-token controls.    | More retrieval routes do not prove better continuation. Native PostgreSQL keyword search uses `tsvector`/`ts_rank_cd`, so not every backend is BM25. |
-| Hindsight `reflect()` | Additional reasoning over curated mental models, observations, and facts, with chunk/document expansion and citations restricted to retrieved IDs. | Available cited IDs do not prove that the cited evidence supports the answer. Query-time reflection differs from background consolidation.           |
-| Honcho Chat           | Peer and workspace reasoning over representations and source-message segments, with observer/observed attribution and optional evidence reporting. | Reported evidence identifies what was read, not what caused the answer.                                                                              |
-| Mem0 Platform Dream   | Superseding and merging during addition processing, plus optional background synthesis with contributing memory references.                        | Hosted capability, not OSS behavior. Synthesis is prospective rather than an automatic replay of all stored records.                                 |
+Failure, valid empty output, retained input, accepted observations, and searchable records need distinct outcomes. Additive facts avoid one destructive rewrite but do not decide which conflicting claim currently applies.
 
-Sources checked on 2026-10-04:
-[Hindsight retrieval](https://hindsight.vectorize.io/developer/retrieval),
-[Hindsight reflect](https://hindsight.vectorize.io/developer/reflect),
-[Honcho Chat](https://honcho.dev/docs/v3/documentation/features/chat),
-[Mem0 Dream](https://docs.mem0.ai/platform/features/dream).
+**Observed in current Mem0 Platform documentation:** [Dream](https://docs.mem0.ai/platform/features/dream) supersedes and merges during addition processing. Default reads include active and superseded history while hiding merged duplicates; flags select active-only or expanded history. Optional scheduled synthesis records contributing memories and applies prospectively after enablement. The [Platform comparison](https://docs.mem0.ai/platform/platform-vs-oss) separates these hosted maintenance features from OSS model, embedding, and storage provisioning. Published client releases also expose asynchronous [user-profile generation](https://github.com/mem0ai/mem0/releases/tag/v2.2.0); a profile is a separate derived product, not a session checkpoint.
 
-Honcho records messages before asynchronous derivation. Its queue reports representation, summary,
-and dream work, but excludes some infrastructure work; an empty queue is explicitly not a
-synchronization barrier. Admission and readiness need an observable contract beyond “background work
-finished.” [Reasoning](https://honcho.dev/docs/v3/documentation/core-concepts/reasoning),
-[queue status](https://honcho.dev/docs/v3/documentation/features/advanced/queue-status).
+## Retrieval and reasoning alternatives
 
-Mem0 Platform's default reads include active and superseded records with historical status while
-hiding merged duplicates. That is a retrieval policy, not deletion of all prior evidence. Platform
-Dream, temporal reasoning, and decay must remain separate from OSS CRUD/search and its independently
-provisioned model, embedding, and storage dependencies.
-[Platform versus OSS](https://docs.mem0.ai/platform/platform-vs-oss).
+**Observed in documentation retrieved on 2026-10-11:** These mechanisms provide choices for a future companion. They are not measured continuation improvements.
 
-## Letta: distinguish current MemFS from MemGPT
+| Mechanism                     | Evidence and behavior                                                                                                                                                                                                                                                        | Limit relevant to Orbis                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Hindsight recall              | [Retrieval](https://hindsight.vectorize.io/developer/retrieval) combines semantic, keyword, graph, and temporal routes, fusion, reranking, and separate search-effort and output budgets. Native PostgreSQL keyword ranking uses `tsvector` and `ts_rank_cd`, not true BM25. | The token budget counts memory text only; if nothing fits, the top result is returned whole. It is not a strict total-response cap. |
+| Hindsight reflection          | [Reflect](https://hindsight.vectorize.io/developer/reflect) adds reasoning over maintained knowledge and retrieved memories, with source expansion.                                                                                                                          | Returned evidence and generated answers still require factual support checks.                                                       |
+| Honcho Chat                   | [Chat](https://honcho.dev/docs/v3/documentation/features/chat) reasons over peers, representations, and messages. Optional evidence records what the reasoning process read.                                                                                                 | Evidence availability is not proof that the answer used or correctly interpreted it.                                                |
+| claude-mem progressive search | [v13.35.0](https://github.com/thedotmack/claude-mem/releases/tag/v13.35.0) provides one `mem_search` interface for index, nearby context, and selected details.                                                                                                              | Staged output reduces what is returned, but does not establish selected-lineage or exact transcript coverage.                       |
+| Letta MemFS                   | [MemFS](https://docs.letta.com/concepts/memfs) uses ordinary file search by default; semantic search is optional.                                                                                                                                                            | Durable memory does not inherently require embeddings or a retrieval service.                                                       |
 
-The current [Letta SDK memory documentation](https://docs.letta.com/agent-sdk/memory) describes a
-Git-backed repository. Files under `system/` enter context routinely; other files are discoverable
-and read on demand. Shared repositories are on-demand context. Memory edits are committed and
-pushed, and dreaming can be triggered by step or compaction events.
+## Letta distinguishes memory files from conversation history
 
-This separates prompt placement, storage ownership, and background maintenance. It is a different
-API generation from the memory-block/archive descriptions associated with early MemGPT. Its
-agent-editable repository and synchronization workflow are a valid broader product, not an
-established requirement for the core MVP. Git history alone does not settle conflicting edits,
-source validity, or which repository facts remain applicable.
+**Observed in current Letta documentation:** [MemFS](https://docs.letta.com/concepts/memfs) stores memory in Git-backed files. Root memory files enter the system prompt each turn; indexed subdirectories are read on demand. The page identifies `system/` as an older layout, while the [Agent SDK memory page](https://docs.letta.com/agent-sdk/memory) still describes `system/` placement. The current [root-memory prompt](https://github.com/letta-ai/letta-code/blob/main/src/agent/prompts/letta_root_memfs.md) and [older-layout prompt](https://github.com/letta-ai/letta-code/blob/main/src/agent/prompts/letta_local_memfs.md) further distinguish these representations. The documentation should not be reduced to one universal placement rule.
 
-## Claude Code: authored instructions and learned notes
+The MemFS guide separates committed memory from local edits and cloud synchronization from local-only storage. It also separates file memory search from conversation-history search. The SDK describes background dreaming triggered by step counts or compaction, with either reminders or automatic subagents. Shared repositories and agent-owned skills extend the product beyond preserving one conversation.
 
-[Claude Code's native memory documentation](https://code.claude.com/docs/en/memory) distinguishes
-authored instructions from learned auto-memory. An index and topic files support selective loading.
-Startup reads the first 200 lines or 25 KB of the index, whichever limit comes first; topic files
-are read on demand. Oversized writes can succeed with feedback to shorten the index, while excess
-content will not load on the next startup. Memory persists independently of transcript cleanup.
+For Orbis, prompt placement, storage ownership, history access, and background maintenance remain separate design decisions. Git versioning can record edits but does not itself prove that a claim is correct, current, authorized, or applicable to the selected branch.
 
-This provides an explicit comparison for capacity policy: a system can permit a write whose entire
-content will not be presented. It does not establish parity for Orbis's continuation snapshot, where
-silently omitted obligations could prevent the next correct action. A readable Markdown file also
-does not determine whether its contents are instructions or attributed evidence.
+## Claude Code and claude-mem have different memory contracts
 
-The separate
-[claude-mem project](https://github.com/thedotmack/claude-mem/blob/a1951f2ad247330b2b5d58a1e0c7efeef4a03be5/README.md)
-documents lifecycle capture, a local worker, SQLite records, and staged retrieval through search,
-timeline context, and selected details. It also offers a hosted observer path. This is a third-party
-product, not Claude Code's native memory. Staged retrieval is a useful candidate; its savings claims
-were not reproduced here, and its services add deployment and maintenance responsibilities.
+**Observed in current Claude Code documentation:** [Native memory](https://code.claude.com/docs/en/memory) distinguishes authored instructions from learned notes. The first 200 lines or 25 KB of `MEMORY.md`, whichever limit is reached first, load at conversation start; topic files load on demand. An oversized write succeeds but returns an error asking the agent to shorten the index. Learned notes are stored in separate Markdown files. This permits a stored index whose full content is not presented, which is unsuitable as an implicit guarantee that all continuation obligations reach the acting model.
 
-## Hermes: native compaction plus separate memory
+**Observed in claude-mem v13.35.0 release notes and current source:** The [release](https://github.com/thedotmack/claude-mem/releases/tag/v13.35.0) adds a unified staged `mem_search`, explicit `save_memory`, a native-memory lookup bridge, and optional Markdown-note import. [Progressive search](https://github.com/thedotmack/claude-mem/blob/main/src/shared/progressive-search.ts) supports caller-guided and automatic lexical selection, bounded details, and scoped continuation state that expires after 15 minutes. Automatic stage selection does not call a model. The [worker adapter](https://github.com/thedotmack/claude-mem/blob/main/src/services/worker/ProgressiveMemorySearch.ts) uses the shared engine. The [README](https://github.com/thedotmack/claude-mem/blob/main/README.md) still describes separate search/timeline/detail tools alongside lifecycle capture, SQLite, a local worker, optional vector search, and hosted observer options.
 
-The pinned
-[defaults](https://github.com/chandra447/pi-hermes-memory/blob/d5e2d1384b2f78d7a304f24383ad3aae1da5749e/src/config.ts)
-select policy-only memory with explicit standing instructions enabled. Its
-[pre-compaction flush](https://github.com/chandra447/pi-hermes-memory/blob/d5e2d1384b2f78d7a304f24383ad3aae1da5749e/src/handlers/session-flush.ts)
-reads the selected branch, takes a bounded recent subset, and attempts extraction with a subprocess
-fallback within a shared time window. It permits native compaction to continue instead of returning
-a replacement checkpoint.
+This third-party product supplies a concrete bounded-retrieval design, not evidence of savings reproduced here. Cursor expiry, service state, and capture coverage remain additional contracts; none substitutes for durable source identifiers and explicit missing-source behavior in Orbis.
 
-This is evidence that knowledge capture can complement native compaction without owning it. It does
-not establish that Hermes's separate memory could replace all native checkpoint information.
+## Hermes complements native compaction and offers two historical searches
 
-Its historical retrieval has a different scope. The
-[JSONL parser](https://github.com/chandra447/pi-hermes-memory/blob/d5e2d1384b2f78d7a304f24383ad3aae1da5749e/src/store/session-parser.ts)
-and
-[session indexer](https://github.com/chandra447/pi-hermes-memory/blob/d5e2d1384b2f78d7a304f24383ad3aae1da5749e/src/store/session-indexer.ts)
-read messages without preserving parent relationships, or use all session entries. Tool-result
-bodies are excluded. The
-[search tool](https://github.com/chandra447/pi-hermes-memory/blob/d5e2d1384b2f78d7a304f24383ad3aae1da5749e/src/tools/session-search-tool.ts)
-provides filtered snippets and optional source anchors. These features do not establish
-selected-lineage recall of an exact error buried in a tool result.
+**Observed in current pi-hermes-memory source and documentation:** The [defaults](https://github.com/chandra447/pi-hermes-memory/blob/main/src/config.ts) select `policy-only` mode and enable standing instructions. In this mode, the prompt provides memory-search guidance while ordinary stored memories are retrieved on demand. Separately authored `STANDING.md` instructions still enter every session. The [README](https://github.com/chandra447/pi-hermes-memory/blob/main/README.md#standing-instructions) assigns that file to user editing or `/memory-pin`; background memory maintenance does not write it. Thus `policy-only` does not mean that all standing instructions disappear from context.
 
-The
-[changelog](https://github.com/chandra447/pi-hermes-memory/blob/d5e2d1384b2f78d7a304f24383ad3aae1da5749e/CHANGELOG.md)
-describes synchronization, corruption recovery, index repair, and source retention work, including
-Unreleased entries. These are concrete costs of maintaining multiple representations. Attribute the
-inspected behavior to its source revision, not automatically to published version 0.9.10.
+The [pre-compaction flush](https://github.com/chandra447/pi-hermes-memory/blob/main/src/handlers/session-flush.ts) reads the selected branch and attempts extraction within a shared timeout across direct and subprocess transports. It permits native compaction to continue without returning a replacement checkpoint. This demonstrates composition with native compaction, not replacement parity.
 
-## Pi adapters and operational footprint
+**Observed in current Hermes historical retrieval source:** The two search modes have different coverage:
 
-| Integration              | Source or documentation evidence                                                                                                                                                                | Operational boundary                                                                                                                                                                             |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Hindsight coding agents  | Inspected manifest is `@vectorize-io/hindsight-coding-agents` 0.8.0; its Pi adapter registers tools, injects memory at `before_agent_start`, and forwards completed transcripts at `agent_end`. | Source-manifest version, not a verified npm release. The default deployment uses PostgreSQL/pgvector, including an embedded development option; Oracle AI Database is an enterprise alternative. |
-| Honcho community adapter | Official guide identifies `@agney/pi-honcho-memory`, message synchronization, cached profile/project context, and search/chat/remember tools.                                                   | Requires Honcho credentials. The self-hosted example has API, deriver, MCP, PostgreSQL/pgvector, and Redis services; not every deployment necessarily needs every example service.               |
-| Mem0 Pi adapter          | Official documentation identifies `@mem0/pi-agent-plugin` 0.3.0, capture at `agent_end`, semantic recall before turns, and project/session/global scope.                                        | Documentation-reported version, not independently checked against npm. Requires Platform credentials.                                                                                            |
+- The [SQLite parser](https://github.com/chandra447/pi-hermes-memory/blob/main/src/store/session-parser.ts) indexes user, assistant, and system text and excludes tool-result bodies. The [live indexer](https://github.com/chandra447/pi-hermes-memory/blob/main/src/store/session-indexer.ts) reads all entries rather than reconstructing parent relationships.
+- The opt-in [anchor search](https://github.com/chandra447/pi-hermes-memory/blob/main/src/store/session-anchor-search.ts) scans JSONL events directly and recursively matches string content, including tool-result text. It excludes metadata keys such as `parentId` from searchable text, but does not use those keys to reconstruct the selected lineage.
+- The [tool](https://github.com/chandra447/pi-hermes-memory/blob/main/src/tools/session-search-tool.ts) returns bounded snippets for indexed search or line-range anchors for anchor search. Raw tool-result discovery is therefore available in the anchor mode, but selected-lineage recall is not established by either implementation.
 
-Sources:
-[Hindsight manifest](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-integrations/coding-agents/package.json),
-[Pi adapter](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-integrations/coding-agents/src/harness/pi-extension.ts),
-[Hindsight storage](https://hindsight.vectorize.io/developer/storage),
-[Honcho Pi guide](https://honcho.dev/docs/v3/guides/community/pi-honcho-memory),
-[deployment example](https://github.com/plastic-labs/honcho/blob/8e4df990d974c146a100e96ab4b3957a6591ceab/docker-compose.yml.example),
-[Mem0 Pi guide](https://docs.mem0.ai/integrations/pi-agent).
+The [release notes](https://github.com/chandra447/pi-hermes-memory/releases/tag/v0.9.10) publish usage counters and bounded, resumable consolidation. The current [changelog](https://github.com/chandra447/pi-hermes-memory/blob/main/CHANGELOG.md) also records synchronization, index repair, source-retention policy, and restricted subprocess tools. Its Unreleased heading alone cannot establish whether every listed feature is unpublished. These mechanisms illustrate operational costs and authority boundaries that a companion must own independently.
 
-Hindsight's default bank template is `coding-agent::{gitProject}`, where `gitProject` uses the main
-worktree root's basename. Without explicit mappings or overrides, unrelated repositories with the
-same basename select the same bank in the same backend namespace. A readable project name is not a
-unique identity; worktree-aware naming alone does not resolve this collision.
-[Bank selection](https://github.com/vectorize-io/hindsight/blob/f7dd3f4fd7420f7beec60c32c965e5e5cf7be066/hindsight-integrations/coding-agents/src/core/bank.ts).
+## Pi adapters and service dependencies
 
-These adapters demonstrate optional services composed with Pi. They do not establish the same
-selected-lineage recall, checkpoint parity, retention, or instruction-authority policy as the core.
+**Observed on 2026-10-11:** Registry versions below were read from npm metadata without installation. Adapter documentation and source inspection do not verify behavior on Pi 1.1.0.
 
-## What transfers to the core
+| Integration              | Current evidence                                                                                                                                                                                                                                                                                                                    | Operational boundary                                                                                                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hindsight coding agents  | [npm latest](https://registry.npmjs.org/@vectorize-io/hindsight-coding-agents/latest) is 0.8.0. Current [Pi adapter](https://github.com/vectorize-io/hindsight/blob/main/hindsight-integrations/coding-agents/src/harness/pi-extension.ts) registers tools, injects at `before_agent_start`, and writes transcripts at `agent_end`. | Current source can exceed npm 0.8.0. [Storage](https://hindsight.vectorize.io/developer/storage) uses PostgreSQL/pgvector, with embedded development storage and an enterprise Oracle alternative.                                          |
+| Honcho community adapter | [npm latest](https://registry.npmjs.org/@agney/pi-honcho-memory/latest) is 0.1.0. The [guide](https://honcho.dev/docs/v3/guides/community/pi-honcho-memory) describes message sync, cached profile/project injection, and search/chat/remember tools.                                                                               | Requires credentials. The [self-hosted example](https://github.com/plastic-labs/honcho/blob/main/docker-compose.yml.example) defines API, deriver, MCP, PostgreSQL/pgvector, and Redis; that example is not a minimum for every deployment. |
+| Mem0 Pi adapter          | [npm latest](https://registry.npmjs.org/@mem0/pi-agent-plugin/latest) is 0.3.2; the [guide](https://docs.mem0.ai/integrations/pi-agent) still reports 0.3.0. It documents `agent_end` capture, recall before turns, and project/session/global scope.                                                                               | Requires Mem0 Platform credentials. Documentation has not been verified against the published package's runtime behavior.                                                                                                                   |
 
-The source cases distinguish retained data, accepted processing, and discoverable evidence. They
-also show why occurrence time differs from processing time and why cross-session claims need
-applicability and retraction rules. The [memory contract](../../SPEC.md) uses these distinctions for
-session continuity and recall; the [companion analysis](modularity-and-knowledge.md) considers
-broader knowledge without selecting a shared backend.
+**Observed in current Hindsight bank selection:** A bank is a named collection of memory records in a backend. The [default template](https://github.com/vectorize-io/hindsight/blob/main/hindsight-integrations/coding-agents/src/core/bank.ts) is `coding-agent::{gitProject}`, where the project is the main worktree root's basename. Unless mappings or overrides distinguish them, unrelated repositories with the same basename select the same bank in the same backend namespace. Worktree-aware naming does not establish unique repository identity.
 
-## Mechanisms to defer, and evidence that could reopen them
+These adapters show that optional services can compose with Pi. They do not establish selected-lineage recall, checkpoint parity, instruction authority, or retention guarantees for the core.
 
-| Mechanism                                                 | Reason to keep outside the current core                                   | Reconsider when                                                                                            |
-| --------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Embeddings, reranking, or entity graphs                   | They add indexing and operational policy beyond exact evidence access.    | Repeated paraphrase or relationship queries defeat a simpler retriever and materially harm continuation.   |
-| Query-time reasoning agent                                | The acting model can initially interpret returned evidence.               | Controlled comparisons show a separate reasoning pass improves actual outcomes enough to justify its cost. |
-| Automatic project/developer profiles                      | Promotion and scope are different from session preservation.              | A companion has explicit ownership, correction, and applicability requirements.                            |
-| Automatic skill or instruction generation                 | Knowledge admission does not authorize changing operating policy.         | A separate user-facing capability defines approval and verification.                                       |
-| Shared storage service or generalized backend abstraction | Current continuation does not establish a multi-consumer deployment need. | Actual consumers require shared behavior or a supported deployment cannot use the simple store.            |
+## Recommendation and evidence needed to expand the core
 
-The [core scope](../../SPEC.md#status-and-purpose) defers public companion and external retrieval
-APIs. The comparisons above identify when a concrete consumer or measured failure might justify
-them.
+Keep the continuation core usable without a companion. Transfer the distinctions between retained evidence, completed processing, and discoverable records; preserve attribution, source time, scope, and failure status. Keep reusable claims separate from instructions and authorization. Treat companion outputs as derived evidence whose freshness and source access can be checked, rather than as a prerequisite for continuation.
+
+| Mechanism to defer                               | Why it remains separate                                                                       | Evidence that could justify adoption                                                                       |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Embeddings, reranking, entity graphs             | They add indexing, cost, and retrieval policy beyond exact evidence access.                   | Repeated paraphrase or relationship queries defeat the simpler retriever and materially harm continuation. |
+| Query-time reasoning agent                       | The acting model can initially interpret retrieved evidence.                                  | Controlled comparisons improve actual outcomes enough to justify added latency and cost.                   |
+| Profiles and maintained knowledge pages          | Cross-session admission, applicability, and retraction differ from preserving a conversation. | A concrete companion defines ownership, correction, scope, and source-removal behavior.                    |
+| Automatic instruction or skill generation        | Extracting knowledge does not authorize changing operating policy.                            | A separate capability defines user control, approval, and verification.                                    |
+| Shared backend or public integration abstraction | Product examples do not establish a required Orbis consumer or deployment.                    | Actual consumers require shared behavior or a supported deployment cannot use the simple store.            |
+
+## Gaps and sources
+
+No runtime behavior, compatibility, retrieval quality, cost, deletion completion, or continuation parity was measured. Current docs can describe development or hosted capabilities ahead of a release. Letta's conflicting layout descriptions, claude-mem's older README examples, and Mem0's adapter-version mismatch require artifact-specific checks before adoption. A focused prototype should test branch changes, exact tool-result recovery, empty extraction, cancelled maintenance, correction, source deletion, scope changes, and loss of companion availability using deterministic fixtures before any authorized model evaluation.
+
+All external links in this document were retrieved on 2026-10-11. Source links identify current implementations; release links establish publication; registry endpoints establish observed npm versions; official guides establish documented capabilities. The [Pi analysis](pi-compaction.md) records the 1.1.0 host baseline, [evaluation analysis](evidence-and-evaluation.md) addresses benchmark limits, and [companion analysis](modularity-and-knowledge.md) considers broader knowledge maintenance. This research recommends boundaries and does not add package requirements.

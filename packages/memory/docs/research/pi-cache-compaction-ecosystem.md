@@ -1,181 +1,134 @@
+---
+date: 2026-10-11
+questions:
+  - Which latest Pi memory, cache, and pruning mechanisms are relevant to the core, with what compatibility and measurement limits?
+observed-in:
+  [
+    Pi 1.1.0,
+    pi-blackhole 0.5.12,
+    pi-cache-compact 0.2.0,
+    pi-prefix-cache-compaction 0.3.0,
+    cprune v0.4.7,
+    pi-oc-prompt-cache 0.1.0,
+  ]
+recheck-when: A compared package changes compaction ownership, request construction, persistence, or its Pi compatibility range.
+---
+
 # Pi memory, cache, and pruning packages
 
-Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
-[Pi 1.1.0](pi-compaction.md).
+Keep checkpoint ownership, evidence retention, request reconstruction, and provider-cache optimization separate. Blackhole declares Pi 1.1.0 compatibility, and cache-compact defaults to appending summary instructions to a reconstructed conversation. These are relevant implementation examples; they do not establish compatibility of combined extensions or measured benefit for Orbis. Blackhole supplies structural compaction and bounded source recall, the dedicated cache packages optimize foreground summary requests, and cprune can remove evidence before persistence.
 
-**Observed in the revisions under Version inventory:** This survey compares current source and
-publication boundaries. It does not report installation, runtime compatibility, cache measurements,
-or model-quality tests.
+This comparison informs which component owns compaction, how historical recall obtains evidence, and whether provider replay, warming, or pruning belongs in the memory core. The host baseline remains [Pi 1.1.0](pi-compaction.md). Package versions, default branches, release metadata, documentation, and source were retrieved on 2026-10-11. Canonical branch links below identify current documentation as of that retrieval date; they are not permanent source snapshots.
 
-## Version inventory
+**Observed in the versions and sources below:** This is source and publication inspection. No package installation, runtime compatibility test, live model call, or independent performance measurement was performed. Reported provider results are attributed to package documentation and do not constitute an Orbis evaluation.
 
-| Package                    | Published or released baseline                  | Inspected source                                                                                                                                                                                |
-| -------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| pi-blackhole               | npm 0.5.10, 2026-09-28                          | [be64de8](https://github.com/k0valik/pi-blackhole/tree/be64de823f27d8be4195dbe0734409017b05240f), also npm gitHead.                                                                             |
-| pi-cache-compact           | npm 0.1.0, 2026-09-22                           | [a905ed8](https://github.com/lennartschoch/pi-cache-compact/tree/a905ed86c3844f1759a9f194dbe4c84d279ac8ca); published source files match.                                                       |
-| pi-prefix-cache-compaction | npm/GitHub 0.3.0, 2026-09-20                    | [7091360](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/tree/70913603f1d74eb90d88038d4acf449f235e5724), 2026-09-30; published source matches, later changes are README updates. |
-| cprune                     | GitHub v0.4.7, 2026-07-01                       | [7e8694f](https://github.com/amutix/cprune/tree/7e8694f7c2fddd1896ac3c087b17b2ee99153b68).                                                                                                      |
-| pi-oc-prompt-cache         | npm 0.1.0, 2026-08-17                           | [Published archive](https://registry.npmjs.org/@touchtechclub/pi-oc-prompt-cache/-/pi-oc-prompt-cache-0.1.0.tgz), publication gitHead 54ca3dd330f739fb15470e223fb24ae67d825427.                 |
-| pi-hermes-memory           | Manifest 0.9.10, with Unreleased source changes | [d5e2d13](https://github.com/chandra447/pi-hermes-memory/tree/d5e2d1384b2f78d7a304f24383ad3aae1da5749e).                                                                                        |
+## Current source and publication boundaries
 
-The two observational-memory projects have their own [detailed comparison](observational-memory.md).
-For the dedicated cache packages, archive-source comparison was necessary because npm gitHead and
-current repository HEAD differ. A matching version string alone would not establish the same code.
+| Package                    | Latest publication or release observed                                                                                                  | Current source and Pi 1.1.0 evidence                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| pi-blackhole               | npm 0.5.12, 2026-10-08; no GitHub release returned                                                                                      | [main](https://github.com/k0valik/pi-blackhole/tree/main), manifest 0.5.12, matches npm's publication revision. Peers are `>=0.85.1 <2.0.0`; development dependencies use Pi 1.1.0.                                                                                                                                                                                                                                                    |
+| pi-cache-compact           | npm 0.2.0, 2026-10-06; no GitHub release returned                                                                                       | [main](https://github.com/lennartschoch/pi-cache-compact/tree/main), manifest 0.2.0; all four published TypeScript source files match current source. Peers are `*`; development dependencies and the README's tested baseline are Pi 0.87.0.                                                                                                                                                                                          |
+| pi-prefix-cache-compaction | npm 0.3.0 and [GitHub v0.3.0](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/releases/tag/v0.3.0), 2026-09-20            | [master](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/tree/master), manifest 0.3.0; both published TypeScript source files match current source. Current README changes extend the reported test matrix through Pi 0.99.1. Peers are `>=0.85.0`.                                                                                                                                                                      |
+| cprune                     | [GitHub v0.4.7](https://github.com/amutix/cprune/releases/tag/v0.4.7), 2026-07-01; npm `cprune-pi-extension` is still 0.3.1, 2026-06-30 | [main](https://github.com/amutix/cprune/tree/main), manifest 0.4.7, is the inspected GitHub release source. Its Pi development dependency is `latest`; it declares no constrained Pi peer range. The findings below must not be attributed to npm 0.3.1.                                                                                                                                                                               |
+| pi-oc-prompt-cache         | npm `@touchtechclub/pi-oc-prompt-cache` 0.1.0, 2026-08-17                                                                               | The [published archive](https://registry.npmjs.org/@touchtechclub/pi-oc-prompt-cache/-/pi-oc-prompt-cache-0.1.0.tgz) is the available source. The current [pi-toolkit main packages directory](https://github.com/TouchTechClub/pi-toolkit/tree/main/packages) does not have the declared `packages/oc-prompt-cache` directory. The archive declares Pi coding-agent 0.78.1 and pi-ai 0.84.1 development dependencies and no Pi peers. |
+
+A permissive peer range establishes declared install compatibility, not successful execution. The inspected Blackhole and cache-compact behavior is published. Prefix-cache's later documentation describes additional trials of the same 0.3.0 implementation. The observational-memory projects have a separate [detailed comparison](observational-memory.md); Hermes has a [companion analysis](agent-memory-systems.md#hermes-complements-native-compaction-and-offers-two-historical-searches).
 
 ## Blackhole: structural compaction and observational memory
 
-Blackhole combines deterministic structural summarization with observational memory under one
-compaction owner. Its
-[README](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/README.md)
-explains the conflict between independently replacing hooks and distinguishes zero-inference
-checkpoint rendering from billed background workers. It explicitly reports no comparative
-measurements.
+**Observed in Blackhole 0.5.12:** The default configuration combines deterministic structural summaries and model-written observational memory in one replacement compaction hook. Its compiler reads selected messages, the previous summary, and prepared file operations, recognizes its own sections, and applies fixed caps. The structural checkpoint does not require a model call; the Observer, Reflector, and Dropper workers make separate billed calls. The README explicitly says comparative measurements are unavailable. Pattern matching, section merging, and line caps do not establish semantic preservation of goals, blockers, rationale, or authorization. Sources: [README](https://github.com/k0valik/pi-blackhole/blob/main/README.md), [compiler](https://github.com/k0valik/pi-blackhole/blob/main/src/core/summarize.ts), [compaction hook](https://github.com/k0valik/pi-blackhole/blob/main/src/hooks/before-compact.ts).
 
-The
-[summary compiler](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/core/summarize.ts)
-uses current messages, earlier summary text, and prepared file operations, recognizes its own
-sections, and applies fixed caps. This preserves some structural context without foreground model
-summarization. Pattern matching and line limits do not establish semantic parity for goals,
-blockers, decision rationale, or active constraints.
+### Retained messages and manual observational memory
 
-Its integration choices differ from the proposed core:
+**Observed in Blackhole 0.5.12:** `tailBehavior: "minimal"` is the default. It normally summarizes messages before the newest user message and retains that user message plus the assistant and tool messages after it. “Minimal” does not mean retaining exactly one message. The boundary selection has exceptions:
 
-- Default `tailBehavior` is minimal rather than Pi's prepared boundary.
-- Its command uses an internal instruction marker; arbitrary `/compact` focus is not passed to a
-  semantic summarizer.
-- Native fallback occurs when both structural and observational content are empty. Nonempty
-  structural output does not require complete observation coverage.
-- Optional mid-run behavior adapts private `AgentSession` operations.
-- The published peer range excludes Pi 1.1.0. This is a declared compatibility boundary; it does not
-  establish a tested runtime failure on that release.
+- If Pi prepares a later safe split-turn boundary, Blackhole uses that later boundary so a large current turn need not remain intact.
+- If the only user message is the first live message, or there is no user message, the eligible compact-all path summarizes every live message and uses an empty retained-boundary sentinel.
+- With `tailBehavior: "pi-default"`, it generally uses Pi's prepared boundary, including resolving a non-message boundary to the following message; small-history and compact-all guards still apply.
 
-Sources:
-[hook](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/hooks/before-compact.ts),
-[configuration](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/core/unified-config.ts),
-[private integration](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/om/inline-compaction.ts),
-[manifest](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/package.json).
+These are retention policies distinct from unconditionally returning Pi's prepared `firstKeptEntryId`. Sources: [boundary implementation](https://github.com/k0valik/pi-blackhole/blob/main/src/hooks/before-compact.ts), [configuration defaults](https://github.com/k0valik/pi-blackhole/blob/main/src/core/unified-config.ts).
 
-### Recall and worker improvements
+**Observed in Blackhole 0.5.12:** `compaction: "manual"` controls checkpoint timing and worker persistence; it does not disable observational-memory workers. When memory is enabled, workers continue running and save observation, reflection, and drop batches to per-session pending JSON files. The explicit `/blackhole` command runs these steps:
 
-Its recall supports literal/regex search, source expansion, file-content drill-down, touched-file
-lists, observation IDs, and paging. Active-lineage restriction is the default; all-branch scope is
-explicit. Output defaults to 48,000 characters with continuation guidance. This is evidence that
-bounded discovery and exact lookup can exist without semantic/vector search.
-[Recall](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/tools/recall.ts),
-[scope](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/core/recall-scope.ts),
-[budget](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/core/recall-budget.ts).
+1. Load configuration and check compaction eligibility. If Pi would refuse compaction, return before flushing pending memory.
+2. Append pending batches to the session branch and clear the pending file.
+3. Request structural compaction.
 
-Versions 0.5.9–0.5.10 add optional hard deadlines, early completion, and rejection of some
-incomplete worker results. A capped incomplete observer run is rejected when it recorded
-observations; a cap reached before recording anything still becomes an empty success and advances
-the cursor. This does not establish complete accepted coverage. Hard deadlines are disabled by
-default. Manual mode also uses pending files before ledger flush.
-[Observer outcome handling](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/om/agents/observer/agent.ts#L405),
-[Changelog](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/CHANGELOG.md),
-[pending storage](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/om/pending.ts).
+In this mode, ordinary `/compact` falls through to Pi. Arbitrary `/blackhole` text becomes a follow-up prompt; the compaction call receives an internal marker rather than semantic summary-focus instructions. Sources: [command](https://github.com/k0valik/pi-blackhole/blob/main/src/commands/pi-vcc.ts), [pending storage](https://github.com/k0valik/pi-blackhole/blob/main/src/om/pending.ts), [mode guards](https://github.com/k0valik/pi-blackhole/blob/main/src/hooks/before-compact.ts).
 
-Optional
-[append compaction](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/docs/APPEND_COMPACTION.md)
-projects immutable prior segments, current memory/recall content, and recent history, then rebases
-under pressure. Its fixture prefix checks are not provider cache-hit or continuation-quality
-measurements. A fallback inside this mode can mean a complete Blackhole replacement, not native Pi.
-The current-memory portion can still change ahead of retained messages; immutable older segments
-therefore do not establish reuse of the entire conversation prefix.
+**Observed in Blackhole 0.5.12:** The replacement hook delegates to native summarization when both its structural output and its observational-memory projection are empty. A nonempty structural summary does not require complete observation coverage. Optional mid-run compaction still adapts private `AgentSession` behavior. The inline event reason is `threshold` so RPC/SDK clients do not treat that operation as an ended between-run compaction. The declared peer range includes Pi 1.1.0; private integration still requires compatibility verification. Sources: [changelog](https://github.com/k0valik/pi-blackhole/blob/main/CHANGELOG.md), [inline adapter](https://github.com/k0valik/pi-blackhole/blob/main/src/om/inline-compaction.ts), [manifest](https://github.com/k0valik/pi-blackhole/blob/main/package.json).
 
-## pi-cache-compact: reconstruct the discarded prefix
+### Recall, worker completion, and append compaction
 
-This package reconstructs the projected discarded prefix with message structure and adds a handoff
-instruction. It forwards manual instructions, preserves the prepared retained boundary, uses
-registry completion with the compaction signal, disables tools, and delegates on errors,
-empty/truncated output, or attempted tool use.
-[Extension](https://github.com/lennartschoch/pi-cache-compact/blob/a905ed86c3844f1759a9f194dbe4c84d279ac8ca/src/extension.ts),
-[builder](https://github.com/lennartschoch/pi-cache-compact/blob/a905ed86c3844f1759a9f194dbe4c84d279ac8ca/src/build.ts).
+**Observed in Blackhole 0.5.12:** Recall supports BM25-ranked text search, regex matching, entry expansion, file-content and message-body paging, touched-file aggregation, and observation/reflection source lookup. Active lineage is the default; all-session scope is explicit. The response budget defaults to 48,000 characters and supplies continuation guidance. This is an example of ranked lexical discovery and bounded exact lookup without vector search, not evidence of retrieval accuracy. Sources: [recall tool](https://github.com/k0valik/pi-blackhole/blob/main/src/tools/recall.ts), [ranking](https://github.com/k0valik/pi-blackhole/blob/main/src/core/search-entries.ts), [scope](https://github.com/k0valik/pi-blackhole/blob/main/src/core/recall-scope.ts), [response budget](https://github.com/k0valik/pi-blackhole/blob/main/src/core/recall-budget.ts).
 
-Reconstruction is not capture of the final acting request. Context transformations, tool
-declarations, and model overrides can change expected prefix reuse. Its fallback construction
-concatenates prepared spans if projection lookup fails.
-[Fixture-server tests](https://github.com/lennartschoch/pi-cache-compact/blob/a905ed86c3844f1759a9f194dbe4c84d279ac8ca/test/e2e.test.ts)
-verify request construction and persistence, not actual provider cache savings.
+**Observed in Blackhole 0.5.12:** Worker processing selects an oldest contiguous source prefix, derives coverage from serialized source IDs, and allows up to three additional observer drain batches per invocation. Work can be replanned for a smaller model window. Completion checks have these limits:
 
-Its `toolChoice: "none"` differs from the acting request and can affect provider cache matching. A
-reconstructed shorter prefix also needs a compatible earlier cache entry at an eligible boundary;
-matching text does not establish that such an entry was written. The package's
-[documented caveats](https://github.com/lennartschoch/pi-cache-compact/blob/a905ed86c3844f1759a9f194dbe4c84d279ac8ca/README.md#caveats)
-explicitly distinguish summary-request reuse from the new prefix on first continuation.
+- Terminal `length` and `aborted` outcomes are rejected. A terminal `toolUse` is rejected unless a valid `complete: true` batch closed the work or the configured turn limit ended the run.
+- A valid completed batch can preserve recorded work despite a later failure.
+- A run stopped at the turn limit after tool execution can return zero accepted observations without a valid completion declaration. For example, every proposed observation may have an invalid source ID. The stage advances its coverage cursor for that empty result.
+- The completion helper accepts an absent stop reason when the signal is not aborted.
 
-It illustrates foreground summary-request optimization. It does not maintain observations or provide
-historical recall, and therefore addresses a different responsibility from the proposed core.
+These checks do not establish a strict accepted-observation coverage proof. Hard worker deadlines remain optional and unset by default. Sources: [consolidation](https://github.com/k0valik/pi-blackhole/blob/main/src/om/consolidation.ts), [observer](https://github.com/k0valik/pi-blackhole/blob/main/src/om/agents/observer/agent.ts), [completion classification](https://github.com/k0valik/pi-blackhole/blob/main/src/om/agents/completion.ts), [turn limit](https://github.com/k0valik/pi-blackhole/blob/main/src/om/agents/turn-cap.ts), [configuration](https://github.com/k0valik/pi-blackhole/blob/main/src/core/unified-config.ts).
 
-## pi-prefix-cache-compaction: capture a request and optionally warm
+**Observed in Blackhole 0.5.12:** Optional append compaction projects immutable structural segments followed by one current memory/recall message and the retained history. Automatic rebasing considers model-window pressure and useful size reduction; explicit `/blackhole` forces a rebase. A malformed or unavailable chain uses a complete Blackhole replacement summary, which differs from native Pi fallback. The current memory message can change ahead of retained history, so immutable segments do not establish reuse of the entire conversation prefix. Fixture tests compare serialized prefixes and bounded projections; they do not measure provider cache hits or continuation quality. Sources: [append documentation](https://github.com/k0valik/pi-blackhole/blob/main/docs/APPEND_COMPACTION.md), [fixture tests](https://github.com/k0valik/pi-blackhole/blob/main/tests/append-before-compact.test.ts).
 
-This package captures a provider request and appends a summary instruction to a clone. It supports
-Anthropic Messages and OpenAI Completions payload shapes, skips overflow, resolves authentication,
-preserves the prepared boundary, and appends file lists. It includes the captured retained tail in
-summarization and does not apply manual `/compact` instructions. Capture occurs at a hook boundary,
-not necessarily after every later transformation.
-[Extension](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/index.ts),
-[builder](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/core.ts).
+## pi-cache-compact: reconstruct the conversation for a summary request
 
-OpenAI Responses payloads are unsupported, and hosted Anthropic is excluded by default. Supporting
-an Anthropic-shaped endpoint is not the same as enabling every hosted Anthropic configuration. The
-inspected
-[configuration](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/index.ts)
-therefore needs to be considered alongside the payload-shape claim.
+**Observed in pi-cache-compact 0.2.0:** A continuation request appends summary instructions to reconstructed conversation messages. The default planner first uses the full projected conversation, then tries a version limited to the last observed provider-message count. A discarded-only request is an explicit option or an optional fallback when a continuation does not fit. By default, a compaction needing that fallback is delegated to Pi. A boundary instruction expresses the summary's intended coverage while the request can include retained messages. Sources: [planner](https://github.com/lennartschoch/pi-cache-compact/blob/main/src/build.ts), [extension](https://github.com/lennartschoch/pi-cache-compact/blob/main/src/extension.ts).
 
-Optional one-token warming is skipped when the host will retry, but otherwise awaited. Warming usage
-is not added to reported compaction usage. The inspected source does not establish cache savings,
-continuation quality, or runtime compatibility with Pi 1.1.0.
+**Observed in pi-cache-compact 0.2.0:** The extension forwards manual focus, uses registry completion with the compaction signal, preserves Pi's prepared retained boundary, and appends machine-computed file lists. It mirrors observed reasoning effort and replayable request headers, calibrates fit estimates against reported prompt usage, and defaults `toolChoice` to `none`. Empty or tool-call-shaped text may receive one retry when the prior attempt reports cache reuse or a small prompt; rejected summaries and errors delegate to Pi. A sufficiently large zero-cache-read summary suppresses later attempts for 15 minutes by default. These are bounded request-selection and failure policies, not proof that a request will fit or hit a cache. Sources: [extension](https://github.com/lennartschoch/pi-cache-compact/blob/main/src/extension.ts), [configuration](https://github.com/lennartschoch/pi-cache-compact/blob/main/src/config.ts).
 
-The implementation preserves captured thinking settings and resolves authentication at request time.
-Replay therefore depends on provider settings and credentials as well as conversation text.
-[Request construction and authentication](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/index.ts).
+Reconstruction still differs from capturing the final acting request. The last-request variant slices the current projection by an observed message count; context transformations or provider conversions can change that correspondence. System/tool changes, `toolChoice`, model overrides, authentication, and routing can also affect reuse. A shorter matching prefix requires a cache implementation that can reuse that boundary; append-only slot caches can treat it as a rewind. The first continuation after compaction has a new summary prefix regardless of summary-request reuse.
 
-## cprune: reduction can change the source archive
+The current README reports endpoint-specific observations: a llama.cpp rewind reprocessed 7,710 tokens while a continuation reused 7,706 of 7,745 tokens, and a shared endpoint reused repeated requests but missed a shorter prefix. It also qualifies a reasoning-effort experiment because a two-instance router could explain the result. These author-reported trials motivate the new defaults; they do not establish general provider behavior or task-quality improvement. The [fixture-server tests](https://github.com/lennartschoch/pi-cache-compact/blob/main/test/e2e.test.ts) inspect request construction and persistence rather than implementing a real provider cache. The tested baseline remains Pi 0.87.0. Source: [current README](https://github.com/lennartschoch/pi-cache-compact/blob/main/README.md).
 
-cprune distinguishes prompt-time pruning from truncating tool results before persistence. In full
-mode for providers it classifies as prefix caches, it retains previously sent pruned forms while
-original hashes match and prunes new context. These forms are process-local and reset at session
-start; mismatches or shorter history invalidate preservation.
-[Pruning](https://github.com/amutix/cprune/blob/7e8694f7c2fddd1896ac3c087b17b2ee99153b68/src/cprune.ts#L1859),
-[tool-result truncation](https://github.com/amutix/cprune/blob/7e8694f7c2fddd1896ac3c087b17b2ee99153b68/src/cprune.ts#L2413).
+## pi-prefix-cache-compaction: capture requests and warm the next prefix
 
-Persist-time truncation changes the evidence available to later recall. A memory package cannot
-promise recovery of bytes that another tool or extension never recorded. Provider classification is
-a package heuristic, and estimated savings are different from measured usage. The
-[manifest](https://github.com/amutix/cprune/blob/7e8694f7c2fddd1896ac3c087b17b2ee99153b68/package.json)
-uses `latest` dependencies rather than a constrained Pi peer contract, which supplies little version
-compatibility evidence.
+**Observed in pi-prefix-cache-compaction 0.3.0:** The extension clones payloads at `before_provider_request`, captures headers separately, resolves authentication at summary-request time, and appends a summary instruction to the captured request. It supports `anthropic-messages` and `openai-completions`, preserves captured thinking settings, skips overflow compaction, and returns Pi's prepared retained boundary plus file lists. It summarizes the entire captured request, including messages Pi retains, and does not apply `event.customInstructions`. Later extension transformations can differ from the capture. Sources: [extension](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/src/index.ts), [request builder](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/src/core.ts).
 
-## pi-oc-prompt-cache: system baseline plus messages
+**Observed in pi-prefix-cache-compaction 0.3.0:** “Hosted Anthropic excluded” means the configurable `baseUrlExcludes` defaults to `["api.anthropic.com"]`, and `appliesTo` tests whether the configured model `baseUrl` includes that substring. It is not a classification of every hosted Anthropic-compatible endpoint. The README explains that the extension does not manage hosted Anthropic's explicit cache-control breakpoints. Other hosted endpoints can pass the filter; DeepSeek is in the reported test matrix. OpenAI Responses remains unsupported, including Pi's built-in hosted OpenAI path. Sources: [filter and defaults](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/src/core.ts), [requirements and limits](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/README.md).
 
-The
-[published 0.1.0 source](https://registry.npmjs.org/@touchtechclub/pi-oc-prompt-cache/-/pi-oc-prompt-cache-0.1.0.tgz),
-`package/index.ts`, freezes a system-prompt baseline, persists it as a custom entry, and appends
-changes through custom messages. Baseline lookup scans all entries rather than selected ancestry.
-Compaction initially resets only in-memory state.
+**Observed in pi-prefix-cache-compaction 0.3.0:** One-token warming is configurable and enabled by default. The `session_compact` handler skips it when Pi will retry, otherwise awaits it. Warming rebuilds messages through Pi's converter and combines them with captured system/tool settings; it does not replay other extensions' context transformations. Its usage is not included in the returned summary usage, and summary cost fields are zeroed under a self-hosted assumption. This is incomplete cost accounting for a hosted endpoint. Source: [warming handler](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/src/index.ts), [usage conversion](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/src/core.ts).
 
-Pi 1.1.0 supports structured system/tool updates, so this package's custom-message approach is an
-alternative representation rather than evidence of a missing host capability. A `<system_update>`
-label in custom message text does not itself grant system-message authority.
+The current README reports real-provider smoke tests on Pi 0.85.1–0.99.1 with llama.cpp, vLLM, DeepSeek, oMLX, and a LiteLLM proxy. It reports cache counts where providers expose them and eight multi-compaction DeepSeek checkpoints retaining two planted facts. The documentation explicitly leaves SGLang and multi-compaction oMLX tests unverified. These are narrower observations than a representative coding-quality evaluation; a two-fact check does not establish preservation of task constraints, decisions, or authorization. There is no reported Pi 1.1.0 run in that matrix. Source: [reported verification](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/master/README.md#verified-against).
 
-## Hermes: complement native compaction
+## cprune: prompt reduction and persisted evidence loss
 
-The [Hermes analysis](agent-memory-systems.md#hermes-native-compaction-plus-separate-memory) shows a
-bounded pre-compaction save that permits native summarization to continue. It demonstrates a
-composition alternative: knowledge capture and historical retrieval need not replace checkpoints.
-Its source search has different branch and tool-result coverage from the proposed core, so the
-shared label “recall” does not establish equivalent behavior.
+**Observed in cprune GitHub v0.4.7:** The `context` hook changes provider-bound messages, while `tool_result` handling can deduplicate or truncate output before Pi persists it. Safe mode is the default and does not imply that original tool-result bytes remain stored. In full mode, providers classified as prefix-sensitive, including unknown classifications, reuse previously pruned message forms while original hashes match. A changed hash stops reuse from that point; shorter history resets it. These cached forms are process-local and reset at session start. Sources: [implementation](https://github.com/amutix/cprune/blob/main/src/cprune.ts), [mode and persistence documentation](https://github.com/amutix/cprune/blob/main/README.md).
 
-## Implications for Orbis composition
+**Observed in cprune GitHub v0.4.7:** cprune also has a replacement-compaction path, not only pruning hooks. An explicit or configured automatic cprune compaction records a short-lived request; `session_before_compact` consumes it and returns a deterministic, capped summary with Pi's prepared boundary. This can compete with another checkpoint owner. The provider cache classification is a package heuristic. Status separates the latest provider-reported cache usage from estimated token/character savings and estimated money saved; these are not an independent net-cost or quality comparison. The `latest` Pi development dependency supplies little reproducible compatibility evidence. Sources: [compaction and accounting](https://github.com/amutix/cprune/blob/main/src/cprune.ts), [manifest](https://github.com/amutix/cprune/blob/main/package.json).
 
-The packages demonstrate distinct mechanisms: prepared observations, deterministic file/activity
-summaries, bounded source recall, provider request reconstruction, warming, immutable segments, and
-prompt/result pruning. Each solves a different problem and has different source, cost, and
-compatibility limits. Pi does not merge independent replacement checkpoints; the
-[unified compaction requirement](../../SPEC.md#unified-compaction--req-unified-compaction) assumes
-one owner while checking actual stored ownership.
+Persist-time pruning changes the source archive available to any memory package. Hashes, previews, and re-run instructions do not reconstruct omitted bytes. Turning pruning off only changes future processing. Orbis recall can promise retrieval of recorded evidence, not output that another extension removed before recording.
 
-The [request stability requirement](../../SPEC.md#request-stability--req-request-stability) selects
-stable request construction. Provider replay, warming, and immutable segments remain later
-experiments; these source examples do not measure their benefit for Orbis. Persist-time pruning can
-also remove evidence that source recall would need.
+## pi-oc-prompt-cache: frozen system baseline and custom updates
+
+**Observed in the published pi-oc-prompt-cache 0.1.0 archive:** `index.ts` freezes a system-prompt baseline, persists it in custom session entries, and emits changes as custom messages. It sorts provider tool declarations and adds trailing Anthropic cache breakpoints when an existing cache-control value is present. Baseline restoration scans all entries rather than selected ancestry. The compaction handler resets only in-memory state; the next agent-start persists a new baseline. A restart between those steps can reload the earlier saved baseline. Sources: [published source archive](https://registry.npmjs.org/@touchtechclub/pi-oc-prompt-cache/-/pi-oc-prompt-cache-0.1.0.tgz), [current package metadata](https://registry.npmjs.org/@touchtechclub/pi-oc-prompt-cache).
+
+Pi 1.1.0 already supports structured system/tool updates, as the [host analysis](pi-compaction.md) describes. This package's custom-message representation therefore does not establish a missing native capability. A `<system_update>` label inside message text does not itself grant system-message authority, and branch reconstruction and crash timing need separate validation.
+
+The published README reports second-turn cache-hit rates for three ClinePass models under steady, changed-system, and frozen-baseline scenarios. It reports 88.3–96.7% for the frozen variant and 0% for its changed-system variant. The published archive does not include the referenced benchmark implementation, and the declared repository package directory is absent from current main. These remain author-reported, endpoint-specific measurements without independently inspected benchmark code, Pi 1.1.0 validation, or demonstrated instruction-fidelity results.
+
+## Alternatives and recommendation
+
+| Mechanism                                            | Relevant example        | Decision it informs                                                                | Limit that remains                                                                       |
+| ---------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| One replacement checkpoint plus observational memory | Blackhole               | Centralize checkpoint ownership while allowing separately scheduled memory workers | Structural output and worker completion do not prove semantic coverage                   |
+| Ranked source discovery and bounded exact expansion  | Blackhole recall        | Provide historical access without requiring vector search                          | Retrieval scope and retained source bytes determine what can be recovered                |
+| Reconstructed summary continuation                   | cache-compact           | Optimize the foreground summary request using Pi's model registry                  | Transformations, cache type, routing, and retained-boundary instructions need validation |
+| Captured-request replay and one-token warming        | prefix-cache-compaction | Experiment with provider-specific summary and continuation latency                 | Limited wire formats, incomplete cost reporting, and bypassed context transformations    |
+| Immutable structural segments with rebasing          | Blackhole append mode   | Test how much provider-input prefix remains stable across checkpoints              | Logical context still grows; fixture equality does not establish a cache hit             |
+| Prompt-time and persist-time pruning                 | cprune                  | Decide which reductions may affect immediate context or the evidence archive       | Persist-time loss is irreversible through recall; cprune can also replace checkpoints    |
+| Frozen prompt plus custom change messages            | pi-oc-prompt-cache      | Compare native structured updates with extension-level representations             | Branch restoration, update authority, and source availability need verification          |
+
+Retain one compaction owner and preserve recorded evidence independently of the active prompt. Use Blackhole as a current source example for lexical recall, bounded worker processing, and explicit checkpoint modes. Treat request replay, warming, immutable summary segments, and pruning as separately measured composition choices. The released cache packages now supply more concrete endpoint evidence than the earlier survey captured, but that evidence does not justify enabling them together or adding them to Orbis core by default. Hermes remains a complementary example of saving memory while native compaction continues; its current details are in the [companion analysis](agent-memory-systems.md#hermes-complements-native-compaction-and-offers-two-historical-searches).
+
+## Gaps and validation needed
+
+No inspected package combination was executed on Pi 1.1.0. A compatibility check would need scripted providers, branch/resume cases, repeated compactions, competing replacement hooks, cancellation, and RPC lifecycle assertions. It should separately verify recorded-system and reconstructed-system requests, manual focus, tool-call/result relationships, and source recall after any pruning.
+
+Net cache benefit remains unmeasured for Orbis. A later authorized provider evaluation would need summary, retry, worker, warming, and first-continuation usage and latency, together with repeated task-continuation checks. Prefix equality and reported cache-read tokens answer different questions. Task checks should include pending authorization, unresolved blockers, corrected facts, and exact source retrieval; planted-fact survival alone is insufficient.
+
+## Sources
+
+All external package sources above were retrieved on 2026-10-11. Current publication metadata: [Blackhole](https://registry.npmjs.org/pi-blackhole), [cache-compact](https://registry.npmjs.org/pi-cache-compact), [prefix-cache-compaction](https://registry.npmjs.org/pi-prefix-cache-compaction), [cprune npm package](https://registry.npmjs.org/cprune-pi-extension), and [pi-oc-prompt-cache](https://registry.npmjs.org/@touchtechclub/pi-oc-prompt-cache). The linked source sections identify the implementation files supporting each mechanism; author-reported measurements are attributed to their README rather than presented as measurements of Orbis.
