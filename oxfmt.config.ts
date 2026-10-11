@@ -22,6 +22,20 @@ export default defineConfig({
     ".claude/rules/*-rules.md",
   ],
   proseWrap: "always",
+  overrides: [
+    {
+      files: [
+        "./SPEC.md",
+        "packages/*/SPEC.md",
+        "specs/**/*.md",
+        "packages/*/specs/**/*.md",
+        "docs/research/**/*.md",
+        "packages/*/docs/research/**/*.md",
+        ".plans/**/*.md",
+      ],
+      options: { proseWrap: "preserve" },
+    },
+  ],
   jsdoc: {
     addDefaultToDescription: true,
     bracketSpacing: false,

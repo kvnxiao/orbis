@@ -8,26 +8,21 @@ this repository loads this file, including delegates.
 - The **developer** approves designs, authorizes work, resolves material decisions, and merges PRs.
 - The **orchestrator** is the main agent session. It owns decisions, coordination, verification, and
   delivery, and gives bounded work to delegates.
-- A **delegate** is an agent that the orchestrator starts for bounded work: `orbis-implementer`,
-  `orbis-reviewer`, `orbis-conformance-reviewer`, or a documentation delegate. A delegate follows
-  its **assignment**, the message that gives it its work, and returns results to the orchestrator.
-  It does not start other agents or run `work-issue` or `review-changes`.
+- A **delegate** is an agent that the orchestrator starts for bounded work under the active skill,
+  such as a researcher, implementer, reviewer, or documentation editor. A delegate follows its
+  **assignment**, the message that gives it its work, and returns results to the orchestrator. It
+  does not start other agents or run `work-issue` or `review-changes`.
 - A **direct request** asks for a development change without naming an issue or PR.
-- A package's **SPEC**, `packages/<name>/SPEC.md`, defines its approved behavior, and
-  `REQ-<behavior-slug>` identifies each requirement.
-- To **approve** a document, such as a design, a SPEC, or a plan's Design section, the developer
+- A package's **SPEC**, `packages/<name>/SPEC.md` with any declared area files that divide the
+  specification by responsibility, defines its behavior, and `REQ-<behavior-slug>` identifies each
+  requirement.
+- To **approve** a document, such as a design, a SPEC, or an implementation plan, the developer
   confirms it as final and ready for work. To **authorize** work, the developer permits its
   implementation or execution to begin. Approval does not authorize execution, and a SPEC or SPEC
   amendment can be approved before any implementation plan exists.
-- Work follows one of two **work paths**. The **issue-backed path** uses a GitHub issue to track a
-  change that introduces, improves, or changes package behavior. The **PR-only path** delivers a
-  direct request through a PR alone: a change within a package's approved contract, a documentation
-  change, or a workspace tooling change.
-- The **Current handoff** table at the top of an issue body records its authorization, work,
-  blocker, and next action. A **checkpoint** is an issue comment that records paused work, a
-  delivery, or an approved brainstorm's decisions.
-- A **specialist skill** is a repository skill for one kind of work, such as `specify-package`. It
-  returns an outcome to its caller and does not start another repository skill.
+- A **specialist skill** owns one kind of work and returns an outcome to the orchestrator. Global
+  skills own specification, planning, and plan execution; repository skills supply Orbis
+  integration.
 
 ## Start work
 
@@ -58,43 +53,44 @@ Delegates, status questions, read-only reviews, and general questions skip this 
 
 ## Developer decisions
 
-Resolve facts through read-only investigation, and do not ask the developer for facts that the
-repository, documentation, or tools can answer. Only the orchestrator settles decisions with the
-developer, through the global `brainstorm` skill. It gathers each round's facts itself or in a fork
-of its session, instead of starting the research agent that `brainstorm` suggests. Settle these
-through `brainstorm`:
+Only the orchestrator settles decisions with the developer, through the global `brainstorm` skill.
+Follow the active global skill's research, decision, and approval workflow. Resolve factual
+questions through investigation, preserve settled decisions, and return unresolved choices from
+delegates to the orchestrator. Do not substitute repository procedures for a global skill's
+workflow.
 
-- An unknown that investigation cannot resolve.
-- An open or deferred product or implementation decision, even when the choice is easy to reverse.
-- An ambiguity whose interpretations diverge materially.
-- A decision that surfaces during implementation, review, or integration, including one that a
-  delegate or reviewer returns.
-
-Collect the decisions that surface during the work and settle them before delivery; do not list them
-as options in a status reply or summary.
-
-Before editing affected files or publishing decisions, present the complete design for the requested
-scope, ask the developer to confirm it, and wait. Individual answers do not approve the design. Keep
-provisional decisions in chat or private scratch until then, and pause affected work when new
-evidence reopens a decision. A delegate frames a decision and returns it to the orchestrator. If
-`brainstorm` is unavailable, report the limitation and ask the developer directly.
+Explicit developer direction establishes the decisions and authorization within its scope. Approval
+of a SPEC or plan does not by itself authorize runtime implementation. If the required skill is
+unavailable, report the missing capability and stop dependent work; do not silently recreate it.
 
 ## Who edits each file
 
-Every file has one editor on both work paths. Start each delegate and write its assignment under the
-[delegation rules](.agents/shared/delegation.md).
+Assign one editor to each file and preserve concurrent work. Follow
+[delegation.md](.agents/shared/delegation.md) when starting a delegate. Keep repository profiles
+only for direct implementation and package conformance; supply repository rules in global
+assignments.
 
-| Editor                                                     | Files                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orbis-implementer`                                        | TypeScript source and tests; `templates/` and package `tests/` directories, including fixtures, regardless of file type; `scripts/`; reusable harnesses, benchmarks, and scripts, including those in ignored `packages/<name>/implementation/`; toolchain configuration, such as `tsconfig*.json`, Oxlint, Oxfmt, and Vitest configuration, package manifests, `justfile`, and `.gitignore` |
-| Orchestrator, directly or through a documentation delegate | Markdown documentation and instructions, agent definitions (`.claude/agents/`, `.codex/agents/`), host configuration (`.claude/settings.json`, `.codex/config.toml`, `.codex/hooks.json`), and GitHub artifacts                                                                                                                                                                             |
-
-- The orchestrator runs one-off investigation probes, which answer one question and are then
-  discarded, only in ignored `.artifacts/`, ignored `packages/<name>/implementation/`, or outside
-  the repository.
+- For work governed by a global skill, use that skill's research and implementation profiles,
+  ownership rules, and permission for the orchestrator to work without a delegate. Supply the
+  applicable Orbis domain rules.
+- For other direct work, assign TypeScript, tests, templates, scripts, reusable harnesses, toolchain
+  configuration, manifests, `justfile`, and `.gitignore` to `orbis-implementer`. The orchestrator or
+  a documentation delegate edits prose, instructions, agent definitions, and host configuration.
+- The orchestrator owns GitHub artifacts, commits, and delivery. A delegate does not publish them.
+- Keep one-off investigation probes in ignored `.artifacts/`, ignored package `implementation/`, or
+  outside the repository, subject to a global skill's narrower probe-location rule.
 - Whoever changes a dependency manifest runs `just install` and owns the resulting `pnpm-lock.yaml`.
-- When a tool the orchestrator runs, such as `just fix`, rewrites implementation files, hand those
-  changes to `orbis-implementer`.
+- Have the assigned editor inspect implementation changes made by formatting or lint-fix tools.
+
+## Specification and plan workflows
+
+Use global `write-spec`, `plan-from-spec`, and `implement-spec-plan` for their respective work.
+Resolve their installed paths through the host's skill catalog. Their formats, approval gates,
+structural validation, specification fingerprints in plans, and task-state rules are authoritative.
+Keep executable plans in `.plans/<spec-slug>/`; issues link to them and record shared tracking.
+Before migrating or writing a package contract, read [specifications.md](docs/specifications.md) for
+repository locations and Pi interaction conventions. Do not copy global formats or maintain local
+alternatives.
 
 ## Rules skills
 
@@ -102,6 +98,10 @@ Before working on or reviewing a domain, load its `*-rules` skill and read each 
 whose "Read when" condition matches the change. Load
 [pi-coding-agent-rules](.agents/skills/pi-coding-agent-rules/SKILL.md) for Pi extensions, packages,
 and TypeScript. Name the loaded skills and references in every delegate assignment.
+
+When selecting an implementation approach, planning reference implementations or scripts, or working
+on Effect code, read [effect-adoption.md](.agents/shared/effect-adoption.md). Include that policy in
+affected implementation and review assignments.
 
 ## Where rules live
 
@@ -132,17 +132,17 @@ commands, such as `pnpm --filter @orbis/<name> test`, dependency-manifest change
 
 ## Contract before code
 
-Before changing package code, read `packages/<name>/SPEC.md` and, for a package with prompts, menus,
-or other terminal interactions, its linked `docs/tui-interactions.md`. Identify the affected
-`REQ-<behavior-slug>` requirements even when the request omits specifications. These documents
-define approved behavior; current code does not.
+Before changing package code, read `packages/<name>/SPEC.md`, its applicable area files, and, for a
+package with prompts, menus, or other terminal interactions, its linked `docs/tui-interactions.md`.
+Identify the affected `REQ-<behavior-slug>` requirements even when the request omits specifications.
+These documents define approved behavior; current code does not.
 
 - Make fixes and implementation choices within the approved contract.
 - Explicit developer direction approves the behavior it specifies; do not request the same approval
   again.
-- For a change to a contract's observable behavior, amend the contract with `specify-package` before
-  implementation, and deliver the code, tests, SPEC, and interaction document in the same change
-  set.
+- For a change to a contract's observable behavior, amend the contract with global `write-spec`
+  before implementation, and deliver the code, tests, SPEC, and interaction document in the same
+  change set.
 - Do not weaken a SPEC to make code pass.
 
 ## Writing

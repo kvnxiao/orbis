@@ -26,7 +26,8 @@ Each explicit scope limit stops the work at its boundary:
 - A local-only request keeps its results in local files or commits, and a chat-only request keeps
   them in chat. Neither pushes nor publishes to GitHub. When such a request changes package
   behavior, do not create an issue. Keep the outcome, approach, acceptance, and handoff in that
-  local or chat destination, as an issue plan would record them.
+  local or chat destination. A spec-derived plan still follows the global plan format within the
+  authorized publication boundary.
 - A status question requests a report, not execution or a checkpoint comment.
 
 ## Approval and decisions

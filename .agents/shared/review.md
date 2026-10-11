@@ -8,38 +8,29 @@ orchestrator.
 
 - Include the `verify-conformance` check for affected package contracts and the `write-readme` check
   for affected READMEs.
-- Assign `orbis-reviewer` wherever `review-changes` selects `reviewer` or `reviewer-deep`, including
-  a focused deep follow-up. Name the skill's reviewer contract, `references/review-execution.md`,
-  and the assigned assessment references in those assignments.
-- Assign the `verify-conformance` check to `orbis-conformance-reviewer`.
-- Assign a README check to `orbis-reviewer` with the `write-readme` `SKILL.md`.
-- Give documentation and prose delegates scoped write permission instead of a read-only role.
+- Use the global review skill's selected profiles and assessment contracts for its ordinary review.
+  Supply applicable Orbis domain rules without replacing its review procedure.
+- Run the `verify-conformance` check on every host. Use `orbis-conformance-reviewer` when supported;
+  otherwise follow the global skill's reviewer fallback with the same conformance procedure. When
+  delegation is unavailable, run it in-session and report the lack of independent review.
+- Give conformance reviewers resolved paths for `verify-conformance`, the global specification
+  format, applicable domain rules, and matching references. They read these files directly without
+  relying on a skill catalogue or invocation tool.
+- Assign a README check to the global `reviewer` with the `write-readme` `SKILL.md`.
+- Follow the active skill's editing boundary for documentation and prose delegates.
 
-## Write reviewer prompts
+## Reviewer independence
 
-Give an independent reviewer only what it needs to judge the work without bias:
-
-- The scope: the repository, branch, base, and how to read the diff.
-- The contract to judge against: the SPEC, the issue, and approved decisions as constraints.
-- The applicable rules files.
-- The required output format.
+Follow the global skill's assignment procedure.
 
 Omit the implementer's self-assessment, the review history, expected verdicts, and lists of known
 limits, unless they are constraints the reviewer must not reopen.
 
-## Overrides of review-changes
+## Repository integration
 
-These rules replace the matching `review-changes` rules in this repository:
-
-- `orbis-implementer` applies accepted implementation fixes, because it edits all implementation
-  files.
-- A documentation delegate may run `update-docs` and `audit-prose` with `mode=apply` within its
-  scoped write permission. This replaces the skill's rules that only the coordinator edits files in
-  apply mode, including on its fast path, and that delegated documentation investigation uses
-  `mode=report`.
-- Run `agent-gh` wherever the skill runs `gh`.
-- If a named reviewer profile or delegation is unavailable, report the limitation and obtain the
-  developer's choice before substituting another reviewer or reviewing in-session.
+- Run `agent-gh` wherever a global skill names `gh`.
+- Reuse completed review coverage for unchanged inputs. A global skill's required review satisfies
+  the corresponding delivery check; new changes or findings need their affected checks.
 
 ## Judge the work
 
@@ -54,9 +45,10 @@ These rules replace the matching `review-changes` rules in this repository:
   only when it predates the work.
 - Review changes to agent instructions and configuration for correctness when they affect routing,
   authorization, delegation, checkpoints, or execution, whatever their file extension.
-- For a design change, compare the approved scope with the SPEC and interaction contract, even
-  without a runtime implementation. Check that:
-  - Each approved in-scope behavior has a requirement and conformance scenario.
+- For a design change, compare the approved scope with the SPEC, any files that divide its
+  requirements by area, and interaction contract, even without a runtime implementation. Check that:
+  - Each approved in-scope behavior has a requirement and conformance scenario in the specification
+    set, including applicable cross-area invariants.
   - Resolved questions are gone from open lists, and remaining questions concern explicit deferrals.
   - Research does not add requirements, and a SPEC whose package has research links its research
     index from the Supporting evidence section.
@@ -64,11 +56,5 @@ These rules replace the matching `review-changes` rules in this repository:
   Report contract inconsistencies separately from runtime verification gaps. Passing repository
   checks do not establish agreement with the approved design.
 
-## Resolve findings
-
-1. Resolve findings within the authorized scope, and send bounded implementation repairs to
-   `orbis-implementer`.
-2. Recheck the affected behavior after repairs, and rerun the affected checks.
-
-If `review-changes`, `update-docs`, or `audit-prose` is required but unavailable, review the diff,
-update affected documentation, audit prose, run repository checks, and report what was skipped.
+If a required review skill is unavailable, report the missing skill and stop dependent review and
+delivery work. An unavailable reviewer profile or delegation follows the global skill's fallback.

@@ -5,19 +5,21 @@ description:
   return conformance findings.
 model: claude-opus-5-5
 effort: xhigh
-disallowedTools: Write, Edit, NotebookEdit
+disallowedTools: Write, Edit, NotebookEdit, Skill
 ---
 
 Review an Orbis package implementation against its SPEC and interaction contract, read-only, and
-return conformance findings.
+return conformance findings. Read required skill files directly from the paths in the assignment or
+this definition; do not depend on a skill catalogue or invocation tool.
 
 1. Load every `*-rules` skill the assignment names and the rules skills for the work's domain, such
    as `.agents/skills/pi-coding-agent-rules/SKILL.md` for Pi packages and TypeScript. Read each of
    their references whose "Read when" condition matches the change.
 2. Read and follow `.agents/skills/verify-conformance/SKILL.md`.
 3. If a required skill is unavailable, report it to the orchestrator before dependent work.
-4. Read the assigned SPEC, linked interaction document, relevant source, tests, and diff, and follow
-   `.agents/shared/packages.md` for package conventions and tests.
+4. Read the assigned SPEC, its declared files for separate areas of responsibility and the
+   invariants that apply across them, linked interaction document, relevant source, tests, and diff,
+   and follow `.agents/shared/packages.md` for package conventions and tests.
 5. Return the requirement coverage table the skill defines, with file references, expected behavior,
    observed evidence, and verification gaps. Keep the review within the assigned scope.
 
