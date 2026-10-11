@@ -7,11 +7,11 @@ areas: [specs/session-state.md, specs/recall.md, specs/compaction.md]
 
 ## Purpose and scope
 
-`@orbis/memory` prepares context for continuing work after the Pi coding-agent host compacts a conversation and provides bounded recall of earlier evidence within the active session branch and its ancestry. This specification defines the behavioral contract for independent implementers. An installable implementation is not available.
+While enabled, `@orbis/memory` prepares continuation state as a Pi coding-agent session progresses and supplies custom checkpoints during compaction. These checkpoints replace Pi's native summaries; native summarization remains the fallback when custom checkpoint preparation cannot meet the contract. Bounded recall retrieves earlier evidence within the active session branch and its ancestry.
 
-The core works independently. Project knowledge, developer habits, cross-session retrieval, topic consolidation, generated chronologies of earlier work, and user curation of derived memory are outside the MVP. Public companion and external-retrieval APIs require a concrete consumer. Provider-specific prefix reuse, request replay or warming, and reuse of unchanged summary segments are outside the MVP. Shortening checkpoint text in the background is not required.
+The core works independently. Project knowledge, developer habits, cross-session retrieval, topic consolidation, generated chronologies of earlier work, and user curation of derived memory are outside the MVP. Public APIs for other packages or external retrieval require a concrete consumer. Provider-specific prefix reuse, replaying earlier model requests, sending requests to populate provider caches, and reusing unchanged summary segments are outside the MVP. Shortening checkpoint text in the background is not required.
 
-The reference baseline is Pi 1.1.0's public extension and session capabilities. Later releases require verification of those capabilities; the baseline is not a runtime compatibility claim. Pi owns conversation history, compaction triggers, and the retained recent context. The package assumes one replacement-checkpoint owner while checking actual stored ownership when other extensions write checkpoints.
+The reference baseline is Pi 1.1.0's public extension and session capabilities. Later releases require verification of those capabilities; the baseline is not a runtime compatibility claim. Pi owns conversation history and controls compaction triggers, the retained-history boundary, checkpoint persistence, and overflow retry. Memory supplies replacement checkpoint text through Pi's before-compaction hook. The package assumes one extension owns checkpoint replacement and checks whether the stored checkpoint is its own when other extensions also write checkpoints.
 
 The research is informative. It does not establish that prepared memory improves continuation, preserves all relevant meaning, or reduces total cost compared with native Pi.
 
@@ -19,40 +19,42 @@ The research is informative. It does not establish that prepared memory improves
 
 Pi compaction replaces older model context with a checkpoint while retaining recent conversation. Memory prepares a continuation snapshot before that replacement and retains source-linked observations for on-demand recall. It distinguishes recorded evidence, accepted processing of that evidence, and the semantic information a model preserves; none of those guarantees the other two.
 
-| Term                    | Meaning                                                                                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Selected lineage        | The active session branch and ancestry selected by resume, fork, or tree navigation.                                                      |
-| Original evidence       | Recorded source content before applicable context edits.                                                                                  |
-| Effective text          | Source content after applicable Pi context edits, including replacements and omissions.                                                   |
-| Checkpoint              | Native or custom compaction text presented before retained recent history.                                                                |
-| Cut                     | Pi's prepared `firstKeptEntryId`, which identifies the first retained entry.                                                              |
-| Split turn              | A turn divided by the cut; its earlier prefix must supply context for the retained continuation.                                          |
-| Observer                | The auxiliary model that proposes memory updates.                                                                                         |
-| Active obligations      | Protected goals, constraints, unfinished tasks, and waiting conditions.                                                                   |
-| Maintained context      | Completed work, decisions and rationale, critical facts, and relevant identifiers.                                                        |
-| Continuation snapshot   | The state needed to continue work, comprising active obligations and maintained context.                                                  |
-| Protected string        | An exact identifier or original wording that every rendering keeps verbatim in its snapshot item.                                         |
-| Observation             | A source-linked event or finding retained for recall.                                                                                     |
-| Accepted state          | Validated memory reconstructed from records in the selected lineage.                                                                      |
-| Observer job            | One bounded attempt against identified source versions and an accepted-state basis.                                                       |
-| Source horizon          | The extent of semantic inputs in conversation order, including state dependencies, independently of observer commit position.             |
-| Processing coverage     | Accepted processing of identified source portions and versions; it does not prove semantic preservation.                                  |
-| Derived baseline        | An attributed checkpoint or branch summary used as evidence without claiming its originals were processed.                                |
-| Candidate               | The custom checkpoint prepared for one compaction attempt.                                                                                |
-| Catch-up                | Bounded processing by the same observer to prepare missing effective source coverage at the cut.                                          |
-| Checkpoint state        | Accepted state, or an earlier accepted basis extended by catch-up that serves only that checkpoint.                                       |
-| Condensation            | Shortening checkpoint presentation to fit capacity without changing accepted state.                                                       |
-| Instructed presentation | Applying supplied compaction instructions to checkpoint presentation within its preservation rules.                                       |
-| Native fallback         | Declining a custom result so Pi can perform native compaction while the host attempt remains active.                                      |
-| File inventory          | Paths from recognized file-tool invocations through the checkpoint cut; it is not proof of successful filesystem effects.                 |
-| Recall                  | On-demand retrieval of permitted source text or observations.                                                                             |
-| Original view           | Historical source content before replacement or omission; recall access requires a personal configuration opt-in and an explicit request. |
+| Term                    | Meaning                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Selected lineage        | The active session branch and ancestry selected by resume, fork, or tree navigation.                                                               |
+| Original evidence       | Recorded source content before applicable context edits.                                                                                           |
+| Effective text          | Source content after applicable Pi context edits, including replacements and omissions.                                                            |
+| Checkpoint              | Native or custom compaction text presented before retained recent history.                                                                         |
+| Cut                     | Pi's prepared `firstKeptEntryId`, which identifies the first retained entry.                                                                       |
+| Split turn              | A turn divided by the cut; its earlier prefix must supply context for the retained continuation.                                                   |
+| Observer                | The auxiliary model that proposes memory updates.                                                                                                  |
+| Active obligations      | Protected goals, constraints, unfinished tasks, and waiting conditions.                                                                            |
+| Maintained context      | Completed work, decisions and rationale, critical facts, and relevant identifiers.                                                                 |
+| Continuation snapshot   | The state needed to continue work, comprising active obligations and maintained context.                                                           |
+| Protected string        | An exact identifier or original wording that every rendering keeps verbatim in its snapshot item.                                                  |
+| Observation             | A source-linked event or finding retained for recall.                                                                                              |
+| Accepted state          | Validated memory reconstructed from records in the selected lineage.                                                                               |
+| Observer job            | One bounded attempt against identified source versions and an accepted-state basis.                                                                |
+| Source horizon          | The latest source position contributing to a state, including evidence inherited from earlier state; the observer commit position does not set it. |
+| Processing coverage     | Accepted processing of identified source portions and versions; it does not prove semantic preservation.                                           |
+| Derived baseline        | An attributed checkpoint or branch summary used as evidence without claiming its originals were processed.                                         |
+| Candidate               | The custom checkpoint prepared for one compaction attempt.                                                                                         |
+| Catch-up                | Bounded processing by the same observer to prepare missing effective source coverage at the cut.                                                   |
+| Checkpoint state        | Accepted state, or an earlier accepted basis extended by catch-up that serves only that checkpoint.                                                |
+| Condensation            | Shortening checkpoint presentation to fit capacity without changing accepted state.                                                                |
+| Instructed presentation | Applying supplied compaction instructions to checkpoint presentation within its preservation rules.                                                |
+| Native fallback         | Declining a custom result so Pi can perform native compaction while the host attempt remains active.                                               |
+| File inventory          | Paths from recognized file-tool invocations through the checkpoint cut; it is not proof of successful filesystem effects.                          |
+| Recall                  | On-demand retrieval of permitted source text or observations.                                                                                      |
+| Original view           | Historical source content before replacement or omission; recall access requires a personal configuration opt-in and an explicit request.          |
 
 The **acting prefix** is the initial part of the main agent's model request before newly appended conversation. Keeping it stable can support provider prompt caching; it does not guarantee a cache hit.
 
 ## Architecture overview
 
-Pi session entries are authoritative storage. The observer proposes changes; package validation accepts a complete operation that updates the snapshot, observations, and processing coverage together. Reconstruction uses selected-lineage entries. Checkpoint preparation derives model-facing presentation from that state without making presentation changes authoritative. Recall independently applies source-access policy to evidence and observations.
+Pi session entries are authoritative storage. The observer proposes changes; package validation accepts a complete operation that updates the snapshot, observations, and processing coverage together. Reconstruction uses selected-lineage entries.
+
+During compaction, memory renders a checkpoint from the state applicable to Pi's prepared cut. Rendering and shortening that text do not update accepted memory. Pi stores the selected checkpoint and presents it with retained recent history on subsequent acting-model requests. Recall independently applies source-access policy to evidence and observations.
 
 The following component map is illustrative. It assigns responsibilities, not implementation modules.
 
@@ -133,7 +135,7 @@ The package does not sandbox other tools or extensions, erase content already co
 
 A conforming implementation satisfies every requirement and invariant in this specification set and the constraints and non-goals in Purpose and scope. Exact names and actions defined by the activation and recall requirements are external contracts. Present-tense statements and imperative obligations in these parts are mandatory. Uppercase SHOULD marks a recommendation an implementation may decline with a documented reason; uppercase MAY marks an allowed option. Text labeled Example or Note, Background and terms, Architecture overview, Security summaries, Explored alternatives, Supporting evidence, the illustrative diagrams, and linked research are informative. The requirement blocks define the authoritative behavior; diagrams illustrate it without adding transitions or exceptions.
 
-Use local fixtures and scripted providers for automated checks, with no real-model calls. The scenarios beside each requirement check mechanics and preservation of supplied accepted state. An early scripted native-baseline harness is recommended for host integration. Separately authorized, bounded, supervised evaluations compare extracted information and subsequent actions with native Pi; these checks do not establish semantic parity, provider-cache savings, or lower total cost.
+Use local fixtures and scripted providers for automated checks, with no real-model calls. The scenarios beside each requirement check mechanics and preservation of supplied accepted state. An early scripted native-baseline harness is recommended for host integration. These scripted checks do not establish semantic parity, provider-cache savings, or lower total cost. Separately authorized, bounded, supervised evaluations compare extracted information and subsequent actions with native Pi.
 
 ## Explored alternatives
 

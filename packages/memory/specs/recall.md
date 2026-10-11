@@ -19,7 +19,7 @@ Use effective source content by default: return replacements, and exclude omitte
 
 Attribute original results as historical and show their omitted or replaced status, with applicable replacement context or a reference to it. Edits have no reliable reason field; the package must not assume that removed text was only compressed. This policy governs recall access, not erasure of content already copied into observations or checkpoints, and does not sandbox other tools or extensions. Omission alone does not retire an obligation.
 
-Report no matches, unavailable sources, denied original access, stale cursors, invalid arguments, and bounded partial results distinctly. Retrieval grants no additional instruction authority. The acting agent chooses when recall helps; the MVP uses neither an auxiliary retrieval model nor vectors or a generated filesystem mirror.
+Report no matches, unavailable sources, denied original access, stale cursors, invalid arguments, and bounded partial results distinctly. Retrieval does not increase the instruction authority of the returned text. The acting agent chooses when recall helps; the MVP uses neither an auxiliary retrieval model nor vectors or a generated filesystem mirror.
 
 **Permitted choices:** Implementations choose and document argument schemas and opaque reference and cursor encoding within the actions, access policy, and bounded-result rules above.
 
