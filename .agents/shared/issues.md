@@ -68,18 +68,20 @@ each row on one physical line:
 | Next action   | One bounded action and its responsible role                                          |
 | Checkpoint    | A link to the packet the next session needs, or None                                 |
 
-Put the outcome, approved baseline, approach, and acceptance criteria below the table. Update the
-table when work pauses, when a PR opens, and when authorization changes. When an issue still has an
-older table with Stage or Verification rows, remove those rows in your next edit; do not migrate
-idle or closed issues in bulk.
+Put the outcome, approved baseline, plan links, and acceptance criteria below the table. Executable
+spec-derived tasks and their state belong in `.plans/`; issues record scope, authorization,
+dependencies, and handoffs without mirroring those tasks. Update the table when work pauses, when a
+PR opens, and when authorization changes. When an issue still has an older table with Stage or
+Verification rows, remove those rows in your next edit; do not migrate idle or closed issues in
+bulk.
 
 ## Edit the issue body
 
 1. Reread the remote body before every edit. Preserve contributor text, and skip unchanged writes.
 2. For a routine update, change only the value cells between exactly one pair of handoff markers.
    GitHub receives the whole body, so inspect the draft's diff and reconcile concurrent changes.
-3. Edit the plan sections only when the scope, approach, dependencies, acceptance criteria, or task
-   checklists change.
+3. Update plan links and shared tracking when scope, dependencies, or acceptance criteria change.
+   Reconcile executable tasks through global `plan-from-spec`, not in the issue body.
 4. Batch pending changes before a pause or delivery, or update sooner when another worker needs the
    changed plan.
 5. After an uncertain write, check the remote state before retrying.

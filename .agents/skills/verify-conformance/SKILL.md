@@ -20,8 +20,8 @@ a verification gap, or a contract ambiguity with a proposed amendment.
 
 The caller provides:
 
-- The target package and its existing SPEC, which, with its linked interaction document, defines the
-  contract.
+- The target package and its existing SPEC, which, with its declared areas and linked interaction
+  document, defines the contract.
 - The scope: a full-package review, the affected-contract check within `review-changes` with the
   orchestrator's change set, or a re-review after the orchestrator resolves a finding.
 - The specification and implementation revisions, or, for a working-tree review, the base revision.
@@ -31,8 +31,11 @@ verification gap, skip the implementation comparisons, and report the verdict as
 
 ## 1. Read the contract
 
-Read the [specification guide](../../../docs/specifications.md), then the target package's complete
-SPEC and its linked interaction document.
+Resolve the installed global `write-spec` skill and read its specification format. Read
+[specifications.md](../../../docs/specifications.md) for Orbis locations and interaction
+conventions, then the target SPEC, every declared area in scope, and its linked interaction
+document. Read all invariants that apply across areas. If a required format or skill is unavailable,
+report the gap.
 
 ## 2. Establish the scope and evidence
 
@@ -66,30 +69,35 @@ Apply these evidence rules:
 
 Check the package's requirement identifiers. Every `REQ-<behavior-slug>` cited in the SPEC,
 interaction document, README, and tracked tests must resolve to a requirement the SPEC defines.
-Every defined slug must be unique within the package and have at least one conformance scenario, and
-a cross-package reference must name its package. Report each of these as a finding:
+Every defined slug must be unique across the package specification set and have at least one
+conformance scenario, and a cross-package reference must name its package. Report each of these as a
+finding:
 
 - An ordinal identifier.
 - A duplicate slug.
 - A dangling reference left by a retirement or rename.
 - A requirement without a conformance scenario.
 
-Read the affected contract in order without following forward links, applying the guide's
-[forward-reference checks](../../../docs/specifications.md#avoid-forward-references). For an
-unexplained term, approach, state, or interface, report the earliest dependent passage and the
-missing or later introduction. Report a reading-order defect separately from an implementation
-deviation; moving an unchanged requirement does not amend its behavior. Check that reordered text
-preserves IDs, obligations, exceptions, and linked heading anchors.
+Use the global format's structural checker with the target SPEC and research directory. Within a
+read-only review, return the command and any required prerequisites to the orchestrator. Report
+format failures as gaps requiring conversion; do not waive them by applying a local format.
+
+Read the affected contract in order without following forward links, applying the global format's
+reading-order rules. For an unexplained term, approach, state, or interface, report the earliest
+dependent passage and the missing or later introduction. Report a reading-order defect separately
+from an implementation deviation; moving an unchanged requirement does not amend its behavior. Check
+that reordered text preserves IDs, obligations, exceptions, and linked heading anchors.
 
 When requirements conflict or lack an observable acceptance condition, report the ambiguity.
 
 ## 4. Compare each requirement with the implementation
 
-Derive expected behavior from the SPEC's system requirements and the normative interaction document
-before examining current output. Verify detailed UI behavior and appearance against the interaction
-document under the same requirement IDs, and check that both documents agree on state, submission,
-cancellation, and recovery. Treat recommendations, research, the `Explored alternatives` and
-`Supporting evidence` sections, and explicitly illustrative examples as informative.
+Derive expected behavior from the SPEC set's conformance clause, invariants, requirements, and
+normative interaction document before examining current output. Verify detailed UI behavior and
+appearance against the interaction document under the same requirement IDs, and check that both
+documents agree on state, submission, cancellation, and recovery. Treat recommendations, research,
+the `Explored alternatives` and `Supporting evidence` sections, and explicitly illustrative examples
+as informative.
 
 For each requirement in scope, identify:
 

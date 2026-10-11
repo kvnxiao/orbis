@@ -29,13 +29,14 @@ contributor follows; this guide covers the workspace, the package lifecycle, and
 packages/                      Package specifications and available implementations
 templates/extension/           Source-only package template
 docs/development-workflow.md   How to ask agents for work, and where instructions live
-docs/specifications.md         Package specification guidance
+docs/specifications.md         Package contract locations and Pi interaction conventions
 docs/readme-guidelines.md      README guidance
 docs/research/                 Research behind repository standards
 .agents/skills/                Repository-local agent skills
 .agents/shared/                Rules shared by several skills and agents, including package conventions
 .codex/                        Codex session defaults and custom agents
 .claude/                       Claude Code session settings and custom agents
+.plans/                        Executable spec-derived plans and agent task state
 scripts/                       Scaffolding and toolchain scripts
 justfile                       Common workspace recipes
 package.json                   Root scripts, pnpm version, and Pi extension discovery
@@ -75,12 +76,14 @@ package.
 
 ## Design a package
 
-Define a package's behavior in `packages/<name>/SPEC.md` before implementing it, following the
-[specification guide](docs/specifications.md). A package that owns prompts, menus, forms, modals, or
-interactive terminal views also documents its user flows in `docs/tui-interactions.md`, linked from
-the SPEC. For packages with configurable behavior, follow the generated
+Define a package's behavior in `packages/<name>/SPEC.md` before implementing it, using the global
+`write-spec` skill and the [package contract conventions](docs/specifications.md). A package that
+owns prompts, menus, forms, modals, or interactive terminal views also documents its user flows in
+`docs/tui-interactions.md`, linked from the SPEC. For packages with configurable behavior, follow
+the generated
 [Pi settings and commands rules](.agents/skills/pi-coding-agent-rules/references/pi-settings-and-commands.md)
-for the native menu boundary, reusable settings components, and command design.
+for the boundary between Pi's built-in menus and extension settings, reusable settings components,
+and command design.
 
 The [development workflow](docs/development-workflow.md) explains how shared work is tracked and
 delivered.
@@ -101,8 +104,9 @@ login unless its profile routes them to a bot. Before your first agent session:
 2. Install `agent-gh` and a GitHub App with Issues and Pull requests write access on the repository.
    Define a profile for the App with the
    [comments configuration](https://github.com/kvnxiao/agent-gh#comments-configuration) as its
-   `run_as_bot` rules, so checkpoint comments show your bot as their author while issue, PR, and
-   Project changes stay with your login.
+   `run_as_bot` rules, so issue comments that record paused work, delivery, or approved design
+   decisions show your bot as their author while issue, PR, and Project changes stay with your
+   login.
 3. Run `agent-gh self setup <profile>` in your clone to select the profile.
 4. Run `agent-gh self status` and confirm that it prints the profile and its `run_as_bot` rules.
 5. Trust the repository in Codex so it loads the project configuration. Configuration changes apply
@@ -299,7 +303,7 @@ satisfies the same 24-hour age policy as other non-exempt dependencies. Until a 
 eligible, it selects the highest eligible numeric `4.0.0-rc.N` release. Other major versions and
 preview tracks are excluded. Migration from an RC to stable v4 is authorized, subject to
 compatibility checks. Review the selected release's notes and installed guidance, then verify the
-memory package's lifecycle and storage checks.
+tiered-memory package's lifecycle and storage checks.
 
 ## References
 

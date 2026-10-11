@@ -137,8 +137,8 @@ Make the selected edits in one change set:
   values, `.node-version`, `packageManager`, and affected manifests, including package runtime
   requirements. The implementer activates the selected development Node.js and pnpm, then runs
   `just install` to regenerate the lockfile.
-- For a non-trivial update, split the fixes into bounded implementer assignments, and assign
-  `orbis-reviewer` a focused review of each risky migration under
+- For a non-trivial update, split the fixes into bounded implementer assignments, and assign the
+  global review profile a focused review of each risky migration under
   [review.md](../../shared/review.md) as it lands.
 - The orchestrator updates the `CONTRIBUTING.md` version table, affected compatibility
   documentation, and the SPEC edits from step 4. It keeps development tool versions, such as the
