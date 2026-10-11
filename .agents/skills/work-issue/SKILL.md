@@ -12,6 +12,16 @@ Coordinate GitHub tracking, authorization, and delivery. The global `write-spec`
 and `implement-spec-plan` skills own specification, planning, and plan execution. Resolve their
 installed paths through the host's skill catalog; do not copy their procedures into this repository.
 
+## Work paths and handoffs
+
+- Work follows one of two **work paths**. The **issue-backed path** uses a GitHub issue to track a
+  change that introduces, improves, or changes package behavior. The **PR-only path** delivers a
+  direct request through a PR alone: a change within a package's approved contract, a documentation
+  change, or a workspace tooling change.
+- The **Current handoff** table at the top of an issue body records its authorization, work,
+  blocker, and next action. A **checkpoint** is an issue comment that records paused work, a
+  delivery, or an approved brainstorm's decisions.
+
 ## 1. Find the target
 
 - Resolve an unqualified issue or PR number against `kvnxiao/orbis`, and honor an explicit

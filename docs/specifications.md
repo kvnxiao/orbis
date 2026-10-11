@@ -51,9 +51,9 @@ interaction section, and preserve links when requirements move. Describe initial
 actions, successful results, interruption, and recovery. Use diagrams where the global format calls
 for them. Do not impose one layout or keymap across packages.
 
-For grouped values or configurable display variants, describe the facets first and put concrete
-symbols, colors, labels, and other UI values in a table. Use a row per facet or scenario and a
-column per mode or configuration.
+For grouped values or configurable display variants, introduce the displayed properties or
+categories, then put their symbols, colors, labels, and other UI values in a table. Use a row per
+property, category, or scenario and a column per mode or configuration.
 
 ## Validation and delivery
 
@@ -65,8 +65,9 @@ reading order, and whether scenarios distinguish correct results from plausible 
 GitHub issues record scope, authorization, dependencies, and handoffs, and link the relevant plan
 files. Plan files define executable tasks; their state files record execution progress. Convert a
 contract or reconcile an issue-body plan before work that depends on the installed global format.
-Preserve valid completed work and its evidence during reconciliation. Do not rewrite unrelated
-specifications as part of another package's change.
+Preserve valid completed work and its evidence during reconciliation. When converting a package to
+use `specs/`, include that directory in its manifest's published files and verify the packed
+contract. Do not rewrite unrelated specifications as part of another package's change.
 
 Keep global skills installed in the host environment. Resolve them by name through the host's skill
 catalog; the repository does not vendor their contents or provide a competing format.

@@ -10,18 +10,18 @@ orchestrator.
   for affected READMEs.
 - Use the global review skill's selected profiles and assessment contracts for its ordinary review.
   Supply applicable Orbis domain rules without replacing its review procedure.
-- Assign the `verify-conformance` check to `orbis-conformance-reviewer`.
+- Run the `verify-conformance` check on every host. Use `orbis-conformance-reviewer` when supported;
+  otherwise follow the global skill's reviewer fallback with the same conformance procedure. When
+  delegation is unavailable, run it in-session and report the lack of independent review.
+- Give conformance reviewers resolved paths for `verify-conformance`, the global specification
+  format, applicable domain rules, and matching references. They read these files directly without
+  relying on a skill catalogue or invocation tool.
 - Assign a README check to the global `reviewer` with the `write-readme` `SKILL.md`.
 - Follow the active skill's editing boundary for documentation and prose delegates.
 
-## Write reviewer prompts
+## Reviewer independence
 
-Give an independent reviewer only what it needs to judge the work without bias:
-
-- The scope: the repository, branch, base, and how to read the diff.
-- The contract to judge against: the SPEC, the issue, and approved decisions as constraints.
-- The applicable rules files.
-- The required output format.
+Follow the global skill's assignment procedure.
 
 Omit the implementer's self-assessment, the review history, expected verdicts, and lists of known
 limits, unless they are constraints the reviewer must not reopen.
@@ -29,12 +29,8 @@ limits, unless they are constraints the reviewer must not reopen.
 ## Repository integration
 
 - Run `agent-gh` wherever a global skill names `gh`.
-- During `review-changes mode=apply`, the coordinator applies repairs, including implementation
-  repairs. Review delegates return findings or proposed corrections without editing.
 - Reuse completed review coverage for unchanged inputs. A global skill's required review satisfies
   the corresponding delivery check; new changes or findings need their affected checks.
-- Follow the global skill's fallback when a profile or delegation is unavailable, and report the
-  actual review coverage and limitations.
 
 ## Judge the work
 
@@ -60,10 +56,5 @@ limits, unless they are constraints the reviewer must not reopen.
   Report contract inconsistencies separately from runtime verification gaps. Passing repository
   checks do not establish agreement with the approved design.
 
-## Resolve findings
-
-1. Resolve findings within the authorized scope and apply confirmed repairs in the coordinator.
-2. Recheck the affected behavior after repairs, and rerun the affected checks.
-
-If `review-changes`, `update-docs`, or `audit-prose` is required but unavailable, review the diff,
-update affected documentation, audit prose, run repository checks, and report what was skipped.
+If a required review skill is unavailable, report the missing skill and stop dependent review and
+delivery work. An unavailable reviewer profile or delegation follows the global skill's fallback.

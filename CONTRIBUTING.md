@@ -21,6 +21,9 @@ contributor follows; this guide covers the workspace, the package lifecycle, and
 | Effect                    | `4.0.0-rc.118`, approved v4 track    |
 | Extension runtime minimum | Node.js `22.19.0`                    |
 
+On Windows, install the pinned pnpm version as `pnpm.exe` and make it available on `PATH`.
+Repository scripts invoke `pnpm` directly.
+
 `pnpm-workspace.yaml` pins dependency versions in a shared catalog.
 
 ## Repository layout
@@ -137,9 +140,9 @@ and
 2. When implementation starts, run `just new <name>` and then `just install`. The recipe adds the
    runtime files to `packages/<name>` with npm name `@orbis/<name>` and registers an example
    `/orbis-<name>` command. It requires an existing real directory containing `SPEC.md`, with
-   optional `docs/research/`, `docs/tui-interactions.md`, and `implementation/`; it preserves those
-   artifacts and rejects a missing SPEC, other existing contents, and linked directories without
-   creating anything. The scaffold copies the repository license.
+   optional `specs/`, `docs/research/`, `docs/tui-interactions.md`, and `implementation/`; it
+   preserves those artifacts and rejects a missing SPEC, other existing contents, and linked
+   directories without creating anything. The scaffold copies the repository license.
 3. Implement `packages/<name>/src/index.ts` as a default factory that receives `ExtensionAPI` and
    registers commands, tools, and handlers. Keep runtime imports resolvable from the published
    package under the import rules in the
@@ -254,7 +257,7 @@ emit files for publication.
 ## Publication
 
 Before publishing, pack the package and inspect the tarball for `src/index.ts`, every imported
-source file, `SPEC.md`, the package README, and `LICENSE`:
+source file, `SPEC.md`, its declared area files under `specs/`, the package README, and `LICENSE`:
 
 ```sh
 pnpm --filter @orbis/review pack --pack-destination .artifacts

@@ -23,7 +23,7 @@ function reject(message: string): never {
 const root = resolve(import.meta.dirname, "..");
 const destination = join(root, "packages", name);
 const missingSpecification = `Missing packages/${name}/SPEC.md: write the package specification before scaffolding.`;
-const invalidLayout = `packages/${name} must be a directory, not a link, and may contain only SPEC.md, docs/research/, docs/tui-interactions.md, and implementation/.`;
+const invalidLayout = `packages/${name} must be a directory, not a link, and may contain only SPEC.md, specs/, docs/research/, docs/tui-interactions.md, and implementation/.`;
 
 let existing;
 try {
@@ -60,7 +60,8 @@ if (
   !entries.every(
     (entry) =>
       entry.name === "SPEC.md" ||
-      ((entry.name === "docs" || entry.name === "implementation") && entry.isDirectory()),
+      ((entry.name === "specs" || entry.name === "docs" || entry.name === "implementation") &&
+        entry.isDirectory()),
   )
 ) {
   reject(invalidLayout);

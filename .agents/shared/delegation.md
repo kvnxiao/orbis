@@ -26,9 +26,10 @@ main session and repository-specific roles for other work; it does not override 
   override.
 - Do not rely on a role name in the prompt to select a model, and do not claim that a skill changes
   the active model. Configuration changes apply to new sessions only.
-- For repository-specific work, if the required model or delegation is unavailable, report the
-  limitation and obtain the developer's choice before substituting another model for that role. For
-  global workflows, follow the active skill's fallback.
+- Follow the active global skill's fallback for its workflows and for conformance review. Preserve
+  the conformance procedure across hosts, and report when it runs without an independent delegate.
+  For other repository-specific work, report an unavailable model or delegation and obtain the
+  developer's choice before substituting another model for that role.
 
 ## Assignment contents
 

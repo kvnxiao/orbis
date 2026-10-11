@@ -12,9 +12,8 @@ description:
 This skill assesses whether a package's reference implementation satisfies its behavioral contract
 and whether that contract describes the implementation's public behavior. It is read-only: it
 reports findings without editing source, tests, specifications, or configuration, and it does not
-approve or apply contract amendments, commit, or publish. The result is a report with a requirement
-coverage table and a verdict. The report classifies each discrepancy as an implementation deviation,
-a verification gap, or a contract ambiguity with a proposed amendment.
+approve or apply contract amendments, commit, or publish. Return a requirement coverage table,
+classified discrepancies, and a verdict under steps 7 and 8.
 
 ## Inputs
 
@@ -67,26 +66,18 @@ Apply these evidence rules:
 
 ## 3. Check the contract text
 
-Check the package's requirement identifiers. Every `REQ-<behavior-slug>` cited in the SPEC,
-interaction document, README, and tracked tests must resolve to a requirement the SPEC defines.
-Every defined slug must be unique across the package specification set and have at least one
-conformance scenario, and a cross-package reference must name its package. Report each of these as a
-finding:
+Use the global format and structural checker for requirement identifiers, uniqueness, scenarios, and
+document structure, with the target SPEC and research directory. Return the command and any
+prerequisites to the orchestrator in a read-only review. Report format failures as gaps requiring
+conversion; do not substitute a local format.
 
-- An ordinal identifier.
-- A duplicate slug.
-- A dangling reference left by a retirement or rename.
-- A requirement without a conformance scenario.
+Also check requirement references in the interaction document, README, and tracked tests. Each
+reference must resolve to a defined requirement, and cross-package references must name the package.
 
-Use the global format's structural checker with the target SPEC and research directory. Within a
-read-only review, return the command and any required prerequisites to the orchestrator. Report
-format failures as gaps requiring conversion; do not waive them by applying a local format.
-
-Read the affected contract in order without following forward links, applying the global format's
-reading-order rules. For an unexplained term, approach, state, or interface, report the earliest
-dependent passage and the missing or later introduction. Report a reading-order defect separately
-from an implementation deviation; moving an unchanged requirement does not amend its behavior. Check
-that reordered text preserves IDs, obligations, exceptions, and linked heading anchors.
+Apply the global format's reading-order rules to the affected contract without following forward
+links. Report the earliest passage that depends on an unexplained concept and its missing or later
+introduction, separately from implementation deviations. Reordering must preserve requirement IDs,
+obligations, exceptions, and linked heading anchors; it does not amend behavior.
 
 When requirements conflict or lack an observable acceptance condition, report the ambiguity.
 

@@ -7,6 +7,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  readlink,
   rm,
   symlink,
   writeFile,
@@ -420,4 +421,164 @@ test("refuses to scaffold a package without a specification and leaves the files
   ]);
   assert.deepEqual(await readFile(join(destination, "docs", "research", "pi.md")), synthesis);
   assert.deepEqual(await readdir(packages), ["research-only"]);
+});
+
+test("preserves split specification bytes and nested area files when scaffolding", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-split-spec-scaffold-"));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+
+  const destination = join(fixture, "packages", "split-contract");
+  await mkdir(join(destination, "specs", "terminal"), { recursive: true });
+  const specification = Buffer.from(
+    "# Split specification\r\n\r\nAreas: [Core](specs/core.md), [Terminal](specs/terminal/input.md).\r\nPreserve @orbis/example.\r\n",
+  );
+  const core = Buffer.from("# Core area\r\nPreserve orbis-example and é.\r\n");
+  const terminal = Buffer.from("# Terminal area\r\nPreserve packages/example.\r\n");
+  await writeFile(join(destination, "SPEC.md"), specification);
+  await writeFile(join(destination, "specs", "core.md"), core);
+  await writeFile(join(destination, "specs", "terminal", "input.md"), terminal);
+
+  const result = spawnSync(
+    process.execPath,
+    [join(fixture, "scripts", "new-extension.mts"), "split-contract"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(await readFile(join(destination, "SPEC.md")), specification);
+  assert.deepEqual(await readFile(join(destination, "specs", "core.md")), core);
+  assert.deepEqual(await readFile(join(destination, "specs", "terminal", "input.md")), terminal);
+  assert.deepEqual((await readdir(join(destination, "specs"), { recursive: true })).toSorted(), [
+    "core.md",
+    "terminal",
+    join("terminal", "input.md"),
+  ]);
+  assert.match(
+    await readFile(join(destination, "src", "index.ts"), "utf8"),
+    /@orbis\/split-contract/,
+  );
+});
+
+test("rejects files and links named specs before changing package contents", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-invalid-split-spec-scaffold-"));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+
+  const specification = Buffer.from("# Specification\r\nPreserve @orbis/example.\r\n");
+  const area = Buffer.from("# Area\r\nPreserve packages/example.\r\n");
+  const target = join(fixture, "linked-areas");
+  await mkdir(target);
+  await writeFile(join(target, "core.md"), area);
+
+  await Promise.all(
+    ["specs-file", "linked-specs", "dangling-specs", "split-with-runtime"].map(async (name) => {
+      const destination = join(fixture, "packages", name);
+      await mkdir(destination, { recursive: true });
+      await writeFile(join(destination, "SPEC.md"), specification);
+      const specs = join(destination, "specs");
+      const linkTarget = name === "linked-specs" ? target : join(fixture, "absent");
+      if (name === "specs-file") {
+        await writeFile(specs, area);
+      } else if (name === "split-with-runtime") {
+        await mkdir(specs);
+        await writeFile(join(specs, "core.md"), area);
+        await mkdir(join(destination, "src"));
+        await writeFile(join(destination, "src", "index.ts"), "existing runtime\n");
+      } else {
+        await symlink(linkTarget, specs, "junction");
+      }
+      const before = (await readdir(destination, { recursive: true })).toSorted();
+      const result = spawnSync(
+        process.execPath,
+        [join(fixture, "scripts", "new-extension.mts"), name],
+        { encoding: "utf8" },
+      );
+      assert.equal(result.status, 1, name);
+      assert.match(result.stderr, invalidLayout);
+      assert.equal(result.stdout, "");
+      assert.deepEqual((await readdir(destination, { recursive: true })).toSorted(), before);
+      assert.deepEqual(await readFile(join(destination, "SPEC.md")), specification);
+      if (name === "specs-file") {
+        assert.deepEqual(await readFile(specs), area);
+      } else if (name === "split-with-runtime") {
+        assert.deepEqual(await readFile(join(specs, "core.md")), area);
+        assert.equal(
+          await readFile(join(destination, "src", "index.ts"), "utf8"),
+          "existing runtime\n",
+        );
+      } else {
+        assert.equal((await lstat(specs)).isSymbolicLink(), true);
+        assert.equal(await readlink(specs), linkTarget);
+      }
+    }),
+  );
+  assert.deepEqual(await readdir(target), ["core.md"]);
+  assert.deepEqual(await readFile(join(target, "core.md")), area);
+});
+
+test("packs the root specification and every declared nested area file", async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "orbis-packed-split-spec-"));
+  t.onTestFinished(async () => {
+    await rm(fixture, { recursive: true, force: true });
+  });
+  await cp(join(root, "scripts"), join(fixture, "scripts"), { recursive: true });
+  await cp(join(root, "templates"), join(fixture, "templates"), { recursive: true });
+  await cp(join(root, "LICENSE"), join(fixture, "LICENSE"));
+  await cp(join(root, "package.json"), join(fixture, "package.json"));
+  await cp(join(root, "pnpm-workspace.yaml"), join(fixture, "pnpm-workspace.yaml"));
+
+  const destination = join(fixture, "packages", "packed-contract");
+  await mkdir(join(destination, "specs", "terminal"), { recursive: true });
+  const documents = [
+    [
+      "SPEC.md",
+      Buffer.from(
+        "# Specification\r\n\r\nAreas: [Core](specs/core.md), [Terminal](specs/terminal/input.md).\r\n",
+      ),
+    ],
+    ["specs/core.md", Buffer.from("# Core area\r\nPreserve @orbis/example and é.\r\n")],
+    ["specs/terminal/input.md", Buffer.from("# Terminal area\r\nPreserve packages/example.\r\n")],
+  ] as const;
+  await Promise.all(
+    documents.map(async ([path, content]) => {
+      await writeFile(join(destination, path), content);
+    }),
+  );
+  const scaffolded = spawnSync(
+    process.execPath,
+    [join(fixture, "scripts", "new-extension.mts"), "packed-contract"],
+    { encoding: "utf8" },
+  );
+  assert.equal(scaffolded.status, 0, scaffolded.stderr);
+
+  const packed = join(fixture, "packed");
+  await mkdir(packed);
+  const result = spawnSync("pnpm", ["pack", "--pack-destination", packed], {
+    cwd: destination,
+    encoding: "utf8",
+    env: { ...process.env, npm_config_offline: "true" },
+  });
+  assert.equal(result.status, 0, `${result.stderr}${result.stdout}`);
+  const tarballs = (await readdir(packed)).filter((path) => path.endsWith(".tgz"));
+  assert.equal(tarballs.length, 1);
+  const tarball = tarballs[0];
+  assert.ok(tarball !== undefined);
+  const archive = join(packed, tarball);
+  const listing = spawnSync("tar", ["-tzf", archive], { encoding: "utf8" });
+  assert.equal(listing.status, 0, listing.stderr);
+  const paths = listing.stdout.trim().split("\n");
+  for (const [path, content] of documents) {
+    assert.ok(paths.includes(`package/${path}`), `Missing packed contract: ${path}`);
+    const document = spawnSync("tar", ["-xOzf", archive, `package/${path}`]);
+    assert.equal(document.status, 0, document.stderr.toString());
+    assert.deepEqual(document.stdout, content);
+  }
 });

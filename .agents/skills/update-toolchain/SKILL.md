@@ -43,30 +43,24 @@ review. Read:
 
 ## 2. Review the release candidates
 
-`pnpm-workspace.yaml` sets `minimumReleaseAge: 1440` and lists release-age exclusions under
-`minimumReleaseAgeExclude`. Release discovery queries the configured npm registries through pnpm and
-the [official Node.js release index](https://nodejs.org/dist/index.json), then:
+Use the script's candidates from the configured npm registries and
+[official Node.js release index](https://nodejs.org/dist/index.json). It includes unused catalogs,
+selects stable versions numerically, and restricts `@types/node` to the declared runtime generation.
+`pnpm-workspace.yaml` sets `minimumReleaseAge: 1440`; an exact package-name exclusion permits an
+immediate stable release. Other npm candidates must meet that age at the report's `asOf` time.
 
-- Sorts stable versions numerically and restricts `@types/node` to the declared runtime generation.
-- Excludes npm releases younger than 1440 minutes at the report's `asOf` time. For a package whose
-  name exactly matches a release-age exclusion, it can select the newest stable release immediately.
-- Considers versions still listed in registry metadata and includes unused catalog entries.
-- Reports exact-version exclusions eligible for removal. Other exclusions require review.
-- Lists local references in `localDependencies`. It lists aliases, Git sources, and URLs in
-  `manualDependencies`, which require source-specific review.
+Effect follows the same age policy: prefer eligible stable `4.x`, then the highest eligible numeric
+`4.0.0-rc.N`. If neither is eligible, report no candidate. Other majors, betas, snapshots, and
+preview tracks are excluded; other dependencies remain stable-only.
 
-Effect follows the approved v4 policy under the same release-age rule:
+Review the candidate's dist-tags, engines, peers, dependencies, repository, and tarball metadata for
+compatibility before changing pins or installing upgrades. Review these cases separately:
 
-- Prefer the newest eligible stable `4.x` release, including migration from an RC.
-- Until a stable v4 release is eligible, select the highest eligible numeric `4.0.0-rc.N` release.
-- Report no candidate when neither is eligible. Exclude other major versions, betas, snapshots, and
-  other preview tracks.
+- Exact-version exclusions marked for removal; assess other exclusions manually.
+- Aliases, Git sources, or URLs in `manualDependencies`; `localDependencies` lists local references.
+- Renamed packages or runtime ranges the script cannot interpret; inspect their sources.
 
-Other dependencies remain stable-only. The report includes dist-tags, engines, peers, dependencies,
-repository metadata, and tarball metadata for candidate review. It does not edit pins or install
-upgrades, and an eligible candidate still requires a compatibility review. For non-registry
-dependencies, renamed packages, or runtime ranges the script cannot interpret, inspect the source
-and resolve the unsupported case explicitly. Do not substitute guessed versions for failed queries.
+Do not substitute guessed versions for failed queries.
 
 ## 3. Decide compatibility and checks
 
@@ -160,17 +154,15 @@ just fix
 node scripts/update-toolchain.mts verify /absolute/path/to/minimum-node > .artifacts/toolchain-after.json
 ```
 
-`verify` requires the pinned development pnpm and both supported runtimes. It checks:
+`verify` requires the pinned development pnpm and both supported runtimes. It checks publication
+contracts, frozen installation, the catalog's TypeBox alignment with Pi, workspace checks, and
+effective compiler and type-aware lint settings. It also verifies:
 
-- Package publication contracts and frozen installation.
-- The catalog `typebox` pin against the installed Pi release's `typebox` dependency.
-- `pnpm check`, effective compiler settings, and Oxlint type-aware configuration.
-- An isolated workspace without a lockfile or shared `node_modules`, in which it scaffolds an
-  extension, resolves fresh dependencies, and runs workspace and package checks.
-- The packed generated extension. It installs the tarball with production dependencies and Pi
-  outside the workspace, checks published files and resolved manifest references, and loads the
-  extension through Pi on both supported runtimes. It also runs `pi install .` with temporary Pi
-  settings and checks registration.
+- Fresh dependency resolution and scaffold checks in an isolated workspace without a lockfile or
+  shared `node_modules`.
+- Published files and resolved manifest references in the packed extension, installed outside the
+  workspace with production dependencies and Pi.
+- Pi loading on both runtimes and `pi install .` registration with temporary settings.
 
 Temporary workspaces remain at the printed path for failure inspection. Each subprocess has a
 120-second timeout. `ORBIS_PNPM` can select a pnpm executable.

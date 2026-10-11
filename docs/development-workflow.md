@@ -22,7 +22,8 @@ direct work.
 
 ## Ask for work
 
-In a Codex or Claude Code session in the trusted repository, send a request such as:
+Start a Codex, Claude Code, or Pi session in this repository with its repository instructions
+loaded. Then send a request such as:
 
 ```text
 Resume #<number>
@@ -86,8 +87,9 @@ Global `review-changes`, `update-docs`, and `audit-prose` provide delivery check
 `pi-coding-agent-rules` skill and its matching Claude rules file supply domain constraints;
 `ruleskill` generates these files, so agents do not edit them.
 
-Host configuration sets model defaults and routes GitHub CLI commands through `agent-gh`. Checkpoint
-authors identify the model from current runtime metadata, because defaults do not establish which
+Host configuration sets model defaults and routes GitHub CLI commands through `agent-gh`. A
+checkpoint is an issue comment that records a pause, delivery, or approved design decisions. Its
+author identifies the model from current runtime metadata, because defaults do not establish which
 model ran a session. If that metadata is unavailable, the record states that limitation and work
 continues without a confirmation request.
 
@@ -96,3 +98,9 @@ discover a symlinked definition but refuses it when spawning. Keep their source 
 process in the host configuration. Repository agent definitions are regular files under
 `.codex/agents/`. Global profiles cover research, plan implementation, and ordinary review. Orbis
 defines only direct implementation without a spec-derived plan and full package-conformance review.
+
+Conformance review uses the same procedure on every host. Assignments supply explicit skill and
+rules paths. Codex omits this reviewer's skill catalogue; Claude Code disables its `Skill` tool, so
+the reviewer reads the supplied files directly. Both retain repository instructions. On Pi and other
+hosts without delegates, the orchestrator performs the same check in-session and reports that it
+lacks independent review. The main session keeps skill discovery available.

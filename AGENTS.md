@@ -20,13 +20,6 @@ this repository loads this file, including delegates.
   confirms it as final and ready for work. To **authorize** work, the developer permits its
   implementation or execution to begin. Approval does not authorize execution, and a SPEC or SPEC
   amendment can be approved before any implementation plan exists.
-- Work follows one of two **work paths**. The **issue-backed path** uses a GitHub issue to track a
-  change that introduces, improves, or changes package behavior. The **PR-only path** delivers a
-  direct request through a PR alone: a change within a package's approved contract, a documentation
-  change, or a workspace tooling change.
-- The **Current handoff** table at the top of an issue body records its authorization, work,
-  blocker, and next action. A **checkpoint** is an issue comment that records paused work, a
-  delivery, or an approved brainstorm's decisions.
 - A **specialist skill** owns one kind of work and returns an outcome to the orchestrator. Global
   skills own specification, planning, and plan execution; repository skills supply Orbis
   integration.
@@ -73,7 +66,9 @@ unavailable, report the missing capability and stop dependent work; do not silen
 ## Who edits each file
 
 Assign one editor to each file and preserve concurrent work. Follow
-[delegation.md](.agents/shared/delegation.md) when starting a delegate.
+[delegation.md](.agents/shared/delegation.md) when starting a delegate. Keep repository profiles
+only for direct implementation and package conformance; supply repository rules in global
+assignments.
 
 - For work governed by a global skill, use that skill's research and implementation profiles,
   ownership rules, and permission for the orchestrator to work without a delegate. Supply the
@@ -96,13 +91,6 @@ Keep executable plans in `.plans/<spec-slug>/`; issues link to them and record s
 Before migrating or writing a package contract, read [specifications.md](docs/specifications.md) for
 repository locations and Pi interaction conventions. Do not copy global formats or maintain local
 alternatives.
-
-## Agent definitions
-
-Use installed global profiles for specification research, plan implementation, and ordinary review.
-Keep repository definitions only for distinct contracts: `orbis-implementer` handles direct work
-without a spec-derived plan, and `orbis-conformance-reviewer` checks complete package conformance.
-Supply repository rules in assignments rather than copying global profiles.
 
 ## Rules skills
 
