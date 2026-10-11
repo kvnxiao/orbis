@@ -1,11 +1,11 @@
 ---
 name: work-issue
-description:
+description: >-
   Start, resume, or continue an Orbis issue, a PR, or a direct request, including plain requests
   such as "Resume #12", "Resume PR #34", or "continue this ticket", and requests that name a
-  specialist skill. Resolve and classify the target, route it to a specialist skill or delegate,
-  and deliver through review and a PR. Excludes status-only questions, read-only reviews, and
-  general questions.
+  specialist skill. Resolve and classify the target, route it to a specialist skill or delegate, and
+  deliver through review and a PR. Excludes status-only questions, read-only reviews, and general
+  questions.
 ---
 
 # Work on an Orbis issue, PR, or request
