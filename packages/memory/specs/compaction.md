@@ -5,109 +5,159 @@ depends-on: [session-state.md, recall.md]
 
 # Compaction
 
-This area defines how memory supplies a custom checkpoint in place of Pi's native summary while preserving Pi's cut. It assumes the shared contract, session-state rules, and recall access policy. The procedure runs during compaction, before Pi generates a native summary, for automatic, manual, SDK, and extension calls that reach the before-compaction hook.
+This area defines custom checkpoint preparation before Pi generates a native summary, and cumulative file information for later requests. It assumes the root contract, session-state rules, and recall access policy.
 
 ## Checkpoint preparation
 
+### REQ-checkpoint-eligibility — Checkpoint eligibility
+
+A custom checkpoint is eligible only when its lineage, state basis, source coverage, presentation, and capacity are valid for the current compaction attempt. Recheck those conditions before returning it.
+
+**Intent:** Return a complete checkpoint for Pi's prepared cut rather than a partial account of available memory.
+
+Eligibility requires all of the following:
+
+- Records and dependencies belong to the selected lineage. Freshness compares lineage, source versions, and state basis, not elapsed time.
+- Processing accounts for effective portions of `messagesToSummarize` and `turnPrefixMessages`, the applicable `previousSummary`, and edits or omissions to earlier covered sources. Accepted reduced tool-result processing counts as reduced coverage. Checkpoint-only catch-up counts only for that checkpoint. Derived baselines do not invent original-source coverage. Scheduled, partial, or failed work does not count.
+- Checkpoint state satisfies the before-cut rule and supplies the required split-turn content.
+- Presentation includes every applicable item, obligations verbatim, and protected strings in their corresponding items.
+- The complete rendering fits its documented budget, including file information and format text within estimated available request capacity. Unknown or inadequately bounded capacity prevents eligibility.
+
+Structural inclusion is checkable; semantic completeness and justified retirement remain separate quality questions.
+
+**Scenarios:**
+
+- Leave one prepared portion unprocessed. **Expected:** The candidate stays ineligible until valid catch-up accounts for it.
+- Change selected lineage after preparing a candidate. **Expected:** The final check rejects stale state.
+- Supply valid coverage but omit required split-turn progress. **Expected:** Coverage alone does not establish eligibility.
+- Prepare a checkpoint that exceeds available capacity after file and format text. **Expected:** It cannot be returned as eligible.
+
+### REQ-checkpoint-presentation — Checkpoint presentation
+
+Render a fitting eligible checkpoint without a presentation model call when instructions are empty. Otherwise, condensation and instructed presentation share at most one bounded model call per compaction attempt, separate from observer catch-up. That call receives the checkpoint state, Pi's prepared inputs, instructions, and final capacity target together, subject to snapshot-capacity retry suppression.
+
+**Intent:** Apply presentation instructions and capacity limits without changing accepted memory or losing required items.
+
+Condensation shortens maintained context; instructions can reorder, group, shorten maintained items, and add emphasis. Neither function removes applicable items or changes obligation text. Code renders obligations verbatim, turn-linked context, and file information. Output has machine-checkable correspondence to snapshot items; its internal schema remains an implementation choice.
+
+When output omits an item or drops a protected string from shortened text, code restores that item's checkpoint-state text and reports the repair. State unapplied instruction parts in the checkpoint and report them to the user. Presentation does not change accepted state or initiate archive search.
+
+**Failure behavior:** If obligations alone cannot fit, decline before presentation inference. If output is unusable or its repaired rendering exceeds capacity, decline without another presentation call. Record repaired overflow for retry suppression.
+
+**Scenarios:**
+
+- Supply a fitting checkpoint and empty instructions. **Expected:** Direct rendering makes zero presentation calls.
+- Ask to emphasize a decision and remove an obligation. **Expected:** One call applies permitted emphasis; the obligation stays verbatim and the unapplied removal is stated and reported.
+- Omit an item or its protected string from output. **Expected:** Code restores that item's original checkpoint-state text and reports the repair.
+- Return a presentation whose repair overflows. **Expected:** Decline without another condensation or presentation call.
+- Supply obligations that alone exceed capacity. **Expected:** Decline without presentation inference.
+
 ### REQ-unified-compaction — Unified compaction
 
-For every compaction attempt, the package preserves Pi's automatic settings and prepared `firstKeptEntryId`. Let Pi execute its incoming `willRetry` decision, which determines whether Pi retries the interrupted acting turn after overflow compaction. Package failure must not cancel compaction to force fallback, since cancellation can suppress that retry. Through `session_before_compact`, use the same bounded preparation pipeline for automatic, manual, SDK, and extension calls that reach the hook.
+Automatic, manual, SDK, and extension compactions that reach `session_before_compact` use the same bounded preparation path. Preserve Pi's automatic settings, prepared `firstKeptEntryId`, and incoming `willRetry` decision.
 
-**Intent:** Use prepared memory when it is eligible and preserve the host fallback and retry behavior otherwise.
+**Intent:** Use eligible prepared memory while preserving Pi's fallback and retry behavior.
 
-A candidate is **eligible** only when all these conditions hold:
+Prepare compatible checkpoint state and missing semantic content through bounded same-observer catch-up, determine final capacity, then apply the presentation requirement. Return one complete eligible custom checkpoint. Otherwise **decline** by returning no custom result, permitting whole-checkpoint native fallback while the host attempt remains active. Never append a native summary of the same evidence to a custom checkpoint.
 
-- Its accepted records and dependencies are valid for the selected lineage. Freshness compares lineage, source versions, and state basis, not elapsed time.
-- Processing accounts for all effective text portions in `messagesToSummarize` and `turnPrefixMessages`, plus the applicable `previousSummary`. It also accounts for every context edit, including an omission, to an earlier source that the checkpoint state covers. Accepted processing counts, including tool results reduced under the documented rule; checkpoint-only catch-up counts for that checkpoint. An accepted derived baseline can account for earlier history without inventing original-source coverage. Scheduled, partial, or failed processing does not count.
-- Its source horizon and state basis satisfy the snapshot's before-cut rule. Later completion or cancellation in retained history has not been applied early.
-- Presentation includes every applicable checkpoint-state item and the split-turn context, renders obligations verbatim, and keeps every protected string in its item's text. Structural inclusion is checkable; semantic completeness and justified retirement are separate quality questions.
-- The complete rendered checkpoint fits its documented budget, accounting for deterministic file information and surrounding format text within the model request's available capacity.
+Catch-up and presentation share one foreground deadline, including waiting, inference, validation, and rechecking. Use the resolved observer policy with explicit routing, credential resolution, and cancellation. Missing helper credentials do not invalidate an already eligible direct rendering. Native summarization has separate host controls.
 
-Prepare the candidate in this order:
+**Failure behavior:** Package failure does not cancel compaction to force fallback; cancellation can suppress the host's overflow retry. A helper timeout permits decline while the host attempt remains active. Host cancellation ends the attempt. Throwing is not a general fallback mechanism. Report package fallback reasons separately from the eventual host outcome.
 
-1. Where coverage is missing or the source horizon does not match the cut, perform bounded same-observer catch-up.
-2. Determine the final presentation capacity, including deterministic file information and surrounding format text. If obligations alone cannot fit, decline. When direct rendering fits and the instruction string is empty, render without a presentation model call.
-3. Otherwise, make one bounded structured presentation call using the checkpoint state, Pi's prepared inputs, the instructions, and the final capacity target together. Instructions can reorder, group, and shorten maintained items, and the framing note can add emphasis. They cannot remove applicable items or change obligation text. State unapplied instruction parts in the framing note and report them to the user.
-4. Validate and render the output, restoring omitted items and protected strings under the snapshot rule. If the repaired result cannot fit, decline without a further presentation call, including when instructions caused the expansion.
-
-Instructed presentation and condensation do not change accepted state or initiate archive search.
-
-Recheck eligibility before returning one complete custom checkpoint for Pi to store in place of a native summary. If it remains ineligible, **decline** by returning no custom compaction result, permitting whole-checkpoint native fallback while the host attempt remains active. Never append a native summary of the same evidence to a custom checkpoint. Report fallback reasons separately from the eventual host outcome.
-
-Catch-up, condensation, and instructed presentation share one foreground deadline, including waiting, inference, validation, and rechecking. Use the resolved observer model policy with explicit routing, credential resolution, and cancellation handling. Native summarization has separate host controls. Missing helper credentials need not invalidate an already eligible candidate. A helper timeout can permit decline; host cancellation ends the attempt. Throwing is not a general fallback mechanism.
-
-Single checkpoint ownership is an operating assumption. Later handlers can replace a candidate. `turn_end` and `agent_before_settle` handlers can return compaction drafts that Pi stores directly, bypassing the usual compaction hooks. The success event finds the first matching summary text across all stored branches, so identical text can identify an older checkpoint. Check selected stored identity and ownership rather than relying on that match or Pi's `fromHook` flag, which marks extension-produced checkpoints. Treat other writers' checkpoints as derived evidence. Handle failure reporting without a preceding before-hook.
-
-**Note:** This diagram illustrates the preparation decision. Host cancellation ends the attempt at any stage; the shared deadline also includes waiting, validation, and rechecking.
+**Note:** This diagram illustrates the preparation path. Host cancellation ends it at any stage.
 
 ```mermaid
 flowchart TD
-    P["Pi prepares the cut and compaction inputs"] --> C["Prepare checkpoint state and catch up within limits"]
-    C -->|"Cannot prepare"| F["Decline: return no custom result"]
+    P["Pi prepares cut and source inputs"] --> C["Prepare compatible checkpoint state within shared deadline"]
+    C -->|"Cannot prepare"| F["Decline custom result"]
     C --> B["Determine final presentation capacity"]
     B --> O{"Obligations alone fit?"}
     O -->|No| F
     O -->|Yes| D{"Direct rendering fits and instructions are empty?"}
-    D -->|"Yes: zero presentation calls"| R["Render the final checkpoint"]
-    D -->|No| M["One structured presentation call with instructions and final capacity"]
-    M -->|"Failure or unusable output"| F
-    M --> V["Validate output; restore omitted items and protected strings"]
-    V --> E{"Repaired rendering fits?"}
-    E -->|No| F
-    E -->|Yes| R
-    R --> Q{"Candidate still eligible?"}
+    D -->|Yes| R["Render with zero presentation calls"]
+    D -->|No| S{"Presentation retry permitted?"}
+    S -->|No| F
+    S -->|Yes| M["One call with instructions and capacity target"]
+    M --> V["Validate and restore required items and strings"]
+    V -->|"Unusable or oversized"| F
+    V --> R
+    R --> Q{"Still eligible?"}
     Q -->|No| F
-    Q -->|Yes| U["Return one complete custom checkpoint"]
-    F --> N["Pi may run native summarization while the host attempt remains active"]
+    Q -->|Yes| U["Return complete custom checkpoint"]
+    F --> N["Pi can summarize natively while its attempt remains active"]
 ```
 
 **Scenarios:**
 
-- Supply a complete eligible checkpoint that fits, empty instructions, and available helper credentials. **Expected:** Return the complete custom checkpoint with zero presentation model calls.
-- Leave one prepared text portion or previous summary unprocessed; exercise both retry values, helper timeout, missing credentials, and host abort. **Expected:** A gap prevents eligibility until catch-up processes it; failed preparation declines without package cancellation; host abort ends the attempt; eligible rendering needs no helper credentials.
-- Omit a covered source that a snapshot item cites, then compact before the next observer job. **Expected:** Catch-up processes the omission before the candidate is eligible, or the attempt falls back; the checkpoint does not present the item without that processing.
-- Use repeated identical summaries, a later replacement handler, a draft returned by `turn_end` or `agent_before_settle`, and failure before hook entry. **Expected:** Ownership follows selected stored state; foreign checkpoints supply only derived evidence; failure reporting does not depend on a matched before-hook.
-- Supply an eligible prepared candidate and a non-empty instruction that requests a presentation change and an obligation's removal. **Expected:** Instructed presentation runs before return; the obligation stays verbatim; the framing note states the unapplied removal and the user receives a report; an unusable candidate triggers reported fallback.
-- Supply instructions that expand a fitting checkpoint, then return an oversized or incomplete structured presentation whose repair overflows. **Expected:** Instructions and the final capacity target reach one presentation call; code restores required items and strings; overflow declines without another presentation or condensation call.
+- Invoke each supported compaction entry path with the same prepared state. **Expected:** Each preserves Pi's cut and uses the same eligibility and preparation rules.
+- Fail catch-up under each incoming retry value. **Expected:** Decline without package cancellation; Pi retains control of its retry decision.
+- Time out a helper while the host signal is active. **Expected:** Decline and distinguish preparation failure from the later host result.
+- Abort the host attempt. **Expected:** Preparation stops and does not claim native fallback succeeded.
+- Supply an eligible direct rendering without helper credentials. **Expected:** The checkpoint can be returned without helper authentication.
+
+### REQ-checkpoint-ownership — Checkpoint ownership
+
+Determine checkpoint identity and ownership from selected stored state. Do not treat a success event's summary-text match or `fromHook` flag, which identifies an extension-produced checkpoint, as proof that the stored checkpoint is this package's candidate. Treat other writers' checkpoints as derived evidence.
+
+**Intent:** Reconstruct the actual checkpoint after competing extension writes or host entry paths.
+
+Single replacement ownership is an operating assumption, not host enforcement. Later handlers can replace a candidate. Handlers at turn end (`turn_end`) or before a run settles (`agent_before_settle`) can return checkpoint objects called boundary drafts. Pi can store them without the usual compaction hooks. Handle failure reporting without a preceding before-hook.
+
+**Scenarios:**
+
+- Store repeated identical summary text across branches. **Expected:** Ownership follows selected stored identity rather than the first text match.
+- Replace a candidate in a later handler or store another extension's boundary draft. **Expected:** Its checkpoint supplies only derived evidence, not invented observer coverage.
+- Receive failure before hook entry. **Expected:** Report the host outcome without requiring a matched preparation attempt.
 
 ## Cumulative file information
 
 ### REQ-file-inventory — File inventory
 
-A file inventory records invocations of Pi's `read`, `write`, and `edit` tools with non-empty string paths. Recognize direct assistant tool calls and calls recorded in tool-result nested-call metadata. An invocation is not proof of a successful filesystem effect; include recognized failed invocations. Exclude arbitrary shell changes and printed call-like text.
+Record Pi `read`, `write`, and `edit` invocations with non-empty string paths, including direct assistant calls and recorded tool-result nested-call metadata. Include recognized failed invocations; an invocation is not proof of a successful filesystem effect. Exclude other tool names, arbitrary shell changes, and printed call-like text.
 
-**Intent:** Preserve available cumulative file activity within request capacity without claiming verified filesystem effects.
+**Intent:** Preserve available cumulative file activity without claiming verified filesystem effects.
 
-Include deterministic cumulative file information in custom checkpoint text. While enabled, add a bounded file-inventory supplement to acting-model requests that use a native checkpoint. Reconcile repeated file blocks and deduplicate paths. A write/edit target does not also appear as read-only. Source inventory remains fixed to the checkpoint cut; later operations remain in recent history.
+Include deterministic cumulative file information in custom checkpoints. Reconcile repeated file blocks and deduplicate paths; write/edit classification takes precedence over read-only classification. The inventory includes only source invocations strictly before the checkpoint cut; later operations remain in recent history. Report unavailable or incomplete source inventory. Semantic snapshot items preserve task-critical paths independently of this supplementary list.
 
-For a native-checkpoint supplement, estimate available capacity in the acting-model request after accounting for all its other content: the existing native checkpoint, system context, tools, retained history and other messages, surrounding format text, and output reserve. Include the complete available inventory when it fits. Otherwise select whole paths within that capacity, prioritizing write/edit targets before read-only paths and using lexical order within each group. Visit paths in that order, include each whole path that fits the remaining capacity, and skip a non-fitting path while continuing through the rest. A read-only path may fit even when a longer write/edit path was omitted. Never truncate a path. When source inventory is incomplete or selection omits paths, reserve space for an explicit incomplete-inventory marker. If capacity cannot be estimated sufficiently, or even that marker cannot fit, omit the supplement and report the reason through status. Report unavailable or incomplete inventory.
+**Scenarios:**
 
-Recompute the fitting subset when capacity changes, including a smaller model or growing retained history. Identical inventory and capacity inputs produce identical output. Capacity-based selection does not admit post-cut operations or remove task-critical paths from the semantic snapshot.
+- Supply direct and recorded nested calls with valid, empty, and non-string paths. **Expected:** Only recognized non-empty string paths enter inventory.
+- Include failed `write`, shell operations, printed call text, and `custom_read`. **Expected:** The failed `write` enters inventory; the others do not.
+- Put a file invocation at `firstKeptEntryId`. **Expected:** It remains in retained history and is excluded from the checkpoint inventory.
+- Read and edit the same path strictly before the cut, then write another path after it. **Expected:** The first appears once as modified; the later path stays outside the checkpoint inventory.
 
-Apply the supplement through public context transformation. It does not change the stored checkpoint, its TUI rendering, or Pi's copying of file-list metadata from earlier checkpoints. Do not mutate undocumented preparation objects.
+### REQ-native-inventory-supplement — Native inventory supplement
 
-**Note:** This diagram illustrates selection for a native-checkpoint supplement. Task-critical paths remain protected in semantic snapshot items independently of this supplementary list.
+While enabled, add a bounded file-inventory supplement to acting requests that use a native checkpoint. Estimate capacity after all other request content: native checkpoint, system context, active tool declarations, retained history and other messages, format text, and output reserve. Include the complete available inventory when it fits.
+
+**Intent:** Restore useful cumulative path information to native-checkpoint requests within a defensible capacity estimate.
+
+A virtual model routes a selection to a concrete model whose limits can differ. Use a documented estimator and conservative bounds for supported request transformations and routing. Prior provider usage, registered tool lists, and a virtual model's advertised window alone are insufficient. When later changes or routed limits cannot be bounded, omit the supplement and report the reason through status. The estimate is not a guarantee of provider acceptance.
+
+When full inventory does not fit, reserve an incomplete-inventory marker, then visit deduplicated write/edit paths lexically followed by read-only paths lexically. Include each whole path that fits; skip a non-fitting path and continue. Never truncate a path. Reserve the marker also when source inventory is incomplete. If even the marker cannot fit, omit the supplement and report why.
+
+Recompute selection when capacity changes. Identical inventory and capacity inputs produce identical output; capacity changes do not admit post-cut operations. Apply through public context transformation without changing stored checkpoint text, TUI rendering, or Pi's file-metadata inheritance. Do not mutate undocumented preparation objects.
+
+**Note:** This diagram illustrates capacity-based selection, not semantic retention of critical paths.
 
 ```mermaid
 flowchart TD
-    I["Recognized file invocations through the checkpoint cut"] --> D["Deduplicate paths; write/edit classification takes precedence"]
-    D --> C["Estimate capacity after the complete native request and output reserve"]
-    C --> K{"Usable capacity known?"}
-    K -->|No| O["Omit supplement and report the reason"]
-    K -->|Yes| F{"Available paths and any required incomplete marker fit?"}
-    F -->|Yes| A["Include all available paths; mark incomplete source inventory"]
-    F -->|No| M{"Incomplete-inventory marker fits?"}
+    I["Deduplicated inventory strictly before checkpoint cut"] --> C["Estimate capacity after complete request and output reserve"]
+    C --> K{"Routing and later changes bounded?"}
+    K -->|No| O["Omit supplement and report reason"]
+    K -->|Yes| F{"All paths and any required marker fit?"}
+    F -->|Yes| A["Include all available paths"]
+    F -->|No| M{"Incomplete marker fits?"}
     M -->|No| O
-    M -->|Yes| S["Reserve marker space; select whole write/edit paths before read-only paths, lexically within each group; skip paths that do not fit"]
-    A --> R["Render within capacity; recompute when capacity changes"]
+    M -->|Yes| S["Reserve marker; visit write/edit then read paths lexically; skip paths that do not fit"]
+    A --> R["Render within estimated capacity"]
     S --> R
 ```
 
 **Scenarios:**
 
-- Alternate custom/native checkpoints and repeat requests with unchanged capacity, with file invocations on both sides of the cut. **Expected:** Available earlier inventory appears once with deterministic output; later invocations remain in recent history; incomplete inventory is reported without claiming stored-metadata repair.
-- Supply direct and recorded nested read/write/edit calls with valid, empty, and non-string paths; include failures, shell operations, printed call-like text, and direct and nested `custom_read` calls with valid paths. **Expected:** Differently named tools remain excluded; only recognized calls with non-empty string paths enter inventory, including failed invocations; inventory does not claim successful effects.
-- Supply a full inventory that fits, then limit capacity with repeated read/write paths, long paths, a smaller model, and growing retained history. **Expected:** Full inventory appears when it fits; partial selection keeps whole paths, deduplicates, prioritizes write/edit targets, sorts lexically within groups, and reserves an incomplete marker. Changed capacity recomputes selection without admitting post-cut activity.
-- Place an oversized write path first lexically, followed by a shorter write path and a shorter read-only path; reserve enough capacity for both shorter paths and the incomplete marker. **Expected:** Skip the oversized path, include both shorter paths in priority order, and mark the inventory incomplete.
-- Keep inventory and retained history unchanged while increasing the existing native checkpoint size. **Expected:** Supplement capacity shrinks with the complete request; selection becomes partial or is omitted with the required report when it cannot fit.
-- Supply incomplete source inventory, an unknown usable capacity, and capacity too small for the incomplete marker. **Expected:** Incomplete output is marked when it fits; otherwise the supplement is omitted with a status reason. Capacity accounting includes the existing native checkpoint and every other request component, including system context, tools, messages, surrounding format text, and output reserve.
+- Alternate custom and native checkpoints with unchanged request capacity. **Expected:** Available earlier inventory appears once with deterministic output; stored native metadata remains unchanged.
+- Put an oversized write path before shorter write and read paths that fit with the marker. **Expected:** Skip the long path, include fitting paths in priority order, and mark incompleteness.
+- Increase the native checkpoint size or retained history, or switch to a smaller known model. **Expected:** Recompute a smaller subset without admitting post-cut paths.
+- Leave routing unresolved or permit an unbounded later request mutation. **Expected:** Omit the supplement and report unknown capacity, rather than relying on previous usage.
+- Supply incomplete source inventory when the marker cannot fit. **Expected:** Omit the supplement and report the capacity limit.

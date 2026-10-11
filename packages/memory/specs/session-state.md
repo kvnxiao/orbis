@@ -4,141 +4,245 @@ spec: ../SPEC.md
 
 # Session state
 
-This area defines the memory state reconstructed from the selected lineage, the user's activation controls, and accepted updates. It assumes the shared terms and invariants in the root specification.
+This area defines lineage reconstruction, activation, accepted observation updates, and continuation snapshots. It assumes the root specification's terms and invariants. Compaction selects and renders these records without changing their authority.
 
 ## Lineage and reconstruction
 
 ### REQ-session-lineage — Session lineage
 
-Pi custom session entries are authoritative and follow Pi retention. Reconstruct accepted state on resume; indexes may be rebuilt. Validate selected ancestry as well as identity, since forks can copy entry IDs into a different session. Reject pending results whose lineage, effective source, or accepted-state basis became stale. Forks inherit accepted records in their ancestry, not later observer commits for earlier sources; missing processing needs catch-up.
+Pi custom session entries are authoritative and follow Pi retention. Reconstruct accepted state on resume; indexes may be rebuilt. Validate selected ancestry as well as identity, since forks can copy entry IDs into a different session. Reject pending results whose lineage, effective source, or accepted-state basis became stale. Forks inherit accepted records in their ancestry, not later observer commits for earlier sources.
 
-**Intent:** Reconstruct only memory that belongs to the selected ancestry and valid dependencies.
+**Intent:** Reconstruct only state valid for the selected ancestry and dependencies.
 
-The applicable prepared `previousSummary` may establish an attributed derived baseline without replaying the entire archive. Its position follows Pi's projected history, the selected conversation after compaction and context edits, and the represented source horizon, not its later append position; the next cut may still lie inside its retained tail. A branch summary may likewise supply earlier derived evidence within the prepared source view. Preserve applicable accepted obligations and track original-source coverage separately. Resolve known invalidations or missing facts from available evidence when needed; a summary cannot silently repair them or authorize otherwise denied original access.
-
-Malformed, unsupported, or inconsistent memory records stop reconstruction at the last validated state whose dependencies remain valid. Do not accept descendants of an invalid dependency. Report degradation and use native compaction until eligibility can be established again. Recall remains available where provenance and access policy permit. Pi can append an entry to in-memory session state before its disk write fails. Ephemeral or unflushed sessions can lose records. Do not promise transactional rollback or crash durability.
+**Failure behavior:** Malformed, unsupported, or inconsistent records stop reconstruction at the last validated state whose dependencies remain valid. Reject descendants of an invalid dependency. Report degradation and use native compaction until eligibility is restored; recall remains available where provenance and access policy permit. Pi can append an entry in memory before its disk write fails. Ephemeral or unflushed sessions can lose records; the package does not promise transactional rollback or crash durability.
 
 **Scenarios:**
 
-- Resume, fork before an observer commit, navigate, or context-edit a source during pending work. **Expected:** Only selected-ancestry records reconstruct; copied IDs do not admit foreign state; stale work is rejected; missing pre-fork processing requires catch-up.
-- Introduce an invalid dependency and an external derived baseline. **Expected:** Reconstruction stops at valid dependencies; recovery does not invent original coverage or bypass known invalidations.
-- Compact twice with the second cut inside the first checkpoint's retained tail. **Expected:** The applicable prepared previous summary remains an admissible derived baseline despite its later append position; original-source coverage remains separate.
+- Fork before an observer commit about an earlier source. **Expected:** The fork excludes that commit and needs catch-up for the missing processing.
+- Resume a fork with copied source IDs. **Expected:** Matching IDs do not admit records outside its ancestry.
+- Navigate or context-edit source during a pending job. **Expected:** The stale result cannot commit.
+- Reconstruct a record with an invalid dependency. **Expected:** Reconstruction stops before it and its descendants, reports degradation, and preserves permitted recall.
+
+### REQ-derived-baseline — Derived baseline
+
+The applicable prepared `previousSummary` can establish an attributed derived baseline without replaying the archive. Its position follows Pi's projected history—the selected conversation after compaction and context edits—and represented source horizon, not its append position. A selected branch summary can likewise supply derived evidence.
+
+**Intent:** Continue from available summaries without inventing processing of their originals.
+
+Preserve applicable accepted obligations and track original-source coverage separately. Resolve known invalidations or missing facts from permitted evidence when needed. A summary cannot silently repair them or authorize denied original access.
+
+**Scenarios:**
+
+- Compact twice with the second cut inside the first checkpoint's retained tail. **Expected:** The applicable previous summary remains admissible despite its later append position.
+- Process an external checkpoint. **Expected:** Coverage describes derived text, not its original archive.
+- Supply a summary that repeats an invalidated fact. **Expected:** Its repetition does not repair the invalidation or bypass source access policy.
 
 ## Activation and configuration
 
 ### REQ-memory-activation — Memory activation
 
-Package loading alone does not enable auxiliary inference. `/memory on` enables it; new sessions default to disabled. Persist enablement and the selected observer model with the lineage. Forks inherit those records in their ancestry. Unless settings specify a model, select the acting model at activation. Keep each job's captured configuration fixed for that job and make explicit configuration changes visible.
+Package loading alone does not enable auxiliary inference. `/memory on` enables it; new sessions default to disabled. Persist enablement in the lineage; forks inherit those records in their ancestry. Re-enablement reconstructs valid state and handles missing coverage before custom compaction.
 
 **Intent:** Give the user explicit control over auxiliary inference while keeping bounded recall available.
 
-Disablement cancels package work, prevents late commits, stops custom checkpoint production, and removes request-local file supplements. It does not erase stored checkpoints or memory. Keep recall registered and usable while disabled under its normal bounds and access policy, without auxiliary inference. Native compaction remains available. Re-enablement reconstructs eligible lineage state and handles missing coverage before supplying a custom checkpoint.
+Disablement:
 
-Provide status, disablement, and configuration inspection through commands usable interactively and noninteractively, with validated file-based settings. Status reports the effective model, coverage, pending work, capacity degradation, fallback reasons, and original-access policy. No settings dialog or per-update approval interface is required.
+- Cancels package work and prevents late commits.
+- Stops custom checkpoint production.
+- Removes request-local file supplements.
 
-**Permitted choices:** Implementations choose and document remaining command spelling, settings locations, reload triggers, and settings precedence. These choices preserve the personal-only original-access policy and do not change the lineage's selected model implicitly.
+Disablement does not erase stored checkpoints or memory. Recall remains registered and usable under its normal policy without auxiliary inference. Native compaction remains available.
+
+Provide status, disablement, and configuration inspection through commands usable interactively and noninteractively. Status reports the effective model and destination, coverage, pending work, capacity degradation, fallback reasons, and original-access policy. No settings dialog or per-update approval interface is required.
+
+**Permitted choices:** Implementations document remaining command spelling. Commands that print status or perform an action need no interactive view.
 
 **Scenarios:**
 
-- Load disabled, enable and resume, change settings, then disable with a job and eligible snapshot pending. **Expected:** Disabled operation performs no observation, custom checkpoint, or supplement; late work cannot commit; recall remains usable; enabled jobs use pinned configuration and inherited ancestry state.
+- Load a new session. **Expected:** Observation, custom checkpoints, and file supplements are disabled; recall works without auxiliary inference.
+- Enable memory, resume, then fork after enablement. **Expected:** Selected-ancestry enablement persists.
+- Disable while a job is pending. **Expected:** It is cancelled and cannot commit late; request supplements disappear and native compaction remains available.
+- Re-enable after unprocessed conversation. **Expected:** Missing coverage is handled before returning a custom checkpoint.
 
-## Observation acceptance
+### REQ-observer-configuration — Observer configuration
+
+Unless personal configuration selects another observer model, capture the acting model at activation. Persist that selection with the lineage. Ordinary settings reloads and acting-model switches do not change it implicitly. Explicit observer configuration changes are visible through status and apply to newly scheduled jobs; each job's captured configuration stays fixed.
+
+**Intent:** Keep auxiliary inference destinations explicit and prevent project configuration from redirecting session content.
+
+Observer provider, account, and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, which includes temporary user choices and command-line overrides rather than only saved trust decisions. Before dispatch, revalidate the captured model's current routing, intended account, destination, and permission. A stored selection does not authorize a changed destination. On a mismatch or unavailable authority, reject queued dispatch and report the configuration problem; never silently route elsewhere. Credentials do not enter prompts, memory entries, or diagnostics.
+
+**Permitted choices:** Implementations document validated file-based settings, locations, reload triggers, and precedence. Any supported project settings require Pi's current effective project trust and cannot override personal-only fields.
+
+**Scenarios:**
+
+- Enable with no observer override, then switch the acting model. **Expected:** The observer keeps its captured selection until an explicit change.
+- Supply an observer endpoint in project settings. **Expected:** It cannot redirect observer data, even in a trusted project.
+- Change an account, endpoint, or routing authority while a job waits. **Expected:** Dispatch revalidation rejects the stale authorization rather than sending queued session content to the changed destination.
+- Apply an explicit valid personal model change. **Expected:** Status exposes the selection and new jobs use it; existing jobs do not silently change their captured configuration.
+
+## Observation and evidence
+
+### REQ-effective-source-coverage — Effective source coverage
+
+Each observer job receives the complete snapshot of its accepted-state basis and bounded effective text. Input scope follows Pi's text compaction scope: assistant thinking, tool arguments and result text, included custom messages, and derived checkpoint or branch-summary text. Images remain original evidence under Pi retention; text processing does not claim image coverage. Arbitrary extension state is not conversation input.
+
+**Intent:** Record exactly which source portions and versions received accepted processing.
+
+References identify source session, entry, content portion, and effective version or edit. Process oversized text in bounded portions without claiming unprocessed coverage. A tool result above a documented size can instead use a fixed start-and-end excerpt; mark its processing as reduced, and retain full text for bounded recall. Do not reduce other text. Derived-summary processing covers that text, not its originals. Internal source reads preserve evidence identity, attribution, scope, verification state, and the original-access policy.
+
+A context edit to covered source makes that source uncovered without invalidating accepted records or rolling state back. Process its effective replacement or omission as new evidence against the current snapshot. The update can amend or remove citing items; omission alone does not retire an obligation. Observations do not automatically become project facts or developer preferences.
+
+**Permitted choices:** Implementations document scheduling, source-reference encoding, reduction thresholds, and excerpt sizes within these rules.
+
+**Scenarios:**
+
+- Accept processing of one bounded text portion. **Expected:** Remaining portions stay uncovered.
+- Process a large tool result as an excerpt. **Expected:** Coverage is marked reduced and bounded recall can retrieve its full text.
+- Process image-bearing records and a derived summary. **Expected:** Text coverage claims neither image interpretation nor processing of the summary's originals.
+- Omit a source after accepted processing. **Expected:** Its omission becomes pending evidence against current state; accepted state is not rolled back.
+
+### REQ-edited-evidence-authority — Edited evidence authority
+
+Attribute replacement content as edited evidence. Its preserved message role does not establish the editor or grant the replacement that role's instruction authority. A change that permits additional actions requires independent support from a separate applicable instruction by the appropriate authority.
+
+**Intent:** Accept ordinary corrections without converting edited text into permission.
+
+Additional actions include expanded permissions, weakened constraints, and removed prerequisites. Support can precede or follow the edit, within selected lineage and checkpoint source-horizon limits. Accepted state can preserve independently established permission. Repetition of an edited assertion in a summary is not independent support, and checking support does not authorize protected-original reads.
+
+Ordinary factual corrections and task-status updates can use attributed edited evidence while distinguishing reported claims from results supported by verification evidence. A completion claim does not establish verified completion. Automatic updates need no per-change approval.
+
+**Scenarios:**
+
+- Replace user-role text with a new permission and repeat it in a summary. **Expected:** Neither preserved role nor repetition supplies independent permission; no editor identity is invented.
+- Supply a separate applicable permission before or after an edit. **Expected:** Its independently established scope can apply, but post-cut support cannot authorize a pre-cut checkpoint state.
+- Edit a task fact or claim completion. **Expected:** The fact can update automatically with attribution; claimed completion remains distinct from verified completion.
+- Attempt to read a protected original to establish permission. **Expected:** The access restriction still applies.
 
 ### REQ-session-observations — Session observations
 
-One observer response proposes snapshot changes and observations. Each job receives the complete snapshot of its accepted-state basis, including every active obligation and maintained item, and bounded effective-text inputs. Input scope follows Pi's text compaction scope, including assistant thinking and tool arguments, tool-result text, included custom messages, and derived checkpoint or branch-summary text. Images remain original evidence under Pi retention; text processing must not claim image coverage. Arbitrary extension state is not conversation input.
+Accept one complete validated observer response as one logical operation: snapshot changes, observations, coverage, and operation identity in one versioned Pi custom entry. A valid response with no changes can advance coverage. Invalid or partial output applies nothing.
 
-**Intent:** Accept traceable updates only after complete validation of the source view and state basis.
+**Intent:** Accept traceable state changes together with their evidence-processing record.
 
-References identify the source session, entry, content portion, and effective version or edit. Process oversized text in bounded portions without claiming coverage of unprocessed content. A tool result above a documented size may instead be processed as a fixed excerpt from its start and end. Coverage records that result as reduced, never as fully processed, and recall keeps its full text. Other text is not reduced. Observing a summary establishes coverage of that derived text, not its originals. Preserve evidence identity, attribution, scope, and verification state when the package reads bounded source content internally to prepare observer inputs or validate proposals. Session observations do not automatically become general project facts or developer preferences.
+Additions require fresh item identities and valid resulting content. Replacements and removals require existing targets in the supplied snapshot. Reject invalid references and changes outside that basis. Before accepting, revalidate lineage, source versions, state basis, enablement, and cancellation state.
 
-A context edit to a source with accepted coverage makes that source uncovered; it does not invalidate accepted records or roll state back. Process the source's effective version, or its omission, as new evidence against the current snapshot. That update can amend or remove items that cite the replaced text. Attribute replacement content as edited evidence; preserved message role does not establish its author or grant the replacement that role's instruction authority. Do not invent an editor identity.
+The operation identity distinguishes an update and its retries from separate updates. Reuse it for uncertain retries, reconcile an ambiguous append before further commits, and apply each accepted operation once during reconstruction. Scheduling and partial responses do not establish acceptance.
 
-A change that permits an additional action needs independent support from a separate, applicable instruction by the appropriate authority. This includes new or expanded permissions, weaker constraints, and removal of action prerequisites. The supporting instruction may precede or follow the edit, subject to the selected lineage and checkpoint's source horizon. Previously accepted state may preserve independently established permission. Repetition of an edited assertion in a summary is not independent support. Checking support must respect source-access restrictions; it does not authorize reading protected originals.
+**Permitted choices:** Implementations document versioned record schemas and operation encoding.
 
-Ordinary factual corrections and task-status updates may use attributed edited evidence under the existing verification rules. A completion claim does not establish verified completion. Automatic updates remain available without per-change approval; the permission rule applies when an update would permit additional actions.
-
-Accept a complete validated response as one logical operation: snapshot changes, observations, coverage, and an operation identity in one versioned Pi custom entry. The identity distinguishes one update and its retries from separate updates. A valid response with no changes may advance coverage. Invalid or partial output applies nothing. Additions require fresh identities and valid resulting content. Replacements and removals require existing targets in the supplied snapshot. Reject invalid references and changes outside that supplied basis. Reuse operation identity for uncertain retries, reconcile an ambiguous append before further commits, and apply each accepted operation once during reconstruction. Scheduling or receiving a partial response is not acceptance.
-
-**Permitted choices:** Implementations choose and document record schemas, source-reference encoding, scheduling, the tool-result reduction threshold, and excerpt sizes. These choices preserve the accepted-state and source-coverage rules.
-
-**Note:** Smaller observer jobs that end at points where Pi can cut, which never fall between a tool call and its results, can reduce checkpoint-only catch-up. This scheduling recommendation is informative.
-
-**Note:** This diagram illustrates acceptance and rejection. The requirement text defines validity, atomic acceptance, and recovery from an uncertain append.
+**Note:** Validation checks structure and provenance. It cannot establish that the model noticed every relevant fact or interpreted each valid-shaped citation correctly.
 
 ```mermaid
 flowchart TD
-    S["Selected lineage, effective source versions, and accepted snapshot"] --> J["Observer receives bounded source input and complete snapshot"]
-    J --> R{"Complete response received?"}
-    R -->|"No: partial output, failure, or cancellation"| X["Accept nothing"]
-    R -->|Yes| V{"Output and captured state still valid?"}
+    J["Observer receives bounded source and complete snapshot"] --> R{"Complete response and current basis?"}
+    R -->|No| X["Accept nothing"]
+    R -->|Yes| V{"Operations and references valid?"}
     V -->|No| X
-    V -->|Yes| A["Append one versioned operation with snapshot changes, observations, and coverage"]
-    A --> O{"Operation confirmed accepted?"}
-    O -->|Yes| C["Reconstruct each accepted operation once"]
-    O -->|No| U["Reconcile the operation identity before further commits"]
-    U -->|"Confirmed accepted"| C
-    U -->|"Still uncertain"| W["Report uncertainty and block further commits"]
-    U -->|"Confirmed absent and retry allowed within limits"| A
-    U -->|"Confirmed absent and retry not allowed"| X
+    V -->|Yes| A["Append one logical operation"]
+    A --> C{"Append outcome certain?"}
+    C -->|Yes| S["Reconstruct each accepted operation once"]
+    C -->|No| U["Reconcile identity before further commits"]
+    U -->|Accepted| S
+    U -->|"Absent; retry allowed"| A
+    U -->|"Absent; no retry"| X
+    U -->|Uncertain| W["Report uncertainty and block further commits"]
 ```
 
 **Scenarios:**
 
-- Process edited text, a derived summary, image-bearing records, and a tool result above the reduction size. **Expected:** Coverage names only accepted effective text portions and marks the tool result reduced; it does not claim images, unprocessed portions, or summary originals; recall can read the full tool result within its bounds.
-- Add an item to empty state; return empty, partial, malformed, unknown replacement/removal, and retried updates; make an append outcome uncertain. **Expected:** A valid fresh addition is accepted; valid empty output may advance coverage; rejected output changes nothing; retry reconciliation applies one logical update once.
-- After its coverage is accepted, context-edit a source whose text an item cites. **Expected:** The source becomes uncovered without rolling back accepted state; the next job processes its effective version against the complete snapshot and can amend or remove the citing item.
-- Replace user-role text with a new permission, weaker constraint, or removed action prerequisite; repeat the assertion in a derived summary. **Expected:** The replacement remains attributed edited evidence without an invented editor; preserved role and repetition do not supply independent permission.
-- Supply an independent applicable instruction before or after an edit, then repeat with independently supported permission in accepted state. **Expected:** Permission can retain its independently established scope; lineage and source-horizon rules still apply, including exclusion of support that lies after the cut.
-- Edit an ordinary task fact or completion claim; attempt to inspect a protected original to establish permission. **Expected:** Attributed corrections can update state automatically; a completion claim alone is not verified completion; checking support does not bypass original-access restrictions.
+- Return a valid addition to empty state. **Expected:** Its item, observations, and coverage become one accepted operation.
+- Return a valid no-change response. **Expected:** Its coverage can advance without inventing edits.
+- Return partial output, a malformed operation, or an unknown replacement target. **Expected:** No part of the response is applied.
+- Make an append outcome uncertain, then retry. **Expected:** Reconciliation precedes further commits and reconstruction applies the operation once.
 
-## Snapshot maintenance and checkpoint state
+## Snapshot maintenance
 
 ### REQ-continuation-snapshot — Continuation snapshot
 
-The observer returns structured additions, replacements, and removals addressing stable item identities. Additions and replacements supply the resulting content; code validates and applies operations without another model interpreting prose instructions. Updates are automatic and do not require per-change user approval. Omitted items persist.
+The observer proposes structured additions, replacements, and removals against stable item identities. Additions and replacements supply resulting content; code applies validated operations without another model interpreting editing instructions. Omitted items persist.
 
-**Intent:** Maintain current continuation state and present the state that applies before the prepared cut.
+**Intent:** Maintain current continuation information without implicit deletion through omission.
 
-Accepted obligations change only through explicit evidence-linked additions, amendments, completion, cancellation, or supersession. Neither omission from an observer response nor elapsed time retires an obligation. Natural-language cancellation and supersession in source evidence can support retirement without a special user command. Each observer job reviews every active obligation; valid references establish traceability, not correct interpretation.
+Accepted obligations change only through explicit evidence-linked additions, amendments, completion, cancellation, or supersession. Elapsed time does not retire them. Natural-language source instructions can support cancellation or supersession without a special command. Every job supplies all active obligations and instructs the observer to review their continuing applicability; traceable references do not prove correct interpretation.
 
-Maintain completed work, decisions and rationale, critical context, and identifiers through the same structured update mechanism. The observer may explicitly remove details no longer needed for continuation, while preserving applicable critical facts. Removal does not erase historical records from recall. A narrated removal rationale is not mandatory for ordinary context. Checkpoints render resulting continuation state, not operation logs or deletion explanations.
+Maintain completed work, decisions and rationale, critical context, and identifiers through the same operations. Explicitly remove details no longer needed while preserving applicable critical facts. Ordinary context removal needs no narrated rationale. Removal changes active state, not historical recall. Checkpoints present the resulting state, not operation logs or deletion explanations.
 
-Present snapshots through checkpoints without routinely injecting background revisions into ordinary requests. A checkpoint represents semantic state before the cut under the effective source view at preparation. Its evidence and state dependencies must exclude later retained-history events. Applicable context edits still affect earlier sources even when those edits were recorded after the cut. Observer append position alone cannot select the correct state.
+**Scenarios:**
 
-When accepted state's source horizon ends before the cut, catch-up through the cut commits ordinary operations. When that horizon extends past the cut, start from a compatible earlier basis: the latest accepted state whose source horizon, including the state it builds on, ends before the cut. Bounded same-observer catch-up then processes the effective text between that horizon and the cut. This checkpoint-only result is validated within the compaction attempt and never committed to accepted state; the checkpoint's details record its basis and processed portions. In both cases, catch-up also processes context edits, including omissions, to earlier sources that the checkpoint state covers. Do not split a semantic update by filtering its citations. If compatible state cannot be prepared within limits, use native fallback.
+- Omit an obligation and a decision from a response. **Expected:** Both persist.
+- Explicitly retire an obligation using applicable cancellation evidence. **Expected:** Validated retirement applies automatically without a special cancellation command.
+- Explicitly remove obsolete maintained context. **Expected:** It leaves active state while its permitted history remains recallable.
 
-**Condensation** shortens a presentation that exceeds capacity, and **instructed presentation** applies supplied compaction instructions; [unified compaction](compaction.md#req-unified-compaction--unified-compaction) defines when each runs. Together, condensation and instructed presentation share at most one model call per compaction attempt, separate from observer catch-up. That call receives both the instructions and final capacity target, whether one or both presentation functions are needed. Its structured output has:
+### REQ-snapshot-capacity — Snapshot capacity
 
-- An order and grouping of item identities.
-- Optional shorter text for maintained items, keyed by identity.
-- An optional short framing note.
-- The instruction parts that could not be applied.
+Every observer job receives a snapshot maintenance target derived from the latest available checkpoint presentation capacity. When that capacity is unknown, use the documented checkpoint budget less known mandatory overhead and identify the estimate. The target guides concise maintenance and supported removal of obsolete context; it does not authorize dropping applicable items, weakening obligations, or truncating protected strings.
 
-Code renders obligations verbatim and renders split-turn context and file information itself. When the output omits an applicable item, or shortened text drops a protected string, code renders that item's checkpoint-state text and reports the repair. If obligations alone cannot fit, or the repaired presentation still exceeds capacity, report native fallback without another presentation or condensation call. Do not repeat an identical failed condensation until a relevant input changes: checkpoint state, evidence, instructions, configuration, or available capacity.
+**Intent:** Address growing state before it repeatedly overflows presentation or observer input.
 
-Observation can shrink the snapshot through supported retirement and removal while the snapshot fits the observer input budget. If the complete snapshot cannot fit that budget, suspend observation and report the need for an admissible model, budget, or lineage. Shortening checkpoint text does not reduce the complete snapshot supplied to the observer.
+After a presentation attempt overflows following repair, do not spend another presentation inference merely because evidence or state changed. Permit another attempt when any of these changes occurs:
 
-**Note:** This diagram illustrates how the source horizon determines checkpoint state. Catch-up also processes applicable edits to earlier covered sources. The final compaction checks are defined in the compaction area.
+- The deterministic full rendering becomes smaller.
+- Available capacity increases.
+- Supplied presentation instructions change.
+
+Direct rendering remains available whenever it fits and instructions are empty. Report the suppressed attempt and recovery conditions.
+
+Continue bounded observation while its complete input fits, so new evidence can retire work automatically. Do not schedule standalone maintenance jobs solely to retry the same capacity failure. If the complete snapshot plus required job input and output reserve cannot fit the observer budget, suspend observation and report the need for a permitted model or budget that fits the complete input, or a user-selected branch with smaller valid state. The package does not change branches automatically. Resume only after that complete input can fit. Shortening checkpoint text does not shrink accepted state.
+
+**Scenarios:**
+
+- Prepare a job after available checkpoint capacity decreases. **Expected:** The observer receives the smaller maintenance target and all snapshot items; obligations remain protected.
+- Repair an overflowing presentation, then add unrelated evidence without improving rendered size or capacity. **Expected:** The next compaction declines without repeating presentation inference and reports why.
+- Accept supported retirement that reduces deterministic rendered size. **Expected:** A new bounded presentation attempt is permitted; direct rendering uses zero calls if it fits with empty instructions.
+- Exceed the observer input budget with snapshot and required job input. **Expected:** Observation suspends with a capacity report rather than truncating state.
+- Increase a permitted budget enough for the complete input. **Expected:** Observation can resume without dropping items.
+
+## State at the compaction cut
+
+### REQ-checkpoint-state — Checkpoint state
+
+A checkpoint represents semantic state before Pi's prepared cut under the effective source view at preparation. Its evidence and state dependencies exclude retained-history events at or after the cut. Applicable context edits still affect earlier sources even when recorded after the cut. Observer append position alone cannot select state.
+
+**Intent:** Prevent a checkpoint from applying later completion, cancellation, or correction early.
+
+When accepted state's source horizon ends before the cut, bounded catch-up strictly before the cut commits ordinary operations. When its horizon is at or after the cut, select the latest accepted basis whose contributing evidence and state dependencies end strictly before the cut. Same-observer catch-up processes the missing effective text strictly before the cut without committing its result. The checkpoint's details record that basis and processed portions. Both paths process applicable edits, including omissions, to earlier covered sources. Do not split a semantic operation by filtering its citations.
+
+**Failure behavior:** If a compatible basis and complete required processing cannot be prepared within limits, decline custom compaction.
+
+**Note:** The diagram illustrates basis selection. Scheduling smaller jobs at Pi boundaries that do not separate a tool call from its results can reduce checkpoint-only work, but does not replace this rule.
 
 ```mermaid
 flowchart TD
     H{"Accepted state ends before the cut?"}
-    H -->|Yes| M{"Missing effective source coverage before the cut?"}
-    M -->|"No: accepted state is ready"| E["Use the prepared checkpoint state"]
-    M -->|Yes| C["Bounded observer catch-up commits ordinary operations"]
-    C -->|"Updated accepted state"| E
-    H -->|No| B["Select the latest compatible accepted basis ending before the cut"]
-    B --> K["Bounded checkpoint-only catch-up; do not commit its result"]
-    K -->|"Uncommitted checkpoint-only state"| E
+    H -->|Yes| C["Use accepted state; commit bounded catch-up for any missing coverage"]
+    H -->|No| B["Select latest compatible accepted basis ending before the cut"]
+    B --> K["Bounded catch-up only for this checkpoint; do not commit"]
+    C --> E["Prepared checkpoint state"]
+    K --> E
     B -->|"No compatible basis"| F["Decline custom compaction"]
-    C -->|"Cannot prepare within limits"| F
-    K -->|"Cannot prepare within limits"| F
+    C -->|"Cannot finish within limits"| F
+    K -->|"Cannot finish within limits"| F
 ```
 
 **Scenarios:**
 
-- Omit a decision and obligation; then explicitly remove obsolete context and supply supported obligation retirement. **Expected:** Omission preserves both items; valid explicit operations change only their targets automatically; checkpoint text excludes the operation log.
-- Accept a batch spanning the cut and a delayed batch about earlier sources; compact while a completion remains in retained history. **Expected:** The checkpoint starts from the latest basis that ends before the cut plus uncommitted catch-up; its details record that basis; accepted state is unchanged afterward; the retained completion is not applied early; unrepairable preparation falls back.
-- Exceed presentation capacity with maintained items, then with obligations alone; exceed the observer input budget with the complete snapshot; repeat unchanged failed preparation. **Expected:** Condensation shortens only maintained items and keeps obligations and protected strings verbatim; obligations that cannot fit fall back; an identical failed condensation is not repeated; an oversized snapshot suspends observation with a capacity report.
-- Return a structured presentation that omits an applicable item identity or drops a protected string from shortened text. **Expected:** Code renders those items from checkpoint-state text and reports the repair; the candidate falls back only if the repaired presentation exceeds capacity.
+- Accept a batch spanning the cut while completion remains in retained history. **Expected:** Use an earlier basis plus uncommitted catch-up; accepted state is unchanged and completion is not applied early.
+- Leave uncovered source between accepted state and the cut. **Expected:** Successful catch-up commits ordinary operations through that source.
+- Put a completion at `firstKeptEntryId`. **Expected:** Checkpoint state excludes that completion and any accepted state depending on it; the completion remains in retained history.
+- Append a delayed observer record about earlier source. **Expected:** Source horizon, not append position, determines eligibility.
+- Omit an earlier covered source immediately before compaction. **Expected:** Preparation processes the omission or declines.
+
+### REQ-split-turn-context — Split turn context
+
+For every split turn, checkpoint state supplies the effective user request, relevant progress before the cut, and context needed to interpret the retained continuation. The observer produces this semantic content as turn-linked snapshot items during ordinary observation or same-observer catch-up. Coverage without those items is insufficient.
+
+**Intent:** Make a retained partial turn understandable even when checkpoint presentation uses no model call.
+
+Code selects and renders the applicable items with the rest of checkpoint state. Their source references identify the turn and contributing portions; later retained events cannot supply pre-cut progress. The request alone does not substitute for progress or critical context. Presentation instructions are not required to produce this content. Missing items require bounded observer catch-up or native fallback, even if text coverage was already recorded.
+
+**Scenarios:**
+
+- Supply fully covered turn-linked request, progress, and context items that fit; compact with empty instructions. **Expected:** The checkpoint includes them with zero presentation calls.
+- Mark the prefix covered but omit its progress item. **Expected:** Direct rendering is ineligible until catch-up supplies the missing content; failure to do so declines.
+- Complete a tool operation only after the cut. **Expected:** The split-turn checkpoint describes its pre-cut state and leaves later completion to retained history.

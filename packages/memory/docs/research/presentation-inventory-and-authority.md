@@ -14,6 +14,8 @@ Pi source baseline: **1.1.0**, commit `abe508e1b89912adde45528136c3221eb69acdd7`
 
 ## Questions and findings
 
+A checkpoint replaces older conversation while recent messages remain available. The cut is the exclusive boundary before the first retained entry. File invocations at or after that entry are post-cut operations and remain in recent history.
+
 The investigation asks how a bounded checkpoint can preserve continuation information, which file facts the host supplies, and what authority can be inferred from a context edit. Native mechanisms provide useful comparisons, but none establishes an optimal preservation policy for Orbis.
 
 ### File tracking in Pi
@@ -40,13 +42,15 @@ A design that first applies instructions and then checks whether condensation is
 
 **Observed in Pi 1.1.0:** replacing an entry preserves its original role and message metadata. The edit has an identity and timestamp but no reliable editor identity or reason. A replacement in a user-role entry therefore does not establish that the user authored it. [Session-manager source](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/session-manager.ts), [effective-context analysis](pi-compaction.md#original-records-and-effective-context).
 
-The distinction matters when an edited statement permits an additional action. An ordinary factual correction and a new permission claim have different consequences even if both replace text in the same role. A summary repeating the replacement adds no independent support. Previously accepted state can preserve evidence of independently established permission; access to hidden originals is not necessary in every case and remains governed by the recall policy.
+The distinction matters when an edited statement permits an additional action. An ordinary factual correction and a new permission claim have different consequences even if both replace text in the same role. A summary repeating the replacement adds no independent support. Previously accepted state can preserve evidence of independently established permission; access to hidden originals is not necessary in every case and requires an explicit original-view request and a personal opt-in from user-controlled configuration outside the project tree.
+
+The [Pi 1.1.0 API and runtime investigation](pi-runtime-feasibility.md) establishes a narrower sizing boundary than a final-provider guarantee. Full context precedes later hooks and projections, a virtual model routes to a concrete model whose capacity can differ from the advertised selection, and usage is unavailable after compaction. A supplement is feasible for documented estimators with bounded transformations; unresolved cases require omission.
 
 ## Implications for design and evaluation
 
 The continuation snapshot stores active goals, constraints, unfinished tasks, waiting conditions, decisions, completed work, and critical context. This semantic state is distinct from the checkpoint text rendered from it and from the supplementary file list.
 
-The [presentation contract](../../specs/compaction.md#req-unified-compaction--unified-compaction) defines the call limit and fallback. The [inventory contract](../../specs/compaction.md#req-file-inventory--file-inventory) defines capacity-dependent selection. The [continuity contract](../../SPEC.md#req-session-continuity--session-continuity) keeps task-critical paths in semantic state independently of the supplementary inventory. The [observation contract](../../specs/session-state.md#req-session-observations--session-observations) defines how edited evidence affects permission claims. These choices belong to the SPEC, not to host behavior.
+The [presentation contract](../../specs/compaction.md#req-checkpoint-presentation--checkpoint-presentation) defines the call limit and fallback. The [native inventory supplement contract](../../specs/compaction.md#req-native-inventory-supplement--native-inventory-supplement) defines capacity-dependent selection. The [continuity contract](../../SPEC.md#req-session-continuity--session-continuity) keeps task-critical paths in semantic state independently of the supplementary inventory. The [edited-evidence authority contract](../../specs/session-state.md#req-edited-evidence-authority--edited-evidence-authority) defines how edited evidence affects permission claims. These choices belong to the SPEC, not to host behavior.
 
 Useful scripted checks include instruction-induced expansion, repair overflow, and changes in available request capacity. Inventory fixtures can compare repeated requests, a smaller acting model, and a growing retained tail without admitting post-cut operations. Authority fixtures can separate a new permission claim from an ordinary correction and distinguish independently supported permission from repetition of edited text.
 

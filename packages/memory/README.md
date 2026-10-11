@@ -4,17 +4,20 @@ Memory for continuing work across Pi compaction and recalling earlier evidence. 
 works independently and supports future complementary packages for project knowledge and developer
 habits across sessions.
 
-The [approved specification](SPEC.md) defines the MVP behavior and conformance scenarios. An
+The [draft specification](SPEC.md) defines the MVP behavior and conformance scenarios. An
 installable implementation is not available.
 
 ## What it adds
 
-The extension design prepares a continuation snapshot and source-linked observations as a session
-progresses. At compaction, a checkpoint presents continuation state through Pi's prepared cut,
-followed by the retained recent conversation. Memory updates are automatic. Recall uses effective
-source text by default; access to edited-out originals requires an explicit request and a personal
-configuration opt-in. Disabling memory stops preparation and supplements while bounded recall
-remains available.
+The extension design maintains unfinished obligations, decisions, progress, and critical facts as a
+session progresses. It also records findings linked to their source messages for later recall. At
+compaction, it replaces Pi's native summary with a checkpoint of that maintained state and retains
+Pi's selected recent conversation. Native summarization remains the fallback.
+
+Memory updates are automatic. Recall uses source text after replacements and omissions by default;
+reading edited-out originals requires an explicit request and a personal configuration opt-in. When
+requests use a native checkpoint, a bounded file-path supplement preserves available earlier file
+activity. Disabling memory stops preparation and these supplements while recall remains available.
 
 | Capability               | Role                                                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -23,9 +26,9 @@ remains available.
 | Provider-side compaction | Compresses context through a model provider's API; its behavior depends on that provider.                                    |
 | Orbis memory design      | Prepares continuation memory before compaction and provides evidence recall, with room for complementary knowledge packages. |
 
-The core focuses on continuation within a selected session lineage. Project learnings, personal
-preferences, retrospectives, and reflections belong to future design work. The name does not imply
-that those capabilities are already implemented.
+The core focuses on continuation within the active session branch and its ancestry. Project
+learnings, personal preferences, retrospectives, and reflections belong to future design work. The
+name does not imply that those capabilities are already implemented.
 
 See the [research synthesis](docs/research/README.md) for evidence, comparison limits, and the
 evaluation questions. Better continuation and lower cost have not been demonstrated for this
