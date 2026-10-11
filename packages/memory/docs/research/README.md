@@ -1,9 +1,8 @@
 # Memory design research
 
-Research date: 2026-10-04. This research explains the evidence and trade-offs behind
-`@orbis/memory`. The [SPEC](../../SPEC.md) defines behavior; its
-[supporting evidence](../../SPEC.md#supporting-evidence) section links each requirement to this
-research and to outcomes that still need measurement.
+This research explains the evidence and trade-offs behind `@orbis/memory`. The [SPEC](../../SPEC.md)
+defines behavior; its [supporting evidence](../../SPEC.md#supporting-evidence) section links each
+requirement to this research and to outcomes that still need measurement.
 
 ## Core reading path
 
@@ -36,24 +35,11 @@ The investigation used primary source, published package archives, official docu
 papers. Topic documents identify inspected revisions and publication status. Source inspection,
 scripted probes, and live-model outcomes are distinct evidence.
 
-The host corrections in this review were verified against installed Pi 0.99.1. The earlier research
-recorded an archive comparison with published 1.0.1; that comparison was not repeated in this review
-and is not runtime compatibility evidence. Recheck host facts against the targeted Pi release before
-implementation.
-
-Important comparison pins are:
-
-| Project                     | Inspected source and release qualification                                                                                                                                                                                                |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pi                          | [1.0.1 / a7229dd](https://github.com/earendil-works/pi/tree/a7229ddc21810d6245105978033b7df645ecc2f7), compared with installed 0.99.1.                                                                                                    |
-| Amos observational memory   | [78a1efc](https://github.com/amosblomqvist/pi-observational-memory/tree/78a1efcfdd46332253fb289724f05b26dfc7769e), manifest 0.1.0; no verified GitHub release.                                                                            |
-| Elpapi observational memory | [886f7a6](https://github.com/elpapi42/pi-observational-memory/tree/886f7a6628d10ea420eb6ceecaee36691489b2fb), newer than released 3.1.4 despite the same manifest version.                                                                |
-| Mastra memory               | [Stable 1.35.0](https://github.com/mastra-ai/mastra/tree/b21e46e19b469a25c8896bcee90afd58d6f1a890), separately compared with [HEAD](https://github.com/mastra-ai/mastra/tree/b2433eb8d90597295de0327c3756d7a2b83a65ff) at 1.36.0-alpha.2. |
-| Blackhole                   | [be64de8](https://github.com/k0valik/pi-blackhole/tree/be64de823f27d8be4195dbe0734409017b05240f), npm 0.5.10.                                                                                                                             |
-| Hermes                      | [d5e2d13](https://github.com/chandra447/pi-hermes-memory/tree/d5e2d1384b2f78d7a304f24383ad3aae1da5749e), manifest 0.9.10 with substantial Unreleased changes.                                                                             |
-
-Additional pins appear in the system and ecosystem documents. Each comparison distinguishes
-published releases, inspected source revisions, and mutable documentation.
+The [host investigation](pi-compaction.md) identifies the Pi release source, inspection date,
+integration capabilities, and verification limits. Each comparison document identifies the revisions
+and release qualifications of the other projects it examines. Those comparisons describe mechanisms;
+they do not establish runtime compatibility with the core's Pi baseline. No Pi runtime or live-model
+experiment is reported for this baseline. Later Pi releases need their own compatibility checks.
 
 ## Verification boundary
 

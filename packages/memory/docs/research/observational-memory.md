@@ -1,9 +1,12 @@
 # The two Pi observational-memory implementations
 
-Research date: 2026-10-04. **Observed in the revisions under Versions and scope:** Two unrelated
-repositories use the name `pi-observational-memory`. Their architectures and failure policies must
-not be attributed to each other. This document records inspected source behavior; neither package
-was installed or run for this research.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+**Observed in the revisions under Versions and scope:** Two unrelated repositories use the name
+`pi-observational-memory`. Their architectures and failure policies must not be attributed to each
+other. This document records inspected source behavior; neither package was installed or run for
+this research.
 
 ## Versions and scope
 
@@ -66,8 +69,7 @@ uses defaults including 10k observation chunks, a 15k consolidation threshold, f
 an extension-owned 150k compaction threshold. These are source defaults, not recommendations for
 Orbis or small local models. The
 [manifest](https://github.com/amosblomqvist/pi-observational-memory/blob/78a1efcfdd46332253fb289724f05b26dfc7769e/package.json)
-has unrestricted Pi peers and 0.74.0 development dependencies; that does not demonstrate current Pi
-compatibility.
+has unrestricted Pi peers; that range does not demonstrate runtime compatibility with Pi 1.1.0.
 
 Amos's chunk formation preserves whole-entry and tool-boundary relationships; an unfinished small
 chunk can wait. Its observer prompt asks for corrections, completion signals, identifiers, and error

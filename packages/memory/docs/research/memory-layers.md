@@ -1,8 +1,10 @@
 # Memory responsibilities and scope
 
-Research date: 2026-10-04. This document compares documented architectures that informed the
-[memory contract](../../SPEC.md). Framework capabilities do not establish that an Orbis
-implementation improves continuation.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+This document compares documented architectures that informed the [memory contract](../../SPEC.md).
+Framework capabilities do not establish that an Orbis implementation improves continuation.
 
 Semantic memory describes knowledge content; semantic search describes a retrieval mechanism. A
 package can retain reusable knowledge in ordinary text without embeddings, and a vector index can
@@ -37,7 +39,7 @@ architecture.
 ## What already exists in a Pi session
 
 Pi's persisted history, authored context, and compacted acting context serve different purposes. The
-[Pi investigation](pi-compaction.md) records the checked versions and public contracts.
+[Pi investigation](pi-compaction.md) records the release source and public contracts.
 
 | Existing capability               | Contribution                                                                   | What the proposed package adds                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |

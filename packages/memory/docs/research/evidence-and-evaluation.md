@@ -1,8 +1,11 @@
 # Evidence and evaluation
 
-Research date: 2026-10-04. Memory quality depends on construction, retrieval, and the acting model's
-use of evidence. Published results describe their stated systems and settings. The later protocol is
-a proposal for a possible Orbis study. This research did not run an Orbis model-quality experiment.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+Memory quality depends on construction, retrieval, and the acting model's use of evidence. Published
+results describe their stated systems and settings. The later protocol is a proposal for a possible
+Orbis study. This research did not run an Orbis model-quality experiment.
 
 ## Read the evidence at the scope it establishes
 
@@ -102,13 +105,14 @@ reason to search for.
 
 ### Baseline and diagnostic arms
 
-For a live comparison, use native Pi with the extension unloaded and the core enabled from session
-start. Match initial repository, history, acting model, tools, and native settings; count auxiliary
-work in the core arm. Optional diagnostic arms can provide source recall alone, a correct supplied
-continuation state, native Pi plus an obligation diagnostic, or full recorded context when it fits.
-Label supplied state as an oracle, not deployable performance. These arms diagnose loss; native Pi
-plus obligations is not a required shipping stage. Run manual compaction at matched milestones
-separately from automatic compaction, where compaction frequency itself is an outcome.
+For a live comparison, run two conditions: native Pi with the extension unloaded, and Pi with the
+core enabled from session start. Match initial repository, history, acting model, tools, and native
+settings; count auxiliary work in the core arm. Optional diagnostic arms can provide source recall
+alone, a correct supplied continuation state, native Pi plus an obligation diagnostic, or full
+recorded context when it fits. Label supplied state as an oracle, not deployable performance. These
+arms diagnose loss; native Pi plus obligations is not a required shipping stage. Run manual
+compaction at matched milestones separately from automatic compaction, where compaction frequency
+itself is an outcome.
 
 ### Histories that distinguish compliant behavior
 
@@ -152,6 +156,17 @@ Count each inference once. Separate background preparation, catch-up, fallback, 
 acting usage; mark unavailable accounting unknown. Local source reads have no independent model bill
 but their returned text can increase acting input. Report end-to-end wall time as well as component
 durations because background work can overlap.
+
+**Observed in Pi 1.1.0 source:** Assistant responses and executed tool results can have
+`durationMs`. Assistant timing also covers direct inference calls. Deferred responses and
+unavailable timings remain unknown. Tool timing excludes hooks, and nested tool durations can
+overlap. These fields help attribute work; they do not replace a timer around the complete
+foreground operation or establish model cost. Scripted providers return
+`AssistantMessageEventStream`, available through `createAssistantMessageEventStream()`, to match the
+public stream contract.
+[Assistant timing](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/utils/event-stream.ts),
+[tool timing](https://github.com/earendil-works/pi/blob/v1.1.0/packages/agent/src/agent-loop.ts),
+[stream types](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/types.ts).
 
 ### Cache-specific evaluation
 

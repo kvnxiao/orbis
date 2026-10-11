@@ -1,8 +1,10 @@
 # Modularity and future knowledge packages
 
-Research date: 2026-10-04. This document compares integration options for future knowledge
-companions based on inspected host and companion mechanisms. The [core contract](../../SPEC.md)
-defines current behavior.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+This document compares integration options for future knowledge companions based on inspected host
+and companion mechanisms. The [core contract](../../SPEC.md) defines current behavior.
 
 ## Separate the product responsibilities
 
@@ -51,13 +53,13 @@ service contract.
 | Companion reads Pi sources independently | Avoids a dependency on the core.                                             | Can duplicate processing and must independently implement lineage, source, and correction semantics.                             |
 
 `pi.events.emit()` does not await asynchronous listeners and provides no durable replay,
-acknowledgement, or request/response protocol. Runtime invalidation removes tracked listeners; it
-does not complete pending application work automatically. `getAllTools()` exposes tool metadata, not
-a general tool-execution service for lifecycle handlers. Nested execution through
-`ExtensionToolContext.executeTool()` is available during tool execution.
-[Event bus](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/event-bus.ts),
-[extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts),
-[loader](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/loader.ts).
+acknowledgement, or request/response protocol. Invalidating an extension runtime during reload or
+teardown removes tracked listeners; it does not complete pending application work automatically.
+`getAllTools()` exposes tool metadata, not a general tool-execution service for lifecycle handlers.
+Nested execution through `ExtensionToolContext.executeTool()` is available during tool execution.
+[Event bus](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/event-bus.ts),
+[extension contracts](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/extensions/types.ts),
+[loader](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/extensions/loader.ts).
 
 The [core scope](../../SPEC.md#status-and-purpose) defers a public interface until a concrete
 consumer supplies its evidence needs. The options above remain useful when that need is defined.
@@ -80,8 +82,8 @@ not supply a crash-durable transaction; the
 [host audit](pi-compaction.md#persistence-and-selected-lineage) records its limits.
 
 Sources:
-[session storage](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
-[extension state management](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/extensions.md#state-management).
+[session storage](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/session-manager.ts),
+[extension state management](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/extensions.md#state-management).
 
 ## State validity and delayed work
 
@@ -90,8 +92,8 @@ do not establish that a result belongs to the current selection. The
 [lineage contract](../../SPEC.md#session-lineage--req-session-lineage) therefore requires a
 selection check before acceptance. Pi's session manager and extension lifecycle expose the relevant
 change points.
-[Session manager](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
-[extension lifecycle](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
+[Session manager](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/session-manager.ts),
+[extension lifecycle](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/extensions/types.ts).
 
 ## Companion-specific integration obligations
 
@@ -99,13 +101,13 @@ A companion managing editable files needs its own revision and conflict policy. 
 guard or cooperating writer queue does not prevent shell writes or external editors. File existence
 also does not establish project trust; public `ctx.isProjectTrusted()` supplies the host's trust
 state when project-local behavior depends on it.
-[Extension contracts](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/extensions/types.ts).
+[Extension contracts](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/extensions/types.ts).
 
 Pi's default session discovery is keyed by working directory, not an Orbis-defined project root.
 Cross-session knowledge therefore needs an explicit scope/index policy. Repository basenames are not
 unique, and deliberate forks can cross directories. Define applicability from actual identity and
 user intent rather than imposing an absolute path-equality rule.
-[Session discovery](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/session-manager.ts),
+[Session discovery](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/session-manager.ts),
 [adapter examples](agent-memory-systems.md#pi-adapters-and-operational-footprint).
 
 Structured task identities, dependencies, and validated transitions are another possible companion

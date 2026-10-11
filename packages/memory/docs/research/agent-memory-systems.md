@@ -1,9 +1,11 @@
 # Memory systems and knowledge maintenance
 
-Research date: 2026-10-04. This comparison examines memory systems relevant to session continuation
-and complementary knowledge maintenance. It records source-inspected behavior and documented
-capabilities separately from proposed Orbis implications. No system was executed or benchmarked in
-this investigation.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+This comparison examines memory systems relevant to session continuation and complementary knowledge
+maintenance. It records source-inspected behavior and documented capabilities separately from
+proposed Orbis implications. No system was executed or benchmarked in this investigation.
 
 ## Source boundaries
 

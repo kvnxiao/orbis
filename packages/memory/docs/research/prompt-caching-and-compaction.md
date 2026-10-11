@@ -1,8 +1,8 @@
 # Provider compaction, prompt caching, and memory
 
-Research date: 2026-10-04. This analysis compares provider documentation with Pi 1.0.1 source. It
-separates provider API contracts, Pi's integration, and proposed Orbis behavior. No provider
-requests or cache measurements were run.
+Pi source inspected: 2026-10-11, release 1.1.0. Provider documentation and comparison sources were
+checked on 2026-10-04. This analysis separates provider API contracts, Pi's integration, and
+proposed Orbis behavior. No provider requests or cache measurements were run.
 
 ## Three different operations
 
@@ -50,7 +50,7 @@ optimization is worthwhile. No numerical break-even point is established by this
 | Path                        | Inspected or documented construction                                                                                                                          | Qualification                                                                                                          |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Claude Code compaction fork | Preserves parent system context, tools, and conversation, then appends summary instructions.                                                                  | Anthropic's engineering account, not independent tracing of every current request.                                     |
-| Pi 1.0.1 native summary     | Dedicated summarization instructions and a transcript flattened into one user message.                                                                        | Does not preserve the acting request's rendered prefix.                                                                |
+| Pi 1.1.0 native summary     | Dedicated summarization instructions and a transcript flattened into one user message.                                                                        | Does not preserve the acting request's rendered prefix.                                                                |
 | Codex local compaction      | History copy plus user compaction prompt and current base instructions; remaining prompt fields default to empty top-level tools and disabled parallel calls. | Copied messages alone do not establish a complete prefix match; history can also contain incremental tool definitions. |
 | Codex remote v2             | Current base instructions and acting-path tool policy, parallel calls enabled, and a compaction trigger.                                                      | Can trim tool history and clears the output schema; compaction effort selection differs.                               |
 
@@ -62,7 +62,7 @@ summarization algorithm.
 
 Sources:
 [Claude Code account](https://claude.dev/blog/lessons-from-building-claude-code-prompt-caching-is-everything/#compacting-without-breaking-the-cache),
-[Pi summary construction](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts),
+[Pi summary construction](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/compaction/compaction.ts),
 [Codex local builder](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/compact.rs),
 [prompt defaults](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/client_common.rs),
 [remote builder](https://github.com/openai/codex/blob/b8dceb0d4f29e49e73daa08f57fcf5181186f354/codex-rs/core/src/compact_remote_v2_attempt.rs),
@@ -102,18 +102,18 @@ Those examples support explicit prefix identity and stale-result handling. They 
 that Pi already exposes provider blocks, or that an Orbis observer can replace any source that
 arrived after its input snapshot.
 
-## Pi 1.0.1 does not expose these as native checkpoint mechanisms
+## Pi native checkpoints and provider compaction
 
-The published provider runtime and declarations did not expose provider `compaction` content or
-`context_management` request support in the inspected paths. Pi's normalized assistant content is
-text, thinking, and tool calls. OpenAI compaction items have no preservation path in that content
-model; Anthropic's stop-reason mapping does not recognize compaction, and ordinary usage
-normalization does not account for compaction iterations.
+**Observed in Pi 1.1.0 source:** The provider runtime and declarations do not expose provider
+`compaction` content or `context_management` request support in the inspected paths. Pi's normalized
+assistant content is text, thinking, and tool calls. OpenAI compaction items have no preservation
+path in that content model; Anthropic's stop-reason mapping does not recognize compaction, and
+ordinary usage normalization does not account for compaction iterations.
 
 Sources:
-[Anthropic adapter](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/anthropic-messages.ts),
-[OpenAI Responses adapter](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/openai-responses.ts),
-[Responses normalization](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/openai-responses-shared.ts).
+[Anthropic adapter](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/api/anthropic-messages.ts),
+[OpenAI Responses adapter](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/api/openai-responses.ts),
+[Responses normalization](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/api/openai-responses-shared.ts).
 
 This is source evidence of an integration gap, not a live compatibility experiment. Injecting a
 provider field into a request would not establish correct response handling, replay, persistence,
@@ -162,38 +162,38 @@ fields. The host SDK's cache warmer concerns acting-session requests, not a nati
 separate routing ID.
 
 Sources:
-[summary helper](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/compaction/compaction.ts),
-[SDK](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/sdk.ts),
-[cache warmer](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/cache-warmer.ts),
-[Codex transport](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/openai-codex-responses.ts).
+[summary helper](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/compaction/compaction.ts),
+[SDK](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/sdk.ts),
+[cache warmer](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/cache-warmer.ts),
+[Codex transport](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/api/openai-codex-responses.ts).
 
-Pi 1.0.1 also adds compatible Anthropic inline tool additions/redefinitions, preserving a stable
-request-level tool list where supported. Therefore, a blanket claim that every tool change
-invalidates the entire tool prefix is outdated. This feature does not make checkpoint replacement
-free.
-[Release source](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/anthropic-messages.ts).
+Pi 1.1.0 supports compatible Anthropic inline tool additions and redefinitions, preserving a stable
+request-level tool list where supported. A tool change therefore need not invalidate the entire tool
+prefix. This feature does not make checkpoint replacement free.
+[Release source](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/api/anthropic-messages.ts).
 
 ### Observer requests have their own cache opportunities
 
 Stable observer instructions and output schemas can precede changing continuation state and new
 source batches. This permits reuse of the worker's static prefix without reproducing the acting
 conversation. If every request starts its changing section with a rewritten snapshot, reuse after
-that point may be limited. A rolling worker history or an acting-prefix fork is an alternative, with
-additional state, input size, and model/configuration constraints.
+that point may be limited. A rolling worker history or a helper request copied from the acting
+request's prefix is an alternative, with additional state, input size, and model/configuration
+constraints.
 
 Pi's public model registry exposes cache retention and an optional session routing identity. These
 are controls and hints, not cache handles. Direct observer calls do not automatically reproduce the
 SDK's acting-context projections, header/retry wrappers, or cache warming. Matching the acting model
 or session ID alone does not establish shared-prefix reuse.
-[Registry](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/model-registry.ts),
-[request options](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/types.ts),
-[SDK orchestration](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/sdk.ts).
+[Registry](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/model-registry.ts),
+[request options](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/types.ts),
+[SDK orchestration](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/sdk.ts).
 
 ### Stable checkpoint presentation
 
-**Observed in Pi 1.0.1:** Pi renders a persisted summary as a user message under a fixed wrapper
+**Observed in Pi 1.1.0:** Pi renders a persisted summary as a user message under a fixed wrapper
 before retained history. Entry IDs and token estimates are not interpolated into that text.
-[Message conversion](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/src/core/messages.ts).
+[Message conversion](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/messages.ts).
 
 The [request stability contract](../../SPEC.md#request-stability--req-request-stability) selects
 stable request construction. The [file inventory](../../SPEC.md#file-inventory--req-file-inventory)
@@ -205,8 +205,8 @@ fixtures establish construction stability; only provider measurements can establ
 Pi also supports structured system/tool updates as transcript changes in compatible paths. A forced
 system-prompt string replaces the leading prompt for that run. Native warming is an independent
 variable with its own eligibility, settings, usage, and latency.
-[Extension events](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/extensions.md#events),
-[native warming settings](https://github.com/earendil-works/pi/blob/v1.0.1/packages/coding-agent/docs/settings.md#models-and-thinking).
+[Extension events](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/extensions.md#events),
+[native warming settings](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/settings.md#models-and-thinking).
 
 ## Separate preparation, compaction, and continuation costs
 
@@ -223,7 +223,7 @@ A useful comparison observes the whole task, including work done before a checkp
 Pi normalizes cache usage differently by provider. Its OpenAI adapter separates cached and write
 input from aggregate input; Anthropic accounting distinguishes reads and write lifetimes. Raw
 provider counts and normalized usage must not be added together as independent work.
-[OpenAI normalization](https://github.com/earendil-works/pi/blob/v1.0.1/packages/ai/src/api/openai-responses-shared.ts).
+[OpenAI normalization](https://github.com/earendil-works/pi/blob/v1.1.0/packages/ai/src/api/openai-responses-shared.ts).
 
 ## Prompt representation options
 

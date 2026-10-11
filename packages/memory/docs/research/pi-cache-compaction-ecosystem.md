@@ -1,8 +1,11 @@
 # Pi memory, cache, and pruning packages
 
-Research date: 2026-10-04. **Observed in the revisions under Version inventory:** This survey
-compares current source and publication boundaries. It does not report installation, runtime
-compatibility, cache measurements, or model-quality tests.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+**Observed in the revisions under Version inventory:** This survey compares current source and
+publication boundaries. It does not report installation, runtime compatibility, cache measurements,
+or model-quality tests.
 
 ## Version inventory
 
@@ -43,8 +46,8 @@ Its integration choices differ from the proposed core:
 - Native fallback occurs when both structural and observational content are empty. Nonempty
   structural output does not require complete observation coverage.
 - Optional mid-run behavior adapts private `AgentSession` operations.
-- The published peer range is `>=0.85.1 <1.0.0`. This declares a compatibility boundary; it does not
-  establish a tested failure on 1.0.1.
+- The published peer range excludes Pi 1.1.0. This is a declared compatibility boundary; it does not
+  establish a tested runtime failure on that release.
 
 Sources:
 [hook](https://github.com/k0valik/pi-blackhole/blob/be64de823f27d8be4195dbe0734409017b05240f/src/hooks/before-compact.ts),
@@ -120,24 +123,12 @@ inspected
 therefore needs to be considered alongside the payload-shape claim.
 
 Optional one-token warming is skipped when the host will retry, but otherwise awaited. Warming usage
-is not added to reported compaction usage. The
-[README](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/README.md)
-includes author smoke runs on Pi 0.99.1 and a correction about a proxy removing cache-count fields.
-Those observations are not reproduced here and do not establish native-information parity.
+is not added to reported compaction usage. The inspected source does not establish cache savings,
+continuation quality, or runtime compatibility with Pi 1.1.0.
 
-The author reports a 229-second native median across 132 compactions and an 86-second extension run
-on a local server. These are not matched trials and do not establish a causal speedup. Reported
-summary-cache counts include 56,192 of 56,216 input tokens for DeepSeek and 131,072 of 135,414 in an
-oMLX contributor run. These remain reports for those configurations, not reproduced Orbis results.
-[Author measurements](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/README.md),
-[contributor report](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/pull/3).
-
-The source history also identifies concrete compatibility failures: changing thinking settings
-changed the rendered prefix, and captured headers omitted SDK-added credentials. The implementation
-removed the thinking override and resolves authentication at request time. These examples explain
-why replay requires more than copying conversation text.
-[Thinking-setting correction](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/commit/c06fa4ba9c93847dca6b8e83d2cd9eda6d89c0f1),
-[authentication report](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/issues/2).
+The implementation preserves captured thinking settings and resolves authentication at request time.
+Replay therefore depends on provider settings and credentials as well as conversation text.
+[Request construction and authentication](https://github.com/jagdeepsinghdev/pi-prefix-cache-compaction/blob/70913603f1d74eb90d88038d4acf449f235e5724/src/index.ts).
 
 ## cprune: reduction can change the source archive
 
@@ -163,9 +154,9 @@ The
 changes through custom messages. Baseline lookup scans all entries rather than selected ancestry.
 Compaction initially resets only in-memory state.
 
-The package predates Pi's structured system/tool update support. A current comparison must account
-for host capabilities rather than assume they are absent. A `<system_update>` label in custom
-message text does not itself grant system-message authority.
+Pi 1.1.0 supports structured system/tool updates, so this package's custom-message approach is an
+alternative representation rather than evidence of a missing host capability. A `<system_update>`
+label in custom message text does not itself grant system-message authority.
 
 ## Hermes: complement native compaction
 

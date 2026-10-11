@@ -1,6 +1,9 @@
 # Observational memory, activation, and current work
 
-Research date: 2026-10-04. This comparison uses the two pinned Pi implementations described in
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+This comparison uses the two pinned Pi implementations described in
 [observational memory](observational-memory.md) and Mastra's published memory package. It compares
 mechanisms, not measured superiority or runtime compatibility with Orbis.
 

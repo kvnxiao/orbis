@@ -1,8 +1,11 @@
 # Continuity and invariants
 
-Research date: 2026-10-04. The product objective is effective continuation: after compaction, the
-acting model can perform the right next action under the current instructions. A shorter checkpoint,
-a successful observer call, and an available archive are each insufficient evidence of that outcome.
+Comparison research date: 2026-10-04. Pi applicability checked: 2026-10-11 against
+[Pi 1.1.0](pi-compaction.md).
+
+The product objective is effective continuation: after compaction, the acting model can perform the
+right next action under the current instructions. A shorter checkpoint, a successful observer call,
+and an available archive are each insufficient evidence of that outcome.
 
 The policy comparisons below are reasoning, not observations. They record trade-offs behind the
 [continuation contract](../../SPEC.md). The [Pi audit](pi-compaction.md) establishes host mechanics;
@@ -33,8 +36,8 @@ incremental work, and verification form a combined harness for web application t
 supports evaluating actual continuation and completion; it does not isolate a memory-policy effect
 or require a memory extension to become a task planner.
 
-The Orbis proposals below follow the user's objectives and the inspected host behavior. They are not
-reported outcomes from these articles.
+The Orbis proposals below address continuation under current instructions using the inspected host
+behavior. They are not reported outcomes from these articles.
 
 ## Category-level parity
 
@@ -75,10 +78,11 @@ The snapshot represents state as of Pi's prepared cut under the effective source
 preparation. A later context edit may still affect a source before the cut. An observer append
 timestamp only records when processing finished. It does not make later evidence valid at an earlier
 cut. When an observation batch spans the cut, start from the latest accepted state whose source
-horizon ends before the cut and use bounded catch-up through the cut. That catch-up serves only the
-checkpoint and is not committed, so the main accepted state keeps one chain. If it cannot produce
-eligible state, the candidate needs fallback. Inferring earlier state by removing facts that appear
-recent can project later corrections or completions backward.
+horizon, the latest position of its contributing evidence, ends before the cut and use bounded
+catch-up through the cut. That catch-up serves only the checkpoint and is not committed, so the main
+accepted state keeps one chain. If it cannot produce eligible state, the candidate needs fallback.
+Inferring earlier state by removing facts that appear recent can project later corrections or
+completions backward.
 
 A context edit to an already processed source is new evidence rather than an invalidation. The
 source becomes uncovered and the observer processes its effective version against the current
