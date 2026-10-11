@@ -66,9 +66,19 @@ delivery, and as the decision record of an approved brainstorm.
 - Choose the stable ID before publishing.
 - Agent and Model name the packet's author, not the account that posts it. When the orchestrator
   summarizes a delegate's work, add Work agent and Work model rows for the delegate.
-- Model is the identifier the host reports in the author's session context, such as
-  `claude-opus-5-5`, or a delegate's explicit model selection. Write `Unknown` when neither is
-  available; do not infer it from a role name or repository default.
+- Resolve Model before each checkpoint from the author's current host-reported runtime metadata. Do
+  not infer it from a repository default, host configuration, or role name. Model selection can
+  change during a session.
+- In Codex, when the session context does not state the model, use `CODEX_THREAD_ID` to locate the
+  matching session record under `$CODEX_HOME/sessions`, or `~/.codex/sessions` when `CODEX_HOME` is
+  unset. Verify `session_meta.payload.id` matches, then read the latest
+  `turn_context.payload.model`. Read only the matching session and extract metadata without printing
+  conversation text. Do not choose a session by working directory or modification time.
+- For delegated work, use the explicit model selection recorded at spawn, or metadata verified to
+  belong to that delegate. A parent thread's runtime record does not identify a delegate's model.
+- If the host exposes neither a verifiable model nor an explicit delegate selection, write
+  `Unavailable (runtime metadata not exposed)` and continue. Do not ask the developer to identify or
+  confirm the model, and do not block delivery for this metadata.
 - Result states the work, findings, and consequential choices with their rationale. Evidence
   separates passed, failed, skipped, and unverified checks. Next action names the remaining
   obligations and the responsible role, or None.
@@ -115,7 +125,9 @@ with a link, a "Read when" condition, the decision, and its status.
 
 - Keep scratch work, logs, and run evidence in ignored `.artifacts/` or
   `packages/<name>/implementation/` directories.
-- Do not keep a second authoritative local plan, and do not publish raw logs without the developer's
-  opt-in. Reconcile an older local plan with the current scope before publishing from it.
+- Keep executable spec-derived plans and task state in the global skills' `.plans/` layout. Do not
+  duplicate their task lists or state in issue bodies or scratch notes. Preserve approval and
+  execution evidence when reconciling an older issue-body plan. Do not publish raw logs without the
+  developer's opt-in.
 - Put reusable conclusions from a retrospective where their scope requires, link the checkpoint
   evidence, and state the history examined and its gaps.

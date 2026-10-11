@@ -15,10 +15,10 @@ capabilities, not proof that every UI exposes the same controls.
 [App Server reference](https://learn.chatgpt.com/docs/app-server)
 
 **Design implication:** Explicit mode entry and structured user input are useful reference
-behaviors. Orbis supplies its own revision-aware question and approval records, and does not convert
+behaviors. Orbis supplies its own question and approval records tied to a specific plan revision, and does not convert
 elapsed time into an answer. The retrieved pages do not establish Codex CLI's complete
 question-navigation behavior, default plan-file storage, or an approval-only extension event
-equivalent to Orbis's proposed event.
+equivalent to Orbis's proposed planning-completion handoff event.
 
 ## Claude Code
 
@@ -63,14 +63,14 @@ validates identities and submission but cannot establish research quality or dec
 completeness from a tool call alone.
 
 The repository's
-[specify-package skill](https://github.com/kvnxiao/orbis/blob/main/.agents/skills/specify-package/SKILL.md)
+[specify-package skill](https://github.com/kvnxiao/orbis/blob/4d01464411ee5af81f2518c467ad4eac4e4f3562/.agents/skills/specify-package/SKILL.md)
 adapts that process to package design. The plan spec defines the intended runtime experience
 separately from this development-time skill.
 
 **Design implication:** A frontier can contain related questions that users need to revisit.
 Whole-round navigation and explicit submission preserve that freedom. Per-question clarification
-returns to the main agent with selected answers and current option notes marked unsubmitted;
-unfinished custom answers and unselected option notes remain local. Form rendering does not
+returns to the main agent with selected answers and current user-written option annotations marked unsubmitted;
+unfinished custom answers and annotations for unselected options remain local. Form rendering does not
 establish the research and clarification process.
 
 [HumanEvalComm](https://arxiv.org/abs/2406.00215) studies clarification for ambiguous, inconsistent,

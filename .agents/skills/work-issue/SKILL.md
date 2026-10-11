@@ -1,24 +1,32 @@
 ---
 name: work-issue
-description:
-  Start, resume, or continue an Orbis issue, a PR, or a direct request, including plain requests
-  such as "Resume #12", "Resume PR #34", or "continue this ticket", and requests that name a
-  specialist skill. Resolve and classify the target, route it to a specialist skill or delegate,
-  and deliver through review and a PR. Excludes status-only questions, read-only reviews, and
-  general questions.
+description: >-
+  Start, resume, or continue an Orbis issue, PR, or direct development request. Resolve the target,
+  route authorized work to the applicable global or repository skill, and deliver through review and
+  a PR. Excludes status-only questions, read-only reviews, and general questions.
 ---
 
 # Work on an Orbis issue, PR, or request
 
-Every development request starts here. This skill finds the target, classifies it, routes it to one
-specialist skill or delegate, and delivers the result. It is the only skill that starts another
-repository skill. Read each shared file at the step that names it, not up front.
+Coordinate GitHub tracking, authorization, and delivery. The global `write-spec`, `plan-from-spec`,
+and `implement-spec-plan` skills own specification, planning, and plan execution. Resolve their
+installed paths through the host's skill catalog; do not copy their procedures into this repository.
+
+## Work paths and handoffs
+
+- Work follows one of two **work paths**. The **issue-backed path** uses a GitHub issue to track a
+  change that introduces, improves, or changes package behavior. The **PR-only path** delivers a
+  direct request through a PR alone: a change within a package's approved contract, a documentation
+  change, or a workspace tooling change.
+- The **Current handoff** table at the top of an issue body records its authorization, work,
+  blocker, and next action. A **checkpoint** is an issue comment that records paused work, a
+  delivery, or an approved brainstorm's decisions.
 
 ## 1. Find the target
 
-- Resolve an unqualified `#number` against `kvnxiao/orbis`, and honor an explicit URL or
-  repository-qualified reference.
-- Query GitHub with explicit fields, and do not request comments while finding or resuming work:
+- Resolve an unqualified issue or PR number against `kvnxiao/orbis`, and honor an explicit
+  repository or URL.
+- Read issue or PR metadata with explicit fields before requesting comments:
 
   ```sh
   agent-gh issue view N -R kvnxiao/orbis --json number,title,state,body,parent,subIssues,blockedBy,blocking
@@ -26,84 +34,84 @@ repository skill. Read each shared file at the step that names it, not up front.
   agent-gh issue list -R kvnxiao/orbis --state all --search "<terms> in:title,body" --json number,title,state,url
   ```
 
-  Fetch a single comment with `agent-gh api repos/kvnxiao/orbis/issues/comments/ID` only when the
-  handoff's Checkpoint link or a specific finding needs it.
+- Resume a PR on its closing issue or the issue whose Work row records it; otherwise use the PR-only
+  path. Resolve a branch through its PR or recorded issue.
+- For a direct request, search existing issues. Reuse a matching open issue and treat a closed match
+  as delivered context.
+- Fetch a specific comment only when its checkpoint link or a finding requires it:
+  `agent-gh api repos/kvnxiao/orbis/issues/comments/ID`.
 
-- A PR resumes on the issue it closes, or on the issue whose Work row records it; otherwise it is
-  PR-only work. A branch resumes through its PR, or through the issue that records the branch.
-- For a direct request, search open and closed issues. Resume a matching open issue, and treat a
-  closed match as delivered context.
+## 2. Establish scope and authorization
 
-## 2. Read the state
+Read [authorization.md](../../shared/authorization.md) when the request limits scope and before
+publishing. Read the issue's handoff, relevant discussion, dependencies, and linked PR. Preserve
+unrelated changes.
 
-1. Read the issue body, its handoff table and plan, the parent and open blockers that set its scope,
-   and any linked PR's state, head, review decision, and body.
-2. If the PR is open and not a draft, has no unaddressed feedback, has passing verification recorded
-   for its head, and no agent-owned work remains, report the developer's remaining action and stop.
-3. For package work, read the SPEC and its interaction document before relying on behavior. Preserve
-   unrelated files and concurrent work.
+- Keep issue-backed work on that path. For a new package behavior change, create or reuse an issue
+  under [issues.md](../../shared/issues.md), unless the request is local-only or chat-only. Deliver
+  other direct requests by PR alone.
+- Read the package's SPEC, any declared files that divide the specification by area, and linked
+  interaction contract before relying on behavior. Read
+  [specifications.md](../../../docs/specifications.md) when writing or converting a contract.
+- For planned implementation, locate the `.plans/<spec-slug>/README.md` that the issue names. Let
+  the global skills validate its approval, specification baseline, dependencies, and task state. An
+  issue checklist is not a substitute for that plan set.
+- If existing work has only an issue-body plan, preserve its decisions and evidence and reconcile it
+  through `plan-from-spec` before executing it. Do not infer completion or refresh a baseline from a
+  historical checklist.
+- If a reviewed PR has passing verification for its head and no agent-owned work remains, report the
+  developer's remaining action. New user instructions can create additional work.
 
-## 3. Classify and route
+## 3. Route the authorized work
 
-When the request limits scope, read [authorization.md](../../shared/authorization.md) first. Then
-classify the work on a work path as `AGENTS.md` defines it:
+State the work path, next bounded action, and responsible editor. Honor an explicitly named skill
+and the request's scope limits. Load domain rules before dependent work and use
+[delegation.md](../../shared/delegation.md) when assigning a delegate.
 
-- Work that an issue already tracks stays issue-backed, even when its remaining change would qualify
-  for the PR-only path.
-- For new issue-backed work, create or reuse an issue under [issues.md](../../shared/issues.md) once
-  its outcome can be named, unless the request is local-only or chat-only.
-- PR-only work does not create an issue.
+| Work                                                         | Route                                            |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| Create, amend, reconcile, or convert a specification         | Global `write-spec`                              |
+| Plan an approved specification or reconcile an existing plan | Global `plan-from-spec`                          |
+| Execute or resume an approved plan set                       | Global `implement-spec-plan`                     |
+| Refresh dependencies or compiler checks                      | Repository `update-toolchain`                    |
+| Write or review a README                                     | Repository `write-readme`                        |
+| Other bounded changes                                        | Assign each file to its editor under `AGENTS.md` |
 
-State the classification, the next bounded action, and who executes it. When the request names a
-specialist skill, invoke it within the request's scope. Otherwise, act on the first matching row:
+The selected skill owns its decision rounds, approval gates, task selection, state updates, and
+review. Supply Orbis rules and authorization without replacing that workflow. If a required global
+skill is unavailable, report the missing skill and stop the dependent work rather than substituting
+a local procedure.
 
-| Situation                                                                                             | Next action                                                                                                |
-| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| The requested scope is complete                                                                       | Deliver undelivered changes in step 4, or report the results and the authorization the next activity needs |
-| Code or a PR needs corrections                                                                        | Resume its branch, send accepted findings to each file's editor, then deliver                              |
-| Dependency refresh or newly supported strict checks                                                   | Invoke `update-toolchain`                                                                                  |
-| A README to write or review                                                                           | Invoke `write-readme`                                                                                      |
-| A SPEC is missing, unfinished, or unapproved, package behavior changes, or code drifted from its SPEC | Invoke `specify-package`                                                                                   |
-| An approved contract without a current plan, and planning requested or implementation authorized      | Invoke `plan-implementation`                                                                               |
-| A plan's Design section awaits approval                                                               | Present the section, and keep implementation blocked until the developer approves it                       |
-| An approved contract and current plan, with implementation authorized                                 | Delegate the next unblocked task to `orbis-implementer` under [delegation.md](../../shared/delegation.md)  |
-| Any other change                                                                                      | Have each file's editor make the edits, then deliver                                                       |
+Route `Needs spec` or `Needs contract` to `write-spec`, and `Needs plan` or `Needs a plan` to
+`plan-from-spec`, within the authorized scope. After `Done` or `No spec change`, reassess the
+remaining authorized work. A design-only or planning-only request stops at its deliverable. Continue
+already-authorized implementation when the required approvals and plan checks pass; otherwise report
+what is pending. Resolve returned decisions through `brainstorm` and continue independent work while
+a blocker remains.
 
-When a specialist skill returns, act on its outcome:
-
-| Outcome        | Next action                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| Done           | Reclassify from the new state and the skill's report, and route again                                 |
-| Needs contract | Invoke `specify-package`                                                                              |
-| Needs a plan   | Invoke `plan-implementation`                                                                          |
-| Blocked        | Settle a developer decision through `brainstorm`, or report the blocker and continue independent work |
-
-While routing:
-
-- Read [authorization.md](../../shared/authorization.md) before pushing or publishing. Continue
-  authorized implementation after planning without asking again.
-- Load the rules skills for the domain before any edit.
-- For an epic or initiative, select an unfinished child by its dependencies and approved priority.
-  Do not redo completed design or duplicate current plans.
+For an initiative or epic, use issue dependencies and approved priority to identify the requested
+plan or slice; the execution skill selects tasks within it. Link plan files from the issue and
+record shared progress there without duplicating executable tasks or agent-only state.
 
 ## 4. Pause or deliver
 
-When work pauses before delivery, publish a checkpoint for issue-backed work under
-[records.md](../../shared/records.md), and update the handoff table under
-[issues.md](../../shared/issues.md). For an unapproved brainstorm, report the pending approval in
-chat, and keep its provisional decisions out of the checkpoint. For PR-only work without a PR,
-report the branch and next action in chat.
+For an issue-backed pause, publish a checkpoint under [records.md](../../shared/records.md) and
+update the handoff under [issues.md](../../shared/issues.md). Keep unapproved brainstorm decisions
+in chat or private scratch. For PR-only work without a PR, report the branch and next action in
+chat.
 
 To deliver:
 
-1. Run the global `review-changes` skill with `mode=apply` on the accumulated change set, under
-   [review.md](../../shared/review.md).
-2. Draft the commit message and PR body in `.artifacts/` under
-   [records.md](../../shared/records.md), and audit them with `audit-prose`.
-3. Open the PR against the default branch from a work branch, with labels and a `Closes #<number>`
-   line for each completed issue under [issues.md](../../shared/issues.md).
-4. For issue-backed work, publish the delivery checkpoint and update the handoff table.
-5. Leave the PR open for developer review and merge.
+1. Complete `review-changes mode=apply` under [review.md](../../shared/review.md). Reuse a review
+   the active global skill already completed for the same accumulated changes; resolve new changes
+   and findings before delivery.
+2. Draft and audit commit and PR prose with `audit-prose`, following
+   [records.md](../../shared/records.md).
+3. Push the work branch and open a PR against the default branch under
+   [issues.md](../../shared/issues.md). Include a separate `Closes #<number>` line for each issue
+   the merge completes.
+4. For issue-backed work, publish the delivery checkpoint and update the handoff. Leave the PR open
+   for developer review and merge.
 
-Report the issue and PR links, verified outcomes, remaining blockers, and any remote state that
-could not be verified. Never infer delivery from an issue closed as not planned.
+Report links, verified outcomes, remaining obligations, and unverified remote state. Never infer
+delivery from an issue closed as not planned.

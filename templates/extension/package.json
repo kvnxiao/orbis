@@ -11,6 +11,7 @@
     "src",
     "docs",
     "SPEC.md",
+    "specs",
     "LICENSE"
   ],
   "type": "module",

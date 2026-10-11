@@ -1,8 +1,6 @@
 # Implementation plan formats
 
-Research date: 2026-09-09. The
-[issue plan format](../../.agents/skills/plan-implementation/references/plan-format.md) states the
-current rules; the
+Research date: 2026-09-09. The installed global `plan-from-spec` skill states the current rules; the
 [previous version](https://github.com/kvnxiao/orbis/blob/405932fbefac5e3955b4fcb03166022fcdeecc7a/docs/implementation-plan-research.md)
 of this document also recommended a format for Orbis. The inspected formats range from
 conversational Markdown to persisted documents and structured task ledgers. They do not establish
