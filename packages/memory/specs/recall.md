@@ -64,22 +64,21 @@ flowchart TD
 
 ### REQ-state-inspection — State inspection
 
-`/memory inspect` exposes the current accepted snapshot and recent accepted obligation retirements in the selected lineage, whether auxiliary memory is enabled or disabled. It performs bounded reads without inference or state mutation.
+`/memory inspect` prints or writes a complete report of the selected lineage's accepted snapshot and retirement history in one bounded operation. It works while memory is enabled or disabled, without inference or memory mutation.
 
-**Intent:** Let the user examine what checkpoint preparation uses and audit explicit retirements.
+**Intent:** Expose continuation state and retirement evidence for human inspection.
 
-Show the snapshot's basis identity, source horizon, coverage gaps, and current degradation conditions. For each item, expose its stable identity, obligation or maintained-context category, complete accepted text, evidence references, and verification state. Distinguish accepted state from any separately prepared checkpoint state; inspection does not claim to reproduce a past checkpoint.
+Report the accepted revision, source horizon, coverage gaps, and degradation; include each item's identity, category, complete text, evidence references, and verification state, followed by newest-first retirement records. Use one consistent revision and recheck lineage, source view, and access permission before releasing the report.
 
-List retirements newest first with their recorded disposition, prior item text, accepting operation, and evidence references. The first response includes a bounded recent set; older accepted retirements and every current item remain reachable through bounded continuation. State when a view is empty, partial, unavailable, or restricted. Never silently omit an item or truncate its text; use bounded text continuation when necessary. Bind continuations to the inspected lineage, accepted revision, and effective source view; reject stale continuations rather than mixing views.
+Show current copied text with edit attribution. Retired text citing edited-out source is restricted by original-access policy; show its identity and a restriction marker instead. Evidence reads follow the same policy.
 
-Current snapshot text remains visible as copied state, with attribution when its sources were edited. Historical retired text citing replaced or omitted source follows the original-access policy: hide that text by default and show a restriction marker and identity. Expanding evidence also follows that policy, including current permission checks. Inspection grants neither original access nor permission to edit accepted state.
+**Failure behavior:** Check finite work and output limits before release. If either prevents a complete report, return a size failure without partial content or pagination. State the limit and measured size, or a lower bound when exact size cannot be obtained within the work limit.
 
-**Permitted choices:** Implementations document finite work and output bounds, output format, and continuation syntax, usable interactively and noninteractively.
+**Permitted choices:** Document report format, output destination, and finite limits for interactive and noninteractive use.
 
 **Scenarios:**
 
-- Disable memory, then inspect an accepted snapshot. **Expected:** Items and recent retirements remain inspectable without a model call or state change.
-- Exceed one response's output bound with an item. **Expected:** Text continuation exposes the complete permitted item without silent truncation.
-- Change accepted state or source view between pages. **Expected:** The old continuation is rejected as stale.
-- Inspect a retirement whose cited source was omitted. **Expected:** Default output identifies the restricted retirement without exposing its prior text or edited-out evidence; explicit original access requires current personal opt-in.
-- Inspect a current item copied from omitted source. **Expected:** Its actual accepted text is visible with edit attribution, while expanding its protected source still requires original access.
+- Disable memory, then inspect fitting state. **Expected:** The complete permitted snapshot and retirement history appear without inference or memory changes.
+- Exceed a report limit. **Expected:** Return the size failure without truncated items, partial output, or a continuation token.
+- Change lineage or revoke original access before release. **Expected:** Do not release the stale or unauthorized report.
+- Inspect an item and a retirement citing omitted source. **Expected:** Current copied state remains visible with attribution; protected historical text requires current original-access permission.

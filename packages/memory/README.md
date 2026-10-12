@@ -15,10 +15,12 @@ compaction, it replaces Pi's native summary with a checkpoint of that maintained
 Pi's selected recent conversation. Native summarization remains the fallback.
 
 Memory updates are automatic. The design includes `/memory inspect` for the current snapshot and
-recent obligation retirements with evidence references. Nonmodal notices report degraded operation
-and whether auxiliary observation continues to incur costs. Virtual acting models use native
-compaction when their request capacity cannot be bounded; unsupported observer routing suspends
-auxiliary inference.
+accepted obligation retirements with evidence references. The command produces a complete bounded
+report or a size failure. Nonmodal notices report persistent or repeated degradation and whether
+auxiliary observation continues to incur costs. A virtual model routes the main agent's requests to
+other models; native compaction applies when their capacity cannot be bounded. If memory captures a
+virtual model as its observer at activation, personal configuration must select a concrete model for
+auxiliary work. Later acting-model switches preserve an already captured concrete observer.
 
 Recall uses source text after replacements and omissions by default; reading edited-out originals
 requires an explicit request and a personal configuration opt-in. When requests use a native

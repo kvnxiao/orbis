@@ -70,58 +70,55 @@ Unless personal configuration selects another observer model, capture the acting
 
 **Intent:** Keep auxiliary inference destinations explicit and prevent project configuration from redirecting session content.
 
-Observer provider, account, and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, including temporary user choices and command-line overrides. A virtual selection identifies a routing policy, not a permanently selected concrete model. Capturing it does not authorize every destination that its router could choose.
+Observer provider, account, and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, including temporary user choices and command-line overrides. If the captured observer selection is virtual, suspend auxiliary inference until personal configuration selects a concrete observer; do not invoke the router or infer an observer from its last response. Personal observer selections must also be concrete.
 
 **Permitted choices:** Implementations document validated file-based settings, locations, reload triggers, and precedence. Any supported project settings require Pi's current effective project trust and cannot override personal-only fields.
 
 **Scenarios:**
 
 - Enable with no observer override, then switch the acting model. **Expected:** The observer keeps its captured selection until an explicit change.
+- Capture a virtual acting model without a concrete personal observer selection. **Expected:** Auxiliary inference suspends with a configuration notice; no router is invoked.
 - Supply an observer endpoint in project settings. **Expected:** It cannot redirect observer data, even in a trusted project.
 - Apply an explicit valid personal model change. **Expected:** Status exposes the selection and new jobs use it; existing jobs do not silently change their captured configuration.
 
 ### REQ-observer-dispatch — Observer dispatch
 
-Before any observation, catch-up, or presentation request sends session content, validate its actual model, destination, account authority, permission, and capacity against the job's captured configuration. Reject dispatch when that authority is unavailable or has changed. Credentials do not enter prompts, memory entries, or diagnostics.
+Dispatch observation, catch-up, and presentation only through the captured concrete observer configuration while memory remains enabled and the request is permitted and fits its budget. Resolve credentials through Pi for that concrete provider/model. Missing credentials prevent dispatch and produce a configuration report.
 
-**Intent:** Permit authorized routing without sending evidence to an unapproved destination.
+**Intent:** Use Pi's existing authorization for ordinary observers and validate explicit endpoint overrides.
 
-For a concrete selection, validate the configured provider, endpoint, and account authority; a model identifier alone does not establish them. A virtual selection requires an enforceable policy identifying its permitted destinations and account authority, established through the authorized model configuration or personal override. Different concrete routes within that policy are permitted. A route outside it, an authority change, or an unverifiable destination prevents dispatch. A changed credential for the same verifiable authorized account is not inherently a mismatch.
+Reject an account-only override: an explicit account selection requires a personal endpoint override. Without either override, Pi's current credential and endpoint resolution is the authorization, including normal credential refresh. Do not require a generic account identifier, freeze provider registrations, or infer a billed account. A personal model-only override uses the same rule.
 
-Validate authorization before invoking routing code that can send session content, including its own classifier requests, and again at the final model-request boundary. Do not infer authorization from the previous response or catalog equality. Document supported integrations and their validation boundaries. Suspend helper inference when the selected integration cannot enforce these checks; report the reason and a permitted configuration that can restore it. Bounded recall and otherwise eligible direct checkpoint rendering remain available.
+For a personal endpoint override, verify the endpoint and credential selection against that override before sending content. Enforce any named account through a supported provider account selector; otherwise reject the override. Revalidate personal overrides before queued dispatch; changed or revoked overrides invalidate the queued job. Credentials never enter prompts, stored memory, or diagnostics.
 
 **Scenarios:**
 
-- Route consecutive jobs to different concrete models within an unchanged authorized policy. **Expected:** Both requests are permitted after individual capacity and destination checks.
-- Change the authorized account or endpoint while a job waits. **Expected:** The stale job cannot send its content to the changed destination.
-- Select a router whose internal data destinations are unknown. **Expected:** Suspend before invoking it with session content.
-- Deny a destination at the supported dispatch boundary. **Expected:** No model request with the session content is sent; the configuration problem is reported.
+- Use a concrete observer whose Pi credentials have no account identifier. **Expected:** Pi's successful resolution permits dispatch; ordinary credential refresh needs no account comparison.
+- Name a personal account without an endpoint override. **Expected:** Reject the configuration; do not dispatch using Pi's default account.
+- Select another concrete model personally without an endpoint override. **Expected:** Resolve its provider credentials through Pi.
+- Change a personal endpoint override while a job waits, or name an unsupported account selector. **Expected:** Do not send content through that override; report the configuration problem.
 
 ### REQ-degradation-reporting — Degradation reporting
 
-While memory is enabled, emit a nonmodal notice without requiring a status request when any of these conditions occurs:
+While enabled, report every custom-compaction failure, suppressed presentation, unavailable file supplement, and inference suspension in status. Emit unsolicited nonmodal notices according to these rules:
 
-- Custom checkpoint preparation cannot satisfy its eligibility rules.
-- A presentation attempt is suppressed.
-- An available native-checkpoint file inventory cannot be supplemented because capacity is insufficient or cannot be bounded.
-- Auxiliary inference is suspended.
+- Notify immediately for invalid or unsupported observer configuration, unknown acting-request capacity, obligations exceeding checkpoint capacity, insufficient space for the inventory marker, observation suspension, or presentation retry suppression.
+- For other failures, notify on the same reason in two consecutive completed attempts of the affected operation. A successful attempt resets the count; host cancellation counts as neither failure nor recovery.
+- Deduplicate an unchanged reported condition. Announce recovery only for a condition that produced a notice. On resume or re-enablement, report any still-active condition that already qualified for a notice. Intentional disablement is not degradation.
 
-Report the reason, whether observation continues and can incur charges, the available recovery conditions, and how to inspect state or disable memory.
+**Intent:** Expose persistent loss of functionality and continuing costs without warning on isolated failures.
 
-**Intent:** Make reduced functionality and continuing auxiliary costs visible during autonomous work.
-
-Emit the notice when a condition begins or materially changes, and on resume or re-enablement if it persists. Deduplicate repeated notices for the same condition in the selected lineage; keep its current reason and suppressed-attempt count in status. Emit a recovery notice when that condition clears. Intentional disablement is not degradation.
-
-Use the host notification surface in interactive and RPC sessions. In print and JSON modes, emit diagnostics on stderr and preserve stdout's output contract. Delivery means emission to the host or client, not proof that a person read it. Notices do not require acknowledgment, initiate an acting turn, or enter checkpoint text or the acting prefix. Missing notification UI does not remove the diagnostic obligation.
+Notices state the reason, whether observation continues and can incur charges, recovery conditions, and how to inspect or disable memory. Status retains current reasons and failure or suppression counts. Use host notifications in interactive/RPC sessions and stderr in print/JSON, preserving stdout. Emission does not prove human receipt. Notices do not require acknowledgment, start an acting turn, or enter checkpoints or the acting prefix.
 
 **Scenarios:**
 
-- Exceed checkpoint capacity with obligations alone while observer input still fits. **Expected:** An unsolicited notice says native fallback is active and observation continues with possible charges; status records the condition.
-- Suppress another presentation for the same unresolved condition. **Expected:** Status updates the count without another identical notice.
-- Accept a supported retirement or increase capacity enough to clear the condition. **Expected:** A recovery notice and status update occur automatically.
-- Resume while observer dispatch remains unsupported. **Expected:** The session reports suspension without waiting for a status command.
-- Omit an available file supplement because virtual request capacity is unknown, before any new compaction attempt. **Expected:** Emit the notice immediately; do not wait for compaction or a status request.
-- Trigger degradation in JSON mode. **Expected:** The diagnostic appears on stderr without corrupting JSONL stdout or requesting confirmation.
+- Time out catch-up once, then compact successfully. **Expected:** Status records the failure; neither warning nor recovery notice appears.
+- Time out two consecutive compactions, then succeed. **Expected:** One warning follows the second failure and one recovery notice follows success.
+- Exceed checkpoint capacity with obligations alone while observer input fits. **Expected:** An immediate notice states that native fallback applies and observation can continue incurring charges.
+- Omit an available supplement because acting capacity is unknown before compaction runs. **Expected:** Notify immediately without waiting for compaction or status polling.
+- Omit a supplement because its required incomplete-inventory marker cannot fit. **Expected:** Notify on the first attempt.
+- Repeat an unchanged reported condition, then resume. **Expected:** Repetition updates status without duplicate notices; resume reports the unresolved condition.
+- Trigger a qualifying notice in JSON mode. **Expected:** Emit stderr without changing JSONL stdout or requesting confirmation.
 
 ## Observation and evidence
 

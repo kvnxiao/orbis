@@ -63,7 +63,7 @@ Automatic, manual, SDK, and extension compactions that reach `session_before_com
 
 Prepare compatible checkpoint state and missing semantic content through bounded same-observer catch-up, determine final capacity, then apply the presentation requirement. Return one complete eligible custom checkpoint. Otherwise **decline** by returning no custom result, permitting whole-checkpoint native fallback while the host attempt remains active. Never append a native summary of the same evidence to a custom checkpoint.
 
-Catch-up and presentation share one foreground deadline, including waiting, inference, validation, and rechecking. Use the resolved observer policy with explicit routing, credential resolution, and cancellation. Missing helper credentials do not invalidate an already eligible direct rendering. Native summarization has separate host controls.
+Catch-up and presentation share one foreground deadline, including waiting, inference, validation, and rechecking. Use the captured concrete observer configuration with Pi credential resolution, applicable personal endpoint checks, and cancellation. Missing helper credentials do not invalidate an already eligible direct rendering. Native summarization has separate host controls.
 
 **Failure behavior:** Package failure does not cancel compaction to force fallback; cancellation can suppress the host's overflow retry. A helper timeout permits decline while the host attempt remains active. Host cancellation ends the attempt. Throwing is not a general fallback mechanism. Report package fallback reasons separately from the eventual host outcome.
 
