@@ -66,7 +66,7 @@ Provide status, disablement, and configuration inspection through commands usabl
 
 ### REQ-observer-configuration — Observer configuration
 
-Unless personal configuration selects another observer model, capture the acting model at activation. Persist that selection with the lineage. Ordinary settings reloads and acting-model switches do not change it implicitly. Explicit observer configuration changes are visible through status; each job's captured configuration stays fixed.
+Unless personal configuration selects another observer model, capture the acting model at activation. Persist that selection with the lineage. Ordinary settings reloads and acting-model switches do not change it implicitly. Explicit observer configuration changes are visible through status. Each job uses its captured configuration or is cancelled; it never switches to a changed configuration.
 
 **Intent:** Keep auxiliary inference destinations explicit and prevent project configuration from redirecting session content.
 
