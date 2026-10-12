@@ -23,6 +23,8 @@ Eligibility requires all of the following:
 - Presentation includes every applicable item, obligations verbatim, and protected strings in their corresponding items.
 - The complete rendering fits its documented budget, including file information and format text within estimated available request capacity. Unknown or inadequately bounded capacity prevents eligibility.
 
+For virtual acting models, capacity must bound the actual request or every route that an enforced routing policy permits. Advertised virtual limits, the last physical response, and a catalog snapshot alone do not establish that bound. When it cannot be established, decline and report the limitation through degradation reporting. An independently configured observer does not resolve acting-request capacity.
+
 Structural inclusion is checkable; semantic completeness and justified retirement remain separate quality questions.
 
 **Scenarios:**
@@ -31,6 +33,7 @@ Structural inclusion is checkable; semantic completeness and justified retiremen
 - Change selected lineage after preparing a candidate. **Expected:** The final check rejects stale state.
 - Supply valid coverage but omit required split-turn progress. **Expected:** Coverage alone does not establish eligibility.
 - Prepare a checkpoint that exceeds available capacity after file and format text. **Expected:** It cannot be returned as eligible.
+- Select a virtual acting model without a verifiable request or enforced all-route bound. **Expected:** Decline custom compaction and emit the degradation notice even when the advertised window appears large enough.
 
 ### REQ-checkpoint-presentation — Checkpoint presentation
 
@@ -117,7 +120,7 @@ Record Pi `read`, `write`, and `edit` invocations with non-empty string paths, i
 
 **Intent:** Preserve available cumulative file activity without claiming verified filesystem effects.
 
-Include deterministic cumulative file information in custom checkpoints. Reconcile repeated file blocks and deduplicate paths; write/edit classification takes precedence over read-only classification. The inventory includes only source invocations strictly before the checkpoint cut; later operations remain in recent history. Report unavailable or incomplete source inventory. Semantic snapshot items preserve task-critical paths independently of this supplementary list.
+Include deterministic cumulative file information in custom checkpoints. Reconcile file-path sections inherited from prior checkpoints and deduplicate paths; write/edit classification takes precedence over read-only classification. The inventory includes only source invocations strictly before the checkpoint cut; later operations remain in recent history. Report unavailable or incomplete source inventory. Semantic snapshot items preserve task-critical paths independently of this supplementary list.
 
 **Scenarios:**
 
@@ -132,11 +135,11 @@ While enabled, add a bounded file-inventory supplement to acting requests that u
 
 **Intent:** Restore useful cumulative path information to native-checkpoint requests within a defensible capacity estimate.
 
-A virtual model routes a selection to a concrete model whose limits can differ. Use a documented estimator and conservative bounds for supported request transformations and routing. Prior provider usage, registered tool lists, and a virtual model's advertised window alone are insufficient. When later changes or routed limits cannot be bounded, omit the supplement and report the reason through status. The estimate is not a guarantee of provider acceptance.
+A virtual model routes a selection to a concrete model whose limits can differ. Use a documented estimator and conservative bounds for supported request transformations and routing. Prior provider usage, registered tool lists, and a virtual model's advertised window alone are insufficient. When later changes or routed limits cannot be bounded, omit the supplement and report the reason through degradation reporting and status. The estimate is not a guarantee of provider acceptance.
 
-When full inventory does not fit, reserve an incomplete-inventory marker, then visit deduplicated write/edit paths lexically followed by read-only paths lexically. Include each whole path that fits; skip a non-fitting path and continue. Never truncate a path. Reserve the marker also when source inventory is incomplete. If even the marker cannot fit, omit the supplement and report why.
+When full inventory does not fit, reserve an incomplete-inventory marker, then visit deduplicated write/edit paths lexically followed by read-only paths lexically. Include each whole path that fits; skip a non-fitting path and continue. Never truncate a path. Reserve the marker also when source inventory is incomplete. If even the marker cannot fit, omit the supplement and report why through degradation reporting and status.
 
-Recompute selection when capacity changes. Identical inventory and capacity inputs produce identical output; capacity changes do not admit post-cut operations. Apply through public context transformation without changing stored checkpoint text, TUI rendering, or Pi's file-metadata inheritance. Do not mutate undocumented preparation objects.
+Recompute selection when capacity changes. Identical inventory and capacity inputs produce identical output; capacity changes do not admit post-cut operations. Apply through public context transformation without changing stored checkpoint text, TUI rendering, or Pi's rules for inheriting file-operation metadata between checkpoints. Do not mutate undocumented preparation objects.
 
 **Note:** This diagram illustrates capacity-based selection, not semantic retention of critical paths.
 

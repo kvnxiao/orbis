@@ -3,9 +3,9 @@ spec: ../SPEC.md
 depends-on: [session-state.md]
 ---
 
-# Recall
+# Recall and inspection
 
-This area defines bounded discovery and access to source text and observations. It assumes the shared contract and session-state rules. Recall remains available without auxiliary inference while memory is disabled.
+This area defines bounded discovery and access to source text, observations, and accepted continuation state. It assumes the shared contract and session-state rules. Recall remains available without auxiliary inference while memory is disabled.
 
 ## Evidence access
 
@@ -59,3 +59,27 @@ flowchart TD
 - Enable personal access and change sessions. **Expected:** Explicit original requests remain permitted with historical attribution.
 - Revoke access, then reuse a cached result or old reference. **Expected:** Current permission denies disclosure.
 - Make the personal permission file malformed or unavailable. **Expected:** Access fails closed without treating cached permission as current.
+
+## State inspection
+
+### REQ-state-inspection — State inspection
+
+`/memory inspect` exposes the current accepted snapshot and recent accepted obligation retirements in the selected lineage, whether auxiliary memory is enabled or disabled. It performs bounded reads without inference or state mutation.
+
+**Intent:** Let the user examine what checkpoint preparation uses and audit explicit retirements.
+
+Show the snapshot's basis identity, source horizon, coverage gaps, and current degradation conditions. For each item, expose its stable identity, obligation or maintained-context category, complete accepted text, evidence references, and verification state. Distinguish accepted state from any separately prepared checkpoint state; inspection does not claim to reproduce a past checkpoint.
+
+List retirements newest first with their recorded disposition, prior item text, accepting operation, and evidence references. The first response includes a bounded recent set; older accepted retirements and every current item remain reachable through bounded continuation. State when a view is empty, partial, unavailable, or restricted. Never silently omit an item or truncate its text; use bounded text continuation when necessary. Bind continuations to the inspected lineage, accepted revision, and effective source view; reject stale continuations rather than mixing views.
+
+Current snapshot text remains visible as copied state, with attribution when its sources were edited. Historical retired text citing replaced or omitted source follows the original-access policy: hide that text by default and show a restriction marker and identity. Expanding evidence also follows that policy, including current permission checks. Inspection grants neither original access nor permission to edit accepted state.
+
+**Permitted choices:** Implementations document finite work and output bounds, output format, and continuation syntax, usable interactively and noninteractively.
+
+**Scenarios:**
+
+- Disable memory, then inspect an accepted snapshot. **Expected:** Items and recent retirements remain inspectable without a model call or state change.
+- Exceed one response's output bound with an item. **Expected:** Text continuation exposes the complete permitted item without silent truncation.
+- Change accepted state or source view between pages. **Expected:** The old continuation is rejected as stale.
+- Inspect a retirement whose cited source was omitted. **Expected:** Default output identifies the restricted retirement without exposing its prior text or edited-out evidence; explicit original access requires current personal opt-in.
+- Inspect a current item copied from omitted source. **Expected:** Its actual accepted text is visible with edit attribution, while expanding its protected source still requires original access.

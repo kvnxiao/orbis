@@ -1,5 +1,5 @@
 ---
-date: 2026-10-11
+date: 2026-10-12
 questions:
   - How does complete-snapshot observation scale relative to native compaction?
   - What policy limits repeated presentation overflow without preventing autonomous recovery?
@@ -10,7 +10,7 @@ recheck-when: Representative repeated-compaction histories, observer scheduling 
 
 # Snapshot growth, cost, and available continuation evidence
 
-Complete-snapshot observation has a predictable input cost and an unmeasured continuation benefit. Checkpoint capacity can become limiting well before observer input capacity. The recommended design gives ordinary observer jobs a checkpoint maintenance target, suppresses repeated overflowing presentation calls until fit can improve, and continues bounded observation so new evidence can retire work. It does not add a reflector or silently shorten active obligations.
+Complete-snapshot observation has a predictable input cost and an unmeasured continuation benefit. Checkpoint capacity can become limiting well before observer input capacity. The recommended design gives ordinary observer jobs a checkpoint maintenance target, suppresses repeated overflowing presentation calls until fit can improve, and continues bounded observation so new evidence can retire work. It uses the same auxiliary observer to maintain the snapshot, process missing evidence at compaction, and perform model-assisted checkpoint presentation. It does not add a separate model to rewrite accumulated memory or silently shorten active obligations.
 
 ## Two capacity limits
 
@@ -18,7 +18,7 @@ The checkpoint budget limits what can be presented alongside the retained acting
 
 A maintenance target gives the observer a reason to remove obsolete context and keep applicable context concise during the jobs already required for observation. It cannot justify deleting an active constraint merely to hit a size target. Explicit structured retirement remains semantically fallible; the [structured-update analysis](structured-memory-updates.md) distinguishes validation from correct interpretation.
 
-After a repaired presentation exceeds capacity, unrelated new evidence does not itself improve fit. A smaller deterministic rendering, larger available capacity, or changed presentation instructions provides a concrete reason for another bounded attempt. Recording that failure avoids spending the same presentation work on each compaction. Observation can still process completion or cancellation evidence and recover naturally. Native fallback remains available while the host attempt is active; native fallback can fail or lose information too.
+Presentation repair restores required items or exact strings omitted by the model, using their accepted snapshot text. After that repaired checkpoint exceeds capacity, unrelated new evidence does not itself improve fit. A smaller deterministic rendering, larger available capacity, or changed presentation instructions provides a concrete reason for another bounded attempt. Recording that failure avoids spending the same presentation work on each compaction. Observation can still process completion or cancellation evidence and recover naturally. Native fallback remains available while the host attempt is active; native fallback can fail or lose information too.
 
 An aggregate observer-spend cutoff would provide a stronger cost bound, but requires a reset and recovery policy. Automatically stopping after an arbitrary number of compactions would also prevent processing the evidence that could retire obligations. The recommended core therefore keeps finite job, retry, concurrency, and foreground limits, stops observation when complete input cannot fit, and exposes the total cost. Session-wide spending controls or partial-state maintenance remain separate policies to consider if measurements show persistent paid work without useful recovery. There is no claim that this policy minimizes cost.
 
@@ -53,6 +53,8 @@ Assume the same 200,000 effective evidence tokens, no retries or catch-up, and 1
 
 For comparison, assume four native summary calls each process 50,000 new evidence tokens, use 1,000 fixed tokens, and produce a 3,000-token checkpoint. Reusing that checkpoint in the final three calls gives approximately 213,000 input tokens and 12,000 output tokens. Native split-turn calls, serialization differences, and failed attempts are excluded from this illustration. Actual Pi and observer inputs can differ, including tool-result reduction. The examples therefore show order of magnitude rather than equal-quality costs.
 
+In the 40-job examples, 560,000 / 213,000 is approximately 2.6 and 1,040,000 / 213,000 is approximately 4.9. Thus observer input alone is about 2.6–4.9 times the illustrated native compaction input at mean snapshots of 8,000–20,000 tokens. This is an input-volume comparison under stated assumptions, not measured spending or equal continuation quality. Carry it into evaluation alongside actual cache rates, model prices, retries, catch-up, presentation, fallback, and subsequent acting work.
+
 The prepared-memory path can replace those native calls, but adds presentation when needed and native calls on fallback. Total task cost also includes subsequent acting requests: a useful compact checkpoint might reduce those, while a missing obligation can cause expensive repeated work. Token counts alone cannot establish the net result, and equal token counts at different models or cache rates do not mean equal prices.
 
 ## Native Pi evidence and cut-crossing frequency
@@ -83,5 +85,7 @@ There is no empirical basis here to replace compatible earlier-state selection a
 | Complete observer input cannot fit                      | Suspend with a capacity report; recover through a permitted budget or model that fits complete input, or a user-selected branch with smaller valid state | Real suspension frequency justifies evaluating partial-state input and its selection losses             |
 | Cut-crossing frequency is unknown                       | Keep before-cut state and bounded checkpoint-only catch-up                                                                                               | Offline replay provides enough cases to compare immediate fallback meaningfully                         |
 | Quality or cost remains unmeasured                      | Use scripted integration checks, then separately authorized matched continuation evaluation                                                              | Results identify extraction, retirement, presentation, recall, or acting-use failure specifically       |
+
+When obligations alone exceed checkpoint capacity, an unsolicited notice should make continuing observer cost explicit. Recovery can follow evidence-supported retirement or increased capacity without user intervention; disablement is the user's direct way to stop auxiliary work. Read-only retirement inspection helps diagnose a wrong change but does not protect a checkpoint automatically. See [routing and mode-specific alerts](virtual-routing-and-alerts.md).
 
 The branches preserve the autonomous single-observer design. They do not prescribe internal response schemas, scheduler algorithms, or numerical defaults. Those choices need executable plans and measured limits after approval of the written contract.

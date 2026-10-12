@@ -1,5 +1,5 @@
 ---
-date: 2026-10-11
+date: 2026-10-12
 questions:
   - Does Pi 1.1.0 expose enough public context to implement the complete acting-request file supplement and checkpoint preparation contract, and which parts remain estimates or require fallback?
 observed-in: [Pi 1.1.0, Node.js 26.10.0, pnpm 12.8.1]
@@ -16,7 +16,7 @@ The memory package replaces Pi's summary only when its maintained state accounts
 
 ## Public request inputs
 
-A forced prompt replaces the normal system prompt; forced-prompt projection is the host transformation that applies it. Loadout hooks control which tools and declarations are available for a request. A virtual model routes a selection to a concrete model, which can have different capacity limits.
+A forced prompt replaces the normal system prompt; forced-prompt projection is the host transformation that applies it. Loadout hooks control which tools and declarations are available for a request. Hidden-declaration filtering removes model-facing tool declarations; it does not itself establish whether the corresponding tools are executable. A virtual model routes a selection to a concrete model, which can have different capacity limits.
 
 **Observed in Pi 1.1.0 source and scripted runtime:** The ordinary `context` event excludes system messages. Pi restores prompt and tool state after those handlers. `context_with_system` runs afterward and supplies the full transcript, including system messages and their tool declarations. Its handlers execute sequentially, so an earlier handler cannot see changes a later handler will make. Returned messages are request-local; the hook operates on a structured clone rather than rewriting persisted entries. [Extension contracts and dispatch](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/extensions/runner.ts).
 
@@ -25,7 +25,7 @@ A forced prompt replaces the normal system prompt; forced-prompt projection is t
 | Effective prompt          | `ctx.getSystemPrompt()`; full system transcript in `context_with_system`                        | **Observed in Pi 1.1.0 runtime:** With a forced prompt, the full hook saw the base prompt, while the getter and provider saw the forced prompt. The host applies forced-prompt projection after extension context handlers. |
 | Configured tools          | `pi.getAllTools()` exposes names, descriptions, parameter schemas, exposure and source metadata | **Observed in Pi 1.1.0 runtime:** Two tools remained registered while only `read` was active and declared. Counting the whole registry would count an inactive tool.                                                        |
 | Current tool declarations | System-message tool additions/removals in the full transcript; public Pi AI transcript helpers  | **Observed in Pi 1.1.0 source:** Loadout hooks can hide declarations, and host filtering runs after extension context handlers. Active executable tools and final declarations are not interchangeable.                     |
-| Acting messages           | Hook messages and exported `convertToLlm()`                                                     | **Observed in Pi 1.1.0 runtime:** Custom hidden content became provider-visible user content. A later full-context handler added content after the earlier handler's view.                                                  |
+| Acting messages           | Hook messages and exported `convertToLlm()`                                                     | **Observed in Pi 1.1.0 runtime:** Custom content hidden from the terminal display became provider-visible user content. A later full-context handler added content after the earlier handler's view.                        |
 | Selected model limits     | `ctx.model.contextWindow` and `maxTokens`                                                       | **Observed in Pi 1.1.0 runtime:** The selected virtual model advertised different limits from the physical model receiving the request.                                                                                     |
 | Session usage             | `ctx.getContextUsage()`                                                                         | **Observed in Pi 1.1.0 runtime:** Usage tokens were `null` after compaction, including in the next request's context hook. The reported window could describe the previous physical model.                                  |
 | Provider payload          | `before_provider_request`, with `payload: unknown`                                              | **Observed in Pi 1.1.0 runtime:** A later payload handler changed an output cap from 777 to 999. This is provider-specific payload access, not a uniform final-capacity API.                                                |
@@ -48,7 +48,7 @@ A supplement policy can reserve a documented output allowance without knowing th
 
 **Observed in Pi 1.1.0 source:** Agent request preparation resolves a virtual model before context transformation, but the selected model remains in agent state. `ctx.model` reads that selection. The usage window comes from the latest successful physical response when available. The hook does not receive the newly resolved route. Calling a router separately is not proof of the route already chosen for the acting request and can differ by conversation, retry reason, or state. [Request routing and limits](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/agent-session.ts), [virtual-model contract](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/core/virtual-models.ts).
 
-For a virtual model, a cooperating router could supply a trusted request limit, or an integration could establish a bound covering every allowed route. Without such an established integration, omission is the supported result. A previous request's physical model is not sufficient evidence.
+For a virtual model, a cooperating router could supply a trusted request limit, or an integration could establish a bound covering every allowed route. Without such an established integration, omission is the supported result. A previous request's physical model is not sufficient evidence. The [routing follow-up](virtual-routing-and-alerts.md) confirms that Pi exposes neither an exhaustive target set nor an enforced cross-route bound, and distinguishes acting-request limits from observer dispatch validation.
 
 ## Prepared checkpoint and split-turn evidence
 

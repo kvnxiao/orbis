@@ -14,10 +14,16 @@ session progresses. It also records findings linked to their source messages for
 compaction, it replaces Pi's native summary with a checkpoint of that maintained state and retains
 Pi's selected recent conversation. Native summarization remains the fallback.
 
-Memory updates are automatic. Recall uses source text after replacements and omissions by default;
-reading edited-out originals requires an explicit request and a personal configuration opt-in. When
-requests use a native checkpoint, a bounded file-path supplement preserves available earlier file
-activity. Disabling memory stops preparation and these supplements while recall remains available.
+Memory updates are automatic. The design includes `/memory inspect` for the current snapshot and
+recent obligation retirements with evidence references. Nonmodal notices report degraded operation
+and whether auxiliary observation continues to incur costs. Virtual acting models use native
+compaction when their request capacity cannot be bounded; unsupported observer routing suspends
+auxiliary inference.
+
+Recall uses source text after replacements and omissions by default; reading edited-out originals
+requires an explicit request and a personal configuration opt-in. When requests use a native
+checkpoint, a bounded file-path supplement preserves available earlier file activity. Disabling
+memory stops preparation and these supplements while recall remains available.
 
 | Capability               | Role                                                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |

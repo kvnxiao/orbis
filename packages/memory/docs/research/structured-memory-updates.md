@@ -1,5 +1,5 @@
 ---
-date: 2026-10-11
+date: 2026-10-12
 questions:
   - What evidence supports model-proposed memory additions, replacements, and removals against stable identities?
   - Does complete active-state input establish reliable review, and what happens as memory grows?
@@ -33,7 +33,7 @@ Mem0 supplies direct public motivation. Its April 16 algorithm article, updated 
 
 **Observed in current official Mem0 guidance:** The vendor distinguishes recency ranking from deciding which contradictory claim applies. Its staleness guide states that soft ranking does not reliably resolve an old, highly relevant but incorrect fact and recommends explicit timestamp-aware resolution in the application. This qualifies the migration guide's broad statement that retrieval surfaces current information. It does not establish an equivalent temporal feature in OSS. [Staleness guidance](https://mem0.ai/library/context-engineering/memory-decay-for-long-running-agents-how-recency-aware-ranking-fixes-retrieval-staleness).
 
-The relevant lesson is to preserve historical evidence when changing the active view. Orbis already separates removal from active continuation state from erasing historical records. Mem0's reported loss from destructive fact reconciliation therefore challenges semantic retirement decisions, but does not directly invalidate that separation.
+Preserving historical evidence permits later audit and correction, but does not protect the next checkpoint from false retirement. Once an obligation leaves active state, the acting model may have no reason to search for it. Mem0's reported destructive-reconciliation failures therefore remain relevant to Orbis even when its underlying session evidence survives. Read-only snapshot inspection and visible retirement evidence can expose the change to a reviewer; they do not establish its correctness or replace a missing obligation automatically.
 
 ## Comparable editing systems
 
@@ -89,7 +89,7 @@ If the full snapshot exceeds the observer budget, suspension with a capacity rep
 
 ## Recommendation and evidence gaps
 
-Retain the single observer, stable identities, explicit resulting content, omission-preserves-state rule, complete snapshot input, and logical all-or-nothing acceptance. Preserve historical evidence independently of the active view. State semantic uncertainty directly and keep capacity exhaustion visible. Do not add a role solely because another product has one, or adopt add-only facts solely because Mem0 reported destructive reconciliation failures.
+Retain the single observer, stable identities, explicit resulting content, omission-preserves-state rule, complete snapshot input, and logical all-or-nothing acceptance. Preserve historical evidence independently of the active view and expose accepted retirements with their prior text and supporting evidence under the source-access policy. This provides an audit surface without another model or per-retirement approval. Keep retirement logs out of routine checkpoints; evaluate whether users or agents detect false retirement through inspection, without counting availability as detection. State semantic uncertainty directly and keep capacity exhaustion visible. Do not add a role solely because another product has one, or adopt add-only facts solely because Mem0 reported destructive reconciliation failures.
 
 The missing evidence is a controlled test of actual continuation after repeated updates. A separately authorized study should compare the same histories and acting model under Pi's native compaction summaries and the proposed core, then diagnose full-state versus selected-state input and any additional maintenance role. Measure missed additions, wrong-target changes, false retirement, false completion, duplicate accumulation, unresolved contradiction, and downstream constraint violations. Vary active-state size, repeated corrections, weakly related obligations, edited evidence, and source attribution. Count all observation, retry, catch-up, presentation, and acting costs, including failed calls. Scripted tests can establish state mechanics before that study; they cannot establish semantic reliability.
 

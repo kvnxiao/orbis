@@ -25,7 +25,7 @@ Pi custom session entries are authoritative and follow Pi retention. Reconstruct
 
 ### REQ-derived-baseline — Derived baseline
 
-The applicable prepared `previousSummary` can establish an attributed derived baseline without replaying the archive. Its position follows Pi's projected history—the selected conversation after compaction and context edits—and represented source horizon, not its append position. A selected branch summary can likewise supply derived evidence.
+The applicable prepared `previousSummary` can establish an attributed derived baseline without replaying the archive. Its position follows Pi's projected history—the selected conversation after compaction and context edits—and the source horizon established by Pi's applicable summary boundary, not its append position. A selected branch summary can likewise supply derived evidence.
 
 **Intent:** Continue from available summaries without inventing processing of their originals.
 
@@ -70,7 +70,7 @@ Unless personal configuration selects another observer model, capture the acting
 
 **Intent:** Keep auxiliary inference destinations explicit and prevent project configuration from redirecting session content.
 
-Observer provider, account, and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, which includes temporary user choices and command-line overrides rather than only saved trust decisions. Before dispatch, revalidate the captured model's current routing, intended account, destination, and permission. A stored selection does not authorize a changed destination. On a mismatch or unavailable authority, reject queued dispatch and report the configuration problem; never silently route elsewhere. Credentials do not enter prompts, memory entries, or diagnostics.
+Observer provider, account, and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, including temporary user choices and command-line overrides. A virtual selection identifies a routing policy, not a permanently selected concrete model. Capturing it does not authorize every destination that its router could choose.
 
 **Permitted choices:** Implementations document validated file-based settings, locations, reload triggers, and precedence. Any supported project settings require Pi's current effective project trust and cannot override personal-only fields.
 
@@ -78,8 +78,50 @@ Observer provider, account, and endpoint overrides come only from personal confi
 
 - Enable with no observer override, then switch the acting model. **Expected:** The observer keeps its captured selection until an explicit change.
 - Supply an observer endpoint in project settings. **Expected:** It cannot redirect observer data, even in a trusted project.
-- Change an account, endpoint, or routing authority while a job waits. **Expected:** Dispatch revalidation rejects the stale authorization rather than sending queued session content to the changed destination.
 - Apply an explicit valid personal model change. **Expected:** Status exposes the selection and new jobs use it; existing jobs do not silently change their captured configuration.
+
+### REQ-observer-dispatch — Observer dispatch
+
+Before any observation, catch-up, or presentation request sends session content, validate its actual model, destination, account authority, permission, and capacity against the job's captured configuration. Reject dispatch when that authority is unavailable or has changed. Credentials do not enter prompts, memory entries, or diagnostics.
+
+**Intent:** Permit authorized routing without sending evidence to an unapproved destination.
+
+For a concrete selection, validate the configured provider, endpoint, and account authority; a model identifier alone does not establish them. A virtual selection requires an enforceable policy identifying its permitted destinations and account authority, established through the authorized model configuration or personal override. Different concrete routes within that policy are permitted. A route outside it, an authority change, or an unverifiable destination prevents dispatch. A changed credential for the same verifiable authorized account is not inherently a mismatch.
+
+Validate authorization before invoking routing code that can send session content, including its own classifier requests, and again at the final model-request boundary. Do not infer authorization from the previous response or catalog equality. Document supported integrations and their validation boundaries. Suspend helper inference when the selected integration cannot enforce these checks; report the reason and a permitted configuration that can restore it. Bounded recall and otherwise eligible direct checkpoint rendering remain available.
+
+**Scenarios:**
+
+- Route consecutive jobs to different concrete models within an unchanged authorized policy. **Expected:** Both requests are permitted after individual capacity and destination checks.
+- Change the authorized account or endpoint while a job waits. **Expected:** The stale job cannot send its content to the changed destination.
+- Select a router whose internal data destinations are unknown. **Expected:** Suspend before invoking it with session content.
+- Deny a destination at the supported dispatch boundary. **Expected:** No model request with the session content is sent; the configuration problem is reported.
+
+### REQ-degradation-reporting — Degradation reporting
+
+While memory is enabled, emit a nonmodal notice without requiring a status request when any of these conditions occurs:
+
+- Custom checkpoint preparation cannot satisfy its eligibility rules.
+- A presentation attempt is suppressed.
+- An available native-checkpoint file inventory cannot be supplemented because capacity is insufficient or cannot be bounded.
+- Auxiliary inference is suspended.
+
+Report the reason, whether observation continues and can incur charges, the available recovery conditions, and how to inspect state or disable memory.
+
+**Intent:** Make reduced functionality and continuing auxiliary costs visible during autonomous work.
+
+Emit the notice when a condition begins or materially changes, and on resume or re-enablement if it persists. Deduplicate repeated notices for the same condition in the selected lineage; keep its current reason and suppressed-attempt count in status. Emit a recovery notice when that condition clears. Intentional disablement is not degradation.
+
+Use the host notification surface in interactive and RPC sessions. In print and JSON modes, emit diagnostics on stderr and preserve stdout's output contract. Delivery means emission to the host or client, not proof that a person read it. Notices do not require acknowledgment, initiate an acting turn, or enter checkpoint text or the acting prefix. Missing notification UI does not remove the diagnostic obligation.
+
+**Scenarios:**
+
+- Exceed checkpoint capacity with obligations alone while observer input still fits. **Expected:** An unsolicited notice says native fallback is active and observation continues with possible charges; status records the condition.
+- Suppress another presentation for the same unresolved condition. **Expected:** Status updates the count without another identical notice.
+- Accept a supported retirement or increase capacity enough to clear the condition. **Expected:** A recovery notice and status update occur automatically.
+- Resume while observer dispatch remains unsupported. **Expected:** The session reports suspension without waiting for a status command.
+- Omit an available file supplement because virtual request capacity is unknown, before any new compaction attempt. **Expected:** Emit the notice immediately; do not wait for compaction or a status request.
+- Trigger degradation in JSON mode. **Expected:** The diagnostic appears on stderr without corrupting JSONL stdout or requesting confirmation.
 
 ## Observation and evidence
 
@@ -174,6 +216,21 @@ Maintain completed work, decisions and rationale, critical context, and identifi
 - Explicitly retire an obligation using applicable cancellation evidence. **Expected:** Validated retirement applies automatically without a special cancellation command.
 - Explicitly remove obsolete maintained context. **Expected:** It leaves active state while its permitted history remains recallable.
 
+### REQ-obligation-retirements — Obligation retirements
+
+Every accepted completion, cancellation, or supersession of an obligation records its item identity, prior accepted text, disposition, supporting evidence references, and accepting operation identity. Preserve this history under Pi retention in the selected lineage, together with the accepted change.
+
+**Intent:** Make an explicit but mistaken retirement auditable after it leaves active state.
+
+Reconstruction exposes only accepted retirements in the selected ancestry and applies retry identity once. Rejected proposals and uncommitted checkpoint-only catch-up do not enter accepted retirement history. Retiring through a replacement rather than removal follows the same rule. Checkpoints still present resulting state without retirement logs. Recording evidence does not prove that it justifies the retirement or automatically restore a missing obligation.
+
+**Scenarios:**
+
+- Accept a cancellation, then retry its uncertain append. **Expected:** Reconstruction exposes one retirement with its prior text, disposition, evidence, and operation identity.
+- Replace an active obligation with a completed-work item. **Expected:** The transition records retirement even though it uses a replacement.
+- Fork before a retirement or reject its proposal. **Expected:** It is absent from that branch's accepted retirement history.
+- Retire an obligation during uncommitted catch-up. **Expected:** The checkpoint uses its prepared state without publishing an accepted retirement.
+
 ### REQ-snapshot-capacity — Snapshot capacity
 
 Every observer job receives a snapshot maintenance target derived from the latest available checkpoint presentation capacity. When that capacity is unknown, use the documented checkpoint budget less known mandatory overhead and identify the estimate. The target guides concise maintenance and supported removal of obsolete context; it does not authorize dropping applicable items, weakening obligations, or truncating protected strings.
@@ -186,7 +243,7 @@ After a presentation attempt overflows following repair, do not spend another pr
 - Available capacity increases.
 - Supplied presentation instructions change.
 
-Direct rendering remains available whenever it fits and instructions are empty. Report the suppressed attempt and recovery conditions.
+Direct rendering remains available whenever it fits and instructions are empty. Report the suppressed attempt and recovery conditions through degradation reporting.
 
 Continue bounded observation while its complete input fits, so new evidence can retire work automatically. Do not schedule standalone maintenance jobs solely to retry the same capacity failure. If the complete snapshot plus required job input and output reserve cannot fit the observer budget, suspend observation and report the need for a permitted model or budget that fits the complete input, or a user-selected branch with smaller valid state. The package does not change branches automatically. Resume only after that complete input can fit. Shortening checkpoint text does not shrink accepted state.
 

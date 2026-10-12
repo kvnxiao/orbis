@@ -1,5 +1,5 @@
 ---
-date: 2026-10-11
+date: 2026-10-12
 questions:
   - How should construction loss, retrieval failures, action quality, and full-task cost be evaluated?
 observed-in: [Pi 1.1.0, current comparison sources checked 2026-10-11]
@@ -88,6 +88,10 @@ Publication status describes the artifact checked, not an endorsement of its cla
 
 ## Proposed evaluation design
 
+Carry the [illustrative 2.6–4.9× observer/native input ratio](growth-and-cost.md#illustrative-scale-not-a-benchmark) into the cost analysis for mean snapshots of 8,000–20,000 tokens. Measure the actual ratio and complete task spending separately, including cache billing, rejected work, retries, catch-up, presentation, native fallback, and acting requests. The illustration is a hypothesis to test, not an acceptance threshold or evidence of equal quality.
+
+Record false retirements separately from whether their evidence is inspectable, whether a user or agent detects them, and whether correction occurs before the next consequential action. Test automatic degradation emission in each supported host mode with scripted fixtures. Treat unknown virtual-route capacity and unsupported observer authorization as explicit availability outcomes, not successful custom-compaction samples. Native retention measurements remain pending until qualifying histories with repeated compactions exist.
+
 The [SPEC scenarios](../../SPEC.md#conformance) define required conformance evidence. A scripted native-baseline harness early in implementation can compare host mechanics without making a live quality comparison a prototype gate. A later, separately authorized live study can measure semantic parity, subsequent actions, and total cost. This section proposes diagnostic controls for that study, not additional MVP requirements.
 
 ### Separate three failure locations
@@ -107,6 +111,8 @@ For a live comparison, run two conditions: native Pi with the extension unloaded
 Use finite histories where earlier obligations change the correct action despite an identical final request and checkout. Include old prohibitions, later corrections, paused work, failed verification, omitted identifiers, split turns, native fallback after a custom checkpoint, forks, and delayed observer results. Record whether tested facts actually left recent context. Check repository actions and acceptance results; a plausible answer about next steps is only supporting evidence.
 
 ### Evidence identity and recovery fixtures
+
+Pi's prepared cut is the boundary between summarized and retained history; checkpoint state uses only evidence before that boundary. Compaction instructions can expand model-generated checkpoint presentation. Code repairs omitted required items and protected strings from the accepted text, which can increase its size further.
 
 Model-free fixtures should distinguish:
 
