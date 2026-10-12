@@ -66,11 +66,13 @@ Provide status, disablement, and configuration inspection through commands usabl
 
 ### REQ-observer-configuration — Observer configuration
 
-Unless personal configuration selects another observer model, capture the acting model at activation. Persist that selection with the lineage. Ordinary settings reloads and acting-model switches do not change it implicitly. Explicit observer configuration changes are visible through status and apply to newly scheduled jobs; each job's captured configuration stays fixed.
+Unless personal configuration selects another observer model, capture the acting model at activation. Persist that selection with the lineage. Ordinary settings reloads and acting-model switches do not change it implicitly. Explicit observer configuration changes are visible through status; each job's captured configuration stays fixed.
 
 **Intent:** Keep auxiliary inference destinations explicit and prevent project configuration from redirecting session content.
 
-Observer provider, account, and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, including temporary user choices and command-line overrides. If the captured observer selection is virtual, suspend auxiliary inference until personal configuration selects a concrete observer; do not invoke the router or infer an observer from its last response. Personal observer selections must also be concrete.
+When an explicit observer model change takes effect, cancel queued jobs before dispatch and request cancellation of in-flight inference. Discard their late results without advancing coverage or using them for a checkpoint. Pending work can be scheduled again under the new selection within the existing budgets and foreground deadline. Already dispatched requests can still incur charges and remain in usage accounting. Ordinary acting-model switches do not trigger this cancellation.
+
+Observer provider and endpoint overrides come only from personal configuration outside the project tree. Project settings cannot supply or redirect those overrides. Resolve the default acting-model selection through Pi's current permitted model configuration. Check project trust through Pi's effective trust result, including temporary user choices and command-line overrides. If the captured observer selection is virtual, suspend auxiliary inference until personal configuration selects a concrete observer; do not invoke the router or infer an observer from its last response. Personal observer selections must also be concrete.
 
 **Permitted choices:** Implementations document validated file-based settings, locations, reload triggers, and precedence. Any supported project settings require Pi's current effective project trust and cannot override personal-only fields.
 
@@ -79,7 +81,9 @@ Observer provider, account, and endpoint overrides come only from personal confi
 - Enable with no observer override, then switch the acting model. **Expected:** The observer keeps its captured selection until an explicit change.
 - Capture a virtual acting model without a concrete personal observer selection. **Expected:** Auxiliary inference suspends with a configuration notice; no router is invoked.
 - Supply an observer endpoint in project settings. **Expected:** It cannot redirect observer data, even in a trusted project.
-- Apply an explicit valid personal model change. **Expected:** Status exposes the selection and new jobs use it; existing jobs do not silently change their captured configuration.
+- Change the observer model while a job is queued. **Expected:** Cancel it before dispatch; status exposes the new selection and newly scheduled jobs use it.
+- Change the observer model during inference, then receive its result. **Expected:** Request cancellation and discard the result; coverage does not advance and a prepared checkpoint cannot use it. Account for incurred usage.
+- Switch only the acting model while an observer job waits. **Expected:** The job remains scheduled with its captured observer selection, subject to normal dispatch checks.
 
 ### REQ-observer-dispatch — Observer dispatch
 
@@ -87,16 +91,16 @@ Dispatch observation, catch-up, and presentation only through the captured concr
 
 **Intent:** Use Pi's existing authorization for ordinary observers and validate explicit endpoint overrides.
 
-Reject an account-only override: an explicit account selection requires a personal endpoint override. Without either override, Pi's current credential and endpoint resolution is the authorization, including normal credential refresh. Do not require a generic account identifier, freeze provider registrations, or infer a billed account. A personal model-only override uses the same rule.
+Package-specific account overrides are outside the MVP; reject them with or without an endpoint override. Account selection remains in Pi's provider configuration. Without a personal endpoint override, Pi's current credential and endpoint resolution is the authorization, including normal credential refresh. Do not require a generic account identifier, freeze provider registrations, or infer a billed account. A personal model-only override uses the same rule.
 
-For a personal endpoint override, verify the endpoint and credential selection against that override before sending content. Enforce any named account through a supported provider account selector; otherwise reject the override. Revalidate personal overrides before queued dispatch; changed or revoked overrides invalidate the queued job. Credentials never enter prompts, stored memory, or diagnostics.
+For a personal endpoint override, verify the endpoint and credential selection against that override before sending content. Revalidate personal overrides before queued dispatch; changed or revoked overrides invalidate the queued job. Credentials never enter prompts, stored memory, or diagnostics.
 
 **Scenarios:**
 
 - Use a concrete observer whose Pi credentials have no account identifier. **Expected:** Pi's successful resolution permits dispatch; ordinary credential refresh needs no account comparison.
-- Name a personal account without an endpoint override. **Expected:** Reject the configuration; do not dispatch using Pi's default account.
+- Supply a package-specific account override, with or without an endpoint override. **Expected:** Reject the configuration; do not silently use Pi's default account.
 - Select another concrete model personally without an endpoint override. **Expected:** Resolve its provider credentials through Pi.
-- Change a personal endpoint override while a job waits, or name an unsupported account selector. **Expected:** Do not send content through that override; report the configuration problem.
+- Change a personal endpoint override while a job waits. **Expected:** Invalidate the job before dispatch and report the configuration change.
 
 ### REQ-degradation-reporting — Degradation reporting
 
@@ -234,7 +238,7 @@ Every observer job receives a snapshot maintenance target derived from the lates
 
 **Intent:** Address growing state before it repeatedly overflows presentation or observer input.
 
-After a presentation attempt overflows following repair, do not spend another presentation inference merely because evidence or state changed. Permit another attempt when any of these changes occurs:
+After a presentation attempt overflows following restoration of item text omitted or stripped of protected strings, do not spend another presentation inference merely because evidence or state changed. Permit another attempt when any of these changes occurs:
 
 - The deterministic full rendering becomes smaller.
 - Available capacity increases.
@@ -247,7 +251,7 @@ Continue bounded observation while its complete input fits, so new evidence can 
 **Scenarios:**
 
 - Prepare a job after available checkpoint capacity decreases. **Expected:** The observer receives the smaller maintenance target and all snapshot items; obligations remain protected.
-- Repair an overflowing presentation, then add unrelated evidence without improving rendered size or capacity. **Expected:** The next compaction declines without repeating presentation inference and reports why.
+- Restore item text omitted or stripped of protected strings, causing presentation overflow; then add unrelated evidence without improving rendered size or capacity. **Expected:** The next compaction declines without repeating presentation inference and reports why.
 - Accept supported retirement that reduces deterministic rendered size. **Expected:** A new bounded presentation attempt is permitted; direct rendering uses zero calls if it fits with empty instructions.
 - Exceed the observer input budget with snapshot and required job input. **Expected:** Observation suspends with a capacity report rather than truncating state.
 - Increase a permitted budget enough for the complete input. **Expected:** Observation can resume without dropping items.
