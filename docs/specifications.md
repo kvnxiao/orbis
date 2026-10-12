@@ -23,16 +23,19 @@ Use a plan-directory slug that identifies its package and subject. Interpret pat
 and plan metadata relative to the declaring file, as the global formats require. Requirement IDs are
 unique within a package's specification set; a cross-package reference names the package.
 
-## Pi contracts and implementation status
+## Specification content and Pi contracts
+
+Keep SPECs and their declared area files focused on the contract. Omit implementation availability,
+installation instructions, and directions for obtaining an implementation; put that guidance in the
+package README. For example, specify what compaction replaces without stating whether an
+implementation can be installed or where to obtain it.
 
 Specify behavior against Pi's public capabilities. A named Pi release is a reference baseline for
-inspected capabilities; source inspection does not establish runtime compatibility. State
-implementation availability separately from specification approval.
+inspected capabilities; source inspection does not establish runtime compatibility.
 
-A directory with only specifications and research is not an installable extension. `just new <name>`
-scaffolds runtime files only after the package has a SPEC. A format conversion preserves approved
-behavior, requirement identities, and verification obligations; it does not authorize implementing
-the package.
+Use `just new <name>` to scaffold runtime files only after the package has a SPEC. A format
+conversion preserves approved behavior, requirement identities, and verification obligations; it
+does not authorize implementing the package.
 
 ## Terminal interactions
 
@@ -64,10 +67,11 @@ reading order, and whether scenarios distinguish correct results from plausible 
 
 GitHub issues record scope, authorization, dependencies, and handoffs, and link the relevant plan
 files. Plan files define executable tasks; their state files record execution progress. Convert a
-contract or reconcile an issue-body plan before work that depends on the installed global format.
-Preserve valid completed work and its evidence during reconciliation. When converting a package to
-use `specs/`, include that directory in its manifest's published files and verify the packed
-contract. Do not rewrite unrelated specifications as part of another package's change.
+contract or move an implementation plan from an issue body into a plan set before work that depends
+on the installed global format. Preserve valid completed work and its evidence during
+reconciliation. When converting a package to use `specs/`, include that directory in its manifest's
+published files and verify the packed contract. Do not rewrite unrelated specifications as part of
+another package's change.
 
 Keep global skills installed in the host environment. Resolve them by name through the host's skill
 catalog; the repository does not vendor their contents or provide a competing format.
